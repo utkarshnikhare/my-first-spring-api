@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>SocioMart — Project Report</title><style>
+@page{size:A4;margin:12mm 13mm}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif}
+body{color:#2d2a26;font-size:12px;line-height:1.45}
+.page{page-break-after:always}
+.page:last-child{page-break-after:auto}
+h1{font-size:30px;color:#A04000}
+h2{font-size:16px;color:#A04000;border-bottom:2px solid #f0d9c8;padding-bottom:3px;margin:0 0 9px}
+h3{font-size:12.5px;margin:10px 0 4px;color:#4c463f}
+p{margin:4px 0}
+ul,ol{margin:3px 0 8px 18px}
+li{margin:2.5px 0}
+table{width:100%;border-collapse:collapse;margin:5px 0 9px}
+th{background:#faf3ec;color:#7a4a24;text-align:left;font-size:10.5px}
+th,td{border:1px solid #e8dfd3;padding:4px 7px;font-size:11px;vertical-align:top}
+code,.mono{font-family:Consolas,'Courier New',monospace;font-size:10.5px;background:#f6f1ea;padding:1px 4px;border-radius:4px}
+pre{background:#2d2a26;color:#f3ede4;padding:9px 11px;border-radius:8px;font-size:10.5px;line-height:1.5;page-break-inside:avoid;margin:5px 0 9px;white-space:pre-wrap}
+pre code{background:none;color:inherit;padding:0}
+.cover{text-align:center;padding-top:56px}
+.cover .logo{font-size:52px}
+.cover h1{font-size:38px;margin:6px 0 2px}
+.cover .tag{font-size:14px;color:#7a736a}
+.motive{background:#faf7f2;border:1px solid #ece5da;border-radius:12px;padding:13px 17px;margin-top:28px;text-align:left}
+.facts{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;margin-top:26px}
+.fact{border:1px solid #e8dfd3;border-radius:10px;padding:9px 14px;min-width:31%}
+.fact b{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:#A04000}
+.fact span{font-size:11.5px}
+.note{background:#fff8e6;border:1px solid #f0e2b6;border-radius:8px;padding:7px 11px;font-size:10.5px;margin:7px 0;page-break-inside:avoid}
+/* progress chart */
+.chartwrap{border:1px solid #e8dfd3;border-radius:10px;padding:12px 14px;margin-bottom:10px}
+.grid{display:flex;gap:26px;align-items:center;margin-bottom:12px}
+.donut{width:118px;height:118px;border-radius:50%;position:relative;flex:none}
+.donut.core{background:conic-gradient(#2e7d32 0 100%,#ece7df 0)}
+.donut.vision{background:conic-gradient(#A04000 0 60%,#ece7df 60% 100%)}
+.donut::after{content:'';position:absolute;inset:16px;background:#fff;border-radius:50%}
+.dlabel{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;z-index:2;text-align:center}
+.dlabel b{font-size:20px}.dlabel span{font-size:8.5px;color:#8a837a;line-height:1.2;padding:0 14px}
+.dcap{font-size:10.5px;font-weight:600;color:#4c463f;margin-top:4px;text-align:center}
+.modtable{width:100%;border-collapse:collapse}
+.modtable td{padding:3.5px 8px;border-bottom:1px solid #f0ebe4;font-size:10.5px}
+.modtable td.w{width:47%}
+.track{background:#ece7df;border-radius:8px;height:10px;width:100%}
+.fill{height:10px;border-radius:8px}
+.fill.done{background:#2e7d32}.fill.plan{background:#c9c2b8}
+.pct{width:32px;text-align:right;font-weight:600;color:#4c463f}
+.chip{font-size:9px;font-weight:700;padding:1.5px 7px;border-radius:9px}
+.chip.done{background:#e5f2e6;color:#2e7d32}.chip.plan{background:#f1ede7;color:#8a837a}
+.legend{font-size:10px;color:#7a736a;margin-top:5px}
+.tag{display:inline-block;font-size:9px;font-weight:700;border-radius:8px;padding:1px 6px;margin-right:5px}
+.p1{background:#fdeaea;color:#b23b3b}.p2{background:#fdf1dc;color:#a9702a}.p3{background:#e8eef7;color:#44618c}
+.foot{margin-top:10px;color:#9a938a;font-size:9.5px;text-align:center}
+</style></head><body>
+<!-- ============ PAGE 1 : COVER ============ -->
+<div class="page cover">
+  <div class="logo">🥘</div>
+  <h1>SocioMart</h1>
+  <div class="tag">Community Food Marketplace — Project Report &amp; Setup Guide</div>
+  <p class="motive">
+  <b style="color:#A04000">Motive.</b> Every neighbourhood has talented home cooks whose food never reaches
+  neighbours beyond their own floor. SocioMart connects home kitchens with people in the same society:
+  cooks publish today's menu, neighbours browse a live marketplace, add dishes to a cart and place orders —
+  while sellers manage kitchens, offerings, prices and order status from a simple dashboard. It is built as a
+  real production-style product: secure OTP login, a clean REST API, persistent storage, Swagger docs and a
+  mobile-first single-page app.
+  </p>
+  <div class="facts">
+    <div class="fact"><b>Project</b><span>SocioMart <code>my-first-spring-api</code></span></div>
+    <div class="fact"><b>Repository</b><span>github.com/utkarshnikhare/my-first-spring-api</span></div>
+    <div class="fact"><b>Stack</b><span>Java 21 · Spring Boot 4.1.1 · H2 · JS SPA</span></div>
+    <div class="fact"><b>Version</b><span>v1.0 — MVP complete</span></div>
+    <div class="fact"><b>Status</b><span>Core flows done &amp; E2E-tested</span></div>
+    <div class="fact"><b>Date</b><span>31 August 2026</span></div>
+  </div>
+</div>
+<!-- ============ PAGE 2 : OVERVIEW + STACK ============ -->
+<div class="page">
+<h2>1. Project Overview</h2>
+<p><b>SocioMart</b> is a full-stack <b>community food marketplace</b>: home cooks ("sellers") run a digital
+kitchen inside their housing society; neighbours ("buyers") discover dishes, order online, pay, track the order
+to delivery and rate it — the complete hyperlocal food-ordering loop in one product.</p>
+<h3>Why it exists</h3>
+<ul>
+  <li><b>For home cooks:</b> no shop or tech skills needed — OTP login, create a kitchen, post today's dishes, take orders from a dashboard.</li>
+  <li><b>For neighbours:</b> one place to see every home kitchen in the society, browse, cart and order in a few taps.</li>
+  <li><b>For the community:</b> extra income for cooks, fresh homemade food for residents.</li>
+  <li><b>As a learning product:</b> deliberately built to production standards — layered Spring Boot backend, security, validation, real persistence, documented REST API, polished SPA.</li>
+</ul>
+<h3>What the finished product does today</h3>
+<table>
+<tr><th style="width:50%">Buyer journey (100% click-driven)</th><th>Seller journey (100% click-driven)</th></tr>
+<tr><td>1. Mobile number → OTP (shown on screen in demo mode) → logged in<br>
+2. Browse marketplace: kitchen &amp; dish cards, search, category chips<br>
+3. Tap a dish → quantity modal → <b>Add to Order</b><br>
+4. Floating cart bar → cart → <b>Checkout</b> → delivery details → <b>Place Order</b><br>
+5. Payment screen → <b>I HAVE PAID</b> → track order<br>
+6. Orders tab: history, detail, cancel (PENDING), reorder, rate ★</td>
+<td>1. Profile → <b>Start Selling</b> (one-tap upgrade)<br>
+2. Create kitchen: name, cuisine, description, image<br>
+3. Sell dashboard: Offerings / Orders / Kitchen tabs<br>
+4. Add dishes with price, description, category<br>
+5. Incoming orders live → confirm → ready → delivered<br>
+6. Edit prices/availability; pause or delete dishes</td></tr>
+</table>
+
+<h2>2. What Has Been Used — Technology Stack</h2>
+<table>
+<tr><th style="width:22%">Layer</th><th style="width:40%">Technology</th><th>Why it is used</th></tr>
+<tr><td><b>Language</b></td><td>Java 21 (LTS)</td><td>Modern LTS runtime; records, switch expressions</td></tr>
+<tr><td><b>Framework</b></td><td>Spring Boot <b>4.1.1</b> (starter-parent)</td><td>Auto-configuration, embedded Tomcat, industry standard</td></tr>
+<tr><td><b>Web / REST</b></td><td>spring-boot-starter-webmvc</td><td>REST controllers, JSON, static content serving</td></tr>
+<tr><td><b>Security</b></td><td>spring-boot-starter-security (Spring Security 7)</td><td>OTP session auth, per-role endpoint protection, CSRF</td></tr>
+<tr><td><b>Validation</b></td><td>spring-boot-starter-validation</td><td>Declarative bean validation → clean 400 errors</td></tr>
+<tr><td><b>Persistence</b></td><td>spring-boot-starter-data-jpa + Hibernate</td><td>Repositories, entity mapping, schema auto-update</td></tr>
+<tr><td><b>Database</b></td><td>H2 in <b>file mode</b> <code>jdbc:h2:file:./data/sociomartdb</code></td><td>Zero-install persistence; survives restarts; console at <code>/h2-console</code></td></tr>
+<tr><td><b>API docs</b></td><td>springdoc-openapi 2.5.0</td><td>Live Swagger UI at <code>/swagger-ui.html</code></td></tr>
+<tr><td><b>Frontend</b></td><td>Vanilla HTML5 / CSS3 / ES6 SPA (no framework)</td><td>Zero build step; hash router; mobile-first UI</td></tr>
+<tr><td><b>Build</b></td><td>Maven via included wrapper (<code>mvnw</code>)</td><td>Reproducible builds; no Maven install needed</td></tr>
+<tr><td><b>Testing</b></td><td>28-step scripted E2E run (API + UI click flows)</td><td>All core flows verified end-to-end</td></tr>
+</table>
+<div class="note"><b>Key config:</b> app port <code>8081</code> · 30-min sessions · JPA <code>ddl-auto=update</code> ·
+no external services, no environment variables required.</div>
+</div>
+<!-- ============ PAGE 3 : ARCHITECTURE / API / DATA ============ -->
+<div class="page">
+<h2>3. Architecture &amp; What Was Built</h2>
+<h3>3.1 Layered architecture &amp; project structure</h3>
+<pre><code>my-first-spring-api/                  (repo root)
+└─ my-first-spring-api/               (Maven project)
+   ├─ mvnw / mvnw.cmd                 Maven wrapper — no Maven install needed
+   ├─ pom.xml                         Spring Boot 4.1.1 · Java 21 · dependencies
+   ├─ data/sociomartdb.mv.db          H2 file database (created on first run)
+   └─ src/main/
+      ├─ java/com/example/my_first_spring_api/
+      │  ├─ MyFirstSpringApiApplication.java   (main entry point)
+      │  ├─ SecurityConfig.java                (route security rules)
+      │  ├─ GlobalExceptionHandler.java        (consistent JSON ApiErrorDto)
+      │  ├─ controller/   Auth · Marketplace · Seller · BuyerOrder · BuyerProfile
+      │  ├─ service/      Buyer · Kitchen · Marketplace · Order · Otp · Seller
+      │  ├─ repository/   Spring Data JPA interfaces (6 repositories)
+      │  ├─ model/        9 JPA entities (User, Kitchen, Product, Order…)
+      │  ├─ dto/          request/response payloads with validation
+      │  └─ exception/    domain exceptions → mapped to HTTP status codes
+      └─ resources/
+         ├─ application.properties     (port 8081, H2 file DB, Swagger)
+         └─ static/  index.html · css/styles.css · js/app.js  (the SPA)</code></pre>
+
+<h3>3.2 REST API (secure, JSON, documented in Swagger)</h3>
+<table>
+<tr><th style="width:22%">Area</th><th style="width:46%">Representative endpoints</th><th>Purpose</th></tr>
+<tr><td><b>Auth</b> <code>/api/auth</code></td><td><code>POST /otp/request</code> · <code>POST /otp/verify</code> · <code>GET /me</code> · <code>POST /become-seller</code> · <code>POST /logout</code></td><td>OTP login, session, role upgrade</td></tr>
+<tr><td><b>Marketplace</b> (public)</td><td><code>GET /api/marketplace</code> · <code>GET /api/kitchens</code> · <code>GET /api/kitchens/{name}/products</code> · <code>GET /api/products/{id}</code></td><td>Browse kitchens, dishes, search</td></tr>
+<tr><td><b>Buyer orders</b> <code>/api/buyer/orders</code></td><td><code>POST|GET|DELETE /draft</code> · <code>POST /place</code> · <code>GET /my</code> · <code>GET /{id}</code> · <code>PUT …/payment</code> · <code>POST …/rating</code> · <code>POST …/reorder</code></td><td>Cart, checkout, payment ★, history, reorder</td></tr>
+<tr><td><b>Buyer profile</b></td><td><code>GET/PUT /api/buyer/profile</code></td><td>Name / flat / phone</td></tr>
+<tr><td><b>Seller</b> <code>/api/seller</code></td><td><code>GET|POST /kitchen</code> · <code>PUT /kitchen/{id}</code> · <code>GET|POST /products</code> · <code>PUT|DELETE /products/{id}</code> · <code>GET /orders</code> · <code>PATCH /orders/{id}/status</code></td><td>Kitchen &amp; menu management, order lifecycle</td></tr>
+</table>
+
+<h3>3.3 Data model (6 core entities, 9 tables)</h3>
+<table>
+<tr><th style="width:26%">Entity</th><th>Key fields &amp; relationships</th></tr>
+<tr><td><code>User</code></td><td>mobileNumber (unique), name, flatHouseNumber, role (<code>USER | SELLER</code>)</td></tr>
+<tr><td><code>OtpVerification</code></td><td>mobileNumber, otpCode, expiresAt, verified — short-lived login codes</td></tr>
+<tr><td><code>Kitchen</code></td><td>name (URL slug), displayName, cuisine, description, imageUrl, open · <code>seller → User</code></td></tr>
+<tr><td><code>Product</code></td><td>name, description, price, category, imageUrl, available · <code>kitchen → Kitchen</code></td></tr>
+<tr><td><code>Order</code></td><td>status <code>PENDING → CONFIRMED → READY → DELIVERED / CANCELLED</code> · paymentStatus <code>PENDING → PAID</code> · total, delivery fields, rating</td></tr>
+<tr><td><code>OrderItem</code></td><td>order, product, quantity &amp; price snapshots — cart and history lines</td></tr>
+</table>
+<div class="note"><b>Business rules:</b> a cart (draft order) is locked to the first kitchen added from —
+switching kitchens clears it; only unpaid <code>PENDING</code> orders can be cancelled; sellers only see/modify
+their own kitchen's data; every error returns a consistent JSON <code>ApiErrorDto</code>.</div>
+<h3>3.4 Frontend SPA</h3>
+<ul>
+  <li>Served by Spring Boot itself — <b>no Node.js, no build step</b>: clone, run, open browser.</li>
+  <li>Hash routing (<code>#/home</code>, <code>#/kitchen/:slug</code>, <code>#/my-orders</code>, <code>#/checkout</code>, <code>#/payment/:id</code>, <code>#/orders</code>, <code>#/sell</code>, <code>#/profile</code>) with bottom tab bar, floating cart bar, auth-aware inline OTP prompts.</li>
+</ul>
+</div>
+<!-- ============ PAGE 4 : PROGRESS CHART + FUTURE SCOPE ============ -->
+<div class="page">
+<h2>4. Project Progress Chart — Completed vs Future Scope</h2>
+<div class="chartwrap">
+  <div class="grid">
+    <div>
+      <div class="donut core"><div class="dlabel"><b>100%</b><span>of planned v1 (MVP) scope</span></div></div>
+      <div class="dcap">Core product — complete</div>
+    </div>
+    <div>
+      <div class="donut vision"><div class="dlabel"><b>~60%</b><span>of full product roadmap</span></div></div>
+      <div class="dcap">Full vision — productionization ahead</div>
+    </div>
+    <div style="flex:1;font-size:10.5px;color:#4c463f">
+      <b style="color:#A04000">How to read this chart</b><br>
+      Green = completed work · Grey = future scope.<br>
+      Every feature planned for v1 is built, wired to the
+      database and verified by a 28-step end-to-end test.
+      The remaining work is productionization — tests,
+      CI/CD, real messaging, payments and cloud hosting.
+    </div>
+  </div>
+  <table class="modtable">
+  <tr><td class="w">Authentication &amp; security (OTP login, Spring Security 7)</td><td><div class="track"><div class="fill done" style="width:100%"></div></div></td><td class="pct">100%</td><td><span class="chip done">DONE</span></td></tr>
+  <tr><td class="w">Marketplace, search &amp; kitchen pages</td><td><div class="track"><div class="fill done" style="width:100%"></div></div></td><td class="pct">100%</td><td><span class="chip done">DONE</span></td></tr>
+  <tr><td class="w">Seller module (kitchen, offerings, order management)</td><td><div class="track"><div class="fill done" style="width:100%"></div></div></td><td class="pct">100%</td><td><span class="chip done">DONE</span></td></tr>
+  <tr><td class="w">Buyer module (cart, orders, payment, ratings)</td><td><div class="track"><div class="fill done" style="width:100%"></div></div></td><td class="pct">100%</td><td><span class="chip done">DONE</span></td></tr>
+  <tr><td class="w">SPA frontend with hash routing (mobile-first)</td><td><div class="track"><div class="fill done" style="width:100%"></div></div></td><td class="pct">100%</td><td><span class="chip done">DONE</span></td></tr>
+  <tr><td class="w">REST API + Swagger / OpenAPI documentation</td><td><div class="track"><div class="fill done" style="width:100%"></div></div></td><td class="pct">100%</td><td><span class="chip done">DONE</span></td></tr>
+  <tr><td class="w">Persistence — file-based H2 + JPA/Hibernate</td><td><div class="track"><div class="fill done" style="width:100%"></div></div></td><td class="pct">100%</td><td><span class="chip done">DONE</span></td></tr>
+  <tr><td class="w">End-to-end test run (28-step API + click flows)</td><td><div class="track"><div class="fill done" style="width:100%"></div></div></td><td class="pct">100%</td><td><span class="chip done">DONE</span></td></tr>
+  <tr><td class="w">Unit &amp; integration tests (JUnit / Mockito)</td><td><div class="track"><div class="fill plan" style="width:0%"></div></div></td><td class="pct">0%</td><td><span class="chip plan">PLANNED</span></td></tr>
+  <tr><td class="w">CI/CD pipeline (GitHub Actions)</td><td><div class="track"><div class="fill plan" style="width:0%"></div></div></td><td class="pct">0%</td><td><span class="chip plan">PLANNED</span></td></tr>
+  <tr><td class="w">Real SMS / email OTP delivery</td><td><div class="track"><div class="fill plan" style="width:0%"></div></div></td><td class="pct">0%</td><td><span class="chip plan">PLANNED</span></td></tr>
+  <tr><td class="w">Online payment gateway (Razorpay / Stripe)</td><td><div class="track"><div class="fill plan" style="width:0%"></div></div></td><td class="pct">0%</td><td><span class="chip plan">PLANNED</span></td></tr>
+  <tr><td class="w">Cloud deployment (Docker, AWS/Azure)</td><td><div class="track"><div class="fill plan" style="width:0%"></div></div></td><td class="pct">0%</td><td><span class="chip plan">PLANNED</span></td></tr>
+  </table>
+  <div class="legend">Legend: green bar = completed work · grey bar = future scope</div>
+</div>
+<h2>5. Future Scope (roadmap)</h2>
+<ul style="list-style:none;margin-left:2px">
+  <li><span class="tag p1">P1</span><b>Quality:</b> JUnit/Mockito unit &amp; integration tests; GitHub Actions CI (build + test on every push)</li>
+  <li><span class="tag p1">P1</span><b>Data:</b> PostgreSQL profile for production; Flyway DB migrations</li>
+  <li><span class="tag p2">P2</span><b>Real OTP:</b> SMS provider (Twilio / MSG91) to replace demo OTP</li>
+  <li><span class="tag p2">P2</span><b>Payments:</b> Razorpay/Stripe gateway with webhooks (UPI/cards) + refunds</li>
+  <li><span class="tag p2">P2</span><b>Notifications &amp; packaging:</b> order-status emails / WhatsApp; Dockerfile for easy deploys</li>
+  <li><span class="tag p3">P3</span><b>Growth:</b> cloud hosting, admin analytics, delivery tracking, photo reviews, PWA/mobile apps</li>
+</ul>
+<p class="foot">All v1 (MVP) features complete and E2E-tested · productionization items planned as listed above</p>
+</div>
+<!--NEXT-->
+</body></html>
