@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><style>
+@page{size:A4;margin:13mm 14mm}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif}
+body{color:#2d2a26;font-size:12px;line-height:1.45}
+.page{page-break-after:always}
+.page:last-child{page-break-after:auto}
+h1{font-size:30px;color:#A04000}
+h2{font-size:17px;color:#A04000;border-bottom:2px solid #f0d9c8;padding-bottom:4px;margin:0 0 10px}
+h3{font-size:13px;margin:12px 0 5px;color:#4c463f}
+p{margin:5px 0}
+ul,ol{margin:4px 0 8px 18px}
+li{margin:3px 0}
+table{width:100%;border-collapse:collapse;margin:6px 0 10px}
+th{background:#faf3ec;color:#7a4a24;text-align:left;font-size:11px}
+th,td{border:1px solid #e8dfd3;padding:5px 8px;font-size:11.5px;vertical-align:top}
+code,.mono{font-family:Consolas,'Courier New',monospace;font-size:11px;background:#f6f1ea;padding:1px 5px;border-radius:4px}
+pre{background:#2d2a26;color:#f3ede4;padding:10px 12px;border-radius:8px;font-size:11px;line-height:1.5;overflow:hidden;page-break-inside:avoid;margin:6px 0 10px}
+pre code{background:none;color:inherit;padding:0}
+.cover{text-align:center;padding-top:70px}
+.cover .logo{font-size:56px}
+.cover h1{font-size:38px;margin:8px 0 2px}
+.cover .tag{font-size:15px;color:#7a736a}
+.facts{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:34px}
+.fact{border:1px solid #e8dfd3;border-radius:10px;padding:10px 16px;min-width:200px}
+.fact b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#A04000}
+.fact span{font-size:12px}
+.motive{background:#faf7f2;border:1px solid #ece5da;border-radius:12px;padding:14px 18px;margin-top:10px}
+.chips{margin:4px 0 8px}
+.chips span{display:inline-block;background:#faf3ec;border:1px solid #ecd9c4;color:#7a4a24;border-radius:14px;padding:2px 10px;font-size:10.5px;font-weight:600;margin:2px 4px 2px 0}
+.step{margin:8px 0}
+.step b{color:#A04000}
+.note{background:#fff8e6;border:1px solid #f0e2b6;border-radius:8px;padding:8px 12px;font-size:11px;margin:8px 0;page-break-inside:avoid}
+img.chart{width:100%;border:1px solid #e8dfd3;border-radius:10px}
+.foot{margin-top:14px;color:#9a938a;font-size:10px;text-align:center}
+</style></head><body>
+
+<!-- ============ PAGE 1 : COVER ============ -->
+<div class="page cover">
+  <div class="logo">🥘</div>
+  <h1>SocioMart</h1>
+  <div class="tag">Community Food Marketplace — Project Report</div>
+  <p class="motive" style="text-align:left;margin-top:34px">
+  <b style="color:#A04000">Motive.</b> Every neighbourhood has talented home cooks whose food never reaches
+  neighbours beyond their own floor. SocioMart connects home kitchens with people living in the same society:
+  cooks publish today's menu, neighbours browse a live marketplace, add dishes to a cart and place orders —
+  while sellers manage kitchens, offerings, prices and order status from a simple dashboard. It is built as a
+  real production-style product: secure OTP login, a clean REST API, persistent storage, Swagger docs and a
+  mobile-first single-page app.
+  </p>
+  <div class="facts">
+    <div class="fact"><b>Project</b><span>SocioMart (my-first-spring-api)</span></div>
+    <div class="fact"><b>Repository</b><span>github.com/utkarshnikhare/my-first-spring-api</span></div>
+    <div class="fact"><b>Stack</b><span>Java 21 · Spring Boot 4.1.1 · H2 · JS SPA</span></div>
+    <div class="fact"><b>Version</b><span>v1.0 (MVP complete)</span></div>
+    <div class="fact"><b>Status</b><span>Core flows done &amp; E2E tested</span></div>
+    <div class="fact"><b>Date</b><span>31 August 2026</span></div>
+  </div>
+</div>
+
+<!-- ============ PAGE 2 : OVERVIEW ============ -->
+<div class="page">
+<h2>1. Project Overview</h2>
+<p><b>SocioMart</b> is a full-stack <b>community food marketplace</b> web application. It lets home cooks
+("sellers") run a digital kitchen inside their housing society and lets neighbours ("buyers") discover dishes,
+order them online and track them to delivery — the complete hyperlocal food-ordering loop in one product.</p>
+
+<h3>1.1 The motive — why this project exists</h3>
+<ul>
+  <li><b>For home cooks:</b> no tech skills or shop needed — OTP login, create a kitchen, post today's dishes, and start taking orders from a simple dashboard.</li>
+  <li><b>For neighbours:</b> one place to see every home kitchen in the society, browse dishes, add to a cart and order in a few taps.</li>
+  <li><b>For the community:</b> extra income for cooks, fresh homemade food for residents, and less reliance on commercial food apps for daily meals.</li>
+  <li><b>As a learning product:</b> deliberately built to production standards — layered Spring Boot backend, security, validation, real persistence, documented REST API and a polished SPA frontend.</li>
+</ul>
+
+<h3>1.2 What the finished product does today</h3>
+<table>
+<tr><th style="width:50%">Buyer journey (all click-driven)</th><th style="width:50%">Seller journey (all click-driven)</th></tr>
+<tr><td>
+  1. Enter mobile number → OTP (shown on screen in demo mode) → logged in<br>
+  2. Browse marketplace: kitchen cards, dish cards, search, category chips<br>
+  3. Tap a dish → quantity modal → <b>Add to Order</b><br>
+  4. Floating cart bar shows count + total → tap to open cart<br>
+  5. <b>Proceed to Checkout</b> → delivery details → <b>Place Order</b><br>
+  6. Payment screen → <b>I HAVE PAID</b> → success → track order<br>
+  7. Orders tab → order history, detail, cancel (PENDING), reorder, rate ★
+</td><td>
+  1. Profile → <b>Start Selling</b> → become a seller (one tap)<br>
+  2. Create kitchen: name, cuisine, description, image<br>
+  3. Sell tab → dashboard: Offerings / Orders / Kitchen tabs<br>
+  4. Add dishes with price, description, category<br>
+  5. Incoming orders appear live → confirm → ready → delivered<br>
+  6. Edit prices/availability anytime; pause or delete dishes<br>
+  7. Kitchen profile editable; appears in marketplace instantly
+</td></tr>
+</table>
+
+<h2>2. Technology Stack (what has been used)</h2>
+<table>
+<tr><th style="width:26%">Layer</th><th style="width:37%">Technology</th><th>Why it is used</th></tr>
+<tr><td><b>Language</b></td><td>Java 21 (LTS)</td><td>Modern LTS runtime; records, switch expressions, virtual-thread readiness</td></tr>
+<tr><td><b>Framework</b></td><td>Spring Boot <b>4.1.1</b> (spring-boot-starter-parent)</td><td>Opinionated auto-configuration; embedded Tomcat; industry standard</td></tr>
+<tr><td><b>Web / REST</b></td><td>spring-boot-starter-webmvc</td><td>REST controllers, JSON serialization, static content serving</td></tr>
+<tr><td><b>Security</b></td><td>spring-boot-starter-security (Spring Security 7)</td><td>OTP session auth, per-role endpoint protection, CSRF for forms</td></tr>
+<tr><td><b>Validation</b></td><td>spring-boot-starter-validation (Hibernate Validator)</td><td>Declarative bean validation with clean 400 error messages</td></tr>
+<tr><td><b>Persistence</b></td><td>spring-boot-starter-data-jpa + Hibernate</td><td>Repositories, entity mapping, schema auto-update</td></tr>
+<tr><td><b>Database</b></td><td>H2 in <b>file mode</b> (<code>jdbc:h2:file:./data/sociomartdb</code>)</td><td>Zero-install persistence; data survives restarts; H2 console at <code>/h2-console</code></td></tr>
+<tr><td><b>API docs</b></td><td>springdoc-openapi 2.5.0</td><td>Live Swagger UI at <code>/swagger-ui.html</code> + OpenAPI JSON at <code>/v3/api-docs</code></td></tr>
+<tr><td><b>Frontend</b></td><td>Vanilla HTML5/CSS3/ES6 SPA (no framework)</td><td>Zero build step — instant load; hash-based router; mobile-first UI</td></tr>
+<tr><td><b>Build</b></td><td>Maven 3.9.x via included wrapper (<code>mvnw</code>)</td><td>Reproducible builds; no separate Maven install needed</td></tr>
+<tr><td><b>Testing</b></td><td>spring-boot-starter-test (JUnit 5)</td><td>Context-loads smoke test; E2E verified via scripted API/Click flows</td></tr>
+<tr><td><b>Tools</b></td><td>Git + GitHub · VS Code · Chrome DevTools · PowerShell</td><td>Version control, development, live debugging, E2E automation</td></tr>
+</table>
+
+<h3>2.1 Source code at a glance (67 Java files + SPA)</h3>
+<table>
+<tr><th>Package / folder</th><th>Contents</th></tr>
+<tr><td><code>controller</code> (5)</td><td>AuthController (OTP), MarketplaceController (browse/search), SellerController (kitchen/products/orders), BuyerOrderController (cart/orders/payment/rating), BuyerProfileController</td></tr>
+<tr><td><code>service</code> (6)</td><td>OtpService, BuyerService, SellerService, KitchenService, MarketplaceService, OrderService — all business rules</td></tr>
+<tr><td><code>repository</code> (6)</td><td>Spring Data JPA repositories: User, OtpVerification, Kitchen, Product, Order, OrderItem</td></tr>
+<tr><td><code>model</code> (9)</td><td>Entities &amp; enums: User, UserRole, OtpVerification, Kitchen, Product, Order, OrderStatus, OrderItem, PaymentStatus</td></tr>
+<tr><td><code>dto</code> (16)</td><td>Request/response records for every endpoint + ApiErrorDto</td></tr>
+<tr><td><code>exception</code> (7)</td><td>Typed domain exceptions → GlobalExceptionHandler maps them to clean HTTP errors</td></tr>
+<tr><td><code>static/</code></td><td>index.html · css/styles.css · js/app.js (SPA: router, views, modals, cart state)</td></tr>
+</table>
+</div>
+
+<!-- ============ PAGE 3 : ARCHITECTURE & API ============ -->
+<div class="page">
+<h2>3. Architecture</h2>
+<pre><code>┌─────────────────────────── Browser (SPA) ───────────────────────────┐
+│  index.html  →  css/styles.css  →  js/app.js                        │
+│  hash router: #/home #/kitchen/:slug #/my-orders #/checkout         │
+│  #/payment #/orders #/order/:id #/sell #/profile  (+ modals)        │
+└───────────────┬─────────────────────────────────────────────────────┘
+                │  fetch() JSON over same origin, JSESSIONID session
+┌───────────────▼──────────── Spring Boot 4.1.1 (port 8081) ──────────┐
+│ SecurityConfig (Spring Security 7) ── public static + /api/auth/**  │
+│        everything else needs an authenticated session               │
+│ Controllers → Services → Repositories (Spring Data JPA / Hibernate) │
+│ DTO records in/out · GlobalExceptionHandler → clean HTTP errors     │
+└───────────────┬─────────────────────────────────────────────────────┘
+                │  JDBC
+        ┌───────▼────────┐   File-based H2 at ./data/sociomartdb
+        │  USERS · OTPS  │   (schema auto-updated by ddl-auto=update,
+        │ KITCHENS · ... │    data persists across restarts)
+        └────────────────┘</code></pre>
+
+<h3>3.1 REST API reference (summary)</h3>
+<table>
+<tr><th style="width:20%">Area</th><th style="width:44%">Endpoint</th><th>Purpose</th></tr>
+<tr><td rowspan="3"><b>Auth</b></td><td><code>POST /api/auth/otp/request</code></td><td>Request OTP for a mobile number (returns the OTP in demo mode)</td></tr>
+<tr><td><code>POST /api/auth/otp/verify</code></td><td>Verify OTP (+ optional name/address) → creates user &amp; session</td></tr>
+<tr><td><code>POST /api/auth/logout</code> · <code>GET /api/auth/me</code></td><td>End session · current user info</td></tr>
+<tr><td rowspan="2"><b>Marketplace</b></td><td><code>GET /api/marketplace</code></td><td>All open kitchens + available dishes (home feed)</td></tr>
+<tr><td><code>GET /api/marketplace/search?q=</code></td><td>Search dishes &amp; kitchens by keyword</td></tr>
+<tr><td rowspan="4"><b>Seller</b></td><td><code>POST /api/seller/onboard</code></td><td>Become a seller (USER → SELLER role)</td></tr>
+<tr><td><code>POST/GET/PUT/DELETE /api/seller/kitchen…</code></td><td>Create / view / update kitchen profile</td></tr>
+<tr><td><code>POST/PUT/DELETE /api/seller/products…</code></td><td>Manage dish offerings (price, availability)</td></tr>
+<tr><td><code>GET /api/seller/orders</code> · <code>PUT /api/seller/orders/{id}/status</code></td><td>Incoming orders · CONFIRMED → READY → DELIVERED</td></tr>
+<tr><td rowspan="4"><b>Buyer</b></td><td><code>POST /api/buyer/orders/draft</code> / <code>…/items</code></td><td>Cart (draft order) — create and add items</td></tr>
+<tr><td><code>POST /api/buyer/orders/draft/place</code></td><td>Place order (delivery details captured)</td></tr>
+<tr><td><code>GET /api/buyer/orders</code> · <code>GET /api/buyer/orders/{id}</code></td><td>Order history · order detail/tracking</td></tr>
+<tr><td><code>PUT …/payment</code> · <code>POST …/rating</code> · <code>POST …/reorder</code></td><td>Mark paid · rate ★1–5 · reorder past items</td></tr>
+<tr><td><b>Profile</b></td><td><code>GET/PUT /api/buyer/profile</code></td><td>View &amp; edit name / flat / phone</td></tr>
+</table>
+
+<h3>3.2 Data model (9 entities)</h3>
+<table>
+<tr><th style="width:30%">Entity</th><th>Key fields &amp; relationships</th></tr>
+<tr><td><code>User</code></td><td>mobileNumber (unique), name, flatHouseNumber, role (<code>USER | SELLER</code>)</td></tr>
+<tr><td><code>OtpVerification</code></td><td>mobileNumber, otpCode, expiresAt, verified — short-lived login codes</td></tr>
+<tr><td><code>Kitchen</code></td><td>name (URL slug), displayName, cuisine, description, imageUrl, open, <code>seller → User</code></td></tr>
+<tr><td><code>Product</code></td><td>name, description, price, category, imageUrl, available, <code>kitchen → Kitchen</code></td></tr>
+<tr><td><code>Order</code></td><td>buyer, kitchen, status (<code>PENDING → CONFIRMED → READY → DELIVERED / CANCELLED</code>), paymentStatus (<code>PENDING → PAID</code>), total, delivery fields, rating</td></tr>
+<tr><td><code>OrderItem</code></td><td>order, product, quantitySnapshot, priceSnapshot — cart lines &amp; history lines</td></tr>
+</table>
+<div class="note"><b>Business rules worth knowing:</b> a buyer's cart (draft order) is locked to the first kitchen they add from —
+switching kitchens requires clearing the cart; only <code>PENDING</code> (unpaid) orders can be cancelled; sellers only see/modify
+their own kitchen's data; every error returns a consistent JSON <code>ApiErrorDto</code>.</div>
+</div>
+
+<!-- ============ PAGE 4 : FRONTEND + RUN + CHART ============ -->
+<div class="page">
+<h2>4. Frontend — how the SPA works</h2>
+<ul>
+  <li><b>Zero build tooling.</b> Plain <code>index.html</code> + <code>css/styles.css</code> + <code>js/app.js</code> served by Spring Boot itself — clone, run, done.</li>
+  <li><b>Hash routing.</b> A <code>hashchange</code> + <code>load</code> listener re-renders the current view instantly; root <code>/</code> auto-redirects to <code>#/home</code>. Routes: <code>#/home</code>, <code>#/kitchen/:slug</code>, <code>#/search/:query</code>, <code>#/my-orders</code> (cart), <code>#/checkout</code>, <code>#/payment/:id</code>, <code>#/orders</code>, <code>#/order/:id</code>, <code>#/sell</code>, <code>#/profile</code>.</li>
+  <li><b>100% click navigation.</b> Bottom tab bar, floating cart bar, cards and buttons set <code>location.hash</code>; forms use delegated <code>submit</code> handlers with <code>preventDefault()</code> — the user never types a URL.</li>
+  <li><b>Active tab highlighting</code> updates on every route change; cart badge &amp; totals refresh after each action.</li>
+  <li><b>Auth-aware views.</b> Protected tabs prompt for OTP inline and return the user to the screen they originally tapped.</li>
+</ul>
+
+<h2>5. Run it locally (quick version)</h2>
+<table>
+<tr><th style="width:22%">Requires</th><th>Details</th></tr>
+<tr><td><b>JDK 21</b></td><td>Eclipse Temurin / Oracle JDK 21 — set <code>JAVA_HOME</code></td></tr>
+<tr><td><b>VS Code</b></td><td>Extensions: <i>Extension Pack for Java</i> + <i>Spring Boot Extension Pack</i></td></tr>
+<tr><td><b>Git</b></td><td>Any recent version</td></tr>
+<tr><td><b>Maven / DB</b></td><td>Nothing to install — wrapper (<code>mvnw</code>) and H2 are bundled</td></tr>
+</table>
+<pre><code>git clone https://github.com/utkarshnikhare/my-first-spring-api.git
+cd my-first-spring-api
+
+# Windows (PowerShell):
+cd my-first-spring-api; .\mvnw.cmd spring-boot:run
+
+# macOS / Linux:
+cd my-first-spring-api; ./mvnw spring-boot:run</code></pre>
+<p>Then open <code>http://localhost:8081</code> — the app boots on <b>#/home</b> with an empty marketplace.
+Register via any 10-digit number: the OTP is displayed right in the dialog (demo mode), so no SMS setup is needed.
+Extras: Swagger UI at <code>/swagger-ui.html</code> · H2 console at <code>/h2-console</code> (JDBC URL <code>jdbc:h2:file:./data/sociomartdb</code>, user <code>sa</code>, blank password). Stop with <code>Ctrl+C</code>; delete the <code>data/</code> folder for a factory reset.</p>
+
+<h2>6. Project Progress &amp; Future Scope</h2>
+<img class="chart" src="progress-chart.png" alt="Progress chart">
+<p class="foot">All v1 (MVP) features complete and E2E-tested · productionization items planned as listed</p>
+</div>
+
+<!-- ============ PAGE 5 : GITHUB ============ -->
+<div class="page">
+<h2>7. Sharing via GitHub (owner steps — do this first)</h2>
+<div class="note">Important: only the original skeleton was ever committed. All SocioMart work exists in the working
+tree, so <b>commit and push before sharing the link</b>, otherwise your friend will clone an empty project.</div>
+<pre><code>cd C:\project\my-first-spring-api
+git add my-first-spring-api/src my-first-spring-api/pom.xml my-first-spring-api/.gitignore
+git commit -m "SocioMart: full-stack community food marketplace (SPA + Spring Boot 4)"
+git push origin appmod/java-upgrade-20260831033621   # or: git push origin HEAD:main</code></pre>
+<ul>
+  <li><b>Do NOT commit</b> <code>data/</code> (local DB), <code>target/</code>, or the <code>*.log</code> / test-script files in the repo root — add them to <code>.gitignore</code>.</li>
+  <li>Optionally make <code>main</code> the default branch and add this PDF to the repo (e.g. in <code>docs/</code>).</li>
+  <li>Then send your friend the repo URL: <code>https://github.com/utkarshnikhare/my-first-spring-api</code></li>
+</ul>
+
+<h2>8. Complete Setup Guide for Your Friend</h2>
+<h3>Step 1 — Install the software (one-time, ~15 minutes)</h3>
+<table>
+<tr><th style="width:18%">Tool</th><th style="width:30%">What to get</th><th>Notes</th></tr>
+<tr><td><b>1. JDK 21</b></td><td>Adoptium Temurin 21 (LTS) — <code>adoptium.net</code></td><td>Windows .msi → tick "Set JAVA_HOME". Verify: <code>java -version</code> shows 21.x</td></tr>
+<tr><td><b>2. VS Code</b></td><td><code>code.visualstudio.com</code></td><td>Any OS</td></tr>
+<tr><td><b>3. Git</b></td><td><code>git-scm.com</code></td><td>Verify: <code>git --version</code></td></tr>
+<tr><td><b>4. VS Code extensions</b></td><td>"Extension Pack for Java" + "Spring Boot Extension Pack" (by VMware)</td><td>From the Extensions panel; pulls in the Java debugger, Maven support and Spring Boot dashboards</td></tr>
+<tr><td>Not needed</td><td>Maven, Node.js, a database server</td><td>The Maven <i>wrapper</i> (<code>mvnw</code>) auto-downloads Maven; H2 is a bundled dependency</td></tr>
+</table>
+
+<h3>Step 2 — Clone &amp; open in VS Code</h3>
+<pre><code>git clone https://github.com/utkarshnikhare/my-first-spring-api.git
+cd my-first-spring-api
+code .</code></pre>
+<p>Wait ~1 minute while the Java extensions import the project and download dependencies (watch the status bar).</p>
+
+<h3>Step 3 — Run the app</h3>
+<ul>
+  <li><b>Easiest (VS Code):</b> open <code>MyFirstSpringApiApplication.java</code> → press <b>F5</b> → choose <i>Java</i> if asked.</li>
+  <li><b>Or terminal (PowerShell):</b> <code>cd my-first-spring-api</code> then <code>.\mvnw.cmd spring-boot:run</code> (macOS/Linux: <code>./mvnw spring-boot:run</code>).</li>
+  <li>Wait for <code>Started MyFirstSpringApiApplication</code> — first run downloads dependencies (2–5 min).</li>
+</ul>
+<!--PART6-->
+
+
+
+
+</body></html>

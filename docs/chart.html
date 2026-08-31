@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif}
+body{background:#fff;padding:34px 40px;color:#2d2a26}
+h1{font-size:26px;color:#A04000;margin-bottom:2px}
+.sub{color:#7a736a;font-size:13px;margin-bottom:22px}
+.grid{display:flex;gap:34px;align-items:flex-start;margin-bottom:26px}
+.donutbox{text-align:center}
+.donut{width:190px;height:190px;border-radius:50%;margin:0 auto 10px;position:relative}
+.donut.core{background:conic-gradient(#2e7d32 0 100%, #ece7df 0)}
+.donut.vision{background:conic-gradient(#A04000 0 60%, #ece7df 60% 100%)}
+.donut::after{content:'';position:absolute;inset:24px;background:#fff;border-radius:50%}
+.dlabel{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;z-index:2}
+.dlabel b{font-size:30px}.dlabel span{font-size:11px;color:#8a837a;padding:0 30px;line-height:1.25}
+.dcap{font-size:13px;font-weight:600;color:#4c463f;margin-top:4px}
+.modtable{width:100%;border-collapse:collapse;margin-bottom:8px}
+.modtable td{padding:6px 10px;border-bottom:1px solid #f0ebe4;font-size:13px}
+.modtable td.w{width:44%}
+.track{background:#ece7df;border-radius:8px;height:12px;width:100%}
+.fill{height:12px;border-radius:8px}
+.fill.done{background:#2e7d32}.fill.plan{background:#c9c2b8}
+.pct{width:38px;text-align:right;font-weight:600;color:#4c463f}
+.chip{font-size:10px;font-weight:700;padding:2px 8px;border-radius:9px}
+.chip.done{background:#e5f2e6;color:#2e7d32}.chip.plan{background:#f1ede7;color:#8a837a}
+.legend{font-size:11px;color:#7a736a;margin-top:6px}
+.future{margin-top:20px;background:#faf7f2;border:1px solid #ece5da;border-radius:12px;padding:18px 22px}
+.future h2{font-size:16px;color:#A04000;margin-bottom:10px}
+.future li{font-size:13px;margin:5px 0 5px 18px;line-height:1.35}
+.tag{display:inline-block;font-size:10px;font-weight:700;border-radius:8px;padding:1px 7px;margin-right:6px}
+.p1{background:#fdeaea;color:#b23b3b}.p2{background:#fdf1dc;color:#a9702a}.p3{background:#e8eef7;color:#44618c}
+</style></head><body>
+<h1>SocioMart — Project Progress &amp; Future Scope</h1>
+<div class="sub">Community food marketplace · Spring Boot 4.1.1 · Java 21 · Vanilla-JS SPA · 31 Aug 2026</div>
+<div class="grid">
+  <div class="donutbox">
+    <div class="donut core"><div class="dlabel"><b>100%</b><span>of planned v1 (MVP) scope</span></div></div>
+    <div class="dcap">Core product — complete</div>
+  </div>
+  <div class="donutbox">
+    <div class="donut vision"><div class="dlabel"><b>~60%</b><span>of full product roadmap</span></div></div>
+    <div class="dcap">Full vision — productionization ahead</div>
+  </div>
+</div>
+<table class="modtable">
+<tr><td class="w">Authentication &amp; security (OTP login, Spring Security 7)</td><td><div class="track"><div class="fill done" style="width:100%"></div></div></td><td class="pct">100%</td><td><span class="chip done">DONE</span></td></tr>
+<tr><td class="w">Marketplace, search &amp; kitchen pages</td><td><div class="track"><div class="fill done" style="width:100%"></div></div></td><td class="pct">100%</td><td><span class="chip done">DONE</span></td></tr>
+<tr><td class="w">Seller module (kitchen, offerings, order management)</td><td><div class="track"><div class="fill done" style="width:100%"></div></div></td><td class="pct">100%</td><td><span class="chip done">DONE</span></td></tr>
+<tr><td class="w">Buyer module (cart, orders, payment, ratings)</td><td><div class="track"><div class="fill done" style="width:100%"></div></div></td><td class="pct">100%</td><td><span class="chip done">DONE</span></td></tr>
+<tr><td class="w">SPA frontend with hash routing (mobile-first)</td><td><div class="track"><div class="fill done" style="width:100%"></div></div></td><td class="pct">100%</td><td><span class="chip done">DONE</span></td></tr>
+<tr><td class="w">REST API + Swagger / OpenAPI documentation</td><td><div class="track"><div class="fill done" style="width:100%"></div></div></td><td class="pct">100%</td><td><span class="chip done">DONE</span></td></tr>
+<tr><td class="w">Persistence — file-based H2 + JPA/Hibernate</td><td><div class="track"><div class="fill done" style="width:100%"></div></div></td><td class="pct">100%</td><td><span class="chip done">DONE</span></td></tr>
+<tr><td class="w">End-to-end test run (28-step API + click flows)</td><td><div class="track"><div class="fill done" style="width:100%"></div></div></td><td class="pct">100%</td><td><span class="chip done">DONE</span></td></tr>
+<tr><td class="w">Unit &amp; integration tests (JUnit / Mockito)</td><td><div class="track"><div class="fill plan" style="width:0%"></div></div></td><td class="pct">0%</td><td><span class="chip plan">PLANNED</span></td></tr>
+<tr><td class="w">CI/CD pipeline (GitHub Actions)</td><td><div class="track"><div class="fill plan" style="width:0%"></div></div></td><td class="pct">0%</td><td><span class="chip plan">PLANNED</span></td></tr>
+<tr><td class="w">Real SMS / email OTP delivery</td><td><div class="track"><div class="fill plan" style="width:0%"></div></div></td><td class="pct">0%</td><td><span class="chip plan">PLANNED</span></td></tr>
+<tr><td class="w">Online payment gateway (Razorpay / Stripe)</td><td><div class="track"><div class="fill plan" style="width:0%"></div></div></td><td class="pct">0%</td><td><span class="chip plan">PLANNED</span></td></tr>
+<tr><td class="w">Cloud deployment (Docker, AWS/Azure)</td><td><div class="track"><div class="fill plan" style="width:0%"></div></div></td><td class="pct">0%</td><td><span class="chip plan">PLANNED</span></td></tr>
+</table>
+<div class="legend">Legend: green = completed work · grey = future scope</div>
+<div class="future">
+<h2>Future Scope</h2>
+<li><span class="tag p1">P1</span><b>Quality:</b> JUnit/Mockito tests; GitHub Actions CI (build + test on every push)</li>
+<li><span class="tag p1">P1</span><b>Data:</b> PostgreSQL profile for production; Flyway DB migrations</li>
+<li><span class="tag p2">P2</span><b>Real OTP:</b> SMS provider (Twilio / MSG91) to replace demo OTP</li>
+<li><span class="tag p2">P2</span><b>Payments:</b> Razorpay/Stripe gateway with webhooks (UPI/cards) + refunds</li>
+<li><span class="tag p2">P2</span><b>Notifications:</b> order-status emails / WhatsApp; Docker image for easy deploys</li>
+<li><span class="tag p3">P3</span><b>Growth:</b> cloud hosting, admin analytics, delivery tracking, photo reviews, PWA/mobile apps</li>
+</div>
+</body></html>

@@ -1,0 +1,66 @@
+package com.example.my_first_spring_api.service;
+
+import com.example.my_first_spring_api.dto.KitchenDto;
+import com.example.my_first_spring_api.dto.MarketplaceDto;
+import com.example.my_first_spring_api.dto.ProductDto;
+import com.example.my_first_spring_api.model.Kitchen;
+import com.example.my_first_spring_api.model.Product;
+import com.example.my_first_spring_api.repository.KitchenRepository;
+import com.example.my_first_spring_api.repository.ProductRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+@Transactional(readOnly = true)
+public class MarketplaceService {
+
+    private final KitchenRepository kitchenRepository;
+    private final ProductRepository productRepository;
+
+    @Autowired
+    public MarketplaceService(KitchenRepository kitchenRepository, ProductRepository productRepository) {
+        this.kitchenRepository = kitchenRepository;
+        this.productRepository = productRepository;
+    }
+
+    public MarketplaceDto getMarketplaceHome() {
+        List<KitchenDto> kitchens = kitchenRepository.findAll().stream()
+                .map(this::toKitchenDto).collect(Collectors.toList());
+
+        List<ProductDto> availableToday = productRepository.findByAvailableTodayTrueOrderByCreatedAtDesc().stream()
+                .map(this::toProductDto).collect(Collectors.toList());
+
+        List<ProductDto> newProducts = availableToday;
+        List<ProductDto> popularProducts = availableToday.stream()
+                .sorted((p1, p2) -> Double.compare(p2.getRating(), p1.getRating()))
+                .collect(Collectors.toList());
+
+        return new MarketplaceDto(kitchens, popularProducts, newProducts, availableToday);
+    }
+
+    private KitchenDto toKitchenDto(Kitchen kitchen) {
+        return new KitchenDto(kitchen.getId(), kitchen.getName(), kitchen.getDisplayName(),
+                kitchen.getDescription(), kitchen.getImageUrl(), kitchen.getRating(),
+                kitchen.getAvailableToday(), kitchen.getSeller() != null ? kitchen.getSeller().getId() : null);
+    }
+
+    private ProductDto toProductDto(Product product) {
+        Kitchen kitchen = product.getKitchen();
+        ProductDto dto = new ProductDto(product.getId(), kitchen != null ? kitchen.getId() : null,
+                kitchen != null ? kitchen.getDisplayName() : null, product.getName(),
+                product.getDescription(), product.getPrice(), product.getImageUrl(),
+                product.getAvailableToday(), product.getRating());
+        dto.setPriceUnit(product.getPriceUnit());
+        dto.setAvailableDate(product.getAvailableDate());
+        dto.setOrderWindowStart(product.getOrderWindowStart());
+        dto.setOrderWindowEnd(product.getOrderWindowEnd());
+        dto.setMaxQuantity(product.getMaxQuantity());
+        dto.setRemainingQuantity(product.getRemainingQuantity());
+        dto.setIsPreorder(product.getIsPreorder());
+        return dto;
+    }
+}
