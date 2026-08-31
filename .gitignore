@@ -1,0 +1,9 @@
+# Local runtime data & build output (never share)
+data/
+bin/
+target/
+
+# Logs, local test artifacts & scripts
+*.log
+*.txt
+*.ps1

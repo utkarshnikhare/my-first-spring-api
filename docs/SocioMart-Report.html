@@ -2,7 +2,7 @@
 <html><head><meta charset="UTF-8"><title>SocioMart — Project Report</title><style>
 @page{size:A4;margin:12mm 13mm}
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif}
-body{color:#2d2a26;font-size:12px;line-height:1.45}
+body{color:#2d2a26;font-size:11.5px;line-height:1.38}
 .page{page-break-after:always}
 .page:last-child{page-break-after:auto}
 h1{font-size:30px;color:#A04000}
@@ -10,12 +10,12 @@ h2{font-size:16px;color:#A04000;border-bottom:2px solid #f0d9c8;padding-bottom:3
 h3{font-size:12.5px;margin:10px 0 4px;color:#4c463f}
 p{margin:4px 0}
 ul,ol{margin:3px 0 8px 18px}
-li{margin:2.5px 0}
+li{margin:2px 0}
 table{width:100%;border-collapse:collapse;margin:5px 0 9px}
 th{background:#faf3ec;color:#7a4a24;text-align:left;font-size:10.5px}
-th,td{border:1px solid #e8dfd3;padding:4px 7px;font-size:11px;vertical-align:top}
+th,td{border:1px solid #e8dfd3;padding:3px 6px;font-size:10.5px;vertical-align:top}
 code,.mono{font-family:Consolas,'Courier New',monospace;font-size:10.5px;background:#f6f1ea;padding:1px 4px;border-radius:4px}
-pre{background:#2d2a26;color:#f3ede4;padding:9px 11px;border-radius:8px;font-size:10.5px;line-height:1.5;page-break-inside:avoid;margin:5px 0 9px;white-space:pre-wrap}
+pre{background:#2d2a26;color:#f3ede4;padding:9px 11px;border-radius:8px;font-size:10px;line-height:1.45;page-break-inside:avoid;margin:5px 0 9px;white-space:pre-wrap}
 pre code{background:none;color:inherit;padding:0}
 .cover{text-align:center;padding-top:56px}
 .cover .logo{font-size:52px}
@@ -27,7 +27,6 @@ pre code{background:none;color:inherit;padding:0}
 .fact b{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:#A04000}
 .fact span{font-size:11.5px}
 .note{background:#fff8e6;border:1px solid #f0e2b6;border-radius:8px;padding:7px 11px;font-size:10.5px;margin:7px 0;page-break-inside:avoid}
-/* progress chart */
 .chartwrap{border:1px solid #e8dfd3;border-radius:10px;padding:12px 14px;margin-bottom:10px}
 .grid{display:flex;gap:26px;align-items:center;margin-bottom:12px}
 .donut{width:118px;height:118px;border-radius:50%;position:relative;flex:none}
@@ -113,7 +112,7 @@ to delivery and rate it — the complete hyperlocal food-ordering loop in one pr
 <tr><td><b>Validation</b></td><td>spring-boot-starter-validation</td><td>Declarative bean validation → clean 400 errors</td></tr>
 <tr><td><b>Persistence</b></td><td>spring-boot-starter-data-jpa + Hibernate</td><td>Repositories, entity mapping, schema auto-update</td></tr>
 <tr><td><b>Database</b></td><td>H2 in <b>file mode</b> <code>jdbc:h2:file:./data/sociomartdb</code></td><td>Zero-install persistence; survives restarts; console at <code>/h2-console</code></td></tr>
-<tr><td><b>API docs</b></td><td>springdoc-openapi 2.5.0</td><td>Live Swagger UI at <code>/swagger-ui.html</code></td></tr>
+<tr><td><b>API docs</b></td><td>springdoc-openapi 3.1.0</td><td>Live Swagger UI at <code>/swagger-ui.html</code></td></tr>
 <tr><td><b>Frontend</b></td><td>Vanilla HTML5 / CSS3 / ES6 SPA (no framework)</td><td>Zero build step; hash router; mobile-first UI</td></tr>
 <tr><td><b>Build</b></td><td>Maven via included wrapper (<code>mvnw</code>)</td><td>Reproducible builds; no Maven install needed</td></tr>
 <tr><td><b>Testing</b></td><td>28-step scripted E2E run (API + UI click flows)</td><td>All core flows verified end-to-end</td></tr>
@@ -224,5 +223,83 @@ their own kitchen's data; every error returns a consistent JSON <code>ApiErrorDt
 </ul>
 <p class="foot">All v1 (MVP) features complete and E2E-tested · productionization items planned as listed above</p>
 </div>
-<!--NEXT-->
+<!-- ============ PAGE 5 : GITHUB SHARING + FRIEND SETUP ============ -->
+<div class="page">
+<h2>6. Sharing via GitHub — Owner Steps</h2>
+<div class="note"><b>Status (done):</b> the complete SocioMart project is already committed &amp; pushed to
+<code>main</code> on GitHub — including the Spring Boot 4 compatibility fixes for Swagger and the H2 console
+(<code>pom.xml</code>). Local-only files (H2 database, logs, test scripts, build output) are excluded by
+<code>.gitignore</code>, so your friend's clone contains only clean project files + this PDF.</div>
+<p class="step"><b>Whenever you change code, share it with 3 commands</b> (run in the repo root):</p>
+<pre><code>git add -A
+git commit -m "Describe what you changed"
+git push origin HEAD:main</code></pre>
+<p class="step"><b>Then send your friend the repo URL:</b> <code>https://github.com/utkarshnikhare/my-first-spring-api</code>
+(public — no access setup needed) — plus this PDF.</p>
+
+<h2>7. Complete Setup Guide for Your Friend</h2>
+<h3>Step 1 — Install the software (one-time, ~15 minutes)</h3>
+<table>
+<tr><th style="width:17%">Tool</th><th style="width:31%">What to get</th><th>Notes / verify</th></tr>
+<tr><td><b>1. JDK 21</b></td><td>Eclipse Temurin 21 (LTS) — <code>adoptium.net</code></td><td>Windows <code>.msi</code> → tick “Set JAVA_HOME”. Verify: <code>java -version</code> shows <code>21.x</code></td></tr>
+<tr><td><b>2. VS Code</b></td><td><code>code.visualstudio.com</code></td><td>Any OS (Windows/macOS/Linux)</td></tr>
+<tr><td><b>3. Git</b></td><td><code>git-scm.com</code></td><td>Verify: <code>git --version</code></td></tr>
+<tr><td><b>4. VS Code extensions</b></td><td><i>Extension Pack for Java</i> + <i>Spring Boot Extension Pack</i> (VMware)</td><td>Install from the Extensions panel (<code>Ctrl+Shift+X</code>) — adds Java debugger, Maven support, Spring Boot dashboard</td></tr>
+<tr><td>NOT needed</td><td>Maven · Node.js · MySQL/Postgres · Docker</td><td>The Maven <i>wrapper</i> (<code>mvnw</code>) downloads Maven itself; H2 database is a bundled dependency; the SPA needs no build tools</td></tr>
+</table>
+
+<h3>Step 2 — Clone the repo &amp; open it in VS Code</h3>
+<pre><code>git clone https://github.com/utkarshnikhare/my-first-spring-api.git
+cd my-first-spring-api
+code .</code></pre>
+<ul>
+  <li>Wait ~1 minute while the Java extensions import the project and download dependencies (watch the blue status bar; trust the authors if prompted).</li>
+  <li>The Maven project is the inner <code>my-first-spring-api</code> folder (contains <code>pom.xml</code>) — open/refresh it if VS Code shows two roots.</li>
+</ul>
+<!-- ============ PAGE 6 : RUN + VERIFY + TROUBLESHOOTING ============ -->
+<div class="page">
+<h3>Step 3 — Run the app</h3>
+<table>
+<tr><th style="width:22%">Option</th><th>How</th></tr>
+<tr><td><b>Easiest — VS Code</b></td><td>Open <code>MyFirstSpringApiApplication.java</code> → press <b>F5</b> → choose <i>Java</i> if asked. Or use the <b>Spring Boot Dashboard</b> sidebar → right-click the app → <i>Start</i>.</td></tr>
+<tr><td><b>Terminal — Windows</b></td><td>In VS Code terminal (PowerShell), from the <b>inner</b> <code>my-first-spring-api</code> folder: <code>.\mvnw.cmd spring-boot:run</code></td></tr>
+<tr><td><b>Terminal — macOS/Linux</b></td><td><code>./mvnw spring-boot:run</code></td></tr>
+</table>
+<p><b>Wait for</b> <code>Started MyFirstSpringApiApplication</code> in the console. The <b>first run downloads
+dependencies (2–5 min)</b>; later runs are fast. The database file <code>data/sociomartdb.mv.db</code> is created automatically.</p>
+
+<h3>Step 4 — Open the app &amp; verify it works</h3>
+<table>
+<tr><th style="width:34%">URL</th><th>What it is</th></tr>
+<tr><td><code>http://localhost:8081</code></td><td>The SocioMart app — boots on <b>#/home</b> with an empty marketplace</td></tr>
+<tr><td><code>http://localhost:8081/swagger-ui.html</code></td><td>Live API documentation (Swagger UI) · JSON at <code>/v3/api-docs</code></td></tr>
+<tr><td><code>http://localhost:8081/h2-console</code></td><td>DB console — JDBC URL <code>jdbc:h2:file:./data/sociomartdb</code>, user <code>sa</code>, blank password</td></tr>
+</table>
+<div class="note"><b>Try the full demo (5 minutes):</b> register with any 10-digit mobile number → the OTP is
+displayed right in the dialog (demo mode — no SMS setup needed) → log in → Profile → <b>Start Selling</b> →
+create a kitchen → add 2–3 dishes → in a second browser/incognito window register as a different buyer →
+add dishes to the cart → checkout → place order → <b>I HAVE PAID</b> → back in the seller window, confirm →
+ready → deliver the order. That exercises every core feature.</div>
+<p class="step"><b>Stop the app:</b> <code>Ctrl+C</code> in the terminal or <i>Stop</i> in VS Code.
+<b>Factory reset:</b> stop the app and delete the <code>data/</code> folder — it is recreated empty on next start.</p>
+
+<h3>Troubleshooting</h3>
+<table>
+<tr><th style="width:38%">Problem</th><th>Fix</th></tr>
+<tr><td><code>java -version</code> shows 17/11/8 or error</td><td>JDK 21 not installed or <code>JAVA_HOME</code> not set — reinstall Temurin 21 with “Set JAVA_HOME” ticked, restart VS Code</td></tr>
+<tr><td>Port 8081 already in use</td><td>Another instance is running — stop it, or change <code>server.port</code> in <code>application.properties</code></td></tr>
+<tr><td><code>mvnw</code> “script execution disabled” (PowerShell)</td><td>Use <code>.\mvnw.cmd spring-boot:run</code> (the <code>.cmd</code> version), or run <code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code> once</td></tr>
+<tr><td>First build is slow / downloads fail</td><td>Normal on first run (2–5 min); check internet connection, then re-run — Maven caches downloads</td></tr>
+<tr><td>VS Code shows “Language Support for Java” loading forever</td><td>Run <b>Java: Clean Java Language Server Workspace</b> from the Command Palette (<code>Ctrl+Shift+P</code>) and reload</td></tr>
+<tr><td>Marketplace is empty</td><td>Expected on a fresh database — create a seller kitchen first (see demo above)</td></tr>
+</table>
+
+<h3>Cheat sheet</h3>
+<pre><code>git clone https://github.com/utkarshnikhare/my-first-spring-api.git   # get the code
+cd my-first-spring-api; code .                                        # open in VS Code
+cd my-first-spring-api; .\mvnw.cmd spring-boot:run                    # run (Windows)
+# macOS/Linux:  ./mvnw spring-boot:run
+# then open:  http://localhost:8081   ·   /swagger-ui.html   ·   /h2-console</code></pre>
+<p class="foot">SocioMart v1.0 · Spring Boot 4.1.1 · Java 21 · 31 August 2026</p>
+</div>
 </body></html>
