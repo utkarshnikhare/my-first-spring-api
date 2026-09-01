@@ -4,6 +4,7 @@ import com.example.my_first_spring_api.service.AdminService;
 import com.example.my_first_spring_api.service.FeatureService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
@@ -12,8 +13,10 @@ import org.springframework.stereotype.Component;
  *  - grandfathers sellers that existed before the approval workflow,
  *  - seeds the initial seller feature catalogue.
  * Every step is idempotent and safe to run on every startup.
+ * Only active when 'demo' or 'dev' profile is enabled.
  */
 @Component
+@Profile({"demo", "dev"})
 public class DataInitializer implements CommandLineRunner {
 
     private final AdminService adminService;

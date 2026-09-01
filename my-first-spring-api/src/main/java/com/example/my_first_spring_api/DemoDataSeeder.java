@@ -12,6 +12,7 @@ import com.example.my_first_spring_api.repository.PlatformSettingRepository;
 import com.example.my_first_spring_api.repository.ProductRepository;
 import com.example.my_first_spring_api.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import org.springframework.transaction.annotation.Transactional;
@@ -23,8 +24,10 @@ import java.time.LocalDateTime;
  * by a platform_settings flag — so the search & discovery features can be tested
  * immediately. Includes one PENDING-approval kitchen to prove unapproved
  * sellers' kitchens are never exposed in public results.
+ * Only active when 'demo' or 'dev' profile is enabled.
  */
 @Component
+@Profile({"demo", "dev"})
 public class DemoDataSeeder {
 
     private static final String DEMO_SEED_FLAG = "demo_data_seeded";
