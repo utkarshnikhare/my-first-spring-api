@@ -14,7 +14,7 @@ FROM eclipse-temurin:21-jre
 WORKDIR /app
 COPY --from=build /build/target/*.jar app.jar
 
-# Listens on the PORT provided by the platform (Render injects it);
+# Listens on the PORT provided by the hosting platform;
 # falls back to 8081 when run locally via:  docker run -p 8081:8081 sociomart
 EXPOSE 8081
 ENTRYPOINT ["java", "-jar", "app.jar"]
