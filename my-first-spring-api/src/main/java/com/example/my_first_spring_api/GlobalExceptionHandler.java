@@ -20,6 +20,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -71,6 +72,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiErrorDto> handleMethodNotAllowed(HttpRequestMethodNotSupportedException ex) {
         return new ResponseEntity<>(new ApiErrorDto("METHOD_NOT_ALLOWED", "This HTTP method is not supported for the requested endpoint.", 405), HttpStatus.METHOD_NOT_ALLOWED);
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiErrorDto> handleNoResourceFound(NoResourceFoundException ex) {
+        return new ResponseEntity<>(new ApiErrorDto("NOT_FOUND", "The requested endpoint does not exist.", 404), HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler(Exception.class)

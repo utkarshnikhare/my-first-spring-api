@@ -297,7 +297,10 @@ public class OrderService {
     private void consumeStock(Order order) {
         Map<Long, Integer> totals = new HashMap<>();
         for (OrderItem item : order.getItems()) {
-            totals.merge(item.getProduct().getId(), item.getQuantity() == null ? 0 : item.getQuantity(), Integer::sum);
+            Long productId = item.getProduct().getId();
+            int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+            Integer existing = totals.get(productId);
+            totals.put(productId, (existing == null ? 0 : existing) + quantity);
         }
         for (Map.Entry<Long, Integer> e : totals.entrySet()) {
             Product product = productRepository.findById(e.getKey()).orElse(null);
@@ -318,7 +321,10 @@ public class OrderService {
     private void restoreStock(Order order) {
         Map<Long, Integer> totals = new HashMap<>();
         for (OrderItem item : order.getItems()) {
-            totals.merge(item.getProduct().getId(), item.getQuantity() == null ? 0 : item.getQuantity(), Integer::sum);
+            Long productId = item.getProduct().getId();
+            int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+            Integer existing = totals.get(productId);
+            totals.put(productId, (existing == null ? 0 : existing) + quantity);
         }
         for (Map.Entry<Long, Integer> e : totals.entrySet()) {
             Product product = productRepository.findById(e.getKey()).orElse(null);

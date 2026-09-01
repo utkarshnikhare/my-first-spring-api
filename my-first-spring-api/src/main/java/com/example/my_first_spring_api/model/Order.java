@@ -81,9 +81,13 @@ public class Order {
     }
 
     public void recalculateTotal() {
-        totalAmount = items.stream()
-                .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal sum = BigDecimal.ZERO;
+        for (OrderItem item : items) {
+            BigDecimal price = item.getPrice() == null ? BigDecimal.ZERO : item.getPrice();
+            int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+            sum = sum.add(price.multiply(BigDecimal.valueOf(quantity)));
+        }
+        totalAmount = sum;
     }
 
     public Long getId() { return id; }
