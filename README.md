@@ -84,6 +84,20 @@ my-first-spring-api/                 repo root
 - Local-only files (`data/`, `bin/`, logs, test scripts) are git-ignored — **never force-add them**
 - Factory reset of your local data: stop the app and delete the `data/` folder
 
+## ☁️ Free hosting on Render (deploy-ready)
+
+The repo ships with everything needed for a free cloud demo:
+
+- `Dockerfile` — builds with Maven on JDK 21, runs on a slim JRE 21 image
+- `render.yaml` — Render blueprint (free plan, health check on `/api/marketplace`)
+- The app reads the platform-injected `PORT` automatically (`server.port=${PORT:8081}`) — locally it still uses 8081
+
+**To go live (~10 minutes):** [render.com](https://render.com) → sign in with GitHub → **New + → Blueprint** →
+select this repository → **Apply**. Render builds the Docker image and gives you a public URL like
+`https://sociomart.onrender.com`. Notes: the first build takes ~5–10 min; free instances sleep after ~15 min
+idle, so the first visit after a break takes ~1 minute to wake; the free disk is ephemeral, so demo data
+resets when the service restarts.
+
 ## 🩺 Common issues
 
 | Problem | Fix |

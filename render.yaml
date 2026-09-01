@@ -1,0 +1,9 @@
+# Render Blueprint — deploys SocioMart as a free web service.
+# On render.com: New + → Blueprint → select this repository → Apply.
+services:
+  - type: web
+    name: sociomart
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/marketplace
+    autoDeploy: true
