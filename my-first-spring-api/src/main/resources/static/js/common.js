@@ -126,16 +126,15 @@ function initTheme() {
 
 // ==================== Constants ====================
 var STATUS_LABEL = {
-    PLACED: 'Placed', CONFIRMED: 'Confirmed', READY: 'Ready',
-    DELIVERED: 'Delivered', COMPLETED: 'Completed', CANCELLED: 'Cancelled'
+    ORDERED: 'Ordered', CONFIRMED: 'Confirmed', DELIVERED: 'Delivered', CANCELLED: 'Cancelled'
 };
 
 var NEXT_STATUS = {
-    PLACED: 'CONFIRMED', CONFIRMED: 'READY', READY: 'DELIVERED', DELIVERED: 'COMPLETED'
+    ORDERED: 'CONFIRMED', CONFIRMED: 'DELIVERED'
 };
 
 var NEXT_LABEL = {
-    CONFIRMED: 'Confirm Order', READY: 'Mark Ready', DELIVERED: 'Mark Delivered', COMPLETED: 'Mark Completed'
+    CONFIRMED: 'Confirm Order', DELIVERED: 'Mark Delivered'
 };
 
 var CAT_KEYWORDS = {

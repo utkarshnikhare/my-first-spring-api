@@ -85,7 +85,7 @@ function sellerProductRowHtml(item) {
 }
 
 function sellerOrderRowHtml(order) {
-    var statusClass = order.status ? order.status.toLowerCase() : 'placed';
+    var statusClass = order.status ? order.status.toLowerCase() : 'ordered';
     var nextStatus = NEXT_STATUS[order.status];
     var nextLabel = NEXT_LABEL[nextStatus] || 'Update';
     return '<div class="order-card">' +

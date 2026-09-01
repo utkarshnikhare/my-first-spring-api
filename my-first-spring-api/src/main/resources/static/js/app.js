@@ -10,6 +10,7 @@ document.addEventListener('click', async function (e) {
     var a = t.getAttribute('data-action');
     switch (a) {
         case 'toggle-theme': toggleTheme(); break;
+        case 'open-profile': navigate('#/profile'); break;
         case 'become-seller': await becomeSeller(); break;
         case 'request-otp': await requestOtp(); break;
         case 'verify-otp': await verifyOtp(); break;
@@ -26,7 +27,19 @@ document.addEventListener('click', async function (e) {
 });
 window.addEventListener('hashchange', render);
 window.addEventListener('DOMContentLoaded', async function () { initTheme(); await loadUser(); await render(); });
-async function requestOtp() { var mobile = $('#otpMobile') ? $('#otpMobile').value.trim() : ''; if (!mobile || mobile.length < 10) { toast('Enter a valid 10-digit mobile number', 'error'); return; } try { await api('/api/auth/otp/request', { method: 'POST', body: { mobileNumber: mobile } }); state.otpMobile = mobile; state.otpStep = 'otp'; toast('OTP sent! Use any 4-digit code for demo.', 'success'); render(); } catch (err) { toast('Failed: ' + err.message, 'error'); } }
+async function requestOtp() {
+    var mobile = $('#otpMobile') ? $('#otpMobile').value.trim() : '';
+    if (!mobile || mobile.length < 10) { toast('Enter a valid 10-digit mobile number', 'error'); return; }
+    var btn = document.querySelector('[data-action="request-otp"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+    try {
+        await api('/api/auth/otp/request', { method: 'POST', body: { mobileNumber: mobile } });
+        state.otpMobile = mobile; state.otpStep = 'otp';
+        toast('OTP sent! Use any 4-digit code for demo.', 'success');
+        render();
+    } catch (err) { toast('Failed: ' + err.message, 'error'); }
+    finally { if (btn) { btn.disabled = false; btn.textContent = 'Send OTP'; } }
+}
 async function verifyOtp() { var otp = $('#otpCode') ? $('#otpCode').value.trim() : ''; if (!otp || otp.length < 4) { toast('Enter the 4-digit OTP', 'error'); return; } try { var result = await api('/api/auth/otp/verify', { method: 'POST', body: { mobileNumber: state.otpMobile, otp: otp } }); state.user = result.user || result; state.otpStep = 'mobile'; toast('Welcome back!', 'success'); navigate(state.pendingAuthNext || '#/home'); } catch (err) { toast('Failed: ' + err.message, 'error'); } }
 async function loadUser() { try { var me = await api('/api/auth/me'); state.user = me; if (me.role === 'SELLER') { var n = document.getElementById('navSeller'); if (n) n.hidden = false; } } catch (err) { state.user = null; } }
 async function logout() { try { await api('/api/auth/logout', { method: 'POST' }); } catch (e) {} state.user = null; toast('Logged out', 'info'); navigate('#/home'); }

@@ -140,7 +140,7 @@ public class OrderService {
         if (buyerDetails != null) updateBuyerDetails(buyer, buyerDetails);
         if (customInstructions != null && !customInstructions.isBlank()) order.setCustomInstructions(customInstructions);
         consumeStock(order);
-        order.setOrderStatus(OrderStatus.PLACED);
+        order.setOrderStatus(OrderStatus.ORDERED);
         if (paymentStatus != null) order.setPaymentStatus(paymentStatus);
         order.recalculateTotal();
         orderRepository.save(order);
@@ -156,12 +156,12 @@ public class OrderService {
         List<OrderDto> allOrders = orderRepository.findByBuyerOrderByCreatedAtDesc(buyer).stream()
                 .map(this::toOrderDto).collect(Collectors.toList());
         List<OrderDto> active = allOrders.stream()
-                .filter(o -> o.getOrderStatus() != OrderStatus.COMPLETED
+                .filter(o -> o.getOrderStatus() != OrderStatus.DELIVERED
                         && o.getOrderStatus() != OrderStatus.CANCELLED
                         && o.getOrderStatus() != OrderStatus.DRAFT)
                 .collect(Collectors.toList());
         List<OrderDto> completed = allOrders.stream()
-                .filter(o -> o.getOrderStatus() == OrderStatus.COMPLETED || o.getOrderStatus() == OrderStatus.CANCELLED)
+                .filter(o -> o.getOrderStatus() == OrderStatus.DELIVERED || o.getOrderStatus() == OrderStatus.CANCELLED)
                 .collect(Collectors.toList());
         Map<String, List<OrderDto>> result = new HashMap<>();
         result.put("active", active);
@@ -253,8 +253,8 @@ public class OrderService {
         if (order.getOrderStatus() == OrderStatus.CANCELLED) {
             throw new IllegalArgumentException("This order is already cancelled and cannot be updated.");
         }
-        if (order.getOrderStatus() == OrderStatus.COMPLETED) {
-            throw new IllegalArgumentException("This order is already completed and cannot be updated.");
+        if (order.getOrderStatus() == OrderStatus.DELIVERED) {
+            throw new IllegalArgumentException("This order is already delivered and cannot be updated.");
         }
         if (newStatus == null) {
             throw new IllegalArgumentException("Order status is required.");

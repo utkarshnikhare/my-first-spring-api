@@ -33,12 +33,13 @@ function categoryBarHtml() {
 
 function foodCardHtml(item) {
     var inCart = state.draft && state.draft.items && state.draft.items.find(function (i) { return i.productId === item.id; });
+    var qty = inCart ? inCart.quantity : 0;
     return '<div class="food-card" data-pid="' + item.id + '">' +
         '<div class="food-emoji">' + emojiFor(item.name) + '</div>' +
         '<div class="food-name">' + esc(item.name) + '</div>' +
         '<div class="food-price">' + money(item.price) + '</div>' +
         '<button class="btn btn-sm ' + (inCart ? 'btn-success' : 'btn-primary') + '" data-action="add-to-cart" data-pid="' + item.id + '" data-name="' + esc(item.name) + '" data-price="' + item.price + '">' +
-        (inCart ? '✓ In Cart' : 'Add to Order') + '</button>' +
+        (inCart ? '✓ ' + qty + ' in cart' : 'Add to Order') + '</button>' +
         '</div>';
 }
 
@@ -145,7 +146,7 @@ async function myOrdersView() {
 }
 
 function orderCardHtml(order) {
-    var statusClass = order.status ? order.status.toLowerCase() : 'placed';
+    var statusClass = order.status ? order.status.toLowerCase() : 'ordered';
     return '<div class="order-card">' +
         '<div class="order-header"><span class="order-id">#' + order.id + '</span>' +
         '<span class="order-status status-' + statusClass + '">' + (STATUS_LABEL[order.status] || order.status) + '</span></div>' +
@@ -166,25 +167,41 @@ function authPromptHtml(message) {
 
 // ==================== Buyer Actions ====================
 async function addToCart(productId, name, price) {
+    var btn = document.querySelector('[data-action="add-to-cart"][data-pid="' + productId + '"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Adding...'; }
     try {
-        await api('/api/buyer/orders/draft?kitchenId=1', { method: 'POST', body: [{ productId: productId, quantity: 1 }] });
+        var draft = state.draft;
+        var items = draft && draft.items ? draft.items.slice() : [];
+        var existing = items.find(function (i) { return i.productId === productId; });
+        if (existing) { existing.quantity = (existing.quantity || 1) + 1; }
+        else { items.push({ productId: productId, quantity: 1, productName: name, price: price }); }
+        await api('/api/buyer/orders/draft?kitchenId=1', { method: 'POST', body: items });
+        state.draft = { items: items };
         toast('Added to order', 'success');
         navigate('#/my-orders');
     } catch (err) {
         toast('Failed to add item: ' + err.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; }
     }
 }
 
 async function removeFromCart(productId) {
+    if (!confirm('Remove this item from your order?')) return;
+    var btn = document.querySelector('[data-action="remove-item"][data-pid="' + productId + '"]');
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
     try {
         var draft = state.draft;
         if (!draft) return;
         var items = (draft.items || []).filter(function (i) { return i.productId !== productId; });
         await api('/api/buyer/orders/draft?kitchenId=1', { method: 'POST', body: items });
+        state.draft = { items: items };
         toast('Item removed', 'success');
         navigate('#/my-orders');
     } catch (err) {
         toast('Failed to remove item: ' + err.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; }
     }
 }
 
