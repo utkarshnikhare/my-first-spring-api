@@ -151,11 +151,15 @@ async function deleteProduct(productId) {
 }
 
 async function updateOrderStatus(orderId, nextStatus) {
+    var btn = document.querySelector('[data-action="update-order-status"][data-oid="' + orderId + '"]');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="btn-spinner"></span>'; }
     try {
         await api('/api/seller/orders/' + orderId + '/status', { method: 'PATCH', body: { status: nextStatus } });
         toast('Order updated!', 'success');
         navigate('#/sell');
     } catch (err) {
         toast('Failed: ' + err.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; }
     }
 }

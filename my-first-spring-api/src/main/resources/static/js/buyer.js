@@ -162,13 +162,13 @@ function authPromptHtml(message) {
         '<h3>Verify Your Mobile</h3>' +
         '<p class="muted small">' + esc(message || 'Enter your mobile number to continue') + '</p>' +
         '<div class="form-group"><input class="form-input" id="otpMobile" type="tel" placeholder="Mobile number" maxlength="10"></div>' +
-        '<button class="btn btn-primary btn-block" data-action="request-otp">Send OTP</button></div>';
+        '<button class="btn btn-primary btn-block" data-action="request-otp" id="otpSendBtn">Send OTP</button></div>';
 }
 
 // ==================== Buyer Actions ====================
 async function addToCart(productId, name, price) {
     var btn = document.querySelector('[data-action="add-to-cart"][data-pid="' + productId + '"]');
-    if (btn) { btn.disabled = true; btn.textContent = 'Adding...'; }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="btn-spinner"></span> Adding...'; }
     try {
         var draft = state.draft;
         var items = draft && draft.items ? draft.items.slice() : [];
@@ -189,7 +189,7 @@ async function addToCart(productId, name, price) {
 async function removeFromCart(productId) {
     if (!confirm('Remove this item from your order?')) return;
     var btn = document.querySelector('[data-action="remove-item"][data-pid="' + productId + '"]');
-    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="btn-spinner"></span>'; }
     try {
         var draft = state.draft;
         if (!draft) return;
@@ -206,12 +206,16 @@ async function removeFromCart(productId) {
 }
 
 async function placeOrder() {
+    var btn = document.querySelector('[data-action="place-order"]');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="btn-spinner"></span> Placing...'; }
     try {
         await api('/api/buyer/orders/place', { method: 'POST', body: {} });
         toast('Order placed successfully!', 'success');
         navigate('#/orders');
     } catch (err) {
         toast('Failed to place order: ' + err.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; }
     }
 }
 
