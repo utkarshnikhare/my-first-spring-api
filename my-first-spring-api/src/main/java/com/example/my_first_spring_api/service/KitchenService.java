@@ -114,9 +114,18 @@ public class KitchenService {
 
     private ProductDto toProductDto(Product product) {
         Kitchen kitchen = product.getKitchen();
-        return new ProductDto(product.getId(), kitchen != null ? kitchen.getId() : null,
+        ProductDto dto = new ProductDto(product.getId(), kitchen != null ? kitchen.getId() : null,
                 kitchen != null ? kitchen.getDisplayName() : null, product.getName(),
                 product.getDescription(), product.getPrice(), product.getImageUrl(),
                 product.getAvailableToday(), product.getRating());
+        dto.setPriceUnit(product.getPriceUnit());
+        dto.setAvailableDate(product.getAvailableDate());
+        dto.setOrderWindowStart(product.getOrderWindowStart());
+        dto.setOrderWindowEnd(product.getOrderWindowEnd());
+        dto.setMaxQuantity(product.getMaxQuantity());
+        dto.setRemainingQuantity(product.getRemainingQuantity());
+        dto.setIsPreorder(product.getIsPreorder());
+        dto.setKitchenSlug(kitchen != null ? kitchen.getName() : null);
+        return dto;
     }
 }

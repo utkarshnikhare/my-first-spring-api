@@ -18,11 +18,14 @@ public class DataInitializer implements CommandLineRunner {
 
     private final AdminService adminService;
     private final FeatureService featureService;
+    private final DemoDataSeeder demoDataSeeder;
 
     @Autowired
-    public DataInitializer(AdminService adminService, FeatureService featureService) {
+    public DataInitializer(AdminService adminService, FeatureService featureService,
+                            DemoDataSeeder demoDataSeeder) {
         this.adminService = adminService;
         this.featureService = featureService;
+        this.demoDataSeeder = demoDataSeeder;
     }
 
     @Override
@@ -30,5 +33,6 @@ public class DataInitializer implements CommandLineRunner {
         adminService.ensureBootstrapAccounts();
         adminService.approveLegacySellers();
         featureService.ensureDefaults();
+        demoDataSeeder.seedIfEmpty();
     }
 }

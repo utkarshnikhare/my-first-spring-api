@@ -52,7 +52,12 @@ public class MarketplaceController {
 
     @GetMapping("/api/kitchens")
     public ResponseEntity<List<KitchenDto>> getAllKitchens() {
-        MarketplaceDto home = marketplaceService.getMarketplaceHome();
-        return ResponseEntity.ok(home.getKitchens());
+        return ResponseEntity.ok(marketplaceService.getAllActiveKitchens());
+    }
+
+    /** Global browse: every available menu item across all active kitchens. */
+    @GetMapping("/api/items")
+    public ResponseEntity<List<ProductDto>> getAllAvailableItems() {
+        return ResponseEntity.ok(marketplaceService.getAllAvailableItems());
     }
 }

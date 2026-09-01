@@ -7,6 +7,7 @@ public class ProductDto {
     private Long id;
     private Long kitchenId;
     private String kitchenName;
+    private String kitchenSlug;
     private String name;
     private String description;
     private BigDecimal price;
@@ -42,6 +43,8 @@ public class ProductDto {
     public void setKitchenId(Long kitchenId) { this.kitchenId = kitchenId; }
     public String getKitchenName() { return kitchenName; }
     public void setKitchenName(String kitchenName) { this.kitchenName = kitchenName; }
+    public String getKitchenSlug() { return kitchenSlug; }
+    public void setKitchenSlug(String kitchenSlug) { this.kitchenSlug = kitchenSlug; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public String getDescription() { return description; }

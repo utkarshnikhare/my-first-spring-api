@@ -214,6 +214,8 @@ var ROUTES = {
   home: function () { return homeView(); },
   search: function (q) { return searchView(q || ''); },
   kitchen: function (name) { return kitchenView(name); },
+  kitchens: function () { return kitchensView(); },
+  items: function () { return itemsView(); },
   order: function () { return cartView(); },
   'my-orders': function () { return cartView(); },
   checkout: function () { return checkoutView(); },
@@ -232,7 +234,7 @@ async function render() {
   var route = parseHash();
   var fn = ROUTES[route.name] || ROUTES.home;
   setActiveNav(route.name === 'order-detail' ? 'orders'
-    : route.name === 'search' || route.name === 'kitchen' ? 'home'
+    : route.name === 'search' || route.name === 'kitchen' || route.name === 'kitchens' || route.name === 'items' ? 'home'
     : route.name === 'my-orders' || route.name === 'checkout' || route.name === 'payment' ? 'order'
     : route.name === 'sell' ? 'seller'
     : route.name);
@@ -260,6 +262,24 @@ function productCard(p) {
     '<span class="food-icon">' + emojiFor(p.imageUrl || p.name) + '</span>' +
     '<h4 class="food-name">' + esc(p.name) + '</h4>' +
     '<div class="food-meta"><span>' + esc(p.kitchenName || '') + '</span><span class="price">' + money(p.price) + '</span></div>' +
+    stock + '</div>';
+}
+
+/**
+ * Search-result card: shows the dish WITH its active kitchen name and price,
+ * and tapping it deep-links to that kitchen's menu page (where the item is
+ * highlighted). The tap goes through the single-kitchen flow in the switch.
+ */
+function searchProductCard(p) {
+  if (p && p.id != null) state.productIndex[p.id] = p;
+  var stock = (p.remainingQuantity != null && p.remainingQuantity < 999)
+    ? '<span class="badge-stock">' + p.remainingQuantity + ' left</span>' : '';
+  return '<div class="food-card" data-action="goto-kitchen" data-product-id="' + p.id + '"' +
+    ' data-kitchen-name="' + esc(p.kitchenSlug || '') + '" role="link" tabindex="0">' +
+    '<span class="food-icon">' + emojiFor(p.imageUrl || p.name) + '</span>' +
+    '<h4 class="food-name">' + esc(p.name) + '</h4>' +
+    '<div class="food-meta"><span class="from-kitchen">from <strong>' + esc(p.kitchenName || '') +
+    '</strong></span><span class="price">' + money(p.price) + '</span></div>' +
     stock + '</div>';
 }
 
@@ -336,7 +356,8 @@ async function homeView() {
     '" data-action="toggle-view" role="switch" aria-checked="' + (state.viewMode === 'kitchens') + '" tabindex="0"></div>' +
     '<span class="toggle-label ' + (state.viewMode === 'kitchens' ? 'active' : '') + '">By Kitchens</span></div>';
   if (state.viewMode === 'kitchens') {
-    h += '<div class="home-section"><div class="section-row"><h2 class="section-title">Kitchens near you</h2></div>';
+    h += '<div class="home-section"><div class="section-row"><h2 class="section-title">Kitchens near you</h2>' +
+      '<a class="btn btn-ghost btn-sm" href="#/kitchens">View All</a></div>';
     h += (data.kitchens && data.kitchens.length)
       ? '<div class="item-grid">' + data.kitchens.map(kitchenCard).join('') + '</div>'
       : emptyBlock('\uD83C\uDFE0', 'No kitchens yet', 'Be the first to sell in your community');
@@ -357,7 +378,8 @@ async function homeView() {
       : emptyBlock('\uD83C\uDF5F', 'Nothing here yet', 'Try another category or browse all items');
     h += '</div>';
   } else {
-    h += '<div class="home-section"><div class="section-row"><h2 class="section-title">Available today</h2></div>';
+    h += '<div class="home-section"><div class="section-row"><h2 class="section-title">Available today</h2>' +
+      '<a class="btn btn-ghost btn-sm" href="#/items">All Items</a></div>';
     h += (data.availableToday && data.availableToday.length)
       ? '<div class="item-grid">' + data.availableToday.map(productCard).join('') + '</div>'
       : emptyBlock('\uD83C\uDF72', 'Nothing cooking right now', 'Check back soon or explore kitchens');
@@ -389,16 +411,38 @@ async function searchView(q) {
   } else {
     if (hasKitchens) {
       h += '<div class="home-section"><div class="section-row"><h2 class="section-title">Kitchens</h2></div>' +
+        '<p class="muted small" style="margin:-6px 0 10px">Tap a kitchen to see its full menu</p>' +
         '<div class="item-grid">' + res.kitchens.map(kitchenCard).join('') + '</div></div>';
     }
     if (hasProducts) {
       h += '<div class="home-section"><div class="section-row"><h2 class="section-title">Dishes</h2></div>' +
-        '<div class="item-grid">' + res.products.map(productCard).join('') + '</div></div>';
+        '<div class="item-grid">' + res.products.map(searchProductCard).join('') + '</div></div>';
     }
   }
   h += '</div>';
   return h;
 }
+
+async function kitchensView() {
+  var data = await api('/api/kitchens');
+  var h = '<div class="view-enter"><div class="page-head"><h1>All Active Kitchens</h1>' +
+    '<p class="muted">' + (data && data.length ? data.length + ' kitchens cooking in your community' : 'Browse kitchens near you') + '</p></div>';
+  h += (data && data.length)
+    ? '<div class="item-grid">' + data.map(kitchenCard).join('') + '</div>'
+    : emptyBlock('\uD83C\uDFE0', 'No kitchens yet', 'Be the first to sell in your community');
+  return h;
+}
+
+async function itemsView() {
+  var data = await api('/api/items');
+  var h = '<div class="view-enter"><div class="page-head"><h1>All Available Items</h1>' +
+    '<p class="muted">' + (data && data.length ? data.length + ' items across active kitchens' : 'Browse fresh, available items') + '</p></div>';
+  h += (data && data.length)
+    ? '<div class="item-grid">' + data.map(function (p) { return productCard(p); }).join('') + '</div>'
+    : emptyBlock('\uD83C\uDF72', 'Nothing cooking right now', 'Check back soon or explore kitchens');
+  return h;
+}
+
 async function kitchenView(name) {
   var data = await api('/api/kitchens/' + encodeURIComponent(name));
   var k = data.kitchen || {};
@@ -423,7 +467,8 @@ async function kitchenView(name) {
   if (data.products && data.products.length) {
     data.products.forEach(function (p) { state.productIndex[p.id] = p; });
     h += data.products.map(function (p) {
-      return '<div class="menu-item"><div class="menu-item-info"><h4>' + emojiFor(p.imageUrl || p.name) + ' ' + esc(p.name) + '</h4>' +
+      var focused = state.highlightProductId != null && String(state.highlightProductId) === String(p.id);
+      return '<div class="menu-item' + (focused ? ' highlight' : '') + '"' + (focused ? ' id="focus-item"' : '') + '><div class="menu-item-info"><h4>' + emojiFor(p.imageUrl || p.name) + ' ' + esc(p.name) + '</h4>' +
         '<p class="muted small">' + esc(p.description || '') + '</p>' +
         '<div style="display:flex;gap:8px;margin-top:4px;align-items:center;flex-wrap:wrap">' +
         '<span class="menu-item-price">' + money(p.price) + (p.priceUnit ? ' / ' + esc(p.priceUnit) : '') + '</span>' +
@@ -444,6 +489,13 @@ async function kitchenView(name) {
         '<div class="menu-item-actions"><button class="btn btn-secondary btn-sm" data-action="pick-product" data-product-id="' + p.id + '">Pre-order</button></div></div>';
     }).join('');
     h += '</div></div>';
+  }
+  if (state.highlightProductId != null) {
+    state.highlightProductId = null;
+    setTimeout(function () {
+      var el = document.getElementById('focus-item');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
   }
   h += '</div>';
   return h;
@@ -1302,6 +1354,11 @@ function bindEvents() {
       case 'flip-kitchen-open': flipHidden('kAvail', el); break;
       case 'rate-order': rateOrder(Number(oid)); break;
       case 'reorder': reorder(Number(oid)); break;
+      case 'goto-kitchen':
+        // Item search -> open that kitchen's menu and focus the searched item.
+        state.highlightProductId = Number(el.getAttribute('data-product-id'));
+        location.hash = '#/kitchen/' + encodeURIComponent(el.getAttribute('data-kitchen-name') || '');
+        break;
       case 'toggle-theme': toggleTheme(); break;
       case 'close-modal': closeModal(); break;
       case 'retry-render': render(); break;

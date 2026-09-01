@@ -48,6 +48,22 @@ public class MarketplaceService {
         return new MarketplaceDto(kitchens, popularProducts, newProducts, availableToday);
     }
 
+    /** Global browse: every publicly visible kitchen. */
+    public List<KitchenDto> getAllActiveKitchens() {
+        return kitchenRepository.findAll().stream()
+                .filter(KitchenVisibility::isPubliclyVisible)
+                .map(this::toKitchenDto)
+                .collect(Collectors.toList());
+    }
+
+    /** Global browse: every available menu item across all visible kitchens. */
+    public List<ProductDto> getAllAvailableItems() {
+        return productRepository.findByAvailableTodayTrueOrderByCreatedAtDesc().stream()
+                .filter(p -> p.getKitchen() != null && KitchenVisibility.isPubliclyVisible(p.getKitchen()))
+                .map(this::toProductDto)
+                .collect(Collectors.toList());
+    }
+
     private KitchenDto toKitchenDto(Kitchen kitchen) {
         return new KitchenDto(kitchen.getId(), kitchen.getName(), kitchen.getDisplayName(),
                 kitchen.getDescription(), kitchen.getImageUrl(), kitchen.getRating(),
@@ -67,6 +83,7 @@ public class MarketplaceService {
         dto.setMaxQuantity(product.getMaxQuantity());
         dto.setRemainingQuantity(product.getRemainingQuantity());
         dto.setIsPreorder(product.getIsPreorder());
+        dto.setKitchenSlug(kitchen != null ? kitchen.getName() : null);
         return dto;
     }
 }
