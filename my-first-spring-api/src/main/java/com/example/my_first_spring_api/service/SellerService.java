@@ -29,14 +29,17 @@ public class SellerService {
     private final KitchenRepository kitchenRepository;
     private final ProductRepository productRepository;
     private final OrderService orderService;
+    private final FeatureService featureService;
 
     @Autowired
     public SellerService(KitchenRepository kitchenRepository,
                          ProductRepository productRepository,
-                         OrderService orderService) {
+                         OrderService orderService,
+                         FeatureService featureService) {
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
         this.orderService = orderService;
+        this.featureService = featureService;
     }
 
     public KitchenDto createKitchen(KitchenCreateDto dto, User seller) {
@@ -78,6 +81,8 @@ public class SellerService {
 
     public ProductDto createProduct(Long kitchenId, ProductCreateDto dto, User seller) {
         Kitchen kitchen = getOwnedKitchen(kitchenId, seller);
+        assertFeatureCompliance(seller,
+                Boolean.TRUE.equals(dto.getIsPreorder()), dto.getAvailableDate(), dto.getName());
         Product product = new Product(kitchen, dto.getName(), dto.getDescription(), dto.getPrice(), dto.getImageUrl());
         product.setPriceUnit(dto.getPriceUnit());
         product.setAvailableToday(dto.getAvailableToday() != null ? dto.getAvailableToday() : true);
@@ -94,6 +99,11 @@ public class SellerService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
         getOwnedKitchen(product.getKitchen().getId(), seller);
+        boolean effectivePreorder = dto.getIsPreorder() != null
+                ? dto.getIsPreorder() : Boolean.TRUE.equals(product.getIsPreorder());
+        java.time.LocalDate effectiveDate = dto.getAvailableDate() != null
+                ? dto.getAvailableDate() : product.getAvailableDate();
+        assertFeatureCompliance(seller, effectivePreorder, effectiveDate, product.getName());
         if (dto.getName() != null && !dto.getName().isBlank()) product.setName(dto.getName());
         if (dto.getDescription() != null) product.setDescription(dto.getDescription());
         if (dto.getPrice() != null) product.setPrice(dto.getPrice());
@@ -145,6 +155,36 @@ public class SellerService {
                 .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
         if (!kitchen.getSeller().getId().equals(seller.getId())) throw new SellerNotAuthorizedException("You do not own this kitchen");
         return kitchen;
+    }
+
+    /**
+     * Enforces the platform's configurable feature rules for seller offerings:
+     *  - preorders: marking a product as pre-order requires the seller to have
+     *    the "preorders" feature (free by default; Super Admin can make it paid).
+     *  - menu_advance_days: an availableDate further ahead than the seller's
+     *    effective limit is rejected (baseline free = today + tomorrow).
+     */
+    private void assertFeatureCompliance(User seller, boolean isPreorder,
+                                         java.time.LocalDate availableDate, String productName) {
+        if (isPreorder) {
+            featureService.assertSellerCanUse(seller, FeatureService.KEY_PREORDERS);
+        }
+        if (availableDate != null) {
+            long daysAhead = java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), availableDate);
+            if (daysAhead > 0) {
+                if (!featureService.sellerHasAccess(seller, FeatureService.KEY_MENU_ADVANCE_DAYS)) {
+                    throw new IllegalStateException(
+                            "Publishing menus in advance is currently disabled on the platform.");
+                }
+                Integer limit = featureService.sellerLimit(seller, FeatureService.KEY_MENU_ADVANCE_DAYS);
+                int allowed = limit != null ? limit : 0;
+                if (daysAhead > allowed) {
+                    throw new IllegalStateException("'" + (productName == null ? "This offering" : productName)
+                            + "' is " + daysAhead + " day(s) ahead, but your kitchen can publish menus only "
+                            + allowed + " day(s) in advance.");
+                }
+            }
+        }
     }
 
     private KitchenDto toKitchenDto(Kitchen kitchen) {

@@ -1,5 +1,7 @@
 package com.example.my_first_spring_api.dto;
 
+import com.example.my_first_spring_api.model.SellerApprovalStatus;
+
 public class AuthResponseDto {
     private boolean authenticated;
     private String message;
@@ -8,11 +10,18 @@ public class AuthResponseDto {
     private String mobileNumber;
     private String flatHouseNumber;
     private String role;
+    private SellerApprovalStatus sellerApprovalStatus;
 
     public AuthResponseDto() {}
 
     public AuthResponseDto(boolean authenticated, String message, Long userId, String name,
                            String mobileNumber, String flatHouseNumber, String role) {
+        this(authenticated, message, userId, name, mobileNumber, flatHouseNumber, role, null);
+    }
+
+    public AuthResponseDto(boolean authenticated, String message, Long userId, String name,
+                           String mobileNumber, String flatHouseNumber, String role,
+                           SellerApprovalStatus sellerApprovalStatus) {
         this.authenticated = authenticated;
         this.message = message;
         this.userId = userId;
@@ -20,6 +29,7 @@ public class AuthResponseDto {
         this.mobileNumber = mobileNumber;
         this.flatHouseNumber = flatHouseNumber;
         this.role = role;
+        this.sellerApprovalStatus = sellerApprovalStatus;
     }
 
     public boolean isAuthenticated() { return authenticated; }
@@ -36,4 +46,6 @@ public class AuthResponseDto {
     public void setFlatHouseNumber(String flatHouseNumber) { this.flatHouseNumber = flatHouseNumber; }
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+    public SellerApprovalStatus getSellerApprovalStatus() { return sellerApprovalStatus; }
+    public void setSellerApprovalStatus(SellerApprovalStatus sellerApprovalStatus) { this.sellerApprovalStatus = sellerApprovalStatus; }
 }

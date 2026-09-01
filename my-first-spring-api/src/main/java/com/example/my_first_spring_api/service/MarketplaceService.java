@@ -20,18 +20,24 @@ public class MarketplaceService {
 
     private final KitchenRepository kitchenRepository;
     private final ProductRepository productRepository;
+    private final AnalyticsService analyticsService;
 
     @Autowired
-    public MarketplaceService(KitchenRepository kitchenRepository, ProductRepository productRepository) {
+    public MarketplaceService(KitchenRepository kitchenRepository, ProductRepository productRepository,
+                              AnalyticsService analyticsService) {
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
+        this.analyticsService = analyticsService;
     }
 
     public MarketplaceDto getMarketplaceHome() {
+        analyticsService.record(AnalyticsService.EV_MARKETPLACE_VIEW, null, null, null, null);
         List<KitchenDto> kitchens = kitchenRepository.findAll().stream()
+                .filter(KitchenVisibility::isPubliclyVisible)
                 .map(this::toKitchenDto).collect(Collectors.toList());
 
         List<ProductDto> availableToday = productRepository.findByAvailableTodayTrueOrderByCreatedAtDesc().stream()
+                .filter(p -> p.getKitchen() == null || KitchenVisibility.isPubliclyVisible(p.getKitchen()))
                 .map(this::toProductDto).collect(Collectors.toList());
 
         List<ProductDto> newProducts = availableToday;

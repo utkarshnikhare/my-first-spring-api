@@ -29,6 +29,17 @@ public class User {
     @Column(nullable = false)
     private UserRole role;
 
+    /** Approval lifecycle for SELLER accounts (null = legacy seller, treated as APPROVED). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "seller_approval_status")
+    private SellerApprovalStatus sellerApprovalStatus;
+
+    @Column(name = "seller_status_reason", columnDefinition = "TEXT")
+    private String sellerStatusReason;
+
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -69,6 +80,20 @@ public class User {
     public void setBuilding(String building) { this.building = building; }
     public UserRole getRole() { return role; }
     public void setRole(UserRole role) { this.role = role; }
+    public SellerApprovalStatus getSellerApprovalStatus() { return sellerApprovalStatus; }
+    public void setSellerApprovalStatus(SellerApprovalStatus sellerApprovalStatus) { this.sellerApprovalStatus = sellerApprovalStatus; }
+    public String getSellerStatusReason() { return sellerStatusReason; }
+    public void setSellerStatusReason(String sellerStatusReason) { this.sellerStatusReason = sellerStatusReason; }
+    public LocalDateTime getApprovedAt() { return approvedAt; }
+    public void setApprovedAt(LocalDateTime approvedAt) { this.approvedAt = approvedAt; }
+
+    /**
+     * Legacy sellers (created before the approval workflow existed) have a null
+     * status and are treated as APPROVED so existing behaviour is preserved.
+     */
+    public boolean isApprovedSeller() {
+        return sellerApprovalStatus == null || sellerApprovalStatus == SellerApprovalStatus.APPROVED;
+    }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

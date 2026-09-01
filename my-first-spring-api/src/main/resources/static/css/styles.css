@@ -57,8 +57,26 @@
   --shadow-lg: 0 10px 32px rgba(0, 0, 0, 0.5);
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 html { scroll-behavior: smooth; }
+
+/* FIX: any element wider than the screen was widening the whole layout
+   (e.g. to 476px on a 412px phone), which pushed the fixed bottom nav —
+   and its right-most tabs (Sell/Profile) — off-screen and untappable.
+   Clip horizontal overflow so the layout viewport always equals the screen. */
+html, body { overflow-x: clip; }
+
+/* FIX: the [hidden] attribute must ALWAYS win over class display rules.
+   Without this, .modal-root (display:flex, inset:0, z-index:100) ignores
+   the hidden attribute and an invisible full-screen overlay swallows
+   every click/tap on the page. Same bug wrongly showed navSeller & badge. */
+[hidden] { display: none !important; }
+
+/* FIX mobile Chrome: remove 300ms tap delay + accidental double-tap zoom */
+a, button, input, textarea, select, .nav-item, .toggle-label, .toggle-switch,
+.category-card, .food-card, .kitchen-card, .offering-card, .order-card {
+  touch-action: manipulation;
+}
 
 body {
   font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
@@ -138,7 +156,8 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .bottom-nav {
   position: fixed;
   inset: auto 0 0 0;
-  height: var(--nav-h);
+  height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   display: flex;
   align-items: center;
   justify-content: space-around;
@@ -163,6 +182,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .nav-item:hover { color: var(--primary); background: var(--primary-soft); }
 .nav-item.active { color: var(--primary); }
 .nav-icon { font-size: 1.2rem; }
+.nav-label { white-space: nowrap; }
 .nav-badge {
   position: absolute;
   top: 0;
@@ -183,7 +203,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .view-order-bar {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--nav-h) + 14px);
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 14px);
   transform: translateX(-50%);
   z-index: 90;
   display: flex;
@@ -251,6 +271,8 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
   font-size: 5rem;
   opacity: 0.15;
   transform: rotate(-15deg);
+  pointer-events: none;  /* decorative — must never block clicks on hero content */
+  user-select: none;
 }
 
 /* ---------- Section ---------- */
@@ -567,13 +589,21 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 .offering-card-actions { display: flex; gap: 8px; margin-top: 10px; }
 
 /* ---------- Modal ---------- */
-.modal-root { position: fixed; inset: 0; z-index: 100; display: flex; align-items: flex-end; justify-content: center; background: rgba(0,0,0,0.5); animation: fadeIn 0.2s var(--ease); }
-.modal { background: var(--surface); border-radius: var(--radius) var(--radius) 0 0; padding: 20px; width: 100%; max-width: 500px; max-height: 85vh; overflow-y: auto; animation: slideUp 0.25s var(--ease); }
+/* The backdrop area is itself a dismiss target (see app.js) — cursor hints that it
+   is clickable, the sheet itself keeps the default cursor. Auto-height: when no
+   modal is open the root carries [hidden] so it can never intercept clicks. */
+.modal-root { position: fixed; inset: 0; z-index: 100; display: flex; align-items: flex-end; justify-content: center; background: rgba(0,0,0,0.5); animation: fadeIn 0.2s var(--ease); cursor: pointer; }
+.modal { background: var(--surface); border-radius: var(--radius) var(--radius) 0 0; padding: 20px; width: 100%; max-width: 500px; max-height: 85vh; overflow-y: auto; animation: slideUp 0.25s var(--ease); cursor: default; }
 .modal-title { font-size: 1.1rem; font-weight: 800; margin-bottom: 16px; }
 
 /* ---------- Toast ---------- */
-.toast-root { position: fixed; top: calc(var(--header-h) + 10px); left: 50%; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: 8px; width: 90%; max-width: 400px; }
-.toast { padding: 12px 16px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--primary); box-shadow: var(--shadow-lg); font-size: 0.85rem; font-weight: 600; animation: toastIn 0.25s var(--ease); }
+/* FIX (desktop unclickability root cause): the toast root is a fixed, full-width
+   strip at the top of the page (z-index 200) and is NEVER hidden. If it ever has
+   height it would sit on top of the header/hero and swallow every mouse click and
+   tap. The container itself must never intercept input; only the toast pills are
+   clickable. */
+.toast-root { position: fixed; top: calc(var(--header-h) + 10px); left: 50%; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; gap: 8px; width: 90%; max-width: 400px; pointer-events: none; }
+.toast { pointer-events: auto; padding: 12px 16px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--primary); box-shadow: var(--shadow-lg); font-size: 0.85rem; font-weight: 600; animation: toastIn 0.25s var(--ease); }
 .toast.success { border-left-color: var(--success); }
 .toast.error { border-left-color: var(--danger); }
 .toast.warn { border-left-color: var(--accent); }
@@ -584,7 +614,8 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 .upi-copy:hover { background: #D5F5E3; }
 
 /* ---------- Gallery ---------- */
-.gallery { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 12px; scroll-snap-type: x mandatory; }
+.gallery { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 12px; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; -ms-overflow-style: none; }
+.gallery::-webkit-scrollbar { display: none; }
 .gallery-item { flex-shrink: 0; width: 120px; height: 90px; border-radius: var(--radius-sm); background: linear-gradient(135deg, var(--primary-soft), var(--accent-soft)); display: grid; place-items: center; font-size: 2rem; scroll-snap-align: start; }
 
 /* ---------- Empty & Loading ---------- */
@@ -604,9 +635,24 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 640px) {
-  .view { padding: calc(var(--header-h) + 12px) 12px calc(var(--nav-h) + 20px); }
+  .view { padding: calc(var(--header-h) + 12px) 12px calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 24px); }
   .hero h1 { font-size: 1.15rem; }
   .hero::after { font-size: 4rem; }
+  /* Bigger, easier-to-hit bottom tabs on phones (min 48px touch target);
+     min-width:0 lets flex shrink so all tabs always fit on screen */
+  .nav-item { flex: 1 1 0; min-width: 0; min-height: 48px; justify-content: center; padding: 6px 4px; }
+  .view-order-bar { width: calc(100% - 24px); }
+}
+/* Very narrow phones (e.g. 320–380px): tighten the 2-column grids so cards never
+   clip their text and modals never feel cramped. */
+@media (max-width: 380px) {
+  .category-grid, .item-grid { gap: 8px; }
+  .food-card { padding: 10px 8px; }
+  .food-card .food-name { font-size: 0.82rem; }
+  .metric-grid { gap: 8px; }
+  .metric-card { padding: 12px 8px; }
+  .modal { padding: 16px; }
+  .kitchen-banner { padding: 16px; }
 }
 @media (min-width: 900px) {
   .view { max-width: 860px; }

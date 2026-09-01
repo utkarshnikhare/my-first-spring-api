@@ -25,16 +25,24 @@ public class KitchenService {
 
     private final KitchenRepository kitchenRepository;
     private final ProductRepository productRepository;
+    private final AnalyticsService analyticsService;
 
     @Autowired
-    public KitchenService(KitchenRepository kitchenRepository, ProductRepository productRepository) {
+    public KitchenService(KitchenRepository kitchenRepository, ProductRepository productRepository,
+                          AnalyticsService analyticsService) {
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
+        this.analyticsService = analyticsService;
     }
 
     public KitchenDetailDto getKitchenByName(String name) {
         Kitchen kitchen = kitchenRepository.findByName(name)
                 .orElseThrow(() -> new KitchenNotFoundException(name));
+        if (!KitchenVisibility.isPubliclyVisible(kitchen)) {
+            throw new KitchenNotFoundException(name);
+        }
+        analyticsService.record(AnalyticsService.EV_MENU_VIEW, null, null,
+                kitchen.getId(), kitchen.getDisplayName());
         KitchenDto kitchenDto = toKitchenDto(kitchen);
         List<ProductDto> products = productRepository
                 .findByKitchenAndAvailableTodayTrueOrderByCreatedAtDesc(kitchen).stream()
@@ -57,28 +65,41 @@ public class KitchenService {
     public ProductDto getProductById(Long id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new com.example.my_first_spring_api.exception.ProductNotFoundException(id));
+        if (product.getKitchen() != null && !KitchenVisibility.isPubliclyVisible(product.getKitchen())) {
+            throw new com.example.my_first_spring_api.exception.ProductNotFoundException(id);
+        }
         return toProductDto(product);
     }
 
     public List<ProductDto> getProductsByKitchenName(String kitchenName) {
         Kitchen kitchen = kitchenRepository.findByName(kitchenName)
                 .orElseThrow(() -> new KitchenNotFoundException(kitchenName));
+        if (!KitchenVisibility.isPubliclyVisible(kitchen)) {
+            throw new KitchenNotFoundException(kitchenName);
+        }
         return productRepository.findByKitchenAndAvailableTodayTrueOrderByCreatedAtDesc(kitchen).stream()
                 .map(this::toProductDto).collect(Collectors.toList());
     }
 
     public SearchResultDto search(String query) {
         List<ProductDto> products = productRepository.findByNameContainingIgnoreCase(query).stream()
-                .map(this::toProductDto).collect(Collectors.toList());
+                .map(this::toProductDto)
+                .filter(p -> p.getKitchenId() == null
+                        || kitchenRepository.findById(p.getKitchenId())
+                            .map(KitchenVisibility::isPubliclyVisible)
+                            .orElse(false))
+                .collect(Collectors.toList());
 
         Map<Long, KitchenDto> kitchens = new LinkedHashMap<>();
         kitchenRepository.findAll().stream()
+                .filter(KitchenVisibility::isPubliclyVisible)
                 .filter(k -> k.getDisplayName().toLowerCase().contains(query.toLowerCase())
                         || k.getName().toLowerCase().contains(query.toLowerCase()))
                 .forEach(k -> kitchens.put(k.getId(), toKitchenDto(k)));
         for (ProductDto product : products) {
             if (product.getKitchenId() != null && !kitchens.containsKey(product.getKitchenId())) {
                 kitchenRepository.findById(product.getKitchenId())
+                        .filter(KitchenVisibility::isPubliclyVisible)
                         .ifPresent(k -> kitchens.put(k.getId(), toKitchenDto(k)));
             }
         }

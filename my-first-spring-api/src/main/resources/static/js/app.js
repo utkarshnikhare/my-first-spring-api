@@ -698,6 +698,17 @@ async function sellerView() {
   state.sellerProducts = p || [];
   state.sellerKitchen = k || null;
   state.sellerOrders = orders || [];
+  // Seller approval status (set by platform Admins) — surfaced as a notice only.
+  var approvalBanner = '';
+  if (state.user && state.user.role === 'SELLER' && state.user.sellerApprovalStatus &&
+      state.user.sellerApprovalStatus !== 'APPROVED') {
+    var statusText = state.user.sellerApprovalStatus === 'PENDING' ? 'is pending admin approval'
+      : state.user.sellerApprovalStatus === 'SUSPENDED' ? 'has been suspended by the platform'
+      : 'is not approved yet';
+    approvalBanner = '<div class="card pad" style="border-left:4px solid var(--accent);margin-bottom:12px">' +
+      '<strong>⏳ Your kitchen ' + statusText + '.</strong>' +
+      '<div class="muted small">You can prepare your offerings here — neighbours will see your kitchen once the platform approves it.</div></div>';
+  }
   state.sellerProducts.forEach(function (x) { if (x && x.id != null) state.productIndex[x.id] = x; });
 
   var live = state.sellerProducts.filter(function (x) { return x.availableToday !== false; }).length;
@@ -709,7 +720,8 @@ async function sellerView() {
 
   var h = '<div class="view-enter"><div class="page-head"><h1>' +
     esc((state.sellerKitchen && (state.sellerKitchen.displayName || state.sellerKitchen.name)) || 'My Kitchen') + '</h1>' +
-    '<p class="muted">Seller Dashboard</p></div>';
+    '<p class="muted">Seller Dashboard</p></div>' +
+    approvalBanner;
   h += '<div class="metric-grid">' +
     '<div class="metric-card"><span class="metric-value">' + state.sellerOrders.length + '</span><span class="metric-label">Orders</span></div>' +
     '<div class="metric-card"><span class="metric-value">' + money(earnings) + '</span><span class="metric-label">Earnings</span></div>' +
@@ -1299,6 +1311,14 @@ function bindEvents() {
     });
   });
 
+// Clicking the dimmed backdrop (area outside the sheet) closes the modal.
+  // The .modal sheet itself stops propagation so inner controls are unaffected.
+  var modalRootEl = $('#modalRoot');
+  if (modalRootEl) {
+    modalRootEl.addEventListener('click', function (e) {
+      if (e.target === modalRootEl) closeModal();
+    });
+  }
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') closeModal();
     if (e.target && e.target.closest && e.target.closest('.toggle-switch[data-action="toggle-view"]') &&

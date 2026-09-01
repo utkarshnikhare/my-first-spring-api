@@ -2,6 +2,7 @@ package com.example.my_first_spring_api.service;
 
 import com.example.my_first_spring_api.dto.BuyerProfileDto;
 import com.example.my_first_spring_api.exception.BuyerNotAuthenticatedException;
+import com.example.my_first_spring_api.model.SellerApprovalStatus;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.model.UserRole;
 import com.example.my_first_spring_api.repository.UserRepository;
@@ -21,11 +22,14 @@ public class BuyerService {
 
     private final UserRepository userRepository;
     private final OtpService otpService;
+    private final AnalyticsService analyticsService;
 
     @Autowired
-    public BuyerService(UserRepository userRepository, OtpService otpService) {
+    public BuyerService(UserRepository userRepository, OtpService otpService,
+                        AnalyticsService analyticsService) {
         this.userRepository = userRepository;
         this.otpService = otpService;
+        this.analyticsService = analyticsService;
     }
 
     @Transactional
@@ -59,6 +63,10 @@ public class BuyerService {
         }
         buyer = userRepository.save(buyer);
         session.setAttribute(BUYER_SESSION_KEY, buyer.getId());
+        boolean isNew = existing.isEmpty();
+        analyticsService.record(
+                isNew ? AnalyticsService.EV_USER_REGISTERED : AnalyticsService.EV_USER_LOGIN,
+                buyer.getId(), buyer.getMobileNumber(), null, buyer.getName());
         return buyer;
     }
 
@@ -134,7 +142,14 @@ public class BuyerService {
         User user = requireCurrentBuyer(session);
         if (user.getRole() != UserRole.SELLER) {
             user.setRole(UserRole.SELLER);
+            // New sellers always start in the moderation queue: an Admin must
+            // approve them before their kitchen becomes publicly active.
+            if (user.getSellerApprovalStatus() == null) {
+                user.setSellerApprovalStatus(SellerApprovalStatus.PENDING);
+            }
             user = userRepository.save(user);
+            analyticsService.record(AnalyticsService.EV_SELLER_REGISTERED, user.getId(),
+                    user.getMobileNumber(), null, user.getName());
         }
         return user;
     }

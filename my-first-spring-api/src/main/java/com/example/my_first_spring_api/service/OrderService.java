@@ -22,22 +22,30 @@ public class OrderService {
     private final KitchenRepository kitchenRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
+    private final AnalyticsService analyticsService;
 
     public static final String DRAFT_ORDER_SESSION_KEY = "DRAFT_ORDER_ID";
     private static final String BUYER_SESSION_KEY = "BUYER_USER";
 
     @Autowired
     public OrderService(OrderRepository orderRepository, KitchenRepository kitchenRepository,
-                        ProductRepository productRepository, UserRepository userRepository) {
+                        ProductRepository productRepository, UserRepository userRepository,
+                        AnalyticsService analyticsService) {
         this.orderRepository = orderRepository;
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
+        this.analyticsService = analyticsService;
     }
 
     public OrderDto createOrUpdateDraftOrder(Long kitchenId, List<OrderItemRequest> items, HttpSession session) {
         Kitchen kitchen = kitchenRepository.findById(kitchenId)
                 .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
+        // One-kitchen-at-a-time: hidden / suspended / pending sellers' kitchens
+        // cannot be ordered from at all.
+        if (!KitchenVisibility.isPubliclyVisible(kitchen)) {
+            throw new InvalidKitchenSelectionException("This kitchen is not currently accepting orders.");
+        }
         Long draftId = (Long) session.getAttribute(DRAFT_ORDER_SESSION_KEY);
         User buyer = resolveBuyer(session);
         Order draft;
@@ -114,6 +122,15 @@ public class OrderService {
             session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
             throw new IllegalArgumentException("Your order session has expired. Please add items again.");
         }
+        // One-kitchen rule: if the kitchen became unavailable after this draft was
+        // created (seller suspended / rejected / hidden), the draft can no longer be
+        // placed. Clear it so the buyer starts a fresh selection.
+        if (order.getKitchen() == null || !KitchenVisibility.isPubliclyVisible(order.getKitchen())) {
+            session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
+            orderRepository.delete(order);
+            throw new InvalidKitchenSelectionException(
+                    "This kitchen is no longer accepting orders. Your selection was cleared.");
+        }
         if (order.getItems() == null || order.getItems().isEmpty()) {
             throw new IllegalArgumentException("Your order is empty. Please add items before placing it.");
         }
@@ -128,6 +145,9 @@ public class OrderService {
         order.recalculateTotal();
         orderRepository.save(order);
         session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
+        analyticsService.record(AnalyticsService.EV_ORDER_PLACED, buyer.getId(),
+                buyer.getMobileNumber(), order.getKitchen() != null ? order.getKitchen().getId() : null,
+                order.getOrderNumber());
         return toOrderDto(order);
     }
 
@@ -187,6 +207,11 @@ public class OrderService {
     public OrderDto reorder(Long orderId, HttpSession session, User buyer) {
         Order originalOrder = orderRepository.findById(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
         Kitchen kitchen = originalOrder.getKitchen();
+        // One-kitchen rule: do not rebuild a draft from a kitchen that is no longer
+        // publicly active (seller suspended / rejected / hidden).
+        if (kitchen == null || !KitchenVisibility.isPubliclyVisible(kitchen)) {
+            throw new InvalidKitchenSelectionException("This kitchen is no longer accepting orders.");
+        }
         Order newDraft = new Order(buyer, kitchen);
         newDraft.setOrderStatus(OrderStatus.DRAFT);
         newDraft.setOrderNumber(generateOrderNumber());

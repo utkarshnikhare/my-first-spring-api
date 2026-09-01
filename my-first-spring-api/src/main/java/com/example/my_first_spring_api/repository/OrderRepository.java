@@ -14,4 +14,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByBuyerOrderByCreatedAtDesc(User buyer);
     List<Order> findByKitchenOrderByCreatedAtDesc(Kitchen kitchen);
     List<Order> findByKitchenAndOrderStatusNotInOrderByCreatedAtDesc(Kitchen kitchen, List<OrderStatus> statuses);
+    long countByCreatedAtAfter(java.time.LocalDateTime after);
 }
+
