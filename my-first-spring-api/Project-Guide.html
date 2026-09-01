@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SocioMart - Project Guide</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #2c3e50; font-size: 2.5em; margin-bottom: 10px; border-bottom: 3px solid #3498db; padding-bottom: 15px; }
+        .subtitle { text-align: center; color: #7f8c8d; font-size: 1.2em; margin-bottom: 30px; }
+        h2 { color: #2980b9; margin-top: 30px; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #ecf0f1; }
+        h3 { color: #27ae60; margin-top: 20px; margin-bottom: 10px; }
+        .tech-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }
+        .tech-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; }
+        .tech-card.blue { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .tech-card.green { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+        .tech-card.orange { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+        .tech-card.purple { background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%); }
+        .tech-card h4 { margin-bottom: 5px; font-size: 1.1em; }
+        .tech-card p { font-size: 0.85em; opacity: 0.9; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 0.95em; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #3498db; color: white; }
+        tr:nth-child(even) { background: #f8f9fa; }
+        tr:hover { background: #e8f4f8; }
+        .flow-chart { background: #f8f9fa; padding: 25px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3498db; }
+        .flow-step { display: flex; align-items: center; margin: 12px 0; padding: 10px; background: white; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .step-num { background: #3498db; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 15px; flex-shrink: 0; }
+        .code-block { background: #2c3e50; color: #ecf0f1; padding: 15px 20px; border-radius: 5px; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.9em; margin: 10px 0; overflow-x: auto; }
+        .code-block .comment { color: #95a5a6; }
+        .code-block .command { color: #2ecc71; }
+        .highlight { background: #fff3cd; padding: 15px; border-radius: 5px; border-left: 4px solid #ffc107; margin: 15px 0; }
+        .endpoint { display: inline-block; padding: 3px 8px; border-radius: 3px; font-family: monospace; font-size: 0.85em; font-weight: bold; }
+        .get { background: #d4edda; color: #155724; }
+        .post { background: #cce5ff; color: #004085; }
+        .put { background: #fff3cd; color: #856404; }
+        .delete { background: #f8d7da; color: #721c24; }
+        .patch { background: #e2d5f1; color: #5a3d7a; }
+        .role-badge { display: inline-block; padding: 5px 12px; border-radius: 15px; font-size: 0.85em; font-weight: bold; margin: 3px; }
+        .role-buyer { background: #d4edda; color: #155724; }
+        .role-seller { background: #cce5ff; color: #004085; }
+        .role-admin { background: #fff3cd; color: #856404; }
+        .role-super { background: #f8d7da; color: #721c24; }
+        .footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 2px solid #ecf0f1; color: #7f8c8d; }
+        <!-- TECHNOLOGIES USED -->
+        <h2>🔧 Technologies Used</h2>
+        <div class="tech-grid">
+            <div class="tech-card"><h4>Java 21</h4><p>Programming Language</p></div>
+            <div class="tech-card blue"><h4>Spring Boot 4.1.1</h4><p>Backend Framework</p></div>
+            <div class="tech-card green"><h4>H2 Database</h4><p>In-Memory/File Database</p></div>
+            <div class="tech-card orange"><h4>Spring Security</h4><p>Authentication & Authorization</p></div>
+            <div class="tech-card purple"><h4>Swagger UI 3.1.0</h4><p>API Documentation</p></div>
+            <div class="tech-card"><h4>Maven</h4><p>Build Tool</p></div>
+        </div>
+        <h3>📦 Dependencies (from pom.xml)</h3>
+        <table>
+            <tr><th>Dependency</th><th>Purpose</th></tr>
+            <tr><td>spring-boot-starter-webmvc</td><td>Handles HTTP requests and REST APIs</td></tr>
+            <tr><td>spring-boot-starter-security</td><td>User authentication and access control</td></tr>
+            <tr><td>spring-boot-starter-data-jpa</td><td>Database operations (save, update, delete)</td></tr>
+            <tr><td>spring-boot-starter-validation</td><td>Validates user input data</td></tr>
+            <tr><td>springdoc-openapi-starter-webmvc-ui</td><td>Generates Swagger API documentation</td></tr>
+            <tr><td>h2-database</td><td>Lightweight database (no installation needed)</td></tr>
+            <tr><td>spring-boot-h2console</td><td>Web-based database management console</td></tr>
+        </table>
+        <!-- USER ROLES -->
+        <h2>👥 User Roles</h2>
+        <table>
+            <tr><th>Role</th><th>Badge</th><th>What They Can Do</th></tr>
+            <tr><td><strong>Buyer</strong></td><td><span class="role-badge role-buyer">BUYER</span></td><td>Browse kitchens, place orders, rate orders, manage profile</td></tr>
+            <tr><td><strong>Seller</strong></td><td><span class="role-badge role-seller">SELLER</span></td><td>Create kitchen, add products, manage orders</td></tr>
+            <tr><td><strong>Admin</strong></td><td><span class="role-badge role-admin">ADMIN</span></td><td>Approve/reject sellers, view analytics</td></tr>
+            <tr><td><strong>Super Admin</strong></td><td><span class="role-badge role-super">SUPER_ADMIN</span></td><td>Manage admins, platform settings, feature flags</td></tr>
+        </table>
+        <!-- PROJECT STRUCTURE -->
+        <h2>📁 Project Structure</h2>
+        <div class="code-block">
+<span class="comment">my-first-spring-api/</span>
+├── src/main/java/com/example/my_first_spring_api/
+│   ├── controller/          <span class="comment"># Handles HTTP requests (7 files)</span>
+│   │   ├── AdminController.java
+│   │   ├── AuthController.java
+│   │   ├── BuyerOrderController.java
+│   │   ├── BuyerProfileController.java
+│   │   ├── MarketplaceController.java
+│   │   ├── SellerController.java
+│   │   └── SuperAdminController.java
+│   ├── service/             <span class="comment"># Business logic (9 files)</span>
+│   ├── model/               <span class="comment"># Database entities (11 files)</span>
+│   ├── repository/          <span class="comment"># Database access (9 files)</span>
+│   ├── dto/                 <span class="comment"># Data transfer objects (14 files)</span>
+│   ├── exception/           <span class="comment"># Custom errors (7 files)</span>
+│   ├── security/            <span class="comment"># Auth filters</span>
+│   └── config/              <span class="comment"># App configuration</span>
+├── src/main/resources/
+│   ├── application.properties  <span class="comment"># Main config file</span>
+│   ├── static/                 <span class="comment"># Frontend files (HTML, CSS, JS)</span>
+│   └── data/                   <span class="comment"># H2 database files</span>
+├── pom.xml                  <span class="comment"># Maven dependencies</span>
+        <!-- API ENDPOINTS -->
+        <h2>🌐 API Endpoints</h2>
+        <h3>Marketplace (Public - No Login Required)</h3>
+        <table>
+            <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/marketplace</td><td>View all kitchens and featured items</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/kitchens</td><td>List all active kitchens</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/kitchens/{name}</td><td>View specific kitchen details</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/kitchens/{name}/products</td><td>View products of a kitchen</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/products/{id}</td><td>View specific product details</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/items</td><td>List all available items</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/search?q=query</td><td>Search products and kitchens</td></tr>
+        </table>
+        <h3>Authentication (OTP Based)</h3>
+        <table>
+            <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+            <tr><td><span class="endpoint post">POST</span></td><td>/api/auth/otp/request</td><td>Request OTP to mobile number</td></tr>
+            <tr><td><span class="endpoint post">POST</span></td><td>/api/auth/otp/verify</td><td>Verify OTP and login</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/auth/me</td><td>Get current user info</td></tr>
+            <tr><td><span class="endpoint post">POST</span></td><td>/api/auth/become-seller</td><td>Upgrade buyer to seller role</td></tr>
+            <tr><td><span class="endpoint post">POST</span></td><td>/api/auth/logout</td><td>Logout current user</td></tr>
+        <h3>Buyer Profile & Orders</h3>
+        <table>
+            <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/buyer/profile</td><td>View buyer profile</td></tr>
+            <tr><td><span class="endpoint put">PUT</span></td><td>/api/buyer/profile</td><td>Update buyer profile</td></tr>
+            <tr><td><span class="endpoint post">POST</span></td><td>/api/buyer/orders/draft</td><td>Create/update draft order</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/buyer/orders/draft</td><td>View current draft</td></tr>
+            <tr><td><span class="endpoint delete">DELETE</span></td><td>/api/buyer/orders/draft</td><td>Clear draft order</td></tr>
+            <tr><td><span class="endpoint post">POST</span></td><td>/api/buyer/orders/place</td><td>Place final order</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/buyer/orders/my</td><td>View my order history</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/buyer/orders/{id}</td><td>View order details</td></tr>
+            <tr><td><span class="endpoint post">POST</span></td><td>/api/buyer/orders/{id}/rate</td><td>Rate an order (1-5)</td></tr>
+            <tr><td><span class="endpoint post">POST</span></td><td>/api/buyer/orders/{id}/reorder</td><td>Reorder same items</td></tr>
+        </table>
+        <h3>Seller Management</h3>
+        <table>
+            <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+            <tr><td><span class="endpoint post">POST</span></td><td>/api/seller/kitchen</td><td>Create a new kitchen</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/seller/kitchen</td><td>View my kitchen</td></tr>
+            <tr><td><span class="endpoint put">PUT</span></td><td>/api/seller/kitchen/{id}</td><td>Update kitchen details</td></tr>
+            <tr><td><span class="endpoint post">POST</span></td><td>/api/seller/products</td><td>Add product to kitchen</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/seller/products</td><td>View my products</td></tr>
+            <tr><td><span class="endpoint put">PUT</span></td><td>/api/seller/products/{id}</td><td>Update a product</td></tr>
+            <tr><td><span class="endpoint delete">DELETE</span></td><td>/api/seller/products/{id}</td><td>Delete a product</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/seller/orders</td><td>View orders for my kitchen</td></tr>
+            <tr><td><span class="endpoint patch">PATCH</span></td><td>/api/seller/orders/{id}/status</td><td>Update order status</td></tr>
+        </table>
+        <h3>Admin Panel</h3>
+        <table>
+            <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/admin/sellers/pending</td><td>View pending seller approvals</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/admin/sellers</td><td>View all sellers</td></tr>
+            <tr><td><span class="endpoint post">POST</span></td><td>/api/admin/sellers/{id}/approve</td><td>Approve a seller</td></tr>
+            <tr><td><span class="endpoint post">POST</span></td><td>/api/admin/sellers/{id}/reject</td><td>Reject a seller</td></tr>
+            <tr><td><span class="endpoint post">POST</span></td><td>/api/admin/sellers/{id}/suspend</td><td>Suspend a seller</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/admin/analytics</td><td>View platform analytics</td></tr>
+        </table>
+        <h3>Super Admin Panel</h3>
+        <table>
+            <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/superadmin/admins</td><td>List all admins</td></tr>
+            <tr><td><span class="endpoint post">POST</span></td><td>/api/superadmin/admins</td><td>Create new admin</td></tr>
+            <tr><td><span class="endpoint delete">DELETE</span></td><td>/api/superadmin/admins/{id}</td><td>Demote admin to buyer</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/superadmin/features</td><td>View feature flags</td></tr>
+            <tr><td><span class="endpoint put">PUT</span></td><td>/api/superadmin/features/{key}</td><td>Update feature flag</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/superadmin/settings</td><td>View platform settings</td></tr>
+            <tr><td><span class="endpoint put">PUT</span></td><td>/api/superadmin/settings/{key}</td><td>Update platform setting</td></tr>
+            <tr><td><span class="endpoint get">GET</span></td><td>/api/superadmin/analytics</td><td>View platform analytics</td></tr>
+        </table>
+        </table>
+├── mvnw / mvnw.cmd         <span class="comment"># Maven wrapper scripts</span>
+└── target/                  <span class="comment"># Compiled output</span>
+        <!-- COMMANDS -->
+        <h2>💻 Important Commands</h2>
+        <h3>Running the Server</h3>
+        <div class="code-block">
+<span class="comment"># Navigate to project folder</span>
+<span class="command">cd C:\project\my-first-spring-api\my-first-spring-api</span>
+
+<span class="comment"># Start the Spring Boot server</span>
+<span class="command">mvnw.cmd spring-boot:run</span>
+
+<span class="comment"># Server starts at http://localhost:8081</span>
+        </div>
+        <h3>Creating Public Tunnel (Share Link)</h3>
+        <div class="code-block">
+<span class="comment"># Install localtunnel (one-time setup)</span>
+<span class="command">npm install -g localtunnel</span>
+
+<span class="comment"># Start tunnel (run in separate terminal)</span>
+<span class="command">lt --port 8081</span>
+
+<span class="comment"># Output: your url is: https://xxxxx.loca.lt</span>
+        </div>
+        <h3>Stopping the Server</h3>
+        <div class="code-block">
+<span class="comment"># Kill all Java processes</span>
+<span class="command">taskkill /F /IM java.exe /T</span>
+        </div>
+        <h3>Git Commands</h3>
+        <div class="code-block">
+<span class="comment"># Check status</span>
+<span class="command">git status</span>
+
+<span class="comment"># Pull latest changes</span>
+<span class="command">git pull origin main</span>
+
+<span class="comment"># Push changes</span>
+        <!-- CONFIGURATION -->
+        <h2>⚙️ Configuration (application.properties)</h2>
+        <table>
+            <tr><th>Setting</th><th>Value</th><th>What It Does</th></tr>
+            <tr><td>server.port</td><td>8081</td><td>Port number where server runs</td></tr>
+            <tr><td>spring.datasource.url</td><td>jdbc:h2:file:./data/sociomartdb</td><td>Database file location</td></tr>
+            <tr><td>spring.jpa.hibernate.ddl-auto</td><td>update</td><td>Auto-creates/updates database tables</td></tr>
+            <tr><td>spring.h2.console.enabled</td><td>true</td><td>Enables web-based database console</td></tr>
+            <tr><td>spring.h2.console.path</td><td>/h2-console</td><td>URL path for database console</td></tr>
+            <tr><td>springdoc.swagger-ui.path</td><td>/swagger-ui.html</td><td>URL path for API documentation</td></tr>
+            <tr><td>server.servlet.session.timeout</td><td>30m</td><td>User session expires after 30 minutes</td></tr>
+        </table>
+        <!-- IMPORTANT URLS -->
+        <h2>🔗 Important URLs</h2>
+        <table>
+            <tr><th>Purpose</th><th>Local URL</th><th>Public URL (with tunnel)</th></tr>
+            <tr><td>API Documentation</td><td>http://localhost:8081/swagger-ui.html</td><td>https://xxxxx.loca.lt/swagger-ui.html</td></tr>
+            <tr><td>Database Console</td><td>http://localhost:8081/h2-console</td><td>https://xxxxx.loca.lt/h2-console</td></tr>
+            <tr><td>Marketplace API</td><td>http://localhost:8081/api/marketplace</td><td>https://xxxxx.loca.lt/api/marketplace</td></tr>
+            <tr><td>API Docs (JSON)</td><td>http://localhost:8081/v3/api-docs</td><td>https://xxxxx.loca.lt/v3/api-docs</td></tr>
+        </table>
+        <div class="highlight">
+            <strong>⚠️ Note:</strong> Replace <code>xxxxx.loca.lt</code> with your actual tunnel URL (e.g., <code>funny-bats-remain.loca.lt</code>)
+        </div>
+        <!-- ARCHITECTURE DIAGRAM -->
+        <h2>🏛️ System Architecture</h2>
+        <div class="flow-chart">
+            <pre style="font-family: monospace; font-size: 0.85em; line-height: 1.4;">
+┌─────────────────────────────────────────────────────────────────┐
+│                        CLIENT (Browser/Mobile)                  │
+│                             │                                   │
+│                    ┌────────▼────────┐                          │
+│                    │  Static Files   │                          │
+│                    │  (HTML/CSS/JS)  │                          │
+│                    └────────┬────────┘                          │
+│                             │                                   │
+└─────────────────────────────┼───────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     SPRING BOOT SERVER (Port 8081)              │
+│                             │                                   │
+│         ┌───────────────────┼───────────────────┐              │
+│         ▼                   ▼                   ▼              │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐        │
+│  │ Controllers │    │   Security  │    │   Swagger   │        │
+│  │  (REST API) │    │   Filter    │    │     UI      │        │
+│  └──────┬──────┘    └─────────────┘    └─────────────┘        │
+│         │                                                       │
+│         ▼                                                       │
+│  ┌─────────────┐                                                │
+│  │  Services   │  (Business Logic)                              │
+│  └──────┬──────┘                                                │
+│         │                                                       │
+│         ▼                                                       │
+│  ┌─────────────┐                                                │
+│  │ Repositories│  (Database Access)                             │
+│  └──────┬──────┘                                                │
+│         │                                                       │
+└─────────┼───────────────────────────────────────────────────────┘
+          │
+          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      H2 DATABASE (File-based)                   │
+│                    (./data/sociomartdb.mv.db)                   │
+└─────────────────────────────────────────────────────────────────┘
+            </pre>
+        </div>
+<span class="command">git add .</span>
+<span class="command">git commit -m "your message"</span>
+<span class="command">git push origin main</span>
+        </div>
+        <!-- KEYWORDS GLOSSARY -->
+        <h2>📖 Glossary (Important Terms)</h2>
+        <table>
+            <tr><th>Term</th><th>Meaning</th></tr>
+            <tr><td><strong>API</strong></td><td>Application Programming Interface - How programs communicate</td></tr>
+            <tr><td><strong>REST</strong></td><td>Representational State Transfer - Style of API design</td></tr>
+            <tr><td><strong>Endpoint</strong></td><td>A specific URL where API is accessed (e.g., /api/marketplace)</td></tr>
+            <tr><td><strong>DTO</strong></td><td>Data Transfer Object - Format for sending/receiving data</td></tr>
+            <tr><td><strong>JPA</strong></td><td>Java Persistence API - For database operations</td></tr>
+            <tr><td><strong>OTP</strong></td><td>One-Time Password - Used for login authentication</td></tr>
+            <tr><td><strong>CSRF</strong></td><td>Cross-Site Request Forgery - Security attack (disabled here for API)</td></tr>
+            <tr><td><strong>Session</strong></td><td>Server remembers user after login (30 min timeout)</td></tr>
+            <tr><td><strong>Tunnel</strong></td><td>Makes localhost accessible from internet</td></tr>
+            <tr><td><strong>Maven</strong></td><td>Build tool that manages dependencies and compiles code</td></tr>
+        </table>
+        <!-- FOOTER -->
+        <div class="footer">
+            <p><strong>SocioMart Project Guide</strong></p>
+            <p>Built with Spring Boot 4.1.1 | Java 21 | H2 Database</p>
+            <p>GitHub: <a href="https://github.com/utkarshnikhare/my-first-spring-api">github.com/utkarshnikhare/my-first-spring-api</a></p>
+            <p style="margin-top: 15px; font-size: 0.9em;">📄 To save as PDF: Open in browser → Press Ctrl+P → Select "Save as PDF"</p>
+        </div>
+    </div>
+</body>
+</html>
+        </div>
+        @media print { body { background: white; padding: 0; } .container { box-shadow: none; padding: 20px; } .tech-card { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛒 SocioMart</h1>
+        <p class="subtitle">Food Marketplace Platform - Project Guide</p>
+        <h2>📋 Project Overview</h2>
+        <p>SocioMart is a <strong>food marketplace platform</strong> where buyers can order food from multiple kitchen/seller. It has different user roles including Buyers, Sellers, Admins, and Super Admins. The project is built using <strong>Spring Boot</strong> framework with <strong>Java 21</strong>.</p>
+        <div class="flow-chart">
+            <h3>🏗️ How the System Works</h3>
+            <div class="flow-step"><div class="step-num">1</div><div><strong>Buyer</strong> browses kitchens and products on the marketplace</div></div>
+            <div class="flow-step"><div class="step-num">2</div><div><strong>Buyer</strong> places an order with OTP authentication</div></div>
+            <div class="flow-step"><div class="step-num">3</div><div><strong>Seller</strong> receives and manages the order</div></div>
+            <div class="flow-step"><div class="step-num">4</div><div><strong>Admin</strong> approves/rejects sellers</div></div>
+            <div class="flow-step"><div class="step-num">5</div><div><strong>Super Admin</strong> manages platform settings and features</div></div>
+        </div>

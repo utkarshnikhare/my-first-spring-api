@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SocioMart - Project Status Report</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.7; color: #333; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #2c3e50; font-size: 2em; margin-bottom: 5px; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+        .subtitle { text-align: center; color: #7f8c8d; font-size: 1em; margin-bottom: 25px; }
+        h2 { color: #2980b9; margin-top: 25px; margin-bottom: 10px; padding-bottom: 5px; border-bottom: 2px solid #ecf0f1; font-size: 1.3em; }
+        h3 { color: #27ae60; margin-top: 15px; margin-bottom: 8px; font-size: 1.1em; }
+        table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.9em; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #3498db; color: white; }
+        tr:nth-child(even) { background: #f8f9fa; }
+        .info-box { background: #e8f4f8; padding: 15px; border-radius: 5px; border-left: 4px solid #3498db; margin: 12px 0; }
+        .success-box { background: #d4edda; padding: 15px; border-radius: 5px; border-left: 4px solid #28a745; margin: 12px 0; }
+        .warning-box { background: #fff3cd; padding: 15px; border-radius: 5px; border-left: 4px solid #ffc107; margin: 12px 0; }
+        .code-block { background: #2c3e50; color: #ecf0f1; padding: 12px 15px; border-radius: 5px; font-family: 'Consolas', monospace; font-size: 0.85em; margin: 8px 0; }
+        .footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 2px solid #ecf0f1; color: #7f8c8d; font-size: 0.9em; }
+        ul { margin: 8px 0 8px 20px; }
+        li { margin: 5px 0; }
+        @media print { body { background: white; padding: 0; } .container { box-shadow: none; padding: 15px; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛒 SocioMart - Project Status Report</h1>
+        <p class="subtitle">Food Marketplace Platform | Generated: September 1, 2026</p>
+        <h2>📌 Project Overview</h2>
+        <div class="info-box">
+            <strong>SocioMart</strong> is a food marketplace platform where buyers can browse kitchens, place orders, and rate their experience. Sellers can manage their kitchens and products. Admins approve sellers, and Super Admins control platform settings.
+        </div>
+        <table>
+            <tr><th>Attribute</th><th>Details</th></tr>
+            <tr><td>Project Name</td><td>SocioMart (my-first-spring-api)</td></tr>
+            <tr><td>Framework</td><td>Spring Boot 4.1.1</td></tr>
+            <tr><td>Language</td><td>Java 21</td></tr>
+            <tr><td>Database</td><td>H2 (file-based)</td></tr>
+            <tr><td>Authentication</td><td>OTP (One-Time Password)</td></tr>
+            <tr><td>API Documentation</td><td>Swagger UI 3.1.0</td></tr>
+            <tr><td>Server Port</td><td>8081</td></tr>
+            <tr><td>GitHub Repository</td><td>github.com/utkarshnikhare/my-first-spring-api</td></tr>
+        </table>
+        <h2>✅ Current Status</h2>
+        <div class="success-box">
+            <strong>Server:</strong> Running on port 8081<br>
+            <strong>Public Tunnel:</strong> Active (via localtunnel)<br>
+            <strong>Database:</strong> Connected (H2 file-based)<br>
+            <strong>Git:</strong> Up to date with origin/main
+        </div>
+        <h2>📋 What Has Been Completed</h2>
+        <h3>1. Backend Development</h3>
+        <ul>
+            <li>Spring Boot project setup with Maven</li>
+            <li>7 REST controllers implemented</li>
+            <li>9 service classes for business logic</li>
+            <li>11 database models/entities</li>
+            <li>9 repository interfaces for database access</li>
+            <li>14 DTOs for data transfer</li>
+            <li>7 custom exception handlers</li>
+        </ul>
+        <h3>2. Security Implementation</h3>
+        <ul>
+            <li>Spring Security configuration</li>
+            <li>OTP-based authentication (request & verify)</li>
+            <li>Role-based access control (BUYER, SELLER, ADMIN, SUPER_ADMIN)</li>
+            <li>Session management (30-minute timeout)</li>
+            <li>CSRF disabled for REST API</li>
+        </ul>
+        <h3>3. API Endpoints (40+ Total)</h3>
+        <table>
+            <tr><th>Module</th><th>Endpoints</th><th>Status</th></tr>
+            <tr><td>Marketplace</td><td>7</td><td>✅ Complete</td></tr>
+            <tr><td>Authentication</td><td>5</td><td>✅ Complete</td></tr>
+            <tr><td>Buyer Profile</td><td>2</td><td>✅ Complete</td></tr>
+            <tr><td>Buyer Orders</td><td>8</td><td>✅ Complete</td></tr>
+            <tr><td>Seller Management</td><td>9</td><td>✅ Complete</td></tr>
+        <h3>4. Database</h3>
+        <ul>
+            <li>H2 file-based database configured</li>
+            <li>Auto table creation/update enabled</li>
+            <li>H2 Console accessible at /h2-console</li>
+            <li>Data persists across server restarts</li>
+        </ul>
+        <h3>5. API Documentation</h3>
+        <ul>
+            <li>Swagger UI integrated</li>
+            <li>Accessible at /swagger-ui.html</li>
+            <li>All endpoints documented with request/response formats</li>
+        </ul>
+        <h3>6. Deployment & Sharing</h3>
+        <ul>
+            <li>Local server running on port 8081</li>
+            <li>Public tunnel active via localtunnel</li>
+            <li>Shareable HTTPS link generated</li>
+            <li>Code pushed to GitHub</li>
+        </ul>
+        <h2>🚀 How to Run the Project</h2>
+        <div class="code-block">
+# Navigate to project directory
+cd C:\project\my-first-spring-api\my-first-spring-api
+
+# Start the server
+mvnw.cmd spring-boot:run
+
+        <h2>🔗 Important Links</h2>
+        <table>
+            <tr><th>Purpose</th><th>URL</th></tr>
+            <tr><td>Local Server</td><td>http://localhost:8081</td></tr>
+            <tr><td>API Documentation</td><td>http://localhost:8081/swagger-ui.html</td></tr>
+            <tr><td>Database Console</td><td>http://localhost:8081/h2-console</td></tr>
+            <tr><td>Marketplace API</td><td>http://localhost:8081/api/marketplace</td></tr>
+            <tr><td>GitHub Repository</td><td>github.com/utkarshnikhare/my-first-spring-api</td></tr>
+        </table>
+        <h2>👥 User Roles Summary</h2>
+        <table>
+            <tr><th>Role</th><th>Capabilities</th></tr>
+            <tr><td><strong>Buyer</strong></td><td>Browse kitchens, place orders, rate orders, manage profile</td></tr>
+            <tr><td><strong>Seller</strong></td><td>Create kitchen, add products, manage orders</td></tr>
+            <tr><td><strong>Admin</strong></td><td>Approve/reject sellers, view analytics</td></tr>
+            <tr><td><strong>Super Admin</strong></td><td>Manage admins, platform settings, feature flags</td></tr>
+        </table>
+        <h2>🔧 Technologies Used</h2>
+        <table>
+            <tr><th>Technology</th><th>Version</th><th>Purpose</th></tr>
+            <tr><td>Java</td><td>21</td><td>Programming language</td></tr>
+            <tr><td>Spring Boot</td><td>4.1.1</td><td>Backend framework</td></tr>
+            <tr><td>Spring Security</td><td>7</td><td>Authentication & authorization</td></tr>
+            <tr><td>Spring Data JPA</td><td>4.1.1</td><td>Database operations</td></tr>
+            <tr><td>H2 Database</td><td>2.x</td><td>In-memory/file database</td></tr>
+            <tr><td>Swagger OpenAPI</td><td>3.1.0</td><td>API documentation</td></tr>
+            <tr><td>Maven</td><td>3.x</td><td>Build tool</td></tr>
+            <tr><td>localtunnel</td><td>latest</td><td>Public URL sharing</td></tr>
+        </table>
+# Server will start at http://localhost:8081
+        <h2>📝 Important Notes</h2>
+        <div class="warning-box">
+            <ul>
+                <li><strong>Browser Warning:</strong> When opening tunnel link, click "Advanced" → "Proceed" to continue</li>
+                <li><strong>Tunnel URL Changes:</strong> Each time you restart lt, you get a new URL</li>
+                <li><strong>Database:</strong> Data is stored in ./data/sociomartdb.mv.db file</li>
+                <li><strong>Session Timeout:</strong> User sessions expire after 30 minutes</li>
+                <li><strong>OTP Auth:</strong> Most endpoints require OTP verification first</li>
+            </ul>
+        </div>
+        <div class="footer">
+            <p><strong>SocioMart Project Status Report</strong></p>
+            <p>Spring Boot 4.1.1 | Java 21 | H2 Database | Swagger 3.1.0</p>
+            <p>📄 To save as PDF: Open in browser → Press Ctrl+P → Select "Save as PDF"</p>
+        </div>
+    </div>
+</body>
+</html>
+        </div>
+        <h3>Create Public Link (for sharing)</h3>
+        <div class="code-block">
+# In a separate terminal
+lt --port 8081
+
+# Output: your url is: https://xxxxx.loca.lt
+        </div>
+            <tr><td>Admin Panel</td><td>7</td><td>✅ Complete</td></tr>
+            <tr><td>Super Admin</td><td>8</td><td>✅ Complete</td></tr>
+        </table>
