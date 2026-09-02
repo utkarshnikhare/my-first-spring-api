@@ -1,0 +1,9 @@
+# Root-level line-ending policy for the one-command runners.
+# Force LF for bash/make scripts so they run on macOS, Linux, WSL and Git Bash.
+/start.sh text eol=lf
+/Makefile text eol=lf
+/.env.example text eol=lf
+
+# Windows-native runners stay CRLF for cmd.exe / PowerShell compatibility.
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
