@@ -11,6 +11,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -49,16 +51,22 @@ public class OrderService {
         Long draftId = (Long) session.getAttribute(DRAFT_ORDER_SESSION_KEY);
         User buyer = resolveBuyer(session);
         Order draft;
+        boolean isNewDraft = false;
         if (draftId == null) {
             draft = new Order(buyer, kitchen);
             draft.setOrderStatus(OrderStatus.DRAFT);
             draft.setOrderNumber(generateOrderNumber());
-            orderRepository.save(draft);
-            session.setAttribute(DRAFT_ORDER_SESSION_KEY, draft.getId());
+            isNewDraft = true;
         } else {
-            draft = orderRepository.findById(draftId)
-                    .orElseThrow(() -> new OrderNotFoundException(draftId));
-            if (!draft.getKitchen().getId().equals(kitchenId)) {
+            draft = orderRepository.findById(draftId).orElse(null);
+            if (draft == null) {
+                // Stale session pointer (e.g. previous attempt rolled back) — recover.
+                session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
+                draft = new Order(buyer, kitchen);
+                draft.setOrderStatus(OrderStatus.DRAFT);
+                draft.setOrderNumber(generateOrderNumber());
+                isNewDraft = true;
+            } else if (!draft.getKitchen().getId().equals(kitchenId)) {
                 throw new InvalidKitchenSelectionException(
                         "You already have items from " + draft.getKitchen().getDisplayName() +
                                 ". You can only order from one kitchen at a time.");
@@ -86,12 +94,87 @@ public class OrderService {
                     throw new IllegalArgumentException("At most " + product.getMaxQuantity() + " units of '" + product.getName() + "' per order.");
                 }
                 OrderItem orderItem = new OrderItem(product, qty, product.getPrice());
+                applyScheduling(product, itemReq, orderItem);
                 draft.addItem(orderItem);
             }
         }
         draft.recalculateTotal();
-        orderRepository.save(draft);
-        return toOrderDto(draft);
+        Order saved = orderRepository.save(draft);
+        // Only publish the session key once the draft validated & persisted (if any
+        // validation throws above, the transaction rolls back and no stale key remains).
+        if (isNewDraft) session.setAttribute(DRAFT_ORDER_SESSION_KEY, saved.getId());
+        return toOrderDto(saved);
+    }
+
+    /**
+     * Offering-level cutoff & scheduling enforcement (Spec 1.4 / Screen 4A).
+     * Today items: must be placed before the offering cutoff time today.
+     * Fixed pre-orders: scheduled date is the offering's fixed availability date.
+     * Flexible pre-orders: buyer picks a date inside the offering window and a
+     * slot from the offering's time slots; cutoff applies the day before pickup.
+     */
+    private void applyScheduling(Product product, OrderItemRequest req, OrderItem item) {
+        boolean preorder = Boolean.TRUE.equals(product.getIsPreorder());
+        if (!preorder) {
+            enforceCutoff(product, LocalDate.now(), "today");
+            return;
+        }
+        LocalDate earliest = product.getAvailableDate() != null ? product.getAvailableDate() : LocalDate.now().plusDays(1);
+        LocalDate latest = product.getAvailableUntilDate() != null ? product.getAvailableUntilDate() : earliest;
+        LocalDate scheduled;
+        if (req.getScheduledDate() == null || req.getScheduledDate().isBlank()) {
+            scheduled = earliest;
+        } else {
+            try {
+                scheduled = LocalDate.parse(req.getScheduledDate());
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Invalid date for '" + product.getName() + "'.");
+            }
+        }
+        if (scheduled.isBefore(earliest) || scheduled.isAfter(latest)) {
+            throw new IllegalArgumentException("'" + product.getName() + "' can be scheduled between "
+                    + earliest + " and " + latest + ".");
+        }
+        // The strict order deadline is the offering cutoff on the day before fulfilment.
+        enforceCutoff(product, scheduled.minusDays(1), "for " + scheduled + " availability");
+        if (product.getPreorderType() == PreorderType.FLEXIBLE) {
+            List<String> slots = parseSlots(product.getTimeSlots());
+            if (!slots.isEmpty()) {
+                String slot = req.getScheduledSlot();
+                if (slot == null || !slots.contains(slot)) {
+                    throw new IllegalArgumentException("Choose a valid time slot for '" + product.getName() + "'.");
+                }
+                item.setScheduledSlot(slot);
+            }
+        } else {
+            item.setScheduledSlot(null);
+        }
+        item.setScheduledDate(scheduled);
+    }
+
+    /** Cutoffs belong exclusively to offerings — this is where they are enforced. */
+    private void enforceCutoff(Product product, LocalDate cutoffDate, String context) {
+        String cutoff = product.getCutoffTime();
+        if (cutoff == null || cutoff.isBlank()) return;
+        LocalTime cutoffTime;
+        try {
+            cutoffTime = LocalTime.parse(cutoff);
+        } catch (Exception e) {
+            return;
+        }
+        LocalDate today = LocalDate.now();
+        if (cutoffDate.isBefore(today) || (cutoffDate.equals(today) && LocalTime.now().isAfter(cutoffTime))) {
+            throw new IllegalArgumentException("The order cutoff (" + cutoff + ") for '"
+                    + product.getName() + "' has passed — orders " + context + " are closed.");
+        }
+    }
+
+    private List<String> parseSlots(String timeSlots) {
+        if (timeSlots == null || timeSlots.isBlank()) return List.of();
+        return java.util.Arrays.stream(timeSlots.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
@@ -140,8 +223,12 @@ public class OrderService {
         if (buyerDetails != null) updateBuyerDetails(buyer, buyerDetails);
         if (customInstructions != null && !customInstructions.isBlank()) order.setCustomInstructions(customInstructions);
         consumeStock(order);
-        order.setOrderStatus(OrderStatus.ORDERED);
-        if (paymentStatus != null) order.setPaymentStatus(paymentStatus);
+        // Claim-based UPI flow (Screen 6):
+        //  [I HAVE PAID]   → paymentStatus PAID, order CONFIRMED ("Payment pending verification")
+        //  [I'LL PAY LATER] → paymentStatus PENDING, order stays ORDERED ("Pending")
+        boolean claimedPaid = paymentStatus == PaymentStatus.PAID;
+        order.setPaymentStatus(claimedPaid ? PaymentStatus.PAID : PaymentStatus.PENDING);
+        order.setOrderStatus(claimedPaid ? OrderStatus.CONFIRMED : OrderStatus.ORDERED);
         order.recalculateTotal();
         orderRepository.save(order);
         session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
@@ -307,9 +394,14 @@ public class OrderService {
         }
         if (order.getItems() != null) {
             dto.setItems(order.getItems().stream()
-                    .map(item -> new OrderItemDto(item.getId(), item.getProduct().getId(),
-                            item.getProduct().getName(), item.getProduct().getImageUrl(),
-                            item.getQuantity(), item.getPrice()))
+                    .map(item -> {
+                        OrderItemDto itemDto = new OrderItemDto(item.getId(), item.getProduct().getId(),
+                                item.getProduct().getName(), item.getProduct().getImageUrl(),
+                                item.getQuantity(), item.getPrice());
+                        itemDto.setScheduledDate(item.getScheduledDate());
+                        itemDto.setScheduledSlot(item.getScheduledSlot());
+                        return itemDto;
+                    })
                     .collect(Collectors.toList()));
         }
         return dto;
@@ -339,6 +431,8 @@ public class OrderService {
             Product product = productRepository.findById(e.getKey()).orElse(null);
             if (product == null || product.getRemainingQuantity() == null) continue;
             product.setRemainingQuantity(Math.max(0, product.getRemainingQuantity() - e.getValue()));
+            // Live demand progress bar ("18 / 50 booked") — units booked per offering.
+            product.setBookedQuantity((product.getBookedQuantity() == null ? 0 : product.getBookedQuantity()) + e.getValue());
             productRepository.save(product);
         }
     }
