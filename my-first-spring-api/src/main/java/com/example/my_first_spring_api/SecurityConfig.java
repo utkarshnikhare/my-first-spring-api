@@ -35,6 +35,7 @@ public class SecurityConfig {
                                 "/api/search",
                                 "/api/kitchens/**",
                                 "/api/products/**",
+                                "/api/discovery/**",
                                 "/h2-console/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
