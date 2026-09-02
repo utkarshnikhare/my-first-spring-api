@@ -84,6 +84,14 @@ public class MarketplaceService {
         dto.setRemainingQuantity(product.getRemainingQuantity());
         dto.setIsPreorder(product.getIsPreorder());
         dto.setKitchenSlug(kitchen != null ? kitchen.getName() : null);
+        dto.setCategory(product.getCategory() != null ? product.getCategory().name() : null);
+        dto.setCutoffTime(product.getCutoffTime());
+        dto.setReadyByTime(product.getReadyByTime());
+        dto.setPreorderType(product.getPreorderType() != null ? product.getPreorderType().name() : null);
+        dto.setAvailableUntilDate(product.getAvailableUntilDate());
+        dto.setTimeSlots(product.getTimeSlots());
+        dto.setBookedQuantity(product.getBookedQuantity());
+        dto.setSoldOut(product.isSoldOut());
         return dto;
     }
 }

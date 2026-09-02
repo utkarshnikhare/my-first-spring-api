@@ -45,6 +45,12 @@ public class MarketplaceController {
         return ResponseEntity.ok(kitchenService.getProductsByKitchenName(kitchenName));
     }
 
+    /** Public kitchen storefront by id (Screen 4) — offerings split Today / Pre-order. */
+    @GetMapping("/api/kitchens/id/{id}")
+    public ResponseEntity<KitchenDetailDto> getKitchenDetailById(@PathVariable Long id) {
+        return ResponseEntity.ok(kitchenService.getKitchenDetailById(id));
+    }
+
     @GetMapping("/api/products/{productId}")
     public ResponseEntity<ProductDto> getProduct(@PathVariable Long productId) {
         return ResponseEntity.ok(kitchenService.getProductById(productId));

@@ -62,6 +62,30 @@ public class KitchenService {
         return toKitchenDto(kitchen);
     }
 
+    /**
+     * Public kitchen storefront (Screen 4): identity + offerings split strictly
+     * into "Available Today" and "Pre-order" sections.
+     */
+    public KitchenDetailDto getKitchenDetailById(Long id) {
+        Kitchen kitchen = kitchenRepository.findById(id)
+                .orElseThrow(() -> new KitchenNotFoundException(id));
+        if (!KitchenVisibility.isPubliclyVisible(kitchen)) {
+            throw new KitchenNotFoundException(id);
+        }
+        KitchenDto kitchenDto = toKitchenDto(kitchen);
+        List<ProductDto> all = productRepository.findByKitchen(kitchen).stream()
+                .map(this::toProductDto).collect(Collectors.toList());
+        List<ProductDto> preorder = all.stream()
+                .filter(p -> Boolean.TRUE.equals(p.getIsPreorder()))
+                .collect(Collectors.toList());
+        List<ProductDto> today = all.stream()
+                .filter(p -> !Boolean.TRUE.equals(p.getIsPreorder()) && Boolean.TRUE.equals(p.getAvailableToday()))
+                .collect(Collectors.toList());
+        KitchenDetailDto dto = new KitchenDetailDto(kitchenDto, today);
+        dto.setPreorderProducts(preorder);
+        return dto;
+    }
+
     public ProductDto getProductById(Long id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new com.example.my_first_spring_api.exception.ProductNotFoundException(id));
@@ -107,9 +131,17 @@ public class KitchenService {
     }
 
     private KitchenDto toKitchenDto(Kitchen kitchen) {
-        return new KitchenDto(kitchen.getId(), kitchen.getName(), kitchen.getDisplayName(),
+        KitchenDto dto = new KitchenDto(kitchen.getId(), kitchen.getName(), kitchen.getDisplayName(),
                 kitchen.getDescription(), kitchen.getImageUrl(), kitchen.getRating(),
                 kitchen.getAvailableToday(), kitchen.getSeller() != null ? kitchen.getSeller().getId() : null);
+        dto.setShortDescription(kitchen.getShortDescription());
+        dto.setSociety(kitchen.getSociety());
+        dto.setBuilding(kitchen.getBuilding());
+        dto.setWhatsappLink(kitchen.getWhatsappLink());
+        dto.setInstagramLink(kitchen.getInstagramLink());
+        dto.setUpiId(kitchen.getUpiId());
+        dto.setOrderDeadline(kitchen.getOrderDeadline());
+        return dto;
     }
 
     private ProductDto toProductDto(Product product) {
@@ -126,6 +158,14 @@ public class KitchenService {
         dto.setRemainingQuantity(product.getRemainingQuantity());
         dto.setIsPreorder(product.getIsPreorder());
         dto.setKitchenSlug(kitchen != null ? kitchen.getName() : null);
+        dto.setCategory(product.getCategory() != null ? product.getCategory().name() : null);
+        dto.setCutoffTime(product.getCutoffTime());
+        dto.setReadyByTime(product.getReadyByTime());
+        dto.setPreorderType(product.getPreorderType() != null ? product.getPreorderType().name() : null);
+        dto.setAvailableUntilDate(product.getAvailableUntilDate());
+        dto.setTimeSlots(product.getTimeSlots());
+        dto.setBookedQuantity(product.getBookedQuantity());
+        dto.setSoldOut(product.isSoldOut());
         return dto;
     }
 }
