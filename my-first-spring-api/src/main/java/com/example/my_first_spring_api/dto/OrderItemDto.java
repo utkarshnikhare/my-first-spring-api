@@ -1,6 +1,7 @@
 package com.example.my_first_spring_api.dto;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 public class OrderItemDto {
     private Long id;
@@ -9,6 +10,8 @@ public class OrderItemDto {
     private String imageUrl;
     private Integer quantity;
     private BigDecimal price;
+    private LocalDate scheduledDate;
+    private String scheduledSlot;
 
     public OrderItemDto() {}
 
@@ -34,4 +37,9 @@ public class OrderItemDto {
     public void setQuantity(Integer quantity) { this.quantity = quantity; }
     public BigDecimal getPrice() { return price; }
     public void setPrice(BigDecimal price) { this.price = price; }
+    public LocalDate getScheduledDate() { return scheduledDate; }
+    public void setScheduledDate(LocalDate scheduledDate) { this.scheduledDate = scheduledDate; }
+    public String getScheduledSlot() { return scheduledSlot; }
+    public void setScheduledSlot(String scheduledSlot) { this.scheduledSlot = scheduledSlot; }
 }
+

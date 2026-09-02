@@ -21,6 +21,15 @@ public class ProductDto {
     private Integer remainingQuantity;
     private Double rating;
     private Boolean isPreorder;
+    private String category;
+    /** Offering-level cutoff (HH:mm) — revealed only in offering details / ordering flow. */
+    private String cutoffTime;
+    private String readyByTime;
+    private String preorderType;
+    private LocalDate availableUntilDate;
+    private String timeSlots;
+    private Integer bookedQuantity;
+    private Boolean soldOut;
 
     public ProductDto() {}
 
@@ -71,4 +80,20 @@ public class ProductDto {
     public void setRating(Double rating) { this.rating = rating; }
     public Boolean getIsPreorder() { return isPreorder; }
     public void setIsPreorder(Boolean isPreorder) { this.isPreorder = isPreorder; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
+    public String getCutoffTime() { return cutoffTime; }
+    public void setCutoffTime(String cutoffTime) { this.cutoffTime = cutoffTime; }
+    public String getReadyByTime() { return readyByTime; }
+    public void setReadyByTime(String readyByTime) { this.readyByTime = readyByTime; }
+    public String getPreorderType() { return preorderType; }
+    public void setPreorderType(String preorderType) { this.preorderType = preorderType; }
+    public LocalDate getAvailableUntilDate() { return availableUntilDate; }
+    public void setAvailableUntilDate(LocalDate availableUntilDate) { this.availableUntilDate = availableUntilDate; }
+    public String getTimeSlots() { return timeSlots; }
+    public void setTimeSlots(String timeSlots) { this.timeSlots = timeSlots; }
+    public Integer getBookedQuantity() { return bookedQuantity; }
+    public void setBookedQuantity(Integer bookedQuantity) { this.bookedQuantity = bookedQuantity; }
+    public Boolean getSoldOut() { return soldOut; }
+    public void setSoldOut(Boolean soldOut) { this.soldOut = soldOut; }
 }
