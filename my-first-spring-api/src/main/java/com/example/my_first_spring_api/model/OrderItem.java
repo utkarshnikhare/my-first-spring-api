@@ -2,6 +2,7 @@ package com.example.my_first_spring_api.model;
 
 import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -24,6 +25,14 @@ public class OrderItem {
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
+
+    /** Buyer-chosen availability date for pre-order items (null = today). */
+    @Column(name = "scheduled_date")
+    private LocalDate scheduledDate;
+
+    /** Buyer-chosen time slot for FLEXIBLE pre-order items (e.g. "4:00 PM"). */
+    @Column(name = "scheduled_slot")
+    private String scheduledSlot;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -60,6 +69,10 @@ public class OrderItem {
     public void setQuantity(Integer quantity) { this.quantity = quantity; }
     public BigDecimal getPrice() { return price; }
     public void setPrice(BigDecimal price) { this.price = price; }
+    public LocalDate getScheduledDate() { return scheduledDate; }
+    public void setScheduledDate(LocalDate scheduledDate) { this.scheduledDate = scheduledDate; }
+    public String getScheduledSlot() { return scheduledSlot; }
+    public void setScheduledSlot(String scheduledSlot) { this.scheduledSlot = scheduledSlot; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
