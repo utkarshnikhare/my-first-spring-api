@@ -13,10 +13,10 @@ import org.springframework.stereotype.Component;
  *  - grandfathers sellers that existed before the approval workflow,
  *  - seeds the initial seller feature catalogue.
  * Every step is idempotent and safe to run on every startup.
- * Only active when 'demo' or 'dev' profile is enabled.
+ * Only active when 'demo', 'dev' or the implicit 'default' profile is enabled.
  */
 @Component
-@Profile({"demo", "dev"})
+@Profile({"demo", "dev", "default"})
 public class DataInitializer implements CommandLineRunner {
 
     private final AdminService adminService;

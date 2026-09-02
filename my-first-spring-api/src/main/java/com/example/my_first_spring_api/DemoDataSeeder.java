@@ -1,8 +1,10 @@
 package com.example.my_first_spring_api;
 
+import com.example.my_first_spring_api.model.Category;
 import com.example.my_first_spring_api.model.Kitchen;
 
 import com.example.my_first_spring_api.model.PlatformSetting;
+import com.example.my_first_spring_api.model.PreorderType;
 import com.example.my_first_spring_api.model.Product;
 import com.example.my_first_spring_api.model.SellerApprovalStatus;
 import com.example.my_first_spring_api.model.User;
@@ -18,16 +20,17 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 /**
  * Seeds the database with realistic demo kitchens and menus — once only, guarded
  * by a platform_settings flag — so the search & discovery features can be tested
  * immediately. Includes one PENDING-approval kitchen to prove unapproved
  * sellers' kitchens are never exposed in public results.
- * Only active when 'demo' or 'dev' profile is enabled.
+ * Only active when 'demo', 'dev' or the implicit 'default' profile is enabled.
  */
 @Component
-@Profile({"demo", "dev"})
+@Profile({"demo", "dev", "default"})
 public class DemoDataSeeder {
 
     private static final String DEMO_SEED_FLAG = "demo_data_seeded";
@@ -146,6 +149,21 @@ public class DemoDataSeeder {
         product(kPending, "Hidden Chicken Curry", "Should never appear publicly",  200,"plate",10,5,3.0);
         product(kPending, "Hidden Biryani", "Should never appear publicly",  190,"plate",10,4,3.0);
 
+        // ---- Sold-out offering (listed but 🔴 Sold out with a disabled button) ----
+        soldOutProduct(kSnacks, "Kaju Katli", "Premium cashew fudge — batch sold out for today", 60, "box", 8, 4.9);
+
+        // ---- FIXED pre-orders (tomorrow only, cutoff 12 PM — Screen 4A Type 2) ----
+        fixedPreorder(kMoms, "Sunday Special Biryani", "Mom's slow-dum vegetable biryani with mirchi ka salan",
+                190, "plate", 15, 4.9, Category.LUNCH);
+        fixedPreorder(kRoyal, "Ghee Podi Dosa", "Crisp ghee-roast dosa layered with gunpowder podi",
+                110, "plate", 12, 4.8, Category.BREAKFAST);
+
+        // ---- FLEXIBLE pre-orders (buyer picks date + slot — Screen 4A Type 3) ----
+        flexiblePreorder(kDesi, "Weekend Feast Thali", "Three-course festive thali: starter, mains and dessert",
+                250, "platter", 10, 4.8, Category.LUNCH);
+        flexiblePreorder(kPunjabi, "Tandoori Party Pack", "Assorted tandoori platter with naan and dessert",
+                320, "pack", 8, 4.7, Category.DINNER);
+
         platformSettingRepository.save(new PlatformSetting(DEMO_SEED_FLAG, "true"));
     }
 
@@ -182,6 +200,104 @@ public class DemoDataSeeder {
         p.setRemainingQuantity(remQ);
         p.setRating(rating);
         p.setIsPreorder(false);
+        // Offering-level discovery metadata: category + the offering's own cutoff
+        // (cutoffs NEVER belong to the kitchen as a whole — Spec 1.4).
+        p.setCategory(categoryFor(name));
+        p.setCutoffTime(cutoffFor(name));
+        p.setReadyByTime(readyByFor(name));
+        if (maxQ != null && remQ != null) p.setBookedQuantity(Math.max(0, maxQ - remQ));
+        return productRepository.save(p);
+    }
+
+    private static final Map<String, Category> CATEGORIES = Map.ofEntries(
+            Map.entry("poha", Category.BREAKFAST), Map.entry("upma", Category.BREAKFAST),
+            Map.entry("idli", Category.BREAKFAST), Map.entry("masala dosa", Category.BREAKFAST),
+            Map.entry("medu vada", Category.BREAKFAST), Map.entry("aloo paratha", Category.BREAKFAST),
+            Map.entry("puri bhaji", Category.BREAKFAST), Map.entry("tea", Category.BREAKFAST),
+            Map.entry("chai", Category.BREAKFAST), Map.entry("burger", Category.SNACKS),
+            Map.entry("veg thali", Category.LUNCH), Map.entry("rajma chawal", Category.LUNCH),
+            Map.entry("dal tadka", Category.LUNCH), Map.entry("paneer butter masala", Category.LUNCH),
+            Map.entry("dal makhani", Category.LUNCH), Map.entry("chicken curry", Category.LUNCH),
+            Map.entry("chicken biryani", Category.LUNCH), Map.entry("veg biryani", Category.LUNCH),
+            Map.entry("chapati", Category.LUNCH), Map.entry("butter naan", Category.LUNCH),
+            Map.entry("hakka noodles", Category.DINNER), Map.entry("paneer tikka", Category.DINNER),
+            Map.entry("pav bhaji", Category.DINNER), Map.entry("fresh veg salad", Category.SPECIAL),
+            Map.entry("lassi", Category.SNACKS), Map.entry("samosa", Category.SNACKS),
+            Map.entry("gulab jamun", Category.SNACKS), Map.entry("kheer", Category.SNACKS));
+
+    private static Category categoryFor(String name) {
+        String n = name.toLowerCase();
+        for (Map.Entry<String, Category> e : CATEGORIES.entrySet()) {
+            if (n.contains(e.getKey())) return e.getValue();
+        }
+        return Category.SPECIAL;
+    }
+
+    /** Demo per-offering cutoffs (HH:mm) — e.g. breakfasts close at 11 AM. */
+    private static String cutoffFor(String name) {
+        String n = name.toLowerCase();
+        if (n.contains("chai") || n.contains("vada")) return "10:30";
+        if (n.contains("dosa") || n.contains("idli") || n.contains("upma") || n.contains("poha")
+                || n.contains("paratha") || n.contains("puri")) return "11:00";
+        if (n.contains("biryani") || n.contains("thali")) return "12:30";
+        if (n.contains("noodles") || n.contains("bhaji")) return "18:30";
+        return "20:00";
+    }
+
+    private static String readyByFor(String name) {
+        String n = name.toLowerCase();
+        if (n.contains("chai") || n.contains("vada")) return "12:00 PM today";
+        if (n.contains("dosa") || n.contains("idli") || n.contains("upma") || n.contains("poha")
+                || n.contains("paratha") || n.contains("puri")) return "1:00 PM today";
+        if (n.contains("biryani") || n.contains("thali")) return "4:00 PM today";
+        if (n.contains("noodles") || n.contains("bhaji")) return "8:00 PM this evening";
+        return "9:00 PM today";
+    }
+
+    /** One deliberately sold-out offering (🔴 Sold out with disabled button). */
+    private Product soldOutProduct(Kitchen k, String name, String description, int price, String unit,
+                                   Integer maxQ, double rating) {
+        Product p = product(k, name, description, price, unit, maxQ, 0, rating);
+        return p;
+    }
+
+    /** FIXED pre-order: available tomorrow only, cutoff 12 PM today. */
+    private Product fixedPreorder(Kitchen k, String name, String description, int price, String unit,
+                                  Integer maxQ, double rating, Category category) {
+        Product p = new Product(k, name, description, BigDecimal.valueOf(price), null);
+        p.setPriceUnit(unit);
+        p.setAvailableToday(false);
+        p.setAvailableDate(java.time.LocalDate.now().plusDays(1));
+        p.setMaxQuantity(maxQ);
+        p.setRemainingQuantity(maxQ);
+        p.setRating(rating);
+        p.setIsPreorder(true);
+        p.setPreorderType(PreorderType.FIXED);
+        p.setCategory(category);
+        p.setCutoffTime("12:00");
+        p.setReadyByTime("1:30 PM tomorrow");
+        p.setBookedQuantity(0);
+        return productRepository.save(p);
+    }
+
+    /** FLEXIBLE pre-order: buyer picks date (tomorrow..+6d) + slot; day-before cutoff. */
+    private Product flexiblePreorder(Kitchen k, String name, String description, int price, String unit,
+                                     Integer maxQ, double rating, Category category) {
+        Product p = new Product(k, name, description, BigDecimal.valueOf(price), null);
+        p.setPriceUnit(unit);
+        p.setAvailableToday(false);
+        p.setAvailableDate(java.time.LocalDate.now().plusDays(1));
+        p.setAvailableUntilDate(java.time.LocalDate.now().plusDays(6));
+        p.setMaxQuantity(maxQ);
+        p.setRemainingQuantity(maxQ);
+        p.setRating(rating);
+        p.setIsPreorder(true);
+        p.setPreorderType(PreorderType.FLEXIBLE);
+        p.setCategory(category);
+        p.setCutoffTime("21:00");
+        p.setReadyByTime("your chosen slot");
+        p.setTimeSlots("1:00 PM,4:00 PM,8:00 PM");
+        p.setBookedQuantity(0);
         return productRepository.save(p);
     }
 }
