@@ -5,6 +5,7 @@ target/
 
 # Logs, local test artifacts & scripts
 *.log
+*.err
 *.txt
 *.ps1
 
