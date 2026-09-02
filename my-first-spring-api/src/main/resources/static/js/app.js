@@ -1,41 +1,196 @@
-'use strict';
-var state = { user: null, draft: null, viewMode: 'items', catFilter: null, ordersTab: 'active', sellerTab: 'offerings', otpStep: 'mobile', otpMobile: '', pendingAuthNext: '#/checkout', productIndex: {}, sellerProducts: [], sellerKitchen: null, sellerOrders: [], modalQty: 1, modalProduct: null, ratedOrders: {} };
-var routes = { '#/home': homeView, '#/search': searchView, '#/my-orders': ordersView, '#/checkout': checkoutView, '#/orders': myOrdersView, '#/sell': sellerView, '#/profile': profileView };
-async function navigate(hash) { if (location.hash === hash) await render(); else location.hash = hash; }
-async function render() { var hash = location.hash || '#/home'; var viewFn = routes[hash] || homeView; var view = viewEl(); view.innerHTML = '<div class="page-loading"><div class="spinner"></div></div>'; try { var html = await viewFn(hash); view.innerHTML = html || ''; updateNav(hash); } catch (err) { view.innerHTML = '<div class="view-enter empty"><span class="empty-icon">⚠️</span><div class="empty-title">Error</div><p class="muted small">' + esc(err.message) + '</p></div>'; } }
-function updateNav(hash) { $all('.nav-item').forEach(function (el) { el.classList.remove('active'); }); var m = { '#/home': 'home', '#/my-orders': 'order', '#/orders': 'orders', '#/sell': 'seller' }; var el = document.querySelector('[data-nav="' + (m[hash] || '') + '"]'); if (el) el.classList.add('active'); }
-async function profileView() { if (!state.user || !state.user.authenticated) { state.pendingAuthNext = '#/profile'; return '<div class="view-enter"><div class="page-head"><h1>Profile</h1></div>' + authPromptHtml('Verify your mobile number to view your profile') + '</div>'; } var u = state.user; var h = '<div class="view-enter"><div class="page-head"><h1>My Profile</h1></div>'; h += '<div class="card pad"><div class="profile-header"><div class="profile-avatar">' + esc((u.name || '?').charAt(0).toUpperCase()) + '</div><div class="profile-info"><h2>' + esc(u.name || 'User') + '</h2><p class="muted small">' + esc(u.mobileNumber || '') + '</p><span class="role-badge role-' + (u.role || 'buyer').toLowerCase() + '">' + (u.role || 'BUYER') + '</span></div></div></div>'; h += '<div class="card pad"><form data-form="profile"><div class="form-group"><label class="form-label">Name</label><input class="form-input" name="name" value="' + esc(u.name || '') + '" required></div><div class="form-group"><label class="form-label">Mobile</label><input class="form-input" value="' + esc(u.mobileNumber || '') + '" disabled></div><button class="btn btn-primary btn-block" type="submit">Save Changes</button></form></div>'; if (u.role !== 'SELLER') { h += '<div class="card pad"><h3>Become a Seller</h3><p class="muted small">Share your home cooking with neighbours.</p><button class="btn btn-secondary btn-block" data-action="become-seller" style="margin-top:8px">Start Selling</button></div>'; } h += '<div class="card pad"><h3>Appearance</h3><div class="toggle-row"><span class="toggle-label">Dark Mode</span><div class="toggle-switch ' + (document.documentElement.getAttribute('data-theme') === 'dark' ? 'on' : '') + '" data-action="toggle-theme" role="switch" tabindex="0"></div></div></div>'; h += '<div class="card pad"><button class="btn btn-danger-ghost btn-block" data-action="logout">Log Out</button></div></div>'; return h; }
+// ==================== App shell: router, nav & global events ====================
+
+var state = {
+    user: null,
+    viewMode: 'items',        // Screen 2 [By Items] / [By Kitchens]
+    catMode: 'items',         // Screen 2A toggle
+    kitchenTab: 'LIVE_NOW',   // Screen 3 tabs
+    favTab: 'kitchens',       // Screen 8 favourites tabs
+    ordersTab: 'orders',      // Screen 8 orders/enquiries tabs
+    authMobile: '',
+    pendingAuthAction: null,
+    pendingCheckout: null
+};
+
+var routes = {
+    '#/home': homeView,
+    '#/food': foodHubView,
+    '#/kitchens': kitchensView,
+    '#/summary': orderSummaryView,
+    '#/payment': paymentView,
+    '#/favourites': favouritesView,
+    '#/orders': ordersView,
+    '#/profile': profileView
+};
+
+function resolveRoute(hash) {
+    if (routes[hash]) return { fn: routes[hash], arg: hash };
+    if (hash.startsWith('#/category/')) return { fn: categoryView, arg: hash };
+    if (hash.startsWith('#/kitchen/')) return { fn: kitchenPageView, arg: hash };
+    if (hash.startsWith('#/search/')) return { fn: comparisonView, arg: hash };
+    return { fn: homeView, arg: '#/home' };
+}
+
+async function render() {
+    var hash = location.hash || '#/home';
+    var route = resolveRoute(hash);
+    var view = viewEl();
+    view.innerHTML = '<div class="page-loading"><div class="spinner"></div></div>';
+    closeSheet();
+    try {
+        var html = await route.fn(route.arg);
+        view.innerHTML = html || '';
+        updateNav(hash);
+        updateCartBar();
+        window.scrollTo(0, 0);
+    } catch (err) {
+        view.innerHTML = '<div class="view-enter">' + emptyHtml('⚠️', 'Something went wrong', err.message) + '</div>';
+    }
+}
+
+function updateNav(hash) {
+    $all('.nav-item').forEach(function (el) { el.classList.remove('active'); });
+    var key = null;
+    if (hash === '#/home') key = 'home';
+    else if (hash === '#/favourites') key = 'favourites';
+    else if (hash === '#/orders') key = 'orders';
+    else if (hash === '#/profile') key = 'profile';
+    var el = document.querySelector('[data-nav="' + (key || '') + '"]');
+    if (el) el.classList.add('active');
+}
+
+function navigate(hash) {
+    if (location.hash === hash) render();
+    else location.hash = hash;
+}
+
+// ==================== Global click delegation ====================
+
 document.addEventListener('click', async function (e) {
-    var t = e.target.closest('[data-action]'); if (!t) return;
-    var a = t.getAttribute('data-action');
-    switch (a) {
-        case 'toggle-theme': toggleTheme(); break;
-        case 'open-profile': navigate('#/profile'); break;
-        case 'become-seller': await becomeSeller(); break;
-        case 'request-otp': await requestOtp(); break;
-        case 'verify-otp': await verifyOtp(); break;
-        case 'logout': await logout(); break;
-        case 'add-to-cart': await addToCart(Number(t.dataset.pid), t.dataset.name, Number(t.dataset.price)); break;
-        case 'remove-item': await removeFromCart(Number(t.dataset.pid)); break;
-        case 'place-order': await placeOrder(); break;
-        case 'rate-order': var r = prompt('Rate this order (1-5):'); if (r) await rateOrder(Number(t.dataset.oid), Number(r)); break;
-        case 'update-order-status': await updateOrderStatus(Number(t.dataset.oid), t.dataset.next); break;
-        case 'add-product': var n = prompt('Product name:'); var p = prompt('Price:'); if (n && p) await addProduct({ name: n, price: Number(p) }); break;
-        case 'edit-product': var nn = prompt('New name:'); var pp = prompt('New price:'); if (nn && pp) await updateProduct(Number(t.dataset.pid), { name: nn, price: Number(pp) }); break;
-        case 'delete-product': await deleteProduct(Number(t.dataset.pid)); break;
+    var t = e.target.closest('[data-action]');
+    if (!t) return;
+    var a = t.dataset.action;
+    try {
+        switch (a) {
+            case 'go-back': history.back(); break;
+            case 'noop': break;
+            case 'toggle-notifs': {
+                var panel = $('#notifPanel');
+                if (panel) panel.hidden = !panel.hidden;
+                break;
+            }
+            case 'set-mode': state.viewMode = t.dataset.mode; await render(); break;
+            case 'set-cat-mode': state.catMode = t.dataset.mode; await render(); break;
+            case 'switch-cat': navigate('#/category/' + t.dataset.cat); break;
+            case 'set-kitchen-tab': state.kitchenTab = t.dataset.tab; await render(); break;
+            case 'set-fav-tab': state.favTab = t.dataset.tab; await render(); break;
+            case 'set-orders-tab': state.ordersTab = t.dataset.tab; await render(); break;
+            case 'open-login': openAuthModal(); break;
+            case 'read-more': {
+                var full = decodeURIComponent(t.dataset.full || '');
+                var parent = t.closest('.about-text') || t.closest('.oc-desc');
+                if (parent) parent.textContent = full;
+                break;
+            }
+            case 'share-kitchen': {
+                var url = location.href;
+                if (navigator.share) { try { await navigator.share({ title: 'SocioMart Kitchen', url: url }); } catch (e2) {} }
+                else { try { await navigator.clipboard.writeText(url); toast('Link copied', 'success'); } catch (e3) {} }
+                break;
+            }
+            case 'open-order-sheet': openOrderSheet(t.dataset.product, t.dataset.kitchen); break;
+            case 'sheet-qty': sheetQty(Number(t.dataset.dir)); break;
+            case 'set-sheet-date': sheet.date = t.dataset.date; highlightSheetSelection(); break;
+            case 'set-sheet-slot': sheet.slot = t.dataset.slot; highlightSheetSelection(); break;
+            case 'sheet-add': sheetAdd(); break;
+            case 'open-enquiry': openEnquirySheet(t.dataset.kid, t.dataset.kname); break;
+            case 'cart-qty': await cartQty(Number(t.dataset.idx), Number(t.dataset.dir)); break;
+            case 'cart-remove': await cartRemove(Number(t.dataset.idx)); break;
+            case 'go-checkout': await goCheckout(); break;
+            case 'have-paid': await submitOrder(true); break;
+            case 'pay-later': await submitOrder(false); break;
+            case 'copy-upi': {
+                try { await navigator.clipboard.writeText(t.dataset.upi); toast('UPI ID copied', 'success'); }
+                catch (e4) { toast('Copy failed — long-press to copy', 'error'); }
+                break;
+            }
+            case 'logout': {
+                try { await api('/api/auth/logout', { method: 'POST' }); } catch (e5) {}
+                state.user = null;
+                toast('Logged out', 'info');
+                navigate('#/home');
+                if (location.hash === '#/home') render();
+                break;
+            }
+            case 'toggle-fav-kitchen': await toggleFavourite('kitchen', Number(t.dataset.kid), t); break;
+            case 'toggle-fav-product': await toggleFavourite('product', Number(t.dataset.pid), t); break;
+        }
+    } catch (err) {
+        toast(err.message, 'error');
     }
 });
-window.addEventListener('hashchange', render);
-window.addEventListener('DOMContentLoaded', async function () { initTheme(); await loadUser(); await render(); });
-async function requestOtp() {
-    var mobile = $('#otpMobile') ? $('#otpMobile').value.trim() : '';
-    if (!mobile || mobile.length < 10) { toast('Enter a valid 10-digit mobile number', 'error'); return; }
-    var btn = document.getElementById('otpSendBtn') || document.querySelector('[data-action="request-otp"]');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="btn-spinner"></span> Sending...'; }
-    try { await api('/api/auth/otp/request', { method: 'POST', body: { mobileNumber: mobile } }); state.otpMobile = mobile; state.otpStep = 'otp'; toast('OTP sent! Use any 4-digit code for demo.', 'success'); render(); }
-    catch (err) { toast('Failed: ' + err.message, 'error'); }
-    finally { if (btn) { btn.disabled = false; btn.textContent = 'Send OTP'; } }
+
+// ==================== Favourites (identity-bound, Spec 1.1) ====================
+
+async function toggleFavourite(type, id, btnEl) {
+    var label = type === 'kitchen' ? 'kitchen' : 'dish';
+    var doToggle = async function () {
+        try {
+            var resp = await api('/api/favourites/' + type + '/' + id + '/toggle', { method: 'POST' });
+            if (btnEl) {
+                btnEl.classList.toggle('faved', resp.favourited);
+                btnEl.textContent = resp.favourited ? '❤️' : '🤍';
+            }
+            toast(resp.favourited ? ('Saved ' + label + ' to favourites') : ('Removed from favourites'), 'success');
+        } catch (err) {
+            if (!(err instanceof ApiError && err.status === 401)) toast(err.message, 'error');
+        }
+    };
+    // Deferred login: favourites require identity — open OTP gate when needed.
+    requireAuth(doToggle);
 }
-async function verifyOtp() { var otp = $('#otpCode') ? $('#otpCode').value.trim() : ''; if (!otp || otp.length < 4) { toast('Enter the 4-digit OTP', 'error'); return; } var btn = document.querySelector('[data-action="verify-otp"]'); if (btn) { btn.disabled = true; btn.innerHTML = '<span class="btn-spinner"></span> Verifying...'; } try { var result = await api('/api/auth/otp/verify', { method: 'POST', body: { mobileNumber: state.otpMobile, otpCode: otp } }); state.user = result.user || result; state.otpStep = 'mobile'; toast('Welcome back!', 'success'); navigate(state.pendingAuthNext || '#/home'); } catch (err) { toast('OTP verification failed: ' + err.message, 'error'); } finally { if (btn) { btn.disabled = false; btn.textContent = 'Verify OTP'; } } }
-async function loadUser() { try { var me = await api('/api/auth/me'); state.user = me; if (me.role === 'SELLER') { var n = document.getElementById('navSeller'); if (n) n.hidden = false; } } catch (err) { state.user = null; } }
-async function logout() { try { await api('/api/auth/logout', { method: 'POST' }); } catch (e) {} state.user = null; toast('Logged out', 'info'); navigate('#/home'); }
+
+// ==================== Form delegation ====================
+
+document.addEventListener('submit', async function (e) {
+    var form = e.target.closest('form[data-form]');
+    if (!form) return;
+    e.preventDefault();
+    var kind = form.dataset.form;
+    try {
+        if (kind === 'search') {
+            var q = form.querySelector('[name="q"]').value.trim();
+            if (q) navigate('#/search/' + encodeURIComponent(q));
+        } else if (kind === 'enquiry') {
+            await submitEnquiry(form);
+        } else if (kind === 'profile-login') {
+            var mobile = form.querySelector('[name="mobileNumber"]').value.trim();
+            if (!/^\d{10}$/.test(mobile)) { toast('Enter a valid 10-digit mobile number', 'error'); return; }
+            openAuthModal();
+            var mob = $('#authMobile');
+            if (mob) mob.value = mobile;
+        } else if (kind === 'profile-edit') {
+            var vals = formVals(form);
+            await api('/api/buyer/profile', { method: 'PUT', body: vals });
+            state.user = Object.assign({}, state.user, vals);
+            toast('Profile saved', 'success');
+            await render();
+        }
+    } catch (err) {
+        if (err instanceof ApiError && err.status === 401) requireAuth(function () { render(); });
+        else toast(err.message, 'error');
+    }
+});
+
+// ==================== Boot ====================
+
+window.addEventListener('hashchange', render);
+window.addEventListener('DOMContentLoaded', async function () {
+    initTheme();
+    try {
+        var me = await api('/api/auth/me');
+        state.user = (me && me.authenticated) ? me : null;
+    } catch (e) { state.user = null; }
+    if (!location.hash) location.hash = '#/home';
+    await render();
+});

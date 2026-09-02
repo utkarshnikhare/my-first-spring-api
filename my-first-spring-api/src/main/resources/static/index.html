@@ -3,28 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="description" content="SocioMart - order homemade food directly from local kitchens in your community.">
-    <meta name="theme-color" content="#A04000">
-    <title>SocioMart — Community Food Marketplace</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥘</text></svg>">
-    <link rel="stylesheet" href="/css/styles.css?v=6">
+    <meta name="description" content="SocioMart — your hyper-local community marketplace. Discover. Connect.">
+    <meta name="theme-color" content="#2E1065">
+    <title>SocioMart — Discover. Connect.</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%232E1065'/><text x='50' y='68' font-size='52' text-anchor='middle'>🏪</text></svg>">
+    <link rel="stylesheet" href="/css/styles.css?v=10">
 </head>
 <body>
-    <header class="app-header" id="appHeader">
-        <a class="brand" href="#/home" aria-label="SocioMart home">
-            <span class="brand-logo" aria-hidden="true">🥘</span>
-            <span class="brand-name">Socio<span class="brand-accent">Mart</span></span>
+    <!-- Fixed persistent bottom navigation (Spec 1.3) -->
+    <nav class="bottom-nav" id="bottomNav" aria-label="Main navigation">
+        <a href="#/home" data-nav="home" class="nav-item">
+            <span class="nav-icon" aria-hidden="true">🏠</span>
+            <span class="nav-label">Home</span>
         </a>
-        <div class="header-actions">
-            <button class="icon-btn" id="themeToggle" type="button" data-action="toggle-theme" aria-label="Toggle dark mode" title="Toggle theme">
-                <span class="icon-sun" aria-hidden="true">☀️</span>
-                <span class="icon-moon" aria-hidden="true">🌙</span>
-            </button>
-            <button class="avatar-btn" id="profileBtn" type="button" data-action="open-profile" aria-label="Your profile">
-                <span id="profileInitial">?</span>
-            </button>
-        </div>
-    </header>
+        <a href="#/favourites" data-nav="favourites" class="nav-item">
+            <span class="nav-icon" aria-hidden="true">❤️</span>
+            <span class="nav-label">Favourites</span>
+        </a>
+        <a href="#/orders" data-nav="orders" class="nav-item">
+            <span class="nav-icon" aria-hidden="true">📋</span>
+            <span class="nav-label">Orders &amp; Enquiries</span>
+        </a>
+        <a href="#/profile" data-nav="profile" class="nav-item">
+            <span class="nav-icon" aria-hidden="true">👤</span>
+            <span class="nav-label">Profile</span>
+        </a>
+    </nav>
+
+    <!-- Sticky bottom cart bar (Screen 4) -->
+    <a href="#/summary" class="view-order-bar" id="viewOrderBar" hidden>
+        <span class="vob-icon" aria-hidden="true">🛒</span>
+        <span class="vob-text"><strong id="vobCount">0</strong> items · <strong id="vobTotal">₹0</strong></span>
+        <span class="vob-cta">View Order →</span>
+    </a>
 
     <main id="view" class="view" aria-live="polite">
         <div class="page-loading">
@@ -32,39 +43,13 @@
         </div>
     </main>
 
-    <nav class="bottom-nav" id="bottomNav" aria-label="Main navigation">
-        <a href="#/home" data-nav="home" class="nav-item">
-            <span class="nav-icon" aria-hidden="true">🏠</span>
-            <span class="nav-label">Home</span>
-        </a>
-        <a href="#/my-orders" data-nav="order" class="nav-item" id="navOrder">
-            <span class="nav-icon" aria-hidden="true">🧺</span>
-            <span class="nav-label">My Order</span>
-            <span class="nav-badge" id="cartBadge" hidden>0</span>
-        </a>
-        <a href="#/orders" data-nav="orders" class="nav-item">
-            <span class="nav-icon" aria-hidden="true">📋</span>
-            <span class="nav-label">Orders</span>
-        </a>
-        <a href="#/sell" data-nav="seller" class="nav-item" id="navSeller" hidden>
-            <span class="nav-icon" aria-hidden="true">👨‍🍳</span>
-            <span class="nav-label">Sell</span>
-        </a>
-    </nav>
-
-    <a href="#/my-orders" class="view-order-bar" id="viewOrderBar" hidden>
-        <span class="vob-icon" aria-hidden="true">🧺</span>
-        <span class="vob-text"><strong id="vobCount">0</strong> item(s) · <strong id="vobTotal">₹0</strong></span>
-        <span class="vob-cta">View Order ›</span>
-    </a>
-
     <div id="modalRoot" class="modal-root" hidden></div>
+    <div id="sheetRoot" class="sheet-root" hidden></div>
     <div id="toastRoot" class="toast-root" aria-live="assertive"></div>
 
     <script src="/js/config.js"></script>
     <script src="/js/common.js"></script>
     <script src="/js/buyer.js"></script>
-    <script src="/js/seller.js"></script>
     <script src="/js/app.js"></script>
 </body>
 </html>
