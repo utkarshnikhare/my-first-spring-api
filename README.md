@@ -131,26 +131,33 @@ Key buyer endpoints: `GET /api/discovery/counts|kitchens|categories|items|offers
 - Small feature commits; push to `main` when tested.
 - Never force-add ignored local files (`data/`, `bin/`, logs, test scripts).
 
-## 🚀 Quick Start
+## 🚀 Quick Start — one command
 
-**Prerequisites (nothing else):**
-
-1. **JDK 21** — [adoptium.net](https://adoptium.net) (tick *Set JAVA_HOME*). Verify: `java -version` → `21.x`
-2. **Git** — [git-scm.com](https://git-scm.com)
-3. **VS Code** + extensions: *Extension Pack for Java* and *Spring Boot Extension Pack*
+**Only prerequisite: JDK 21** ([adoptium.net](https://adoptium.net), tick *Set JAVA_HOME*). Verify: `java -version` → `21.x`
 
 ```bash
 git clone https://github.com/utkarshnikhare/my-first-spring-api.git
-cd my-first-spring-api/my-first-spring-api
-
-# Windows (PowerShell)
-.\mvnw.cmd spring-boot:run
-
-# macOS / Linux
-./mvnw spring-boot:run
+cd my-first-spring-api
 ```
 
-The first run downloads dependencies (2–5 min). Wait for `Started MyFirstSpringApiApplication`.
+Then run the single command for your OS:
+
+| OS | Command | What it does |
+|---|---|---|
+| macOS / Linux / WSL / Git Bash | `./start.sh` | Verifies JDK 21+, boots the app |
+| macOS / Linux (alt) | `make` | Same as `./start.sh` |
+| Windows Command Prompt | `start.cmd` | Verifies JDK 21+, boots the app |
+| Windows PowerShell | `.\start.ps1` | Verifies JDK 21+, boots the app |
+
+Each runner:
+1. Checks JDK 21+ (the **only** prerequisite — clear error if missing)
+2. Applies optional `.env` overrides (copy `.env.example` → `.env` to change the port)
+3. Boots Spring Boot via the Maven wrapper — **downloads Maven + all dependencies automatically on first run** (2–5 min)
+4. Creates the H2 database schema and seeds the demo marketplace on startup
+
+Wait for `Started MyFirstSpringApiApplication`, then open [http://localhost:8081](http://localhost:8081).
+
+> First run downloads dependencies (2–5 min). Subsequent runs start in ~7 seconds.
 
 ## 🌐 Open the app
 
@@ -192,9 +199,10 @@ my-first-spring-api/                 repo root
 
 | Problem | Fix |
 |---|---|
-| `java -version` shows 17/11/8 | Install Temurin 21 with *Set JAVA_HOME* ticked, restart VS Code |
-| Port 8081 already in use | Stop the other instance, or change `server.port` in `application.properties` |
-| `mvnw` execution policy error (PowerShell) | Use `.\mvnw.cmd spring-boot:run` |
-| Marketplace is empty | Expected on a fresh database — create a seller kitchen first |
+| `java -version` shows 17/11/8 | Install Temurin 21 with *Set JAVA_HOME* ticked, restart your terminal |
+| "Java was not found" when running `./start.sh` / `start.ps1` | Install JDK 21 and ensure `java` is on your PATH (or set `JAVA_HOME`) |
+| Port 8081 already in use | Stop the other instance, or set `PORT=8082` in a `.env` file |
+| PowerShell blocks `.\start.ps1` (execution policy) | Run `powershell -ExecutionPolicy Bypass -File .\start.ps1` |
+| Marketplace is empty | Expected on a fresh database — the demo data seeds automatically on startup |
 
 Full troubleshooting table: page 6 of [`SocioMart-Project-Report.pdf`](SocioMart-Project-Report.pdf).
