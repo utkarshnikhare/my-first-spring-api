@@ -46,8 +46,7 @@ public class SecurityConfig {
                                 "/css/**",
                                 "/js/**",
                                 "/favicon.ico",
-                                "/manifest.webmanifest",
-                                "/api/buyer/orders/draft"
+                                "/manifest.webmanifest"
                         ).permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
