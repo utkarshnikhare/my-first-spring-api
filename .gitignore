@@ -7,3 +7,9 @@ target/
 *.log
 *.txt
 *.ps1
+
+# Local environment overrides (never commit)
+.env
+
+# Allow the committed one-command runner (everything else *.ps1 stays ignored)
+!start.ps1
