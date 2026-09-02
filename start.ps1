@@ -26,9 +26,11 @@ $javaBin = 'java'
 if ($env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME 'bin\java.exe'))) {
     $javaBin = Join-Path $env:JAVA_HOME 'bin\java.exe'
 }
-try {
-    $verLine = (& $javaBin -version 2>&1 | Select-Object -First 1)
-} catch {
+$oldEap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+$verLine = & $javaBin -version 2>&1 | Select-Object -First 1
+$ErrorActionPreference = $oldEap
+if (-not $verLine -or $verLine -notmatch 'version') {
     Write-Host ''
     Write-Host '  ERROR: Java was not found.' -ForegroundColor Red
     Write-Host '  Install JDK 21 (Temurin: https://adoptium.net), then rerun start.ps1'
@@ -44,7 +46,7 @@ if ($major -lt 21) {
     Write-Host ''
     exit 1
 }
-Write-Host ("  [setup] Java OK: {0}   (PORT={1})" -f $verLine.Trim(), $env:PORT)
+Write-Host ("  [setup] Java OK: {0}   (PORT={1})" -f $verLine.ToString().Trim(), $env:PORT)
 
 # ---- 3. Boot --------------------------------------------------------------------
 Set-Location my-first-spring-api
