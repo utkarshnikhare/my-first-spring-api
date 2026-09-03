@@ -66,10 +66,10 @@ async function sellerHomeView() {
             dash.offerings.forEach(function (p) {
                 h += '<div class="offering-card">';
                 h += '<div class="oc-header"><span class="oc-name">' + esc(p.name) + '</span>' + offeringStatusBadge(p) + '</div>';
-                var booked = p.bookedQuantity || 0, remaining = p.remainingQuantity;
+                var booked = p.bookedQuantity || 0, remaining = p.remainingQuantity, maxQty = p.maxQuantity;
                 h += '<div class="oc-stats"><strong>' + booked + '</strong> booked . ' + (remaining != null ? remaining + ' available' : 'No limit') + '</div>';
                 h += '<div class="oc-time-row"><span>Cutoff: <span class="time-label">' + esc(p.cutoffTime || '--') + '</span></span><span>Delivery: <span class="time-label">' + esc(p.readyByTime || '--') + '</span></span></div>';
-                if (remaining != null && remaining >= 0 && !p.soldOut) { h += '<div class="stepper"><button type="button" data-action="inv-dec" data-pid="' + p.id + '">-</button><span class="stepper-value" id="inv-' + p.id + '">' + remaining + '</span><button type="button" data-action="inv-inc" data-pid="' + p.id + '">+</button></div>'; }
+                if (maxQty != null && remaining != null && remaining >= 0 && !p.soldOut) { h += '<div class="stepper"><button type="button" data-action="inv-dec" data-pid="' + p.id + '">-</button><span class="stepper-value" id="inv-' + p.id + '">' + remaining + '</span><button type="button" data-action="inv-inc" data-pid="' + p.id + '">+</button></div>'; }
                 if (!p.soldOut) { h += '<button class="btn-soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Mark Sold Out</button>'; }
                 h += '<a class="btn btn-secondary btn-sm btn-block" style="margin-top:8px" href="#/order-detail/' + p.id + '">View Orders</a></div>';
             });
@@ -154,14 +154,16 @@ async function sellerKitchenView() {
     var h = '<div class="view-enter"><div class="page-head"><h1>Manage Kitchen</h1></div>';
     h += '<div class="kitchen-status-badge">Green Kitchen Page Published</div>';
     h += '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="preview-kitchen" style="margin-bottom:14px">Preview Kitchen Page</button>';
+    var kitchen = null;
+    try { kitchen = await api('/api/seller/kitchen'); S.myKitchen = kitchen; S.kitchen = kitchen; } catch (e) { }
     h += '<form class="seller-form" id="kitchenForm">';
-    h += '<div class="kitchen-avatar-upload"><div class="kitchen-avatar" data-action="upload-avatar">Cam</div></div>';
-    h += '<div class="form-group"><label class="form-label">Kitchen Name</label><input class="form-input" name="displayName" value="Aarti Kitchen"></div>';
-    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Society</label><input class="form-input" name="society" value="Pride World City"></div><div class="form-group"><label class="form-label">Building</label><input class="form-input" name="building" value="Tower A"></div></div>';
-    h += '<div class="form-group"><label class="form-label">Speciality</label><input class="form-input" name="shortDescription" value="North Indian home-style meals"></div>';
-    h += '<div class="form-group"><label class="form-label">Full Description</label><textarea class="form-textarea" name="description">Fresh home-cooked food daily.</textarea></div>';
-    h += '<div class="form-group"><label class="form-label">WhatsApp</label><input class="form-input" name="whatsappLink" value="+91 9100000001"></div>';
-    h += '<div class="form-group"><label class="form-label">Instagram</label><input class="form-input" name="instagramLink" value="@aartiskitchen"></div>';
+    h += '<div class="kitchen-avatar-upload"><div class="kitchen-avatar" data-action="upload-avatar">' + (kitchen && kitchen.imageUrl ? '<img src="' + esc(kitchen.imageUrl) + '" class="avatar-img">' : 'Cam') + '</div></div>';
+    h += '<div class="form-group"><label class="form-label">Kitchen Name</label><input class="form-input" name="displayName" value="' + esc(kitchen && kitchen.displayName ? kitchen.displayName : 'Aarti Kitchen') + '"></div>';
+    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Society</label><input class="form-input" name="society" value="' + esc(kitchen && kitchen.society ? kitchen.society : 'Sunshine Society') + '"></div><div class="form-group"><label class="form-label">Building</label><input class="form-input" name="building" value="' + esc(kitchen && kitchen.building ? kitchen.building : 'Building B') + '"></div></div>';
+    h += '<div class="form-group"><label class="form-label">Speciality</label><input class="form-input" name="shortDescription" value="' + esc(kitchen && kitchen.shortDescription ? kitchen.shortDescription : 'Homemade Maharashtrian Food') + '"></div>';
+    h += '<div class="form-group"><label class="form-label">Full Description</label><textarea class="form-textarea" name="description">' + esc(kitchen && kitchen.description ? kitchen.description : 'Fresh homemade breakfast and traditional snacks') + '</textarea></div>';
+    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">WhatsApp</label><input class="form-input" name="whatsappLink" value="' + esc(kitchen && kitchen.whatsappLink ? kitchen.whatsappLink : '+91 9100000001') + '"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" name="instagramLink" value="' + esc(kitchen && kitchen.instagramLink ? kitchen.instagramLink : '@aartiskitchen') + '"></div></div>';
+    h += '<div class="form-group"><label class="form-label">UPI ID</label><input class="form-input" name="upiId" value="' + esc(kitchen && kitchen.upiId ? kitchen.upiId : 'aarti@okhdfc') + '"></div>';
     h += '<div class="info-box">Your menu loads automatically from live offerings.</div>';
     h += '<button class="btn btn-primary btn-block" type="submit">SAVE CHANGES</button></form></div>';
     return h;
@@ -320,6 +322,12 @@ document.addEventListener('click', async function (e) {
 window.addEventListener('hashchange', sellerRender);
 window.addEventListener('DOMContentLoaded', async function () {
     if (!location.hash) location.hash = '#/home';
+    // Auto-login as demo seller (Aarti) without OTP for client demo
+    try {
+        await api('/api/seller-app/demo-login', { method: 'POST' });
+    } catch (e) {
+        // If demo-login fails, proceed anyway (will fail on API calls)
+    }
     await sellerRender();
 });
 

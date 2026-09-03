@@ -54,123 +54,169 @@ public class DemoDataSeeder {
         if (platformSettingRepository.findBySettingKey(DEMO_SEED_FLAG).isPresent()) {
             return;
         }
-        // ---- 8 approved demo sellers (+ 1 pending seller for visibility tests) ----
-        User aarti = seller("Aarti", "9100000001", "A-101", SellerApprovalStatus.APPROVED);
-        User meena = seller("Meena", "9100000002", "A-102", SellerApprovalStatus.APPROVED);
-        User ravi = seller("Ravi", "9100000003", "B-201", SellerApprovalStatus.APPROVED);
-        User lakshmi = seller("Lakshmi", "9100000004", "C-301", SellerApprovalStatus.APPROVED);
-        User suresh = seller("Suresh", "9100000005", "B-210", SellerApprovalStatus.APPROVED);
-        User farah = seller("Farah", "9100000006", "D-401", SellerApprovalStatus.APPROVED); 
-        User geeta = seller("Geeta", "9100000007", "D-402", SellerApprovalStatus.APPROVED);
+        // ---- 15 approved demo sellers ----
+        User aarti = seller("Aarti", "9100000001", "A-101", SellerApprovalStatus.APPROVED, "Sunshine Society", "Building B");
+        User meena = seller("Meena", "9100000002", "A-102", SellerApprovalStatus.APPROVED, "Sunshine Society", "Building A");
+        User ravi = seller("Ravi", "9100000003", "B-201", SellerApprovalStatus.APPROVED, "Sunshine Society", "Building C");
+        User lakshmi = seller("Lakshmi", "9100000004", "C-301", SellerApprovalStatus.APPROVED, "Green Valley", "Tower 1");
+        User suresh = seller("Suresh", "9100000005", "B-210", SellerApprovalStatus.APPROVED, "Green Valley", "Tower 2");
+        User farah = seller("Farah", "9100000006", "D-401", SellerApprovalStatus.APPROVED, "Green Valley", "Tower 3"); 
+        User geeta = seller("Geeta", "9100000007", "D-402", SellerApprovalStatus.APPROVED, "Lake View", "Block A");
  
-        User arjun = seller("Arjun", "9100000008", "E-501", SellerApprovalStatus.APPROVED);
+        User arjun = seller("Arjun", "9100000008", "E-501", SellerApprovalStatus.APPROVED, "Lake View", "Block B");
  
-        User priya = seller("Priya", "9100000009", "E-502", SellerApprovalStatus.PENDING);
+        User priya = seller("Priya", "9100000009", "E-502", SellerApprovalStatus.APPROVED, "Lake View", "Block C");
+        User vikram = seller("Vikram", "9100000010", "F-601", SellerApprovalStatus.APPROVED, "Hill Side", "Wing 1");
+        User anita = seller("Anita", "9100000011", "F-602", SellerApprovalStatus.APPROVED, "Hill Side", "Wing 2");
+        User rajesh = seller("Rajesh", "9100000012", "G-701", SellerApprovalStatus.APPROVED, "Hill Side", "Wing 3");
+        User sunita = seller("Sunita", "9100000013", "G-702", SellerApprovalStatus.APPROVED, "Riverside", "Tower X");
+        User deepak = seller("Deepak", "9100000014", "H-801", SellerApprovalStatus.APPROVED, "Riverside", "Tower Y");
+        User kavita = seller("Kavita", "9100000015", "H-802", SellerApprovalStatus.APPROVED, "Riverside", "Tower Z");
 
-        // ---- Active demo kitchens ----
-        Kitchen kAarti = kitchen("aarti-kitchen", "Aarti Kitchen", "North Indian home-style meals, cooked fresh every day",
-                "Aarti Kitchen serves comforting North Indian home food cooked to order.", "aarti@okhdfc", 4.7, "9:30 PM", aarti); 
-        Kitchen kMoms = kitchen("moms-special-kitchen", "Mom's Special Kitchen", "Wholesome recipes from mom's kitchen, made with love",
-                "Comfort food that tastes exactly like home: parathas, rajma-chawal and kheer.", "moms@okhdfc", 4.9, "8:30 PM", meena); 
-        Kitchen kDesi = kitchen("desi-rasoi", "Desi Rasoi", "Traditional thalis and comfort food from across India",
-                "A wholesome desi kitchen serving thalis, dal, rajma and lassi every day.", "desirasoi@okhdfc", 4.6, "9:00 PM", ravi); 
-        Kitchen kRoyal = kitchen("royal-south-indian", "Royal South Indian", "Authentic South Indian tiffin, dosas and chai",
-                "Idli, dosa, upma and vada — served with fresh sambhar and coconut chutney.", "royalsouth@okhdfc", 4.8, "11:30 AM", lakshmi); 
-        Kitchen kPunjabi = kitchen("punjabi-tadka-house", "Punjabi Tadka House", "Rich Punjabi curries, tandoori breads and lassi",
-                "Butter-laden Punjabi classics: paneer, dal makhani, naan and lassi.", "punjabitadka@okhdfc", 4.5, "10:00 PM", suresh); 
-        Kitchen kBiryani = kitchen("biryani-bistro", "Biryani Bistro", "Slow-cooked dum biryanis and Indo-Chinese street favourites",
-                "Dum biryanis, paneer tikka and hakka noodles — all under one roof.", "biryanibistro@okhdfc", 4.7, "11:00 PM", farah); 
-        Kitchen kHealthy = kitchen("healthy-bites", "Healthy Bites", "Light, wholesome bowls and breakfasts — guilt-free",
-                "Healthy poha, upma, salads and whole-grain burgers for every mood.", "healthybites@okhdfc", 4.4, "8:00 PM", geeta); 
-        Kitchen kSnacks = kitchen("sweet-snack-corner", "Sweet & Snack Corner", "Evening chai-time snacks, sweets and savouries",
-                "Samosa, pav bhaji, noodles, gulab jamun and kheer — the classic chai break.", "sweetsnacks@okhdfc", 4.6, "10:30 PM", arjun); 
-        Kitchen kPending = kitchen("pending-kitchen-demo", "Pending Kitchen (Demo)", "Hidden kitchen used to verify approval filtering",
-                "This kitchen belongs to a PENDING-approval seller and must never appear publicly.", "pending@okhdfc", 3.0, "9:00 PM", priya);
-        // ---- Aarti Kitchen ----
-        product(kAarti, "Poha", "Fluffy flattened-rice breakfast tempered with peanuts, curry leaves and turmeric", 40, "plate",20,14,4.6);
-        product(kAarti, "Paneer Butter Masala", "Creamy tomato gravy with soft paneer cubes, served with rice or roti", 180,"plate",10,6,4.8);
-        product(kAarti, "Dal Tadka", "Yellow dal finished with a sizzling garlic-cumin tadka",  120,"plate",15,9,4.5);
-        product(kAarti, "Chapati", "Soft whole-wheat phulkas, hot off the tawa",  15,"plate",30,22,4.4);
-        product(kAarti, "Gulab Jamun", "Warm milk-solid dumplings soaked in rose-cardamom syrup",  50,"plate",10,4,4.7);
+        // ---- 15 Active demo kitchens ----
+        Kitchen kAarti = kitchen("aarti-kitchen", "Aarti Kitchen", "Homemade Maharashtrian Food",
+                "Authentic Maharashtrian dishes made with love — poha, misal, puran poli and more.", "aarti@okhdfc", 4.7, "9:00 AM", aarti);
+        Kitchen kPunjabi = kitchen("punjabi-rasoi", "Punjabi Rasoi", "Punjabi Specialities",
+                "Rich and creamy Punjabi curries, tandoori breads and refreshing lassi.", "punjabi@okhdfc", 4.6, "10:00 PM", meena);
+        Kitchen kDakshin = kitchen("dakshin-kitchen", "Dakshin Kitchen", "South Indian Food",
+                "Authentic South Indian tiffin — idli, dosa, upma, pongal and filter coffee.", "dakshin@okhdfc", 4.8, "11:00 AM", ravi);
+        Kitchen kGujarati = kitchen("gujarati-ghar", "Gujarati Ghar", "Gujarati Cuisine",
+                "Traditional Gujarati thali with thepla, dhokla, khandvi and undhiyu.", "gujarati@okhdfc", 4.5, "9:30 PM", lakshmi);
+        Kitchen kMarwar = kitchen("marwar-rasoi", "Marwar Rasoi", "Rajasthani Food",
+                "Royal Rajasthani cuisine — dal baati churma, gatte ki ker sangri and more.", "marwar@okhdfc", 4.7, "10:00 PM", suresh);
+        Kitchen kBangla = kitchen("bangla-bhojan", "Bangla Bhojan", "Bengali Specialities",
+                "Authentic Bengali cuisine — fish curry, mishti doi and rasgulla.", "bangla@okhdfc", 4.6, "9:00 PM", farah);
+        Kitchen kDeccan = kitchen("deccan-kitchen", "Deccan Kitchen", "Hyderabadi Food",
+                "Famous Hyderabadi biryani, haleem and kebabs slow-cooked to perfection.", "deccan@okhdfc", 4.8, "11:00 PM", geeta);
+        Kitchen kKonkan = kitchen("konkan-swad", "Konkan Swad", "Goan/Konkan Food",
+                "Coastal Goan and Konkan delicacies — fish curry, sol kadi and poee bread.", "konkan@okhdfc", 4.5, "10:30 PM", arjun);
+        Kitchen kKerala = kitchen("kerala-taste", "Kerala Taste House", "Kerala Cuisine",
+                "Traditional Kerala sadya, appam, stew and spicy fish preparations.", "kerala@okhdfc", 4.7, "9:00 PM", priya);
+        Kitchen kMadras = kitchen("madras-kitchen", "Madras Kitchen", "Tamil Food",
+                "Classic Tamil meals — sambar, rasam, curd rice and filter coffee.", "madras@okhdfc", 4.6, "11:30 AM", vikram);
+        Kitchen kStreet = kitchen("desi-street-kitchen", "Desi Street Kitchen", "Indian Street Food",
+                "Samosa, vada pav, pav bhaji, bhel and all your favourite street foods.", "street@okhdfc", 4.4, "10:00 PM", anita);
+        Kitchen kMithas = kitchen("mithas-kitchen", "Mithas Kitchen", "Traditional Indian Sweets & Desserts",
+                "Gulab jamun, rasgulla, jalebi, kheer and festive mithai.", "mithas@okhdfc", 4.8, "8:00 PM", rajesh);
+        Kitchen kGhar = kitchen("ghar-ka-swad", "Ghar Ka Swad", "Homemade Vegetarian Food",
+                "Simple, wholesome vegetarian meals just like home-cooked food.", "ghar@okhdfc", 4.5, "9:00 PM", sunita);
+        Kitchen kTiffin = kitchen("morning-tiffin", "Morning Tiffin House", "Breakfast & Snacks",
+                "Fresh breakfast tiffin — poha, upma, idli, dosa and chai.", "tiffin@okhdfc", 4.6, "10:30 AM", deepak);
+        Kitchen kMulti = kitchen("bharat-multi-cuisine", "Bharat Multi-Cuisine Kitchen", "Multi-Cuisine Indian Food",
+                "A diverse menu spanning North Indian, South Indian, Chinese and Continental.", "multi@okhdfc", 4.5, "10:00 PM", kavita);
+        // ---- Aarti Kitchen (Maharashtrian) ----
+        product(kAarti, "Poha", "Fluffy flattened-rice breakfast tempered with peanuts, curry leaves and turmeric", 40, "plate", 50, 30, 4.6);
+        // Unlimited-quantity offering: 50 booked, no cap — shows "50 booked · No limit" (Spec 4.4).
+        Product modak = product(kAarti, "Modak", "Traditional steamed modak filled with coconut and jaggery — Ganesh Chaturthi special", 60, "piece", null, null, 4.9);
+        modak.setBookedQuantity(50);
+        productRepository.save(modak);
+        product(kAarti, "Idli", "Soft steamed rice and lentil cakes served with sambhar and coconut chutney", 50, "plate", 50, 30, 4.7);
+        product(kAarti, "Misal Pav", "Spicy sprouted moth beans curry served with bread, farsan and lemon", 80, "plate", 30, 18, 4.8);
+        product(kAarti, "Puran Poli", "Sweet flatbread stuffed with chana dal and jaggery, served with ghee", 50, "piece", 20, 12, 4.6);
+        product(kAarti, "Sabudana Khichdi", "Tapioca pearls cooked with peanuts, potatoes and cumin — fasting special", 70, "plate", 25, 15, 4.5);
+        product(kAarti, "Thalipeeth", "Multi-grain flatbread served with white butter and curd", 60, "plate", 20, 10, 4.4);
 
-        // ---- Mom's Special Kitchen ----
-        product(kMoms, "Aloo Paratha", "Stuffed potato paratha served with white butter and curd",  60,"plate",15,9,4.8);
-        product(kMoms, "Puri Bhaji", "Crisp golden puris with spiced potato bhaji",  70,"plate",12,7,4.5);
-        product(kMoms, "Rajma Chawal", "Creamy rajma over steamy basmati rice, pure comfort",  140,"plate",12,6,4.7);
-        product(kMoms, "Masala Chai", "Ginger-cardamom chai, brewed the way mom makes it",  20,"cup",50,40,4.9);
-        product(kMoms, "Kheer", "Slow-cooked rice kheer with saffron, almonds and pistachios",  80,"bowl",10,5,4.6);
+        // ---- Punjabi Rasoi ----
+        product(kPunjabi, "Punjabi Chole", "Spicy chickpea curry with onions, tomatoes and fresh coriander", 120, "plate", 40, 25, 4.7);
+        product(kPunjabi, "Rajma Chawal", "Creamy rajma over steamy basmati rice, pure comfort", 140, "plate", 35, 20, 4.8);
+        product(kPunjabi, "Dal Makhani", "Slow-cooked black lentils in a rich buttery gravy", 160, "plate", 30, 18, 4.9);
+        product(kPunjabi, "Paneer Butter Masala", "Creamy tomato gravy with soft paneer cubes", 180, "plate", 25, 15, 4.8);
+        product(kPunjabi, "Butter Naan", "Tandoor-baked naan brushed with butter", 40, "piece", 50, 35, 4.5);
+        product(kPunjabi, "Lassi", "Thick sweet lassi topped with malai", 50, "glass", 40, 28, 4.6);
 
-        // ---- Desi Rasoi ----
-        product(kDesi, "Veg Thali", "A wholesome platter: dal, sabzi, roti, rice, salad and pickle",  180,"platter",10,4,4.7);
-        product(kDesi, "Dal Tadka", "Signature dal fry with garlic-kasuri methi tadka",  120,"plate",15,10,4.5);
-        product(kDesi, "Rajma Chawal", "Punjabi-style rajma simmered overnight, served with rice",  140,"plate",12,8,4.6);
-        product(kDesi, "Lassi", "Thick, sweet Punjabi lassi topped with malai",  50,"glass",20,12,4.8);
-        product(kDesi, "Masala Chai", "Masala chai with ginger, clove and cinnamon",  20,"cup",50,35,4.6);
+        // ---- Dakshin Kitchen (South Indian) ----
+        product(kDakshin, "Masala Dosa", "Crispy rice crepe filled with spiced potato, served with sambhar and chutney", 80, "plate", 40, 22, 4.8);
+        product(kDakshin, "Medu Vada", "Crispy lentil fritters served with sambhar and coconut chutney", 50, "plate", 35, 20, 4.6);
+        product(kDakshin, "Upma", "Semolina porridge with vegetables, nuts and curry leaves", 50, "plate", 30, 18, 4.5);
+        product(kDakshin, "Pongal", "Savory rice and lentil dish with pepper, cumin and ghee", 70, "plate", 25, 15, 4.7);
+        product(kDakshin, "Filter Coffee", "Traditional South Indian filter coffee", 30, "cup", 50, 40, 4.9);
 
-        // ---- Royal South Indian ----
-        product(kRoyal, "Idli Sambhar", "Soft steamed idlis served with piping-hot sambhar and coconut chutney",  70,"plate",20,12,4.9);
-        product(kRoyal, "Upma", "Rava upma tempered with curry leaves, mustard seeds and cashews",  50,"plate",15,9,4.5);
-        product(kRoyal, "Masala Dosa", "Crisp golden dosa with spiced potato filling, sambhar and chutneys",  90,"plate",12,7,4.8);
-        product(kRoyal, "Medu Vada", "Crisp lentil doughnuts with coconut chutney",  60,"plate",12,8,4.4);
-        product(kRoyal, "Masala Chai", "Strong filter-style chai with a hint of ginger",  20,"cup",50,30,4.5);
+        // ---- Gujarati Ghar ----
+        product(kGujarati, "Gujarati Thali", "Complete thali with dal, rice, roti, sabzi, salad and sweet", 150, "plate", 30, 18, 4.7);
+        product(kGujarati, "Dhokla", "Steamed savory cake made from chickpea flour, tempered with mustard", 60, "plate", 40, 28, 4.6);
+        product(kGujarati, "Khandvi", "Soft gram flour rolls tempered with mustard and coconut", 70, "plate", 25, 15, 4.5);
+        product(kGujarati, "Thepla", "Fenugreek flatbread, perfect for travel", 30, "piece", 50, 38, 4.4);
+        product(kGujarati, "Undhiyu", "Mixed vegetable dish cooked in an earthen pot", 140, "plate", 20, 12, 4.7);
 
-        // ---- Punjabi Tadka House ----
-        product(kPunjabi, "Paneer Butter Masala", "Silky butter-tomato gravy with tandoori paneer cubes",  180,"plate",10,5,4.7);
-        product(kPunjabi, "Dal Makhani", "Black lentils slow-simmered with butter and cream",  150,"bowl",12,6,4.8);
-        product(kPunjabi, "Aloo Paratha", "Crisp potato-stuffed paratha with butter, pickle and curd",  60,"plate",15,10,4.6);
-        product(kPunjabi, "Butter Naan", "Tandoor-baked naan brushed with garlic butter",  25,"piece",30,20,4.5);
-        product(kPunjabi, "Chicken Curry", "Homestyle chicken curry with a tomato-onion masala",  190,"plate",10,5,4.2);
-        product(kPunjabi, "Lassi", "Sweet lassi with a saffron-snow cap",  50,"glass",20,14,4.6);
+        // ---- Marwar Rasoi (Rajasthani) ----
+        product(kMarwar, "Dal Baati Churma", "Baked baati with dal and sweet churma — Rajasthani classic", 180, "plate", 25, 15, 4.8);
+        product(kMarwar, "Gatte Ki Sabzi", "Gram flour dumplings in spicy yogurt gravy", 140, "plate", 20, 12, 4.6);
+        product(kMarwar, "Ker Sangri", "Desert beans and berries cooked with spices", 120, "plate", 15, 8, 4.5);
+        product(kMarwar, "Bajra Roti", "Pearl millet flatbread served with white butter", 40, "piece", 30, 20, 4.4);
 
-        // ---- Biryani Bistro ----
-        product(kBiryani, "Chicken Biryani", "Fragrant basmati layers with spiced chicken, raita and salan",  220,"plate",10,4,4.9);
-        product(kBiryani, "Veg Biryani", "Garden vegetables and basmati with saffron, mint and fried onions",  180,"plate",10,5,4.6);
-        product(kBiryani, "Paneer Tikka", "Char-grilled paneer cubes marinated in yogurt tandoori masala",  150,"plate",12,7,4.7);
-        product(kBiryani, "Hakka Noodles", "Street-style hakka noodles tossed with veggies and dark soy",  130,"plate",15,8,4.4);
-        product(kBiryani, "Masala Chai", "Kulhad chai with a smoky ginger kick",  20,"cup",50,40,4.5);
+        // ---- Bangla Bhojan (Bengali) ----
+        product(kBangla, "Bengali Fish Curry", "Rohu fish in mustard gravy with green chillies", 200, "plate", 20, 12, 4.8);
+        product(kBangla, "Mishti Doi", "Sweetened yogurt set in earthen pots", 60, "cup", 30, 20, 4.7);
+        product(kBangla, "Rasgulla", "Soft cottage cheese balls in light sugar syrup", 40, "piece", 40, 28, 4.6);
+        product(kBangla, "Sandesh", "Traditional Bengali sweet made from fresh paneer", 80, "piece", 25, 18, 4.7);
 
-        // ---- Healthy Bites ----
-        product(kHealthy, "Veg Burger", "Whole-grain bun with grilled veggie patty, lettuce and hummus",  90,"piece",10,5,4.3);
-        product(kHealthy, "Upma", "Light rava upma with vegetables and roasted cashews",  50,"plate",15,10,4.4);
-        product(kHealthy, "Poha", "Light poha with peanuts, peas and fresh coriander",  40,"plate",20,15,4.5);
-        product(kHealthy, "Fresh Veg Salad", "Garden bowl with sprouts, seeds and a lemon-tahini dressing",  120,"bowl",10,6,4.4);
-        product(kHealthy, "Masala Chai", "Ginger-tulsi chai, lightly sweetened",  20,"cup",50,40,4.5);
-        product(kHealthy, "Lassi", "Wholesome lassi with a hint of cardamom",  50,"glass",20,12,4.4);
+        // ---- Deccan Kitchen (Hyderabadi) ----
+        product(kDeccan, "Hyderabadi Biryani", "Aromatic basmati rice layered with spiced chicken and saffron", 250, "plate", 30, 18, 4.9);
+        product(kDeccan, "Veg Biryani", "Fragrant rice with mixed vegetables and biryani spices", 180, "plate", 25, 15, 4.7);
+        product(kDeccan, "Haleem", "Slow-cooked wheat and meat porridge with spices", 200, "plate", 20, 12, 4.8);
+        product(kDeccan, "Kebabs", "Tandoori chicken kebabs marinated in yogurt and spices", 180, "plate", 25, 15, 4.6);
 
-        // ---- Sweet & Snack Corner ----
-        product(kSnacks, "Samosa", "Crisp flaky samosa with spiced potato-pea filling, served with chutney",  20,"piece",30,18,4.6);
-        product(kSnacks, "Pav Bhaji", "Buttery pav with smoky mashed bhaji topped with onions and coriander",  90,"plate",15,8,4.7);
-        product(kSnacks, "Hakka Noodles", "Classic hakka noodles with crunchy vegetables",  130,"plate",15,9,4.4);
-        product(kSnacks, "Gulab Jamun", "Hot gulab jamuns drenched in rose syrup",  50,"plate",12,6,4.8);
-        product(kSnacks, "Kheer", "Rich slow-cooked kheer with cardamom and nuts",  80,"bowl",10,5,4.6);
-        product(kSnacks, "Masala Chai", "Adrak-wali chai for your chai break",  20,"cup",50,35,4.5);
+        // ---- Konkan Swad (Goan/Konkan) ----
+        product(kKonkan, "Goan Fish Curry", "Fish cooked in coconut, kokum and red chilli gravy", 220, "plate", 20, 12, 4.8);
+        product(kKonkan, "Sol Kadi", "Refreshing drink made from kokum and coconut milk", 50, "glass", 30, 22, 4.6);
+        product(kKonkan, "Poee Bread", "Goan wood-fired flatbread", 40, "piece", 25, 18, 4.5);
+        product(kKonkan, "Prawn Balchão", "Spicy prawn pickle-style curry with Goan vinegar", 280, "plate", 15, 8, 4.7);
 
-        // ---- Pending kitchen (must never appear publicly) ----
-        product(kPending, "Hidden Chicken Curry", "Should never appear publicly",  200,"plate",10,5,3.0);
-        product(kPending, "Hidden Biryani", "Should never appear publicly",  190,"plate",10,4,3.0);
+        // ---- Kerala Taste House ----
+        product(kKerala, "Kerala Sadya", "Traditional vegetarian feast served on banana leaf", 200, "plate", 20, 12, 4.8);
+        product(kKerala, "Appam with Stew", "Lacy rice pancakes with coconut vegetable stew", 120, "plate", 25, 15, 4.7);
+        product(kKerala, "Kerala Fish Fry", "Spicy marinated fish fried with curry leaves", 180, "plate", 20, 12, 4.6);
+        product(kKerala, "Payasam", "Sweet milk pudding with cardamom and nuts", 80, "bowl", 30, 20, 4.7);
 
-        // ---- Sold-out offering (listed but 🔴 Sold out with a disabled button) ----
-        soldOutProduct(kSnacks, "Kaju Katli", "Premium cashew fudge — batch sold out for today", 60, "box", 8, 4.9);
+        // ---- Madras Kitchen (Tamil) ----
+        product(kMadras, "Sambar", "Lentil stew with vegetables, tamarind and sambar powder", 80, "plate", 40, 28, 4.6);
+        product(kMadras, "Rasam", "Spicy tamarind soup with pepper and cumin", 50, "cup", 35, 25, 4.5);
+        product(kMadras, "Curd Rice", "Thick yogurt rice tempered with mustard and ginger", 60, "plate", 30, 20, 4.4);
+        product(kMadras, "Tamil Meals", "Full meals with rice, sambar, rasam, poriyal and appalam", 150, "plate", 25, 15, 4.7);
 
-        // ---- FIXED pre-orders (tomorrow only, cutoff 12 PM — Screen 4A Type 2) ----
-        fixedPreorder(kMoms, "Sunday Special Biryani", "Mom's slow-dum vegetable biryani with mirchi ka salan",
-                190, "plate", 15, 4.9, Category.LUNCH);
-        fixedPreorder(kRoyal, "Ghee Podi Dosa", "Crisp ghee-roast dosa layered with gunpowder podi",
-                110, "plate", 12, 4.8, Category.BREAKFAST);
+        // ---- Desi Street Kitchen ----
+        product(kStreet, "Samosa", "Crispy pastry filled with spiced potatoes and peas", 20, "piece", 50, 35, 4.5);
+        product(kStreet, "Vada Pav", "Spicy potato fritter in a pav with garlic and dry chutney", 40, "plate", 40, 28, 4.6);
+        product(kStreet, "Pav Bhaji", "Mashed vegetable curry served with buttered pav", 100, "plate", 30, 18, 4.7);
+        product(kStreet, "Bhel Puri", "Puffed rice snack with chutneys, onions and sev", 50, "plate", 35, 25, 4.4);
+        product(kStreet, "Jalebi", "Crispy spirals soaked in saffron sugar syrup", 40, "plate", 40, 30, 4.5);
 
-        // ---- FLEXIBLE pre-orders (buyer picks date + slot — Screen 4A Type 3) ----
-        flexiblePreorder(kDesi, "Weekend Feast Thali", "Three-course festive thali: starter, mains and dessert",
-                250, "platter", 10, 4.8, Category.LUNCH);
-        flexiblePreorder(kPunjabi, "Tandoori Party Pack", "Assorted tandoori platter with naan and dessert",
-                320, "pack", 8, 4.7, Category.DINNER);
+        // ---- Mithas Kitchen (Sweets) ----
+        product(kMithas, "Gulab Jamun", "Warm milk-solid dumplings soaked in rose-cardamom syrup", 50, "plate", 30, 20, 4.8);
+        product(kMithas, "Rasgulla", "Soft cottage cheese balls in light sugar syrup", 40, "piece", 40, 28, 4.7);
+        product(kMithas, "Jalebi", "Crispy spirals soaked in saffron sugar syrup", 40, "plate", 35, 25, 4.6);
+        product(kMithas, "Kheer", "Slow-cooked rice kheer with saffron, almonds and pistachios", 80, "bowl", 25, 15, 4.7);
+        product(kMithas, "Shrikhand", "Creamy strained yogurt with saffron and cardamom", 90, "bowl", 20, 12, 4.6);
+        product(kMithas, "Chai", "Ginger-cardamom chai, brewed fresh", 20, "cup", 50, 40, 4.5);
+
+        // ---- Ghar Ka Swad (Homemade Vegetarian) ----
+        product(kGhar, "Dal Tadka", "Yellow dal finished with a sizzling garlic-cumin tadka", 120, "plate", 30, 18, 4.5);
+        product(kGhar, "Aloo Gobi", "Potato and cauliflower dry curry with cumin and turmeric", 100, "plate", 25, 15, 4.4);
+        product(kGhar, "Chapati", "Soft whole-wheat phulkas, hot off the tawa", 15, "piece", 50, 38, 4.3);
+        product(kGhar, "Mixed Veg Curry", "Seasonal vegetables in a light onion-tomato gravy", 130, "plate", 20, 12, 4.5);
+        product(kGhar, "Raita", "Whisked yogurt with cucumber and roasted cumin", 40, "bowl", 30, 22, 4.4);
+
+        // ---- Morning Tiffin House ----
+        product(kTiffin, "Poha", "Fluffy flattened-rice breakfast tempered with peanuts and curry leaves", 40, "plate", 40, 28, 4.6);
+        product(kTiffin, "Upma", "Semolina porridge with vegetables, nuts and curry leaves", 50, "plate", 35, 22, 4.5);
+        product(kTiffin, "Idli", "Soft steamed rice cakes with sambhar and chutney", 50, "plate", 40, 25, 4.7);
+        product(kTiffin, "Dosa", "Crispy rice crepe with potato filling", 70, "plate", 30, 18, 4.6);
+        product(kTiffin, "Masala Chai", "Ginger-cardamom chai, brewed fresh", 20, "cup", 50, 40, 4.8);
+
+        // ---- Bharat Multi-Cuisine Kitchen ----
+        product(kMulti, "Butter Chicken", "Tender chicken in creamy tomato-butter gravy", 220, "plate", 25, 15, 4.8);
+        product(kMulti, "Paneer Tikka", "Marinated cottage cheese cubes grilled in tandoor", 180, "plate", 20, 12, 4.7);
+        product(kMulti, "Hakka Noodles", "Stir-fried noodles with vegetables and soy sauce", 120, "plate", 30, 18, 4.5);
+        product(kMulti, "Veg Fried Rice", "Rice stir-fried with mixed vegetables and sauces", 110, "plate", 25, 15, 4.4);
+        product(kMulti, "Gulab Jamun", "Warm milk-solid dumplings in rose-cardamom syrup", 50, "plate", 30, 20, 4.6);
 
         platformSettingRepository.save(new PlatformSetting(DEMO_SEED_FLAG, "true"));
     }
 
-    private User seller(String name, String mobile, String flat, SellerApprovalStatus status) {
+    private User seller(String name, String mobile, String flat, SellerApprovalStatus status, String society, String building) {
         User u = new User(name, mobile, flat, UserRole.SELLER);
-        u.setSociety("Pride World City");
-        u.setBuilding("Tower A");
+        u.setSociety(society);
+        u.setBuilding(building);
         u.setSellerApprovalStatus(status);
         if (status == SellerApprovalStatus.APPROVED) u.setApprovedAt(LocalDateTime.now());
         return userRepository.save(u);
@@ -180,8 +226,8 @@ public class DemoDataSeeder {
                              String upi, double rating, String deadline, User seller) {
         Kitchen k = new Kitchen(slug, displayName, description, null, seller);
         k.setShortDescription(shortDescription);
-        k.setSociety("Pride World City");
-        k.setBuilding("Tower A");
+        k.setSociety(seller.getSociety());
+        k.setBuilding(seller.getBuilding());
         k.setWhatsappLink(null);
         k.setInstagramLink(null);
         k.setUpiId(upi);

@@ -37,6 +37,9 @@ public class Kitchen {
     @Column(name = "instagram_link")
     private String instagramLink;
 
+    @Column(name = "gallery_images", columnDefinition = "TEXT")
+    private String galleryImages;
+
     @Column(name = "upi_id")
     private String upiId;
 
@@ -100,6 +103,8 @@ public class Kitchen {
     public void setWhatsappLink(String whatsappLink) { this.whatsappLink = whatsappLink; }
     public String getInstagramLink() { return instagramLink; }
     public void setInstagramLink(String instagramLink) { this.instagramLink = instagramLink; }
+    public String getGalleryImages() { return galleryImages; }
+    public void setGalleryImages(String galleryImages) { this.galleryImages = galleryImages; }
     public String getUpiId() { return upiId; }
     public void setUpiId(String upiId) { this.upiId = upiId; }
     public Double getRating() { return rating; }

@@ -3,8 +3,10 @@ package com.example.my_first_spring_api.controller;
 import com.example.my_first_spring_api.dto.*;
 import com.example.my_first_spring_api.exception.BuyerNotAuthenticatedException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
+import com.example.my_first_spring_api.model.SellerApprovalStatus;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.model.UserRole;
+import com.example.my_first_spring_api.repository.UserRepository;
 import com.example.my_first_spring_api.service.BuyerService;
 import com.example.my_first_spring_api.service.SellerAppService;
 import jakarta.servlet.http.HttpSession;
@@ -23,18 +25,41 @@ public class SellerAppController {
 
     private final SellerAppService sellerAppService;
     private final BuyerService authService;
+    private final UserRepository userRepository;
 
     @Autowired
-    public SellerAppController(SellerAppService sellerAppService, BuyerService authService) {
+    public SellerAppController(SellerAppService sellerAppService, BuyerService authService, UserRepository userRepository) {
         this.sellerAppService = sellerAppService;
         this.authService = authService;
+        this.userRepository = userRepository;
     }
 
     private User requireSeller(HttpSession session) {
         User user = authService.getCurrentBuyer(session);
-        if (user == null) throw new BuyerNotAuthenticatedException("Authentication required. Please verify your mobile number via OTP.");
+        if (user == null) throw new BuyerNotAuthenticatedException("Authentication required. Please log in.");
         if (user.getRole() != UserRole.SELLER) throw new SellerNotAuthorizedException("Only sellers can perform this action");
         return user;
+    }
+
+    /**
+     * Demo auto-login: authenticates as the demo seller (Aarti).
+     * Used for client demo so the app opens directly to the dashboard.
+     */
+    @PostMapping("/demo-login")
+    public ResponseEntity<AuthResponseDto> demoLogin(HttpSession session) {
+        User aarti = userRepository.findByMobileNumber("9100000001")
+                .orElseGet(() -> {
+                    User u = new User("Aarti", "9100000001", "A-101", UserRole.SELLER);
+                    u.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
+                    u.setSociety("Sunshine Society");
+                    u.setBuilding("Building B");
+                    return userRepository.save(u);
+                });
+        session.setAttribute(BuyerService.BUYER_SESSION_KEY, aarti.getId());
+        return ResponseEntity.ok(new AuthResponseDto(
+                true, "Demo login successful",
+                aarti.getId(), aarti.getName(), aarti.getMobileNumber(),
+                aarti.getFlatHouseNumber(), aarti.getRole().name(), aarti.getSellerApprovalStatus()));
     }
 
     /** Parses a date parameter accepting human aliases; falls back to today when absent. */

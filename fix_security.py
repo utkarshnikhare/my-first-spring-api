@@ -1,4 +1,4 @@
-package com.example.my_first_spring_api;
+content = '''package com.example.my_first_spring_api;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -55,10 +55,10 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) -> {
                             response.setStatus(401);
-                    response.setContentType("application/json");
-                    response.getWriter().write(
-                            "{\"error\":\"AUTHENTICATION_REQUIRED\",\"message\":\"Authentication required. Please log in.\"}");
-                }))
+                            response.setContentType("application/json");
+                            response.getWriter().write(
+                                    "{\\"error\\":\\"AUTHENTICATION_REQUIRED\\",\\"message\\":\\"Authentication required. Please log in.\\"}");
+                        }))
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.ALWAYS)
                         .sessionFixation(sessionFixation -> sessionFixation.migrateSession()))
@@ -78,3 +78,8 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 }
+'''
+
+with open('c:/project/my-first-spring-api/my-first-spring-api/src/main/java/com/example/my_first_spring_api/SecurityConfig.java', 'w') as f:
+    f.write(content)
+print("SecurityConfig.java rewritten successfully")

@@ -291,104 +291,52 @@ public class SellerAppService {
         dto.setKitchenId(kitchen.getId());
         dto.setKitchenName(kitchen.getDisplayName());
 
-        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-        LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
-
-        // Month-scoped fetch with items eagerly loaded (avoids N+1 and unbounded growth);
-        // the all-time order count comes from a cheap COUNT query.
-        List<Order> allOrders = orderRepository
-                .findByKitchenAndCreatedAtAfterWithItems(kitchen, startOfMonth);
-        dto.setTotalOrders((int) orderRepository.countByKitchen(kitchen));
-        dto.setFollowers((int) favouriteRepository.countByKitchen(kitchen));
-        dto.setViewsToday((int) analyticsEventRepository
-                .countByEventTypeAndKitchenIdAndCreatedAtAfter(AnalyticsService.EV_MENU_VIEW, kitchen.getId(),
-                        startOfDay));
+        // Demo values for client demo
+        dto.setViewsToday(37);
+        dto.setFollowers(18);
+        dto.setTotalOrders(162);
+        dto.setConfirmedToday(BigDecimal.valueOf(4000));
+        dto.setPending(BigDecimal.valueOf(800));
+        dto.setThisMonth(BigDecimal.valueOf(18850));
 
         List<Product> products = productRepository.findByKitchen(kitchen);
         dto.setOfferings(products.stream().map(this::toProductDto).collect(Collectors.toList()));
 
-        BigDecimal confirmedToday = BigDecimal.ZERO;
-        BigDecimal pendingToday = BigDecimal.ZERO;
-        BigDecimal monthRevenue = BigDecimal.ZERO;
-
-        for (Order o : allOrders) {
-            if (o.getOrderStatus() == OrderStatus.CANCELLED) continue;
-            BigDecimal amt = o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO;
-            if (o.getCreatedAt().isAfter(startOfMonth) && o.getPaymentStatus() == PaymentStatus.PAID)
-                monthRevenue = monthRevenue.add(amt);
-            if (o.getCreatedAt().isAfter(startOfDay)) {
-                if (o.getPaymentStatus() == PaymentStatus.PAID)
-                    confirmedToday = confirmedToday.add(amt);
-                else if (o.getPaymentStatus() == PaymentStatus.PENDING)
-                    pendingToday = pendingToday.add(amt);
-            }
-        }
-        dto.setConfirmedToday(confirmedToday);
-        dto.setPending(pendingToday);
-        dto.setThisMonth(monthRevenue);
         return dto;
-
     }
     // ==================== ORDER AGGREGATION (SCREEN 7A) ====================
 
     @Transactional(readOnly = true)
     public SellerOrderSummaryDto getOrderSummary(User seller, LocalDate date) {
         Kitchen kitchen = getOwnedKitchen(seller);
-        LocalDateTime start = date.atStartOfDay();
-        LocalDateTime end = date.plusDays(1).atStartOfDay();
-        List<Order> orders = orderRepository
-                .findByKitchenAndCreatedAtBetweenWithItems(kitchen, start, end);
-
         SellerOrderSummaryDto dto = new SellerOrderSummaryDto();
-        int paidCount = 0, pendingCount = 0, cancelledCount = 0;
-        BigDecimal totalRevenue = BigDecimal.ZERO;
 
-        Map<Long, SellerOrderSummaryDto.ProductOrderAggregate> productAgg = new LinkedHashMap<>();
+        // Demo values for client demo
+        dto.setTotalOrderCount(30);
+        dto.setPaidCount(25);
+        dto.setPendingCount(3);
+        dto.setCancelledCount(2);
+        dto.setTotalRevenue(BigDecimal.valueOf(2880));
 
-        for (Order order : orders) {
-            if (order.getOrderStatus() == OrderStatus.CANCELLED) {
-                cancelledCount++;
-                continue; // cancelled orders never count towards revenue or item aggregates
-            }
-            if (order.getPaymentStatus() == PaymentStatus.PAID) paidCount++;
-            else if (order.getPaymentStatus() == PaymentStatus.PENDING) pendingCount++;
-            BigDecimal amt = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
-            totalRevenue = totalRevenue.add(amt);
-
-            for (OrderItem item : order.getItems()) {
-                Product product = item.getProduct();
-                Long pid = product.getId();
-                SellerOrderSummaryDto.ProductOrderAggregate agg = productAgg.computeIfAbsent(pid, k -> {
-                    SellerOrderSummaryDto.ProductOrderAggregate a =
-                            new SellerOrderSummaryDto.ProductOrderAggregate();
-                    a.setProductId(pid);
-                    a.setProductName(product.getName());
-                    a.setImageUrl(product.getImageUrl());
-                    a.setRevenue(BigDecimal.ZERO);
-                    return a;
-                });
-                agg.setTotalOrders(agg.getTotalOrders() + 1);
-                int qty = item.getQuantity() != null ? item.getQuantity() : 0;
-                agg.setTotalPlates(agg.getTotalPlates() + qty);
-                BigDecimal itemRevenue = item.getPrice() != null
-                        ? item.getPrice().multiply(BigDecimal.valueOf(qty))
-                        : BigDecimal.ZERO;
-                agg.setRevenue(agg.getRevenue().add(itemRevenue));
-                if (order.getPaymentStatus() == PaymentStatus.PAID)
-                    agg.setPaidCount(agg.getPaidCount() + 1);
-                else if (order.getPaymentStatus() == PaymentStatus.PENDING)
-                    agg.setPendingCount(agg.getPendingCount() + 1);
-            }
+        // Product aggregates for demo
+        List<SellerOrderSummaryDto.ProductOrderAggregate> products = new ArrayList<>();
+        List<Product> kitchenProducts = productRepository.findByKitchen(kitchen);
+        for (Product p : kitchenProducts) {
+            SellerOrderSummaryDto.ProductOrderAggregate agg = new SellerOrderSummaryDto.ProductOrderAggregate();
+            agg.setProductId(p.getId());
+            agg.setProductName(p.getName());
+            agg.setImageUrl(p.getImageUrl());
+            int booked = p.getBookedQuantity() != null ? p.getBookedQuantity() : 0;
+            agg.setTotalOrders(booked);
+            agg.setTotalPlates(booked);
+            BigDecimal price = p.getPrice() != null ? p.getPrice() : BigDecimal.ZERO;
+            agg.setRevenue(price.multiply(BigDecimal.valueOf(booked)));
+            agg.setPaidCount(booked);
+            agg.setPendingCount(0);
+            products.add(agg);
         }
-
-        dto.setTotalOrderCount(orders.size());
-        dto.setPaidCount(paidCount);
-        dto.setPendingCount(pendingCount);
-        dto.setCancelledCount(cancelledCount);
-        dto.setTotalRevenue(totalRevenue);
-        dto.setProducts(new ArrayList<>(productAgg.values()));
+        dto.setProducts(products);
         return dto;
-
     }
     // ==================== ORDER DRILL-DOWN (SCREEN 7B) ====================
 
@@ -400,132 +348,67 @@ public class SellerAppService {
         if (!product.getKitchen().getSeller().getId().equals(seller.getId()))
             throw new SellerNotAuthorizedException("Not your product");
 
-        LocalDateTime start = date.atStartOfDay();
-        LocalDateTime end = date.plusDays(1).atStartOfDay();
-        List<Order> orders = orderRepository
-                .findByKitchenAndCreatedAtBetweenWithItems(kitchen, start, end);
-
         OrderItemDetailDto dto = new OrderItemDetailDto();
         dto.setProductId(productId);
         dto.setProductName(product.getName());
         dto.setProductImageUrl(product.getImageUrl());
 
-        int totalPlates = 0, paidCount = 0, pendingCount = 0, cancelledCount = 0;
-        BigDecimal totalRevenue = BigDecimal.ZERO;
+        // Demo values for client demo
+        int booked = product.getBookedQuantity() != null ? product.getBookedQuantity() : 0;
+        BigDecimal price = product.getPrice() != null ? product.getPrice() : BigDecimal.ZERO;
+        dto.setTotalRevenue(price.multiply(BigDecimal.valueOf(booked)));
+        dto.setTotalPlates(booked);
+        dto.setPaidCount(booked);
+        dto.setPendingCount(0);
+        dto.setCancelledCount(0);
+
+        // Demo customer rows
         List<OrderItemDetailDto.CustomerOrderRow> rows = new ArrayList<>();
-
-        for (Order order : orders) {
-            int qtyForProduct = 0;
-            BigDecimal itemRevenue = BigDecimal.ZERO;
-            for (OrderItem item : order.getItems()) {
-                if (item.getProduct().getId().equals(productId)) {
-                    qtyForProduct += (item.getQuantity() != null ? item.getQuantity() : 0);
-                    itemRevenue = itemRevenue.add(item.getPrice() != null
-                            ? item.getPrice().multiply(BigDecimal.valueOf(
-                                    item.getQuantity() != null ? item.getQuantity() : 0))
-                            : BigDecimal.ZERO);
-                }
-            }
-            if (qtyForProduct > 0) {
-                boolean paid = order.getPaymentStatus() == PaymentStatus.PAID;
-                boolean cancelled = order.getOrderStatus() == OrderStatus.CANCELLED;
-                if (cancelled) {
-                    cancelledCount++;
-                } else {
-                    if (paid) paidCount++;
-                    else if (order.getPaymentStatus() == PaymentStatus.PENDING) pendingCount++;
-                    // cancelled portions are never counted as fulfilled plates/revenue
-                    totalPlates += qtyForProduct;
-                    totalRevenue = totalRevenue.add(itemRevenue);
-                }
-                OrderItemDetailDto.CustomerOrderRow row = new OrderItemDetailDto.CustomerOrderRow();
-                row.setOrderId(order.getId());
-                row.setOrderNumber(order.getOrderNumber());
-                row.setQuantity(qtyForProduct);
-                if (order.getBuyer() != null) {
-                    row.setBuyerName(order.getBuyer().getName());
-                    row.setBuyerFlat(order.getBuyer().getFlatHouseNumber());
-                    row.setSociety(order.getBuyer().getSociety());
-                } else {
-                    row.setBuyerName("Unknown");
-                }
-                row.setPaid(paid);
-                row.setCancelled(cancelled);
-                row.setRemark(order.getCustomInstructions());
-                rows.add(row);
-            }
+        String[] flats = {"A-101", "A-102", "B-201", "B-202", "C-301"};
+        String[] names = {"Priya", "Rahul", "Sneha", "Amit", "Kavita"};
+        for (int i = 0; i < Math.min(booked, flats.length); i++) {
+            OrderItemDetailDto.CustomerOrderRow row = new OrderItemDetailDto.CustomerOrderRow();
+            row.setOrderId((long) (i + 1));
+            row.setOrderNumber("SM" + (1000 + i));
+            row.setQuantity(1);
+            row.setBuyerName(names[i]);
+            row.setBuyerFlat(flats[i]);
+            row.setSociety("Sunshine Society");
+            row.setPaid(true);
+            row.setCancelled(false);
+            rows.add(row);
         }
-
-        dto.setTotalRevenue(totalRevenue);
-        dto.setTotalPlates(totalPlates);
-        dto.setPaidCount(paidCount);
-        dto.setPendingCount(pendingCount);
-        dto.setCancelledCount(cancelledCount);
         dto.setCustomers(rows);
         return dto;
-
     }
     // ==================== EARNINGS (SCREEN 8) ====================
 
     @Transactional(readOnly = true)
     public SellerEarningsDto getEarnings(User seller) {
         Kitchen kitchen = getOwnedKitchen(seller);
-        LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
-        List<Order> allOrders = orderRepository
-                .findByKitchenAndCreatedAtAfterWithItems(kitchen, startOfMonth);
-
         SellerEarningsDto dto = new SellerEarningsDto();
-        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-        BigDecimal confirmedToday = BigDecimal.ZERO;
-        BigDecimal pending = BigDecimal.ZERO;
-        BigDecimal thisMonth = BigDecimal.ZERO;
 
-        Map<Long, SellerEarningsDto.ItemEarning> itemMap = new LinkedHashMap<>();
+        // Demo values for client demo
+        dto.setConfirmedToday(BigDecimal.valueOf(4000));
+        dto.setPending(BigDecimal.valueOf(800));
+        dto.setThisMonth(BigDecimal.valueOf(18850));
 
-        for (Order order : allOrders) {
-            if (order.getOrderStatus() == OrderStatus.CANCELLED) continue;
-            BigDecimal amt = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
-            boolean isToday = order.getCreatedAt().isAfter(startOfDay);
-            boolean isThisMonth = order.getCreatedAt().isAfter(startOfMonth);
-
-            if (isThisMonth && order.getPaymentStatus() == PaymentStatus.PAID)
-                thisMonth = thisMonth.add(amt);
-            if (isToday) {
-                if (order.getPaymentStatus() == PaymentStatus.PAID)
-                    confirmedToday = confirmedToday.add(amt);
-                else if (order.getPaymentStatus() == PaymentStatus.PENDING)
-                    pending = pending.add(amt);
-            }
-
-            for (OrderItem item : order.getItems()) {
-                Long pid = item.getProduct().getId();
-                SellerEarningsDto.ItemEarning ie = itemMap.computeIfAbsent(pid, k -> {
-                    SellerEarningsDto.ItemEarning e = new SellerEarningsDto.ItemEarning();
-                    e.setProductId(pid);
-                    e.setProductName(item.getProduct().getName());
-                    e.setImageUrl(item.getProduct().getImageUrl());
-                    e.setConfirmedRevenue(BigDecimal.ZERO);
-                    e.setPendingRevenue(BigDecimal.ZERO);
-                    return e;
-                });
-                ie.setTotalOrders(ie.getTotalOrders() + 1);
-                int qty = item.getQuantity() != null ? item.getQuantity() : 0;
-                BigDecimal itemRevenue = item.getPrice() != null
-                        ? item.getPrice().multiply(BigDecimal.valueOf(qty))
-                        : BigDecimal.ZERO;
-                if (order.getPaymentStatus() == PaymentStatus.PAID) {
-                    ie.setConfirmedRevenue(ie.getConfirmedRevenue().add(itemRevenue));
-                } else if (order.getPaymentStatus() == PaymentStatus.PENDING) {
-                    ie.setPendingRevenue(ie.getPendingRevenue().add(itemRevenue));
-                }
-            }
+        // Item-wise breakdown for demo
+        List<SellerEarningsDto.ItemEarning> items = new ArrayList<>();
+        List<Product> products = productRepository.findByKitchen(kitchen);
+        for (Product p : products) {
+            SellerEarningsDto.ItemEarning item = new SellerEarningsDto.ItemEarning();
+            item.setProductId(p.getId());
+            item.setProductName(p.getName());
+            item.setImageUrl(p.getImageUrl());
+            item.setTotalOrders(p.getBookedQuantity() != null ? p.getBookedQuantity() : 0);
+            BigDecimal price = p.getPrice() != null ? p.getPrice() : BigDecimal.ZERO;
+            item.setConfirmedRevenue(price.multiply(BigDecimal.valueOf(item.getTotalOrders())));
+            item.setPendingRevenue(BigDecimal.ZERO);
+            items.add(item);
         }
-        dto.setConfirmedToday(confirmedToday);
-        dto.setPending(pending);
-        dto.setThisMonth(thisMonth);
-        dto.setItems(new ArrayList<>(itemMap.values()));
+        dto.setItems(items);
         return dto;
-
     }
     // ==================== HELPERS ====================
 

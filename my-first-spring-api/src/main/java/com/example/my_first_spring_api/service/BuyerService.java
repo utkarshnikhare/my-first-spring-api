@@ -91,7 +91,7 @@ public class BuyerService {
         User buyer = getCurrentBuyer(session);
         if (buyer == null) {
             throw new BuyerNotAuthenticatedException(
-                    "Authentication required. Please verify your mobile number via OTP.");
+                    "Authentication required. Please log in..");
         }
         return buyer;
     }

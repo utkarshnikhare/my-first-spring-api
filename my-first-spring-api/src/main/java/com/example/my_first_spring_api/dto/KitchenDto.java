@@ -11,6 +11,7 @@ public class KitchenDto {
     private String building;
     private String whatsappLink;
     private String instagramLink;
+    private String galleryImages;
     private String upiId;
     private Double rating;
     private Boolean availableToday;
@@ -51,6 +52,8 @@ public class KitchenDto {
     public void setWhatsappLink(String whatsappLink) { this.whatsappLink = whatsappLink; }
     public String getInstagramLink() { return instagramLink; }
     public void setInstagramLink(String instagramLink) { this.instagramLink = instagramLink; }
+    public String getGalleryImages() { return galleryImages; }
+    public void setGalleryImages(String galleryImages) { this.galleryImages = galleryImages; }
     public String getUpiId() { return upiId; }
     public void setUpiId(String upiId) { this.upiId = upiId; }
     public Double getRating() { return rating; }

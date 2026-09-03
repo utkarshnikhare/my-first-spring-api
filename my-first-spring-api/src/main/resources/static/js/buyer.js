@@ -98,21 +98,17 @@ async function homeView() {
         '<p class="prompt">What are you looking for?</p>' +
         '</div>';
 
-    // Tiles grid — one active module, rest visibly "COMING SOON"
+    // Tiles grid — Food & Kitchens is the active module
     h += '<div class="tiles-grid">' +
         '<a class="tile" href="#/food" style="border-color:var(--accent)">' +
         '<span class="tile-icon">🍽️</span><span class="tile-name">Food &amp; Kitchens</span>' +
         '<span class="pill pill-green">● AVAILABLE NOW</span></a>' +
-        '<div class="tile disabled"><span class="tile-icon">🛠️</span><span class="tile-name">Services</span><span class="pill pill-grey">COMING SOON</span></div>' +
-        '<div class="tile disabled"><span class="tile-icon">🏠</span><span class="tile-name">Real Estate</span><span class="pill pill-grey">COMING SOON</span></div>' +
-        '<div class="tile disabled"><span class="tile-icon">🔁</span><span class="tile-name">Buy &amp; Sell</span><span class="pill pill-grey">COMING SOON</span></div>' +
-        '<div class="tile disabled"><span class="tile-icon">🛍️</span><span class="tile-name">Products</span><span class="pill pill-grey">COMING SOON</span></div>' +
         '</div>';
 
     // Footer — marketplace summary
     h += '<p class="muted small section-gap" style="text-align:center; padding: 8px 12px 0">' +
-        'SocioMart connects you with home kitchens, services and neighbours inside your own community. ' +
-        'Fresh food from people you trust — order today or pre-order for later.' +
+        'SocioMart connects you with home kitchens and fresh food from people you trust. ' +
+        'Order today or pre-order for later.' +
         '</p></div>';
     return h;
 }
@@ -120,8 +116,8 @@ async function homeView() {
 // Demo favourites pre-populate the Favourites experience (Screen 8 spec)
 var DEMO_FAVOURITES = [
     { kitchenId: 1, name: 'Aarti Kitchen', type: 'KITCHEN' },
-    { kitchenId: 4, name: 'Royal South Indian', type: 'KITCHEN' },
-    { kitchenId: 6, name: 'Biryani Bistro', type: 'KITCHEN' }
+    { kitchenId: 3, name: 'Dakshin Kitchen', type: 'KITCHEN' },
+    { kitchenId: 7, name: 'Deccan Kitchen', type: 'KITCHEN' }
 ];
 
 async function favRowInner() {
@@ -723,7 +719,7 @@ async function favouritesView() {
     var h = '<div class="view-enter"><div class="page-head"><h1>Favourites</h1></div>';
 
     h += '<div class="segmented">' +
-        ['kitchens', 'food', 'services', 'listings'].map(function (t) {
+        ['kitchens', 'food'].map(function (t) {
             return '<button type="button" class="' + (tab === t ? 'active' : '') + '" data-action="set-fav-tab" data-tab="' + t + '">' +
                 t.charAt(0).toUpperCase() + t.slice(1) + '</button>';
         }).join('') + '</div>';
@@ -749,9 +745,6 @@ async function favouritesView() {
                     '</a>';
             }).join('');
         }
-    } else {
-        h += emptyHtml(tab === 'services' ? '🛠️' : '🔁', 'Coming soon',
-            tab === 'services' ? 'Favourite services will arrive in a future update.' : 'Favourite listings will arrive in a future update.');
     }
     h += '</div>';
     return h;
