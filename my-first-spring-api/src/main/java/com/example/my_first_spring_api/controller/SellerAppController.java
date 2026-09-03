@@ -37,6 +37,16 @@ public class SellerAppController {
         return user;
     }
 
+    /** Parses a date parameter accepting human aliases; falls back to today when absent. */
+    private LocalDate parseDate(String date) {
+        if (date == null || date.isBlank()) return LocalDate.now();
+        String d = date.trim().toLowerCase();
+        if ("today".equals(d)) return LocalDate.now();
+        if ("tomorrow".equals(d)) return LocalDate.now().plusDays(1);
+        if ("yesterday".equals(d)) return LocalDate.now().minusDays(1);
+        return LocalDate.parse(d);
+    }
+
     @GetMapping("/dashboard")
     public ResponseEntity<SellerDashboardDto> getDashboard(HttpSession session) {
         return ResponseEntity.ok(sellerAppService.getDashboard(requireSeller(session)));
@@ -75,14 +85,14 @@ public class SellerAppController {
     public ResponseEntity<ProductDto> publishFromTemplate(@PathVariable Long templateId,
                                                            @RequestBody Map<String, String> body,
                                                            HttpSession session) {
-        LocalDate date = body.get("availableDate") != null ? LocalDate.parse(body.get("availableDate")) : LocalDate.now();
+        LocalDate date = parseDate(body.get("availableDate"));
         return ResponseEntity.ok(sellerAppService.createProductFromTemplate(templateId, date, requireSeller(session)));
     }
 
     @PostMapping("/parse-message")
-    public ResponseEntity<QuickPostParseResultDto> parseMessage(@RequestBody Map<String, String> body, HttpSession session) {
+    public ResponseEntity<QuickPostParseResultDto> parseMessage(@RequestBody(required = false) Map<String, String> body, HttpSession session) {
         requireSeller(session);
-        String message = body.getOrDefault("message", "");
+        String message = body != null ? body.getOrDefault("message", "") : "";
         return ResponseEntity.ok(sellerAppService.parseQuickPost(message));
     }
 
@@ -92,19 +102,28 @@ public class SellerAppController {
     }
 
     @PostMapping("/batch-republish")
-    public ResponseEntity<List<ProductDto>> batchRepublish(@RequestBody Map<String, Object> body, HttpSession session) {
-        @SuppressWarnings("unchecked")
-        List<Number> ids = (List<Number>) body.getOrDefault("productIds", List.of());
-        List<Long> productIds = ids.stream().filter(java.util.Objects::nonNull).map(n -> n.longValue()).toList();
-        String dateStr = (String) body.get("availableDate");
-        LocalDate date = dateStr != null ? LocalDate.parse(dateStr) : LocalDate.now();
+    public ResponseEntity<List<ProductDto>> batchRepublish(@RequestBody(required = false) Map<String, Object> body, HttpSession session) {
+        Object rawIds = body == null ? null : body.get("productIds");
+        List<Long> productIds;
+        if (rawIds == null) {
+            productIds = List.of();
+        } else if (rawIds instanceof List<?> rawList) {
+            productIds = rawList.stream()
+                    .filter(java.util.Objects::nonNull)
+                    .filter(n -> n instanceof Number)
+                    .map(n -> ((Number) n).longValue())
+                    .toList();
+        } else {
+            throw new IllegalArgumentException("productIds must be a list of numbers.");
+        }
+        LocalDate date = parseDate((String) (body != null ? body.get("availableDate") : null));
         return ResponseEntity.ok(sellerAppService.batchRepublish(productIds, date, requireSeller(session)));
     }
 
     @GetMapping("/orders/summary")
     public ResponseEntity<SellerOrderSummaryDto> getOrderSummary(@RequestParam(required = false) String date,
                                                                   HttpSession session) {
-        LocalDate d = date != null ? LocalDate.parse(date) : LocalDate.now();
+        LocalDate d = parseDate(date);
         return ResponseEntity.ok(sellerAppService.getOrderSummary(requireSeller(session), d));
     }
 
@@ -112,7 +131,7 @@ public class SellerAppController {
     public ResponseEntity<OrderItemDetailDto> getOrderItemDetail(@PathVariable Long productId,
                                                                   @RequestParam(required = false) String date,
                                                                   HttpSession session) {
-        LocalDate d = date != null ? LocalDate.parse(date) : LocalDate.now();
+        LocalDate d = parseDate(date);
         return ResponseEntity.ok(sellerAppService.getOrderItemDetail(requireSeller(session), productId, d));
     }
 

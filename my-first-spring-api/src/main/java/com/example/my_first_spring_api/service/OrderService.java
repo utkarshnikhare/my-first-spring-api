@@ -346,6 +346,12 @@ public class OrderService {
         if (newStatus == null) {
             throw new IllegalArgumentException("Order status is required.");
         }
+        if (newStatus == OrderStatus.DRAFT) {
+            throw new IllegalArgumentException("An order cannot be reverted to a draft.");
+        }
+        if (newStatus == order.getOrderStatus()) {
+            throw new IllegalArgumentException("Order is already " + newStatus + ".");
+        }
         if (newStatus == OrderStatus.CANCELLED) {
             restoreStock(order);
         }
@@ -430,7 +436,10 @@ public class OrderService {
         for (Map.Entry<Long, Integer> e : totals.entrySet()) {
             Product product = productRepository.findById(e.getKey()).orElse(null);
             if (product == null || product.getRemainingQuantity() == null) continue;
-            product.setRemainingQuantity(Math.max(0, product.getRemainingQuantity() - e.getValue()));
+            int updated = productRepository.consumeStock(e.getKey(), e.getValue());
+            if (updated == 0) {
+                throw new IllegalArgumentException("Not enough stock left for '" + product.getName() + "'. Please reduce quantity.");
+            }
             // Live demand progress bar ("18 / 50 booked") — units booked per offering.
             product.setBookedQuantity((product.getBookedQuantity() == null ? 0 : product.getBookedQuantity()) + e.getValue());
             productRepository.save(product);
@@ -448,7 +457,9 @@ public class OrderService {
         for (Map.Entry<Long, Integer> e : totals.entrySet()) {
             Product product = productRepository.findById(e.getKey()).orElse(null);
             if (product == null || product.getRemainingQuantity() == null) continue;
-            product.setRemainingQuantity(product.getRemainingQuantity() + e.getValue());
+            Integer max = product.getMaxQuantity();
+            int restored = product.getRemainingQuantity() + e.getValue();
+            product.setRemainingQuantity(max != null ? Math.min(max, restored) : restored);
             productRepository.save(product);
         }
     }

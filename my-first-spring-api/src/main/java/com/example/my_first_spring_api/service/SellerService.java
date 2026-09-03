@@ -6,6 +6,7 @@ import com.example.my_first_spring_api.dto.KitchenUpdateDto;
 import com.example.my_first_spring_api.dto.OrderDto;
 import com.example.my_first_spring_api.dto.ProductCreateDto;
 import com.example.my_first_spring_api.dto.ProductDto;
+import com.example.my_first_spring_api.dto.ProductUpdateDto;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
@@ -92,10 +93,12 @@ public class SellerService {
         product.setMaxQuantity(dto.getMaxQuantity());
         product.setRemainingQuantity(dto.getMaxQuantity());
         product.setIsPreorder(dto.getIsPreorder() != null ? dto.getIsPreorder() : false);
+        product.setCutoffTime(validatedCutoff(dto.getCutoffTime()));
+        product.setReadyByTime(dto.getReadyByTime());
         return toProductDto(productRepository.save(product));
     }
 
-    public ProductDto updateProduct(Long productId, ProductCreateDto dto, User seller) {
+    public ProductDto updateProduct(Long productId, ProductUpdateDto dto, User seller) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
         getOwnedKitchen(product.getKitchen().getId(), seller);
@@ -119,8 +122,12 @@ public class SellerService {
         if (dto.getAvailableDate() != null) product.setAvailableDate(dto.getAvailableDate());
         if (dto.getOrderWindowStart() != null) product.setOrderWindowStart(dto.getOrderWindowStart());
         if (dto.getOrderWindowEnd() != null) product.setOrderWindowEnd(dto.getOrderWindowEnd());
+        if (dto.getCutoffTime() != null) product.setCutoffTime(dto.getCutoffTime());
+        if (dto.getReadyByTime() != null) product.setReadyByTime(dto.getReadyByTime());
         if (dto.getMaxQuantity() != null) product.setMaxQuantity(dto.getMaxQuantity());
         if (dto.getIsPreorder() != null) product.setIsPreorder(dto.getIsPreorder());
+        if (dto.getCutoffTime() != null) product.setCutoffTime(validatedCutoff(dto.getCutoffTime()));
+        if (dto.getReadyByTime() != null) product.setReadyByTime(dto.getReadyByTime());
         return toProductDto(productRepository.save(product));
     }
 
@@ -155,6 +162,16 @@ public class SellerService {
                 .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
         if (!kitchen.getSeller().getId().equals(seller.getId())) throw new SellerNotAuthorizedException("You do not own this kitchen");
         return kitchen;
+    }
+
+    /** Offering cutoffs are strict deadlines: only 24-hour HH:mm is accepted (e.g. "11:30"). */
+    private String validatedCutoff(String value) {
+        if (value == null) return null;
+        String v = value.trim();
+        if (v.isEmpty()) return null;
+        if (!v.matches("^([01]\\d|2[0-3]):[0-5]\\d$"))
+            throw new IllegalArgumentException("cutoffTime must use 24-hour HH:mm format, e.g. 20:30");
+        return v;
     }
 
     /**

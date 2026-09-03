@@ -32,6 +32,8 @@ function sellerNavigate(hash) { if (location.hash === hash) sellerRender(); else
 function greeting() { var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
 function offeringStatusBadge(p) { return p.soldOut ? '<span class="oc-badge soldout">SOLD OUT</span>' : '<span class="oc-badge live">LIVE</span>'; }
 function statusDot(paid, cancelled) { return cancelled ? '<span class="status-dot red"></span>' : paid ? '<span class="status-dot green"></span>' : '<span class="status-dot orange"></span>'; }
+function localDateStr(d) { var y = d.getFullYear(), m = ('0' + (d.getMonth() + 1)).slice(-2), day = ('0' + d.getDate()).slice(-2); return y + '-' + m + '-' + day; }
+function sellerDate(dateKey) { return dateKey === 'tomorrow' ? localDateStr(new Date(Date.now() + 864e5)) : localDateStr(new Date()); }
 
 // SCREEN 2: ADD OFFERING ENTRY POINT
 async function sellerAddView() {
@@ -121,6 +123,7 @@ async function sellerCreateView() {
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Price (Rs) <span class="req">*</span></label><input class="form-input" name="price" type="number" value="' + (t.price || '') + '" placeholder="100" required></div>';
     h += '<div class="form-group"><label class="form-label">Unit <span class="req">*</span></label><select class="form-select" name="priceUnit"><option value="Per Piece">Per Piece</option><option value="Per Plate">Per Plate</option><option value="Per Box">Per Box</option></select></div></div>';
     h += '<div class="form-group"><label class="form-label">Availability <span class="req">*</span></label><div class="radio-group"><label class="radio-option selected" data-action="set-availability" data-val="today">Today</label><label class="radio-option" data-action="set-availability" data-val="tomorrow">Tomorrow</label></div></div>';
+    h += '<input type="hidden" name="availableDate" id="availDate" value="' + sellerDate('today') + '">';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open <span class="req">*</span></label><input class="form-input" name="orderWindowStart" type="time" value="08:00"></div>';
     h += '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label><input class="form-input" name="orderWindowEnd" type="time" value="10:00"></div></div>';
     h += '<div class="form-group"><label class="form-label">Quantity Available <span class="req">*</span></label><input class="form-input" name="maxQuantity" type="number" placeholder="Blank for unlimited"></div>';
@@ -134,7 +137,7 @@ async function sellerOrdersView() {
     var h = '<div class="view-enter"><div class="page-head"><h1>Orders</h1></div>';
     h += '<div class="date-tabs"><button class="date-tab active" data-action="set-date" data-date="today">Today</button><button class="date-tab" data-action="set-date" data-date="tomorrow">Tomorrow</button></div>';
     try {
-        var summary = await api('/api/seller-app/orders/summary?date=' + (S.selectedDate === 'today' ? 'today' : 'tomorrow'));
+        var summary = await api('/api/seller-app/orders/summary?date=' + sellerDate(S.selectedDate));
         h += '<div class="daily-total-card"><div class="dtc-number">' + summary.totalOrderCount + '</div><div class="dtc-label">Total Orders</div><div class="dtc-badges">';
         h += '<span class="dtc-badge green">Green ' + summary.paidCount + ' Paid</span>';
         h += '<span class="dtc-badge orange">Orange ' + summary.pendingCount + ' Pending</span>';
@@ -183,13 +186,13 @@ async function sellerEarningsView() {
 async function sellerOrderDetailView(productId) {
     var h = '<div class="view-enter"><div class="page-head"><h1>Order Details</h1></div>';
     try {
-        var detail = await api('/api/seller-app/orders/product/' + productId + '?date=' + (S.selectedDate === 'today' ? 'today' : 'tomorrow'));
+        var detail = await api('/api/seller-app/orders/product/' + productId + '?date=' + sellerDate(S.selectedDate));
         h += '<div class="drilldown-header"><h3>' + esc(detail.productName) + '</h3>';
         h += '<div class="dd-stats">Revenue: <strong>' + money(detail.totalRevenue) + '</strong> . Plates: <strong>' + detail.totalPlates + '</strong></div>';
         h += '<div class="dd-stats"><span class="dtc-badge green">Paid: ' + detail.paidCount + '</span> <span class="dtc-badge orange">Pending: ' + detail.pendingCount + '</span> <span class="dtc-badge red">Cancelled: ' + detail.cancelledCount + '</span></div></div>';
         h += '<select class="sort-select" id="sortSelect" data-action="set-sort"><option value="all">All</option><option value="paid">Paid Only</option><option value="unpaid">Unpaid Only</option></select>';
         if (!detail.customers || detail.customers.length === 0) { h += emptyHtml('Cust', 'No customer orders', 'Individual orders appear here.'); }
-        else { detail.customers.forEach(function (c) { h += '<div class="' + (c.cancelled ? 'customer-row cancelled' : 'customer-row') + '">' + statusDot(c.paid, c.cancelled) + '<span class="cr-body"><span class="cr-name">' + esc(c.buyerName) + '</span><span class="cr-loc">' + esc(c.society + ', ' + c.buyerFlat) + '</span></span><span class="cr-qty">x' + c.quantity + '</span></div>'; }); }
+        else { detail.customers.forEach(function (c) { h += '<div class="' + (c.cancelled ? 'customer-row cancelled' : 'customer-row') + '">' + statusDot(c.paid, c.cancelled) + '<span class="cr-body"><span class="cr-name">' + esc(c.buyerName) + '</span><span class="cr-loc">' + esc([c.society, c.buyerFlat].filter(Boolean).join(', ')) + '</span></span><span class="cr-qty">x' + c.quantity + '</span></div>'; }); }
     } catch (e) { h += emptyHtml('Warn', 'Could not load details', e.message); }
     h += '</div>';
     return h;
@@ -203,9 +206,31 @@ document.addEventListener('submit', async function (e) {
     try {
         if (form.id === 'createOfferingForm') {
             var vals = formVals(form);
-            await api('/api/seller-app/templates', { method: 'POST', body: vals });
+            var kid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
+            if (!kid) {
+                var k = await api('/api/seller/kitchen');
+                kid = k.id;
+                S.myKitchen = k;
+            }
+            var saveFav = $('#favToggle') && $('#favToggle').classList.contains('on');
+            if (saveFav) {
+                try {
+                    var favBody = { name: vals.name, description: vals.description || '', price: Number(vals.price), priceUnit: vals.priceUnit, maxQuantity: vals.maxQuantity ? Number(vals.maxQuantity) : null, orderWindowStart: vals.orderWindowStart, orderWindowEnd: vals.orderWindowEnd, availableDate: vals.availableDate };
+                    await api('/api/seller-app/templates', { method: 'POST', body: favBody });
+                } catch (favErr) { toast('Could not save favourite: ' + favErr.message, 'error'); }
+            }
+            await api('/api/seller/products?kitchenId=' + kid, { method: 'POST', body: vals });
             toast('Offering published!', 'success'); sellerNavigate('#/home');
-        } else if (form.id === 'kitchenForm') { toast('All changes saved', 'success'); }
+        } else if (form.id === 'kitchenForm') {
+            var kid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
+            if (!kid) {
+                var k = await api('/api/seller/kitchen');
+                kid = k.id;
+                S.myKitchen = k;
+            }
+            await api('/api/seller/kitchen/' + kid, { method: 'PUT', body: formVals(form) });
+            toast('All changes saved', 'success');
+        }
     } catch (err) { toast(err.message, 'error'); }
 });
 
@@ -271,7 +296,7 @@ document.addEventListener('click', async function (e) {
             }
             case 'batch-republish': {
                 if (S.historySelected.length === 0) { toast('Select at least one item', 'error'); return; }
-                await api('/api/seller-app/batch-republish', { method: 'POST', body: { productIds: S.historySelected, availableDate: new Date().toISOString().split('T')[0] } });
+                await api('/api/seller-app/batch-republish', { method: 'POST', body: { productIds: S.historySelected, availableDate: sellerDate('today') } });
                 toast('Republished ' + S.historySelected.length + ' items!', 'success'); sellerNavigate('#/home');
                 break;
             }
@@ -286,7 +311,7 @@ document.addEventListener('click', async function (e) {
             case 'preview-kitchen': toast('Opening kitchen preview...', 'info'); break;
             case 'add-photo': toast('Photo upload (demo)', 'info'); break;
             case 'upload-avatar': toast('Avatar upload (demo)', 'info'); break;
-            case 'set-availability': $all('.radio-option').forEach(function (el) { el.classList.remove('selected'); }); t.classList.add('selected'); break;
+            case 'set-availability': $all('.radio-option').forEach(function (el) { el.classList.remove('selected'); }); t.classList.add('selected'); var av = $('#availDate'); if (av) av.value = sellerDate(t.dataset.val || 'today'); break;
         }
     } catch (err) { toast(err.message, 'error'); }
 });

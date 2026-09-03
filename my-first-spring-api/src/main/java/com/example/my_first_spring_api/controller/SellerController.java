@@ -6,6 +6,7 @@ import com.example.my_first_spring_api.dto.KitchenUpdateDto;
 import com.example.my_first_spring_api.dto.OrderDto;
 import com.example.my_first_spring_api.dto.ProductCreateDto;
 import com.example.my_first_spring_api.dto.ProductDto;
+import com.example.my_first_spring_api.dto.ProductUpdateDto;
 import com.example.my_first_spring_api.dto.UpdateOrderStatusRequest;
 import com.example.my_first_spring_api.exception.BuyerNotAuthenticatedException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
@@ -76,7 +77,7 @@ public class SellerController {
 
     @PutMapping("/products/{productId}")
     public ResponseEntity<ProductDto> updateProduct(@PathVariable Long productId,
-                                                    @Valid @RequestBody ProductCreateDto dto, HttpSession session) {
+                                                    @RequestBody ProductUpdateDto dto, HttpSession session) {
         User seller = requireSeller(session);
         return ResponseEntity.ok(sellerService.updateProduct(productId, dto, seller));
     }

@@ -1,21 +1,17 @@
 package com.example.my_first_spring_api.dto;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-public class ProductCreateDto {
-    @NotBlank(message = "Item name is required")
+/**
+ * Payload for partial product updates (PUT /api/seller/products/{id}).
+ * Unlike ProductCreateDto, no field is mandatory: the service layer already
+ * applies only non-null fields, so validation must not reject partial bodies.
+ */
+public class ProductUpdateDto {
     private String name;
-
     private String description;
-
-    @NotNull(message = "Price is required")
-    @Positive(message = "Price must be positive")
     private BigDecimal price;
-
     private String priceUnit;
     private String imageUrl;
     private Boolean availableToday;

@@ -24,6 +24,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.HashMap;
+import java.time.format.DateTimeParseException;
 import java.util.Map;
 
 @RestControllerAdvice
@@ -74,6 +75,11 @@ public class GlobalExceptionHandler {
             HttpMessageNotReadableException.class})
     public ResponseEntity<ApiErrorDto> handleBadRequestWeb(Exception ex) {
         return new ResponseEntity<>(new ApiErrorDto("BAD_REQUEST", "Invalid request. Please check the submitted data.", 400), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(DateTimeParseException.class)
+    public ResponseEntity<ApiErrorDto> handleDateTimeParse(DateTimeParseException ex) {
+        return new ResponseEntity<>(new ApiErrorDto("BAD_REQUEST", "Invalid date supplied. Use yyyy-MM-dd or 'today'/'tomorrow'.", 400), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)

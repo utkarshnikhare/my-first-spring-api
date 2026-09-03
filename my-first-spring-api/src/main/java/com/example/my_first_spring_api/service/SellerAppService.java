@@ -30,6 +30,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -263,8 +264,13 @@ public class SellerAppService {
     @Transactional
     public List<ProductDto> batchRepublish(List<Long> productIds, LocalDate date, User seller) {
         Kitchen kitchen = getOwnedKitchen(seller);
+        if (productIds == null || productIds.isEmpty()) return List.of();
+        if (productIds.size() > 50) {
+            throw new IllegalArgumentException("Cannot republish more than 50 items at a time.");
+        }
+        List<Long> deduped = new ArrayList<>(new LinkedHashSet<>(productIds));
         List<ProductDto> result = new ArrayList<>();
-        for (Long productId : productIds) {
+        for (Long productId : deduped) {
             Product original = productRepository.findById(productId)
                     .orElseThrow(() -> new ProductNotFoundException(productId));
             if (!original.getKitchen().getSeller().getId().equals(seller.getId()))
@@ -274,6 +280,7 @@ public class SellerAppService {
         }
         return result;
     }
+
 
     // ==================== DASHBOARD ====================
 

@@ -32,4 +32,17 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             "AND p.remainingQuantity + :delta >= 0 " +
             "AND (p.maxQuantity IS NULL OR p.remainingQuantity + :delta <= p.maxQuantity)")
     int adjustRemainingQuantity(@Param("productId") Long productId, @Param("delta") int delta);
+
+    /**
+     * Atomic stock consumption at order placement. Decrements remaining and
+     * increments booked in ONE UPDATE so concurrent checkouts cannot oversell.
+     * Returns 0 when there is not enough stock left.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Product p SET p.remainingQuantity = p.remainingQuantity - :qty, " +
+            "p.bookedQuantity = COALESCE(p.bookedQuantity, 0) + :qty, " +
+            "p.updatedAt = CURRENT_TIMESTAMP " +
+            "WHERE p.id = :productId AND p.remainingQuantity IS NOT NULL " +
+            "AND p.remainingQuantity >= :qty")
+    int consumeStock(@Param("productId") Long productId,@Param("qty") int qty);
 }
