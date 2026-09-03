@@ -15,9 +15,10 @@ const CONFIG = {
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             return 'http://localhost:8081';
         }
-        // For static hosting (Vercel/GitHub Pages), use production URL
-        // Change this to your deployed backend URL
-        return 'http://localhost:8081';
+        // Served from a non-local host (tunnel / LAN / deployed server):
+        // the frontend is served by the same Spring app, so same-origin
+        // relative URLs always hit the correct backend from any device.
+        return '';
     })(),
 
     // App settings

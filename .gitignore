@@ -18,3 +18,6 @@ projectmy-first-spring-api/
 !start.ps1
 !tunnel.ps1
 !e2e-deep-test.ps1
+
+# docs screenshot tooling (local only)
+docs-tools/
