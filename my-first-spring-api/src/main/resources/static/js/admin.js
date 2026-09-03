@@ -130,6 +130,34 @@ async function adminAction(action, t) {
                 break;
             case 'open-buyer': location.href = '/index.html'; break;
             case 'go-tab': adminNavigate(t.dataset.hash); break;
+            case 'approve-seller': {
+                var id = Number(t.dataset.id);
+                await api('/api/admin/sellers/' + id + '/approve', { method: 'POST' });
+                toast('Seller approved', 'success');
+                await adminRender();
+                break;
+            }
+            case 'open-reject': {
+                openModal(
+                    '<h3>Reject ' + esc(t.dataset.name) + '?</h3>' +
+                    '<p class="muted small">Add a reason (shown to the seller( — optional.</p>' +
+                    '<div class="form-group"><textarea id="rejectReason" class="admin-textarea" rows="2" maxlength="200" placeholder="Reason (optional("></textarea></div>' +
+                    '<div class="modal-actions">' +
+                    '<button class="btn btn-outline" type="button" data-action="cancel-reject">Cancel</button>' +
+                    '<button class="btn btn-danger" type="button" data-action="confirm-reject" data-id="' + t.dataset.id + '">Reject</button>' +
+                    '</div>');
+                break;
+            }
+            case 'cancel-reject': closeModal(); break;
+            case 'confirm-reject': {
+                var id = Number(t.dataset.id);
+                var reason = $('#rejectReason') ? $('#rejectReason').value.trim() : '';
+                closeModal();
+                await api('/api/admin/sellers/' + id + '/reject', { method: 'POST', body: { reason: reason || null } });
+                toast('Seller rejected', 'success');
+                await adminRender();
+                break;
+            }
         }
     } catch (err) { toast(err.message, 'error'); }
 }
@@ -137,7 +165,7 @@ async function adminAction(action, t) {
 async function adminHomeView() {
     var h = '<div class="view-enter">';
     h += '<div class="section-head admin-section-head"><div><h1>' + greeting() + ', ' + esc(A.me ? (A.me.name || A.me.mobileNumber || 'Admin') : 'Admin') + '</h1><p class="muted small">SocioMart Admin Console</p></div></div>';
-    h += '<div class="admin-card" data-action="go-tab" data-hash="#/pending"><div class="ac-icon">⏳</div><div class="ac-title">Pending Approvals</div><div class="ac-desc">Review and approve or reject new seller registrations.</div><span class="ac-chip next">Screen B — next increment</span></div>';
+    h += '<div class="admin-card" data-action="go-tab" data-hash="#/pending"><div class="ac-icon">⏳</div><div class="ac-title">Pending Approvals</div><div class="ac-desc">Review and approve or reject new seller registrations.</div><span class="ac-chip live">Live — Screen B</span></div>';
     h += '<div class="admin-card" data-action="go-tab" data-hash="#/sellers"><div class="ac-icon">👥</div><div class="ac-title">Seller Registry</div><div class="ac-desc">Browse all sellers, filter by approval status, suspend accounts.</div><span class="ac-chip next">Screen C — next increment</span></div>';
     h += '<div class="admin-card" data-action="go-tab" data-hash="#/analytics"><div class="ac-icon">📊</div><div class="ac-title">Platform Analytics</div><div class="ac-desc">Users, orders, products, traffic &amp; growth metrics.</div><span class="ac-chip next">Screen D — next increment</span></div>';
     if (A.role === 'SUPER_ADMIN') {
@@ -153,7 +181,33 @@ function adminPlaceholderView(title, copy, icon) {
             '<div class="placeholder-note"><div style="font-size:2rem;margin-bottom:6px">' + icon + '</div><strong>' + title + '</strong> — arrives in a later increment.</div></div>';
     };
 }
-var adminPendingView = adminPlaceholderView('Pending Approvals', 'Approve or reject new seller registrations', '⏳');
+async function adminPendingView() {
+    var list = await api('/api/admin/sellers/pending');
+    var h = '<div class="view-enter">';
+    h += '<div class="section-head admin-section-head"><div><h1>Pending Approvals</h1><p class="muted small">' + (list ? list.length : 0) + ' seller(s) awaiting your decision</p></div></div>';
+    if (!list || !list.length) {
+        return h + '<div class="admin-empty">🎉 All caught up — no pending seller approvals.</div>';
+    }
+    list.forEach(function (s) {
+        h += '<div class="seller-row">' +
+            '<div class="sr-avatar">' + esc(String(s.name || '?').charAt(0).toUpperCase()) + '</div>' +
+            '<div class="sr-body">' +
+            '<div class="sr-name">' + esc(s.name || 'Unknown') + '</div>' +
+            '<div class="sr-meta">📱 ' + esc(s.mobileNumber || '—') + ' · Registered ' + adminDate(s.RegisteredAt) + '</div>' +
+            '</div>' +
+            '<div class="sr-actions">' +
+            '<button class="btn btn-success btn-sm" type="button" data-action="approve-seller" data-id="' + s.id + '">Approve</button>' +
+            '<button class="btn btn-outline btn-sm" type="button" data-action="open-reject" data-id="' + s.id + '" data-name="' + esc(s.name || 'Seller') + '">Reject</button>' +
+            '</div></div>';
+    });
+    h += '</div>';
+    return h;
+}
+function adminDate(iso) {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); }
+    catch (e) { return String(iso); }
+}
 var adminSellersView = adminPlaceholderView('Seller Registry', 'Browse and manage seller accounts by status', '👥');
 var adminAnalyticsView = adminPlaceholderView('Platform Analytics', 'Platform usage, growth and traffic metrics', '📊');
 var adminConsoleView = adminPlaceholderView('Platform Console', 'Super Admin: accounts, features, grants, settings', '⚙️');

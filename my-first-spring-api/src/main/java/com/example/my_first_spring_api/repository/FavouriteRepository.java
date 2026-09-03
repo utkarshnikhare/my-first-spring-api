@@ -13,7 +13,7 @@ public interface FavouriteRepository extends JpaRepository<Favourite, Long> {
     List<Favourite> findByUserIdOrderByCreatedAtDesc(Long userId);
     Optional<Favourite> findByUserIdAndKitchenId(Long userId, Long kitchenId);
     Optional<Favourite> findByUserIdAndProductId(Long userId, Long productId);
-        long countByUser(User user);
+    long countByUser(User user);
     boolean existsByKitchen(Kitchen kitchen);
     boolean existsByProduct(Product product);
     long countByKitchen(Kitchen kitchen);

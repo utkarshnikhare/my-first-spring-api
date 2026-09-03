@@ -12,16 +12,16 @@
 /* Top bar */
 .admin-topbar {
     position: fixed; top: 0; left:  ‌0; right:  ‌0; z-index: 95;
-    display: flex; justify-content: space-between; align-items: center; gap: auc10px;
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
     padding: 10px 16px;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
 }
-.admin-brand { font-weight: 800; font-size: 0.92rem; display: flex; align-items: center; gap: auc6px; }
+.admin-brand { font-weight: 800; font-size: 0.92rem; display: flex; align-items: center; gap: 6px; }
 .admin-brand span { color: var(--admin-2); }
-.admin-identity { display: flex; align-items: center; gap: auc8px; font-size: 0.78rem; color: var(--muted); }
+.admin-identity { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: var(--muted); }
 .admin-role-badge {
-    font-size: 0.68rem; font-weight: 800; padding: 3px 8px; border-radius: auc8px;
+    font-size: 0.68rem; font-weight: 800; padding: 3px 8px; border-radius: 8px;
     background: var(--admin-1); color: var(--admin-3); text-transform: uppercase;
 }
 .admin-role-badge.super { background: linear-gradient(135deg, var(--admin-2), var(--admin-3)); color: #fff; }
@@ -35,47 +35,75 @@
 .admin-nav .nav-item.active .nav-icon { background: var(--admin-1); color: var(--admin-2); }
 
 /* Login & blocked wrappers */
-.login-wrap, .blocked-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: auc24px; }
+.login-wrap, .blocked-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
 .admin-login,.admin-blocked {
-    background: var(--surface); border: 1px solid var(--border); border-radius: auc20px;
-    box-shadow: var(--shadow); padding: auc22px; width: min(420px, 100%);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+    box-shadow: var(--shadow); padding: 22px; width: min(420px, 100%);
 }
-.al-brand { font-size: 1.1rem; font-weight: 800; display: flex; align-items: center; gap: auc8px; margin-bottom: auc14px; color: var(--admin-2); }
-.admin-login h2,.admin-blocked h2 { font-size: 1.15rem; margin-bottom: auc6px; }
-.admin-login .form-group { margin-bottom: auc12px; }
-.admin-login .form-group label { display: block; font-size: 0.78rem; font-weight: 700; margin-bottom: auc4px; color: var(--text); }
+.al-brand { font-size: 1.1rem; font-weight: 800; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; color: var(--admin-2); }
+.admin-login h2,.admin-blocked h2 { font-size: 1.15rem; margin-bottom: 6px; }
+.admin-login .form-group { margin-bottom: 12px; }
+.admin-login .form-group label { display: block; font-size: 0.78rem; font-weight: 700; margin-bottom: 4px; color: var(--text); }
 .admin-login .form-group input {
     width: 100%; padding: 10px 12px;
-    border: 1px solid var(--border); border-radius: auc10px;
+    border: 1px solid var(--border); border-radius: 10px;
     font-size: 0.9rem; background: var(--surface); color: var(--text); box-sizing: border-box;
 }
-.admin-login .btn + .btn { margin-top: auc8px; }
+.admin-login .btn + .btn { margin-top: 8px; }
 .al-info {
     background: var(--admin-1); border: 1px solid var(--admin-2); color: var(--admin-3);
-    border-radius: auc12px; padding: 10px 12px; font-size: 0.8rem; margin-bottom: auc12px;
+    border-radius: 12px; padding: 10px 12px; font-size: 0.8rem; margin-bottom: 12px;
 }
-.al-back { display: inline-block; margin-top: auc12px; font-size: 0.8rem; color: var(--muted); text-decoration: none; }
+.al-back { display: inline-block; margin-top: 12px; font-size: 0.8rem; color: var(--muted); text-decoration: none; }
 .al-back:hover { color: var(--admin-2); }
 
 .admin-blocked { text-align: center; }
-.admin-blocked .ab-icon { font-size: 2.4rem; margin-bottom: auc10px; }
+.admin-blocked .ab-icon { font-size: 2.4rem; margin-bottom: 10px; }
 .admin-blocked p { font-size: 0.85rem; color: var(--muted); margin: 10px 0 16px; }
 
 /* Home roadmap cards */
 .admin-card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: auc16px;
-    box-shadow: var(--shadow); padding: 14px; margin-bottom: auc12px; cursor: pointer;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    box-shadow: var(--shadow); padding: 14px; margin-bottom: 12px; cursor: pointer;
 }
-.admin-card .ac-icon { font-size: 1.5rem; margin-bottom: auc6px; }
-.admin-card .ac-title { font-weight: 800; font-size: 0.92rem; margin-bottom: auc4px; }
+.admin-card .ac-icon { font-size: 1.5rem; margin-bottom: 6px; }
+.admin-card .ac-title { font-weight: 800; font-size: 0.92rem; margin-bottom: 4px; }
 .admin-card .ac-desc { font-size: 0.78rem; color: var(--muted); }
-.ac-chip { display: inline-block; margin-top: auc8px; font-size: 0.68rem; font-weight: 700; padding: 3px 8px; border-radius: auc8px; }
+.ac-chip { display: inline-block; margin-top: 8px; font-size: 0.68rem; font-weight: 700; padding: 3px 8px; border-radius: 8px; }
 .ac-chip.next { background: #F3F4F6; color: #6B7280; }
-.admin-section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: auc12px; }
+.admin-section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .admin-section-head h1 { font-size: 1.15rem; }
 
 /* Placeholder note */
 .placeholder-note {
-    background: var(--surface); border: 1px dashed var(--border); border-radius: auc14px;
-    padding: 16px; text-align: center; font-size: 0.85rem; color: var(--muted); margin-top: auc12px;
+    background: var(--surface); border: 1px dashed var(--border); border-radius: 14px;
+    padding: 16px; text-align: center; font-size: 0.85rem; color: var(--muted); margin-top: 12px;
 }
+
+/* Screen B — pending approvals */
+.seller-row {
+    display: flex; align-items: center; gap: 10px; padding: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: var(--shadow); margin-bottom: 10px;
+}
+.seller-row .sr-avatar {
+    width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0;
+    background: var(--admin-1); color: var(--admin-3);
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.05rem;
+}
+.seller-row .sr-body { flex:  ‌1; min-width: 0; }
+.seller-row .sr-name { font-weight: 800; font-size: 0.9rem; }
+.seller-row .sr-meta { font-size:  ‌0.75rem; color: var(--muted); margin-top: 2px; }
+.seller-row .sr-actions { display: flex; flex-direction: column; gap: 6px; }
+.btn-sm { padding: 6px 10px; font-size: 0.75rem; border-radius: 8px; }
+.btn-success { background: var(--accent); color: #fff; border: none; }
+.modal .btn-danger { background: var(--danger); color: #fff; border: none; }
+.admin-textarea {
+    width: 100%; padding: 8px 10px; border:  ‌1px solid var(--border); border-radius: 10px;
+    font-size:  ‌0.85rem; background: var(--surface); color: var(--text); box-sizing: border-box; resize: vertical;
+}
+.admin-empty {
+    background: var(--surface); border: 1px dashed var(--border); border-radius: 14px;
+    padding: 20px; text-align: center; font-size: 0.88rem; color: var(--muted); margin-top: 8px;
+}
+.ac-chip.live { background: var(--accent-soft); color: var(--accent); }
