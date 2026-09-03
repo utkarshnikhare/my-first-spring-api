@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="SocioMart Seller — manage your kitchen, offerings, and orders.">
+    <meta name="theme-color" content="#16A34A">
+    <title>SocioMart Seller — Aarti's Kitchen</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%2316A34A'/><text x='50' y='68' font-size='52' text-anchor='middle'>👩‍🍳</text></svg>">
+    <link rel="stylesheet" href="/css/styles.css?v=10">
+    <link rel="stylesheet" href="/css/seller.css?v=1">
+</head>
+<body>
+    <!-- Seller App: 5-tab persistent bottom navigation -->
+    <nav class="bottom-nav seller-nav" id="bottomNav" aria-label="Seller navigation">
+        <a href="#/home" data-nav="home" class="nav-item active">
+            <span class="nav-icon" aria-hidden="true">🏠</span>
+            <span class="nav-label">Home</span>
+        </a>
+        <a href="#/kitchen" data-nav="kitchen" class="nav-item">
+            <span class="nav-icon" aria-hidden="true">🏪</span>
+            <span class="nav-label">Kitchen</span>
+        </a>
+        <a href="#/orders" data-nav="orders" class="nav-item">
+            <span class="nav-icon" aria-hidden="true">📋</span>
+            <span class="nav-label">Orders</span>
+        </a>
+        <a href="#/history" data-nav="history" class="nav-item">
+            <span class="nav-icon" aria-hidden="true">🔄</span>
+            <span class="nav-label">History</span>
+        </a>
+        <a href="#/earnings" data-nav="earnings" class="nav-item">
+            <span class="nav-icon" aria-hidden="true">💰</span>
+            <span class="nav-label">Earnings</span>
+        </a>
+    </nav>
+
+    <main id="view" class="view seller-view" aria-live="polite">
+        <div class="page-loading">
+            <div class="spinner" role="status" aria-label="Loading"></div>
+        </div>
+    </main>
+
+    <div id="modalRoot" class="modal-root" hidden></div>
+    <div id="sheetRoot" class="sheet-root" hidden></div>
+    <div id="toastRoot" class="toast-root" aria-live="assertive"></div>
+
+    <script src="/js/config.js"></script>
+    <script src="/js/common.js"></script>
+    <script src="/js/seller.js?v=1"></script>
+</body>
+</html>
+
