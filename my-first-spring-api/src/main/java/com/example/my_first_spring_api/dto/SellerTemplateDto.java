@@ -1,14 +1,28 @@
 package com.example.my_first_spring_api.dto;
 
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+
 import java.math.BigDecimal;
 
 public class SellerTemplateDto {
     private Long id;
+
+    @NotBlank(message = "Template name is required")
     private String name;
+
     private String description;
+
+    @NotNull(message = "Price is required")
+    @DecimalMin(value = "0.01", message = "Price must be greater than 0")
     private BigDecimal price;
+
     private String priceUnit;
     private String imageUrl;
+
+    @Positive(message = "Max quantity must be at least 1 (leave empty for unlimited)")
     private Integer maxQuantity;
     private String cutoffTime;
     private String readyByTime;

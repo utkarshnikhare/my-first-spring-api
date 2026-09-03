@@ -8,6 +8,7 @@ import com.example.my_first_spring_api.exception.OrderNotFoundException;
 import com.example.my_first_spring_api.exception.OtpVerificationException;
 import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
+import com.example.my_first_spring_api.exception.TemplateNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -41,7 +42,8 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errors, HttpStatus.BAD_REQUEST);
     }
 
-    @ExceptionHandler({OrderNotFoundException.class, ProductNotFoundException.class, KitchenNotFoundException.class})
+    @ExceptionHandler({OrderNotFoundException.class, ProductNotFoundException.class,
+            KitchenNotFoundException.class, TemplateNotFoundException.class})
     public ResponseEntity<ApiErrorDto> handleNotFound(RuntimeException ex) {
         return new ResponseEntity<>(new ApiErrorDto("NOT_FOUND", ex.getMessage(), 404), HttpStatus.NOT_FOUND);
     }

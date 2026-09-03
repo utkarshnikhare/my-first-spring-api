@@ -4,6 +4,7 @@ import com.example.my_first_spring_api.dto.*;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
+import com.example.my_first_spring_api.exception.TemplateNotFoundException;
 import com.example.my_first_spring_api.model.Category;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Order;
@@ -27,6 +28,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +64,7 @@ public class SellerAppService {
 
     // ==================== INVENTORY CONTROL ====================
 
+    @Transactional
     public ProductDto updateInventory(Long productId, int delta, User seller) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
@@ -69,12 +72,18 @@ public class SellerAppService {
             throw new SellerNotAuthorizedException("Not your product");
         if (product.getRemainingQuantity() == null)
             throw new IllegalArgumentException("This item has no quantity limit");
-        int newQty = product.getRemainingQuantity() + delta;
-        if (newQty < 0) throw new IllegalArgumentException("Quantity cannot be negative");
-        product.setRemainingQuantity(newQty);
-        return toProductDto(productRepository.save(product));
+        // Atomic UPDATE: guards live in the SQL, so concurrent stepper clicks can
+        // never lose an increment, go below 0, or exceed the advertised maximum.
+        int updated = productRepository.adjustRemainingQuantity(productId, delta);
+        if (updated == 0)
+            throw new IllegalArgumentException(
+                    "Adjustment rejected: quantity cannot go below 0 or above the maximum available");
+        Product fresh = productRepository.findById(productId)
+                .orElseThrow(() -> new ProductNotFoundException(productId));
+        return toProductDto(fresh);
     }
 
+    @Transactional
     public ProductDto markSoldOut(Long productId, User seller) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
@@ -83,12 +92,8 @@ public class SellerAppService {
         product.setRemainingQuantity(0);
         return toProductDto(productRepository.save(product));
     }
+    @Transactional
     public SellerTemplateDto addTemplate(User seller, SellerTemplateDto dto) {
-        long count = sellerTemplateRepository.countBySeller(seller);
-        if (count >= 3) {
-            throw new IllegalStateException(
-                    "Maximum 3 favourite templates allowed. Remove an existing favourite to save a new one.");
-        }
         SellerTemplate template = new SellerTemplate();
         template.setSeller(seller);
         template.setName(dto.getName());
@@ -101,8 +106,21 @@ public class SellerAppService {
         template.setReadyByTime(dto.getReadyByTime());
         template.setOrderWindowStart(dto.getOrderWindowStart());
         template.setOrderWindowEnd(dto.getOrderWindowEnd());
-        if (dto.getCategory() != null) {
-            template.setCategory(Category.valueOf(dto.getCategory()));
+        if (dto.getCategory() != null && !dto.getCategory().isBlank()) {
+            try {
+                template.setCategory(Category.valueOf(dto.getCategory().trim().toUpperCase()));
+            } catch (IllegalArgumentException ex) {
+                String allowed = Arrays.stream(Category.values())
+                        .map(Enum::name).collect(Collectors.joining(", "));
+                throw new IllegalArgumentException("Invalid category '" + dto.getCategory()
+                        + "'. Allowed values: " + allowed);
+            }
+        }
+        // Cap enforced AFTER input validation so sellers see their real error first.
+        long count = sellerTemplateRepository.countBySeller(seller);
+        if (count >= 3) {
+            throw new IllegalStateException(
+                    "Maximum 3 favourite templates allowed. Remove an existing favourite to save a new one.");
         }
         SellerTemplate saved = sellerTemplateRepository.save(template);
         return toSellerTemplateDto(saved);
@@ -115,18 +133,20 @@ public class SellerAppService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional
     public void deleteTemplate(Long templateId, User seller) {
         SellerTemplate template = sellerTemplateRepository.findById(templateId)
-                .orElseThrow(() -> new RuntimeException("Template not found with id: " + templateId));
+                .orElseThrow(() -> new TemplateNotFoundException(templateId));
         if (!template.getSeller().getId().equals(seller.getId()))
             throw new SellerNotAuthorizedException("Not your template");
         sellerTemplateRepository.delete(template);
     }
 
     /** Creates a NEW independent Product from a saved template (Template Independence rule). */
+    @Transactional
     public ProductDto createProductFromTemplate(Long templateId, LocalDate date, User seller) {
         SellerTemplate template = sellerTemplateRepository.findById(templateId)
-                .orElseThrow(() -> new RuntimeException("Template not found with id: " + templateId));
+                .orElseThrow(() -> new TemplateNotFoundException(templateId));
         if (!template.getSeller().getId().equals(seller.getId()))
             throw new SellerNotAuthorizedException("Not your template");
         Kitchen kitchen = getOwnedKitchen(seller);
@@ -162,14 +182,17 @@ public class SellerAppService {
                 Pattern.CASE_INSENSITIVE);
         Matcher qtyMatcher = qtyPattern.matcher(text);
         if (qtyMatcher.find()) {
-            result.setMaxQuantity(Integer.parseInt(qtyMatcher.group(1)));
-            String unit = qtyMatcher.group(2).toLowerCase();
-            if (unit.contains("plate") || unit.contains("por"))
-                result.setPriceUnit("Per Plate");
-            else if (unit.contains("piece"))
-                result.setPriceUnit("Per Piece");
-            else if (unit.contains("box"))
-                result.setPriceUnit("Per Box");
+            int qty = Integer.parseInt(qtyMatcher.group(1));
+            if (qty > 0) {
+                result.setMaxQuantity(qty);
+                String unit = qtyMatcher.group(2).toLowerCase();
+                if (unit.contains("plate") || unit.contains("por"))
+                    result.setPriceUnit("Per Plate");
+                else if (unit.contains("piece"))
+                    result.setPriceUnit("Per Piece");
+                else if (unit.contains("box"))
+                    result.setPriceUnit("Per Box");
+            }
         }
 
         // Extract cutoff / last-order time
@@ -189,9 +212,10 @@ public class SellerAppService {
             result.setCutoffTime(String.format("%02d:%02d", hour, min));
         }
 
-        // Extract name — text before the first price marker, last non-empty line
+        // Extract name — text before the actual price match (regex position, so
+        // "Rs" inside words like "thursday" can never truncate the name)
         if (result.getPrice() != null) {
-            int priceIdx = indexOfAny(text, "\u20B9", "Rs", "rs", "INR", "inr");
+            int priceIdx = priceMatcher.start();
             if (priceIdx > 0) {
                 String beforePrice = text.substring(0, priceIdx).trim();
                 List<String> lines = beforePrice.lines()
@@ -226,8 +250,8 @@ public class SellerAppService {
     public List<ProductDto> getRecentOfferings(User seller) {
         Kitchen kitchen = getOwnedKitchen(seller);
         LocalDateTime twoDaysAgo = LocalDateTime.now().minusDays(2);
-        return productRepository.findByKitchen(kitchen).stream()
-                .filter(p -> p.getCreatedAt() != null && p.getCreatedAt().isAfter(twoDaysAgo))
+        return productRepository
+                .findByKitchenAndCreatedAtAfterOrderByCreatedAtDesc(kitchen, twoDaysAgo).stream()
                 .map(this::toProductDto)
                 .collect(Collectors.toList());
     }
@@ -236,6 +260,7 @@ public class SellerAppService {
      * Creates brand-new independent products from existing offerings (Template Independence rule:
      * originals are never mutated — only cloned).
      */
+    @Transactional
     public List<ProductDto> batchRepublish(List<Long> productIds, LocalDate date, User seller) {
         Kitchen kitchen = getOwnedKitchen(seller);
         List<ProductDto> result = new ArrayList<>();
@@ -259,18 +284,22 @@ public class SellerAppService {
         dto.setKitchenId(kitchen.getId());
         dto.setKitchenName(kitchen.getDisplayName());
 
-        List<Order> allOrders = orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen);
-        dto.setTotalOrders(allOrders.size());
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+
+        // Month-scoped fetch with items eagerly loaded (avoids N+1 and unbounded growth);
+        // the all-time order count comes from a cheap COUNT query.
+        List<Order> allOrders = orderRepository
+                .findByKitchenAndCreatedAtAfterWithItems(kitchen, startOfMonth);
+        dto.setTotalOrders((int) orderRepository.countByKitchen(kitchen));
         dto.setFollowers((int) favouriteRepository.countByKitchen(kitchen));
         dto.setViewsToday((int) analyticsEventRepository
                 .countByEventTypeAndKitchenIdAndCreatedAtAfter(AnalyticsService.EV_MENU_VIEW, kitchen.getId(),
-                        LocalDate.now().atStartOfDay()));
+                        startOfDay));
 
         List<Product> products = productRepository.findByKitchen(kitchen);
         dto.setOfferings(products.stream().map(this::toProductDto).collect(Collectors.toList()));
 
-        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-        LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
         BigDecimal confirmedToday = BigDecimal.ZERO;
         BigDecimal pendingToday = BigDecimal.ZERO;
         BigDecimal monthRevenue = BigDecimal.ZERO;
@@ -301,7 +330,7 @@ public class SellerAppService {
         LocalDateTime start = date.atStartOfDay();
         LocalDateTime end = date.plusDays(1).atStartOfDay();
         List<Order> orders = orderRepository
-                .findByKitchenAndCreatedAtBetweenOrderByCreatedAtDesc(kitchen, start, end);
+                .findByKitchenAndCreatedAtBetweenWithItems(kitchen, start, end);
 
         SellerOrderSummaryDto dto = new SellerOrderSummaryDto();
         int paidCount = 0, pendingCount = 0, cancelledCount = 0;
@@ -367,7 +396,7 @@ public class SellerAppService {
         LocalDateTime start = date.atStartOfDay();
         LocalDateTime end = date.plusDays(1).atStartOfDay();
         List<Order> orders = orderRepository
-                .findByKitchenAndCreatedAtBetweenOrderByCreatedAtDesc(kitchen, start, end);
+                .findByKitchenAndCreatedAtBetweenWithItems(kitchen, start, end);
 
         OrderItemDetailDto dto = new OrderItemDetailDto();
         dto.setProductId(productId);
@@ -434,11 +463,12 @@ public class SellerAppService {
     @Transactional(readOnly = true)
     public SellerEarningsDto getEarnings(User seller) {
         Kitchen kitchen = getOwnedKitchen(seller);
-        List<Order> allOrders = orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen);
+        LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        List<Order> allOrders = orderRepository
+                .findByKitchenAndCreatedAtAfterWithItems(kitchen, startOfMonth);
 
         SellerEarningsDto dto = new SellerEarningsDto();
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-        LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
         BigDecimal confirmedToday = BigDecimal.ZERO;
         BigDecimal pending = BigDecimal.ZERO;
         BigDecimal thisMonth = BigDecimal.ZERO;
@@ -496,17 +526,6 @@ public class SellerAppService {
         List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
         if (kitchens.isEmpty()) throw new KitchenNotFoundException((Long) null);
         return kitchens.get(0);
-    }
-
-    /** First occurrence index of any marker in text, or -1 when none match. */
-    private int indexOfAny(String text, String... markers) {
-        int best = -1;
-        for (String marker : markers) {
-            if (marker == null || marker.isEmpty()) continue;
-            int idx = text.indexOf(marker);
-            if (idx >= 0 && (best == -1 || idx < best)) best = idx;
-        }
-        return best;
     }
 
     private ProductDto toProductDto(Product product) {
@@ -591,7 +610,7 @@ public class SellerAppService {
         clone.setCategory(original.getCategory());
         clone.setCutoffTime(original.getCutoffTime());
         clone.setReadyByTime(original.getReadyByTime());
-                clone.setPreorderType(original.getPreorderType());
+        clone.setPreorderType(original.getPreorderType());
         clone.setAvailableUntilDate(original.getAvailableUntilDate());
         clone.setTimeSlots(original.getTimeSlots());
         clone.setBookedQuantity(0);
