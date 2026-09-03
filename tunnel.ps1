@@ -34,6 +34,10 @@ function Start-App {
 }
 
 function Start-Tunnel {
+    # Never allow orphan cloudflared to race a new tunnel: quick-tunnel URLs
+    # change on every recreate, and two processes would fight over the log.
+    Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force
+    Start-Sleep -Seconds 2
     if (Test-Path $tlog) { Remove-Item $tlog -Force -ErrorAction SilentlyContinue }
     Write-Output ("[{0}] starting cloudflared quick tunnel ..." -f (Get-Date -Format 'HH:mm:ss'))
     Start-Process -FilePath $cf `

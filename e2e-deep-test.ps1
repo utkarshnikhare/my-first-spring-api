@@ -1,6 +1,7 @@
 # SocioMart Seller App — comprehensive E2E deep-test suite
+param([string]$TargetBase = 'http://localhost:8081')
 $ErrorActionPreference = 'Stop'
-$Base = 'http://localhost:8081'
+$Base = $TargetBase
 $script:pass = 0
 $script:fail = 0
 function Check($name, $cond, $detail) {
