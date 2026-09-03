@@ -9,8 +9,11 @@ target/
 *.txt
 *.ps1
 
-# Local environment overrides (never commit)
-.env
+# Local binaries / tooling (cloudflared etc.) - never commit executables
+tools/
+projectmy-first-spring-api/
+*.exe
 
-# Allow the committed one-command runner (everything else *.ps1 stays ignored)
+# Allow the committed one-command runners (everything else *.ps1 stays ignored)
 !start.ps1
+!tunnel.ps1

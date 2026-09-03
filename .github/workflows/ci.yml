@@ -1,0 +1,32 @@
+name: CI Build Verification
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Build (clean compile, zero warnings tolerated on errors)
+        working-directory: my-first-spring-api
+        run: mvn -B -DskipTests clean compile
+
+      - name: Verify build artifact
+        working-directory: my-first-spring-api
+        run: |
+          if [ ! -d target/classes ]; then echo "Build produced no classes" && exit 1; fi
+          echo "Build OK: classes compiled"
