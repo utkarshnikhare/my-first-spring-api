@@ -17,6 +17,8 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEvent, 
 
     long countByCreatedAtAfter(LocalDateTime after);
 
+    long countByEventTypeAndKitchenIdAndCreatedAtAfter(String eventType, Long kitchenId, LocalDateTime after);
+
     @Query("select a.eventType, count(a) from AnalyticsEvent a group by a.eventType")
     List<Object[]> countGroupedByType();
 

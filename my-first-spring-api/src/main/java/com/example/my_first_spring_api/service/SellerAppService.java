@@ -13,6 +13,7 @@ import com.example.my_first_spring_api.model.PaymentStatus;
 import com.example.my_first_spring_api.model.Product;
 import com.example.my_first_spring_api.model.SellerTemplate;
 import com.example.my_first_spring_api.model.User;
+import com.example.my_first_spring_api.repository.AnalyticsEventRepository;
 import com.example.my_first_spring_api.repository.FavouriteRepository;
 import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.OrderRepository;
@@ -42,18 +43,21 @@ public class SellerAppService {
     private final OrderRepository orderRepository;
     private final SellerTemplateRepository sellerTemplateRepository;
     private final FavouriteRepository favouriteRepository;
+    private final AnalyticsEventRepository analyticsEventRepository;
 
     @Autowired
     public SellerAppService(KitchenRepository kitchenRepository,
                             ProductRepository productRepository,
                             OrderRepository orderRepository,
                             SellerTemplateRepository sellerTemplateRepository,
-                            FavouriteRepository favouriteRepository) {
+                            FavouriteRepository favouriteRepository,
+                            AnalyticsEventRepository analyticsEventRepository) {
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
         this.orderRepository = orderRepository;
         this.sellerTemplateRepository = sellerTemplateRepository;
         this.favouriteRepository = favouriteRepository;
+        this.analyticsEventRepository = analyticsEventRepository;
     }
 
     // ==================== INVENTORY CONTROL ====================
@@ -104,6 +108,13 @@ public class SellerAppService {
         return toSellerTemplateDto(saved);
     }
 
+    @Transactional(readOnly = true)
+    public List<SellerTemplateDto> getTemplates(User seller) {
+        return sellerTemplateRepository.findBySellerOrderByCreatedAtDesc(seller).stream()
+                .map(this::toSellerTemplateDto)
+                .collect(Collectors.toList());
+    }
+
     public void deleteTemplate(Long templateId, User seller) {
         SellerTemplate template = sellerTemplateRepository.findById(templateId)
                 .orElseThrow(() -> new RuntimeException("Template not found with id: " + templateId));
@@ -120,7 +131,7 @@ public class SellerAppService {
             throw new SellerNotAuthorizedException("Not your template");
         Kitchen kitchen = getOwnedKitchen(seller);
         Product product = templateToProduct(template, kitchen, date);
-        return productRepository.save(product);
+        return toProductDto(productRepository.save(product));
     }
     // ==================== QUICK POST PARSING (SCREEN 4) ====================
 
@@ -180,7 +191,7 @@ public class SellerAppService {
 
         // Extract name — text before the first price marker, last non-empty line
         if (result.getPrice() != null) {
-                        int priceIdx = indexOfAny(text, "\u20B9", "Rs", "rs", "INR", "inr");
+            int priceIdx = indexOfAny(text, "\u20B9", "Rs", "rs", "INR", "inr");
             if (priceIdx > 0) {
                 String beforePrice = text.substring(0, priceIdx).trim();
                 List<String> lines = beforePrice.lines()
@@ -251,7 +262,9 @@ public class SellerAppService {
         List<Order> allOrders = orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen);
         dto.setTotalOrders(allOrders.size());
         dto.setFollowers((int) favouriteRepository.countByKitchen(kitchen));
-        dto.setViewsToday(37 + allOrders.size() * 2);
+        dto.setViewsToday((int) analyticsEventRepository
+                .countByEventTypeAndKitchenIdAndCreatedAtAfter(AnalyticsService.EV_MENU_VIEW, kitchen.getId(),
+                        LocalDate.now().atStartOfDay()));
 
         List<Product> products = productRepository.findByKitchen(kitchen);
         dto.setOfferings(products.stream().map(this::toProductDto).collect(Collectors.toList()));
@@ -263,6 +276,7 @@ public class SellerAppService {
         BigDecimal monthRevenue = BigDecimal.ZERO;
 
         for (Order o : allOrders) {
+            if (o.getOrderStatus() == OrderStatus.CANCELLED) continue;
             BigDecimal amt = o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO;
             if (o.getCreatedAt().isAfter(startOfMonth) && o.getPaymentStatus() == PaymentStatus.PAID)
                 monthRevenue = monthRevenue.add(amt);
@@ -274,8 +288,8 @@ public class SellerAppService {
             }
         }
         dto.setConfirmedToday(confirmedToday);
-        dto.setPending(pendingToday;
-        dto.setThisMonth(monthRevenue;
+        dto.setPending(pendingToday);
+        dto.setThisMonth(monthRevenue);
         return dto;
 
     }
@@ -296,11 +310,14 @@ public class SellerAppService {
         Map<Long, SellerOrderSummaryDto.ProductOrderAggregate> productAgg = new LinkedHashMap<>();
 
         for (Order order : orders) {
-            BigDecimal amt = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
-            totalRevenue = totalRevenue.add(amt);
+            if (order.getOrderStatus() == OrderStatus.CANCELLED) {
+                cancelledCount++;
+                continue; // cancelled orders never count towards revenue or item aggregates
+            }
             if (order.getPaymentStatus() == PaymentStatus.PAID) paidCount++;
             else if (order.getPaymentStatus() == PaymentStatus.PENDING) pendingCount++;
-            if (order.getOrderStatus() == OrderStatus.CANCELLED) cancelledCount++;
+            BigDecimal amt = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
+            totalRevenue = totalRevenue.add(amt);
 
             for (OrderItem item : order.getItems()) {
                 Product product = item.getProduct();
@@ -330,9 +347,9 @@ public class SellerAppService {
 
         dto.setTotalOrderCount(orders.size());
         dto.setPaidCount(paidCount);
-        dto.setPendingCount(pendingCount;
-        dto.setCancelledCount(cancelledCount;
-        dto.setTotalRevenue(totalRevenue;
+        dto.setPendingCount(pendingCount);
+        dto.setCancelledCount(cancelledCount);
+        dto.setTotalRevenue(totalRevenue);
         dto.setProducts(new ArrayList<>(productAgg.values()));
         return dto;
 
@@ -374,14 +391,17 @@ public class SellerAppService {
                 }
             }
             if (qtyForProduct > 0) {
-                totalPlates += qtyForProduct;
-                totalRevenue = totalRevenue.add(itemRevenue);
                 boolean paid = order.getPaymentStatus() == PaymentStatus.PAID;
                 boolean cancelled = order.getOrderStatus() == OrderStatus.CANCELLED;
-                if (paid) paidCount++;
-                else if (order.getPaymentStatus() == PaymentStatus.PENDING) pendingCount++;
-                if (cancelled) cancelledCount++;
-
+                if (cancelled) {
+                    cancelledCount++;
+                } else {
+                    if (paid) paidCount++;
+                    else if (order.getPaymentStatus() == PaymentStatus.PENDING) pendingCount++;
+                    // cancelled portions are never counted as fulfilled plates/revenue
+                    totalPlates += qtyForProduct;
+                    totalRevenue = totalRevenue.add(itemRevenue);
+                }
                 OrderItemDetailDto.CustomerOrderRow row = new OrderItemDetailDto.CustomerOrderRow();
                 row.setOrderId(order.getId());
                 row.setOrderNumber(order.getOrderNumber());
@@ -402,9 +422,9 @@ public class SellerAppService {
 
         dto.setTotalRevenue(totalRevenue);
         dto.setTotalPlates(totalPlates);
-        dto.setPaidCount(paidCount;
-        dto.setPendingCount(pendingCount;
-        dto.setCancelledCount(cancelledCount;
+        dto.setPaidCount(paidCount);
+        dto.setPendingCount(pendingCount);
+        dto.setCancelledCount(cancelledCount);
         dto.setCustomers(rows);
         return dto;
 
@@ -426,6 +446,7 @@ public class SellerAppService {
         Map<Long, SellerEarningsDto.ItemEarning> itemMap = new LinkedHashMap<>();
 
         for (Order order : allOrders) {
+            if (order.getOrderStatus() == OrderStatus.CANCELLED) continue;
             BigDecimal amt = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
             boolean isToday = order.getCreatedAt().isAfter(startOfDay);
             boolean isThisMonth = order.getCreatedAt().isAfter(startOfMonth);
@@ -475,6 +496,17 @@ public class SellerAppService {
         List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
         if (kitchens.isEmpty()) throw new KitchenNotFoundException((Long) null);
         return kitchens.get(0);
+    }
+
+    /** First occurrence index of any marker in text, or -1 when none match. */
+    private int indexOfAny(String text, String... markers) {
+        int best = -1;
+        for (String marker : markers) {
+            if (marker == null || marker.isEmpty()) continue;
+            int idx = text.indexOf(marker);
+            if (idx >= 0 && (best == -1 || idx < best)) best = idx;
+        }
+        return best;
     }
 
     private ProductDto toProductDto(Product product) {

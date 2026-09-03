@@ -56,6 +56,11 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(new ApiErrorDto("FORBIDDEN", ex.getMessage(), 403), HttpStatus.FORBIDDEN);
     }
 
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiErrorDto> handleConflict(IllegalStateException ex) {
+        return new ResponseEntity<>(new ApiErrorDto("CONFLICT", ex.getMessage(), 409), HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler({OtpVerificationException.class, InvalidKitchenSelectionException.class, IllegalArgumentException.class})
     public ResponseEntity<ApiErrorDto> handleBadRequest(RuntimeException ex) {
         logger.warn("Bad request: {}", ex.getMessage());
