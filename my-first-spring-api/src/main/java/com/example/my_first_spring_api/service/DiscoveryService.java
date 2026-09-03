@@ -7,7 +7,6 @@ import com.example.my_first_spring_api.dto.DiscoveryDtos.KitchenCard;
 import com.example.my_first_spring_api.dto.DiscoveryDtos.KitchenCounts;
 import com.example.my_first_spring_api.model.Category;
 import com.example.my_first_spring_api.model.Kitchen;
-import com.example.my_first_spring_api.model.Order;
 import com.example.my_first_spring_api.model.OrderStatus;
 import com.example.my_first_spring_api.model.Product;
 import com.example.my_first_spring_api.model.User;
@@ -118,7 +117,7 @@ public class DiscoveryService {
                 .map(k -> toCard(k, byKitchen.getOrDefault(k.getId(), List.of()), ordered))
                 .sorted(Comparator
                         .comparing((KitchenCard c) -> "LIVE_NOW".equals(c.getStatus()) ? 0 : 1)
-                        .thenComparing(KitchenCard::getDisplayName))
+                        .thenComparing(c -> c.getDisplayName()))
                 .collect(Collectors.toList());
     }
 
@@ -144,7 +143,7 @@ public class DiscoveryService {
         card.setOrderableItemCount((int) items.stream().filter(DiscoveryService::orderableToday).count());
         card.setItemNames(items.stream()
                 .filter(p -> orderableToday(p) || openPreorder(p))
-                .map(Product::getName)
+                .map(p -> p.getName())
                 .distinct()
                 .limit(6)
                 .collect(Collectors.toList()));
@@ -158,7 +157,7 @@ public class DiscoveryService {
     public List<CategoryTile> getCategoryTiles() {
         Map<Category, Long> counts = visibleProducts().stream()
                 .filter(p -> p.getCategory() != null && !p.isSoldOut())
-                .collect(Collectors.groupingBy(Product::getCategory, Collectors.counting()));
+                .collect(Collectors.groupingBy(p -> p.getCategory(), Collectors.counting()));
         List<CategoryTile> tiles = new ArrayList<>();
         tiles.add(new CategoryTile("BREAKFAST", "Breakfast", "🌅", counts.getOrDefault(Category.BREAKFAST, 0L)));
         tiles.add(new CategoryTile("LUNCH", "Lunch", "🍛", counts.getOrDefault(Category.LUNCH, 0L)));
@@ -173,7 +172,7 @@ public class DiscoveryService {
         Map<String, List<Product>> byName = visibleProducts().stream()
                 .filter(p -> !p.isSoldOut())
                 .filter(p -> category == null || p.getCategory() == category)
-                .collect(Collectors.groupingBy(Product::getName, LinkedHashMap::new, Collectors.toList()));
+                .collect(Collectors.groupingBy(p -> p.getName(), LinkedHashMap::new, Collectors.toList()));
 
         return byName.entrySet().stream()
                 .map(e -> {
@@ -186,7 +185,7 @@ public class DiscoveryService {
                     g.setKitchenIds(e.getValue().stream().map(p -> p.getKitchen().getId()).distinct().collect(Collectors.toList()));
                     return g;
                 })
-                .sorted(Comparator.comparing(ItemGroup::getName))
+                .sorted(Comparator.comparing(g -> g.getName()))
                 .collect(Collectors.toList());
     }
 
@@ -199,7 +198,7 @@ public class DiscoveryService {
         Set<Long> ordered = buyerKitchenIds(buyer);
         return byKitchen.entrySet().stream()
                 .map(e -> toCard(e.getValue().get(0).getKitchen(), e.getValue(), ordered))
-                .sorted(Comparator.comparing(KitchenCard::getDisplayName))
+                .sorted(Comparator.comparing(c -> c.getDisplayName()))
                 .collect(Collectors.toList());
     }
 

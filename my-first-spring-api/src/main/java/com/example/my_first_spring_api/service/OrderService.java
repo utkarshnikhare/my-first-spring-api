@@ -172,7 +172,7 @@ public class OrderService {
     private List<String> parseSlots(String timeSlots) {
         if (timeSlots == null || timeSlots.isBlank()) return List.of();
         return java.util.Arrays.stream(timeSlots.split(","))
-                .map(String::trim)
+                .map(s -> s.trim())
                 .filter(s -> !s.isEmpty())
                 .collect(Collectors.toList());
     }

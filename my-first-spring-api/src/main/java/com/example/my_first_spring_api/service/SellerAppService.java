@@ -111,7 +111,7 @@ public class SellerAppService {
                 template.setCategory(Category.valueOf(dto.getCategory().trim().toUpperCase()));
             } catch (IllegalArgumentException ex) {
                 String allowed = Arrays.stream(Category.values())
-                        .map(Enum::name).collect(Collectors.joining(", "));
+                        .map(c -> c.name()).collect(Collectors.joining(", "));
                 throw new IllegalArgumentException("Invalid category '" + dto.getCategory()
                         + "'. Allowed values: " + allowed);
             }
@@ -219,7 +219,7 @@ public class SellerAppService {
             if (priceIdx > 0) {
                 String beforePrice = text.substring(0, priceIdx).trim();
                 List<String> lines = beforePrice.lines()
-                        .map(String::trim)
+                        .map(l -> l.trim())
                         .filter(l -> !l.isEmpty())
                         .collect(Collectors.toList());
                 for (int i = lines.size() - 1; i >= 0; i--) {

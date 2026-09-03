@@ -95,7 +95,7 @@ public class SellerAppController {
     public ResponseEntity<List<ProductDto>> batchRepublish(@RequestBody Map<String, Object> body, HttpSession session) {
         @SuppressWarnings("unchecked")
         List<Number> ids = (List<Number>) body.getOrDefault("productIds", List.of());
-        List<Long> productIds = ids.stream().map(Number::longValue).toList();
+        List<Long> productIds = ids.stream().filter(java.util.Objects::nonNull).map(n -> n.longValue()).toList();
         String dateStr = (String) body.get("availableDate");
         LocalDate date = dateStr != null ? LocalDate.parse(dateStr) : LocalDate.now();
         return ResponseEntity.ok(sellerAppService.batchRepublish(productIds, date, requireSeller(session)));

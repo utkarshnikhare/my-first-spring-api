@@ -118,7 +118,7 @@ public class FeatureService {
         FeatureFlag flag = featureFlagRepository.findByFeatureKey(featureKey).orElse(null);
         Integer platformDefault = flag != null ? flag.getLimitValue() : null;
         return grantRepository.findBySellerIdAndFeatureKey(seller.getId(), featureKey)
-                .map(SellerFeatureGrant::getLimitOverride)
+                .map(g -> g.getLimitOverride())
                 .orElse(platformDefault);
     }
 
@@ -158,6 +158,6 @@ public class FeatureService {
     @Transactional(readOnly = true)
     public Map<String, FeatureFlag> flagsByKey() {
         return featureFlagRepository.findAll().stream()
-                .collect(Collectors.toMap(FeatureFlag::getFeatureKey, Function.identity()));
+                .collect(Collectors.toMap(f -> f.getFeatureKey(), Function.identity()));
     }
 }
