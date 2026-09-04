@@ -7,14 +7,14 @@
 .info-box { background: var(--blue-soft); border: 1px solid var(--blue); border-radius: 12px; padding: 12px; font-size: 0.8rem; color: var(--blue); margin: 14px 0; }
 
 /* Orders */
-.date-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
-.date-tab { padding: 8px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); font-weight: 700; font-size: 0.82rem; cursor: pointer; color: var(--muted); }
+.date-tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.date-tab { padding: 8px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); font-weight: 700; font-size: 0.82rem; cursor: pointer; color: var(--muted); white-space: nowrap; }
 .date-tab.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .daily-total-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 16px; text-align: center; margin-bottom: 16px; }
 .daily-total-card .dtc-number { font-size: 2.2rem; font-weight: 800; color: var(--accent); }
 .daily-total-card .dtc-label { font-size: 0.82rem; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
-.dtc-badges { display: flex; justify-content: center; gap: 10px; }
-.dtc-badge { font-size: 0.72rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; }
+.dtc-badges { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.dtc-badge { font-size: 0.72rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; white-space: nowrap; }
 .dtc-badge.green { background: var(--accent-soft); color: var(--accent); }
 .dtc-badge.orange { background: var(--amber-soft); color: var(--amber); }
 .dtc-badge.red { background: var(--danger-soft); color: var(--danger); }
@@ -28,17 +28,44 @@
 .drilldown-header { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 14px; box-shadow: var(--shadow); }
 .drilldown-header h3 { font-size: 1rem; margin-bottom: 6px; }
 .drilldown-header .dd-stats { font-size: 0.82rem; color: var(--muted); }
-.sort-select { padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.82rem; font-weight: 600; margin-bottom: 10px; background: var(--surface); color: var(--text); }
-.customer-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; }
+.sort-select { padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.82rem; font-weight: 600; margin-bottom: 10px; background: var(--surface); color: var(--text); max-width: 100%; }
+.customer-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; min-width: 0; }
 .customer-row .status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .customer-row .status-dot.green { background: var(--accent); }
 .customer-row .status-dot.orange { background: var(--amber); }
 .customer-row .status-dot.red { background: var(--danger); }
-.customer-row .cr-body { flex: 1; }
-.customer-row .cr-name { font-weight: 700; font-size: 0.85rem; }
-.customer-row .cr-loc { font-size: 0.75rem; color: var(--muted); }
-.customer-row .cr-qty { font-weight: 800; font-size: 0.88rem; }
-.customer-row.cancelled { opacity: 0.5; text-decoration: line-through; }
+.customer-row .cr-body { flex: 1; min-width: 0; }
+.customer-row .cr-name { font-weight: 700; font-size: 0.85rem; overflow-wrap: anywhere; }
+.customer-row .cr-loc { font-size: 0.75rem; color: var(--muted); overflow-wrap: anywhere; }
+.customer-row .cr-qty { font-weight: 800; font-size: 0.88rem; flex-shrink: 0; }
+.customer-count { font-size: 0.78rem; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+.odc-buyer-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+.odc-buyer { font-weight: 700; font-size: 0.92rem; }
+.odc-qty { font-weight: 800; font-size: 0.88rem; color: var(--accent); white-space: nowrap; }
+.dot-green { color: var(--accent); }
+.dot-orange { color: var(--amber); }
+.dot-red { color: var(--danger); }
+.filter-row { margin-bottom: 10px; }
+
+/* Enhanced order detail card */
+.order-detail-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 10px; box-shadow: var(--shadow); }
+.order-detail-card.cancelled { opacity: 0.5; }
+.odc-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 10px; min-width: 0; }
+.odc-order-id { font-weight: 800; font-size: 0.85rem; color: var(--accent); overflow-wrap: anywhere; }
+.odc-status-pill { font-size: 0.68rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
+.odc-status-pill.paid { background: var(--accent-soft); color: var(--accent); }
+.odc-status-pill.pending { background: var(--amber-soft); color: var(--amber); }
+.odc-status-pill.cancelled { background: var(--danger-soft); color: var(--danger); }
+.odc-buyer { font-weight: 700; font-size: 0.9rem; margin-bottom: 2px; overflow-wrap: anywhere; }
+.odc-mobile { font-size: 0.75rem; color: var(--muted); margin-bottom: 6px; }
+.odc-items { background: var(--brand-soft); border-radius: 10px; padding: 10px; margin-bottom: 8px; }
+.odc-item-name { font-weight: 800; font-size: 0.88rem; overflow-wrap: anywhere; }
+.odc-item-meta { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+.odc-item-total { font-weight: 800; font-size: 0.85rem; color: var(--accent); margin-top: 4px; }
+.odc-address { font-size: 0.78rem; color: var(--muted); margin-bottom: 6px; line-height: 1.4; }
+.odc-address strong { color: var(--text); }
+.odc-remark { font-size: 0.78rem; font-style: italic; color: var(--muted); border-top: 1px solid var(--border); padding-top: 6px; margin-top: 6px; overflow-wrap: anywhere; }
+.odc-remark:empty { display: none; }
 
 /* Earnings */
 .earnings-header-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 18px; text-align: center; margin-bottom: 18px; }
@@ -332,10 +359,12 @@
 .oc-header, .oc-controls, .oc-time-row, .stepper,
 .seller-header, .section-head, .date-tabs, .modal-actions,
 .dtc-badges, .sdh-top-row, .ep-row, .parse-field,
-.history-card, .offering-card { min-width: 0; }
+.history-card, .offering-card,
+.order-detail-card, .odc-top, .odc-buyer-row, .customer-row { min-width: 0; }
 .oc-name, .oc-stats, .oc-time-row, .history-name, .pathway-title,
-.metric-label, .metric-value, .item-name, .item-sub { overflow-wrap: anywhere; word-break: break-word; }
-.badge, .oc-badge, .pill, .status-pill, .metric-badge { flex-shrink: 0; }
+.metric-label, .metric-value, .item-name, .item-sub,
+.odc-order-id, .odc-buyer, .odc-item-name, .cr-name { overflow-wrap: anywhere; word-break: break-word; }
+.badge, .oc-badge, .pill, .status-pill, .metric-badge, .odc-status-pill, .odc-qty { flex-shrink: 0; }
 
 
 

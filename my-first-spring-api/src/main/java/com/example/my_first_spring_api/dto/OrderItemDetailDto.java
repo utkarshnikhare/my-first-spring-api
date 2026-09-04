@@ -22,11 +22,17 @@ public class OrderItemDetailDto {
         private Long orderId;
         private String orderNumber;
         private int quantity;
+        private String unit;
+        private BigDecimal pricePerUnit;
+        private BigDecimal totalAmount;
         private String buyerName;
+        private String buyerMobile;
         private String buyerFlat;
+        private String building;
         private String society;
         private boolean paid;
         private boolean cancelled;
+        private String orderStatus;
         private String remark;
 
         public Long getOrderId() { return orderId; }
@@ -35,16 +41,28 @@ public class OrderItemDetailDto {
         public void setOrderNumber(String orderNumber) { this.orderNumber = orderNumber; }
         public int getQuantity() { return quantity; }
         public void setQuantity(int quantity) { this.quantity = quantity; }
+        public String getUnit() { return unit; }
+        public void setUnit(String unit) { this.unit = unit; }
+        public BigDecimal getPricePerUnit() { return pricePerUnit; }
+        public void setPricePerUnit(BigDecimal pricePerUnit) { this.pricePerUnit = pricePerUnit; }
+        public BigDecimal getTotalAmount() { return totalAmount; }
+        public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
         public String getBuyerName() { return buyerName; }
         public void setBuyerName(String buyerName) { this.buyerName = buyerName; }
+        public String getBuyerMobile() { return buyerMobile; }
+        public void setBuyerMobile(String buyerMobile) { this.buyerMobile = buyerMobile; }
         public String getBuyerFlat() { return buyerFlat; }
         public void setBuyerFlat(String buyerFlat) { this.buyerFlat = buyerFlat; }
+        public String getBuilding() { return building; }
+        public void setBuilding(String building) { this.building = building; }
         public String getSociety() { return society; }
         public void setSociety(String society) { this.society = society; }
         public boolean isPaid() { return paid; }
         public void setPaid(boolean paid) { this.paid = paid; }
         public boolean isCancelled() { return cancelled; }
         public void setCancelled(boolean cancelled) { this.cancelled = cancelled; }
+        public String getOrderStatus() { return orderStatus; }
+        public void setOrderStatus(String orderStatus) { this.orderStatus = orderStatus; }
         public String getRemark() { return remark; }
         public void setRemark(String remark) { this.remark = remark; }
     }

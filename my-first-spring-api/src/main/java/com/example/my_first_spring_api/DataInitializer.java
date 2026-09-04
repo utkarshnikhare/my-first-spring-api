@@ -36,6 +36,6 @@ public class DataInitializer implements CommandLineRunner {
         adminService.ensureBootstrapAccounts();
         adminService.approveLegacySellers();
         featureService.ensureDefaults();
-        demoDataSeeder.seedIfEmpty();
+        demoDataSeeder.seedAll();
     }
 }

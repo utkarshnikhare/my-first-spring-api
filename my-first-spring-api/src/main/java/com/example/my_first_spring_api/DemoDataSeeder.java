@@ -2,7 +2,10 @@ package com.example.my_first_spring_api;
 
 import com.example.my_first_spring_api.model.Category;
 import com.example.my_first_spring_api.model.Kitchen;
-
+import com.example.my_first_spring_api.model.Order;
+import com.example.my_first_spring_api.model.OrderItem;
+import com.example.my_first_spring_api.model.OrderStatus;
+import com.example.my_first_spring_api.model.PaymentStatus;
 import com.example.my_first_spring_api.model.PlatformSetting;
 import com.example.my_first_spring_api.model.PreorderType;
 import com.example.my_first_spring_api.model.Product;
@@ -34,19 +37,31 @@ import java.util.Map;
 public class DemoDataSeeder {
 
     private static final String DEMO_SEED_FLAG = "demo_data_seeded";
+    private static final String DEMO_BUYERS_FLAG = "demo_buyers_seeded";
+    private static final String DEMO_ORDERS_FLAG = "demo_orders_seeded";
 
     private final UserRepository userRepository;
     private final KitchenRepository kitchenRepository;
     private final ProductRepository productRepository;
     private final PlatformSettingRepository platformSettingRepository;
+    private final com.example.my_first_spring_api.repository.OrderRepository orderRepository;
 
     @Autowired
     public DemoDataSeeder(UserRepository userRepository, KitchenRepository kitchenRepository,
-                           ProductRepository productRepository, PlatformSettingRepository platformSettingRepository) {
+                           ProductRepository productRepository, PlatformSettingRepository platformSettingRepository,
+                           com.example.my_first_spring_api.repository.OrderRepository orderRepository) {
         this.userRepository = userRepository;
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
         this.platformSettingRepository = platformSettingRepository;
+        this.orderRepository = orderRepository;
+    }
+
+    /** Idempotent entry point called from DataInitializer on every startup. */
+    public void seedAll() {
+        seedIfEmpty();
+        seedBuyersIfEmpty();
+        seedOrdersIfEmpty();
     }
 
     @Transactional
@@ -211,6 +226,88 @@ public class DemoDataSeeder {
         product(kMulti, "Gulab Jamun", "Warm milk-solid dumplings in rose-cardamom syrup", 50, "plate", 30, 20, 4.6);
 
         platformSettingRepository.save(new PlatformSetting(DEMO_SEED_FLAG, "true"));
+    }
+
+    // ==================== DEMO BUYERS ====================
+
+    public void seedBuyersIfEmpty() {
+        if (platformSettingRepository.findBySettingKey(DEMO_BUYERS_FLAG).isPresent()) return;
+        seedBuyer("Aarav Mehta", "9876500001", "A-402", "Green Valley Residency", "A Wing");
+        seedBuyer("Priya Sharma", "9876500002", "B-105", "Green Valley Residency", "B Wing");
+        seedBuyer("Rahul Joshi", "9876500003", "C-303", "Lakeview Heights", "Tower 2");
+        seedBuyer("Neha Patil", "9876500004", "D-201", "Sunrise Enclave", "Building C");
+        seedBuyer("Rohan Desai", "9876500005", "A-101", "Palm Residency", "Tower 1");
+        seedBuyer("Sneha Kulkarni", "9876500006", "B-505", "Shree Ganesh Society", "A Wing");
+        seedBuyer("Ananya Shah", "9876500007", "C-404", "Harmony Towers", "Tower 3");
+        seedBuyer("Karan Verma", "9876500008", "A-301", "Maple Heights", "Block A");
+        seedBuyer("Meera Iyer", "9876500009", "D-102", "Sai Darshan Apartments", "Building B");
+        seedBuyer("Vikram Rao", "9876500010", "B-202", "Royal Orchid Residency", "Tower 2");
+        seedBuyer("Ishaan Gupta", "9876500011", "A-501", "Green Valley Residency", "C Wing");
+        seedBuyer("Diya Nair", "9876500012", "C-101", "Lakeview Heights", "Tower 1");
+        seedBuyer("Amit Tiwari", "9876500013", "D-303", "Sunrise Enclave", "Building A");
+        seedBuyer("Pooja Reddy", "9876500014", "B-401", "Palm Residency", "Tower 3");
+        seedBuyer("Nikhil Jain", "9876500015", "A-202", "Harmony Towers", "Tower 1");
+        platformSettingRepository.save(new PlatformSetting(DEMO_BUYERS_FLAG, "true"));
+    }
+
+    private User seedBuyer(String name, String mobile, String flat, String society, String building) {
+        User b = userRepository.findByMobileNumber(mobile).orElse(null);
+        if (b == null) {
+            b = new User(name, mobile, flat, UserRole.BUYER);
+        }
+        b.setSociety(society);
+        b.setBuilding(building);
+        return userRepository.save(b);
+    }
+
+    // ==================== DEMO ORDERS ====================
+
+    public void seedOrdersIfEmpty() {
+        if (platformSettingRepository.findBySettingKey(DEMO_ORDERS_FLAG).isPresent()) return;
+        java.util.List<User> sellers = userRepository.findAll().stream()
+                .filter(u -> u.getRole() == UserRole.SELLER && u.getSellerApprovalStatus() == SellerApprovalStatus.APPROVED)
+                .collect(java.util.stream.Collectors.toList());
+        for (User s : sellers) {
+            seedOrdersForSeller(s, true);
+            seedOrdersForSeller(s, false);
+        }
+        platformSettingRepository.save(new PlatformSetting(DEMO_ORDERS_FLAG, "true"));
+    }
+
+    private void seedOrdersForSeller(User seller, boolean today) {
+        java.util.List<Kitchen> kits = kitchenRepository.findBySeller(seller);
+        if (kits.isEmpty()) return;
+        Kitchen k = kits.get(0);
+        java.util.List<Product> products = productRepository.findByKitchen(k);
+        if (products.isEmpty()) return;
+        String[] mobiles = {"9876500001","9876500002","9876500003","9876500004","9876500005"};
+        String[] remarks = {"Less spicy please","Extra chutney","","Ring bell twice","No onions"};
+        for (int i = 0; i < Math.min(products.size(), 4); i++) {
+            User buyer = userRepository.findByMobileNumber(mobiles[i % mobiles.length]).orElse(null);
+            if (buyer == null) continue;
+            int qty = (i % 3) + 1;
+            String pay = (i % 3 == 0) ? "PAID" : (i % 3 == 1) ? "PENDING" : "PAID";
+            String ord = (i == 3 && !today) ? "CANCELLED" : (pay.equals("PAID") ? "CONFIRMED" : "ORDERED");
+            createOrder(buyer, products.get(i), qty, pay, ord, remarks[i], today);
+        }
+    }
+
+    private Order createOrder(User buyer, Product p, int qty, String payStatus, String ordStatus, String remark, boolean today) {
+        Order o = new Order(buyer, p.getKitchen());
+        o.setOrderStatus(OrderStatus.valueOf(ordStatus));
+        o.setPaymentStatus(PaymentStatus.valueOf(payStatus));
+        o.setCustomInstructions(remark.isBlank() ? null : remark);
+        o.setOrderNumber("SM-" + (1000 + (int)(Math.random() * 8999)));
+        o = orderRepository.save(o);
+        OrderItem item = new OrderItem(p, qty, p.getPrice());
+        o.addItem(item);
+        o.recalculateTotal();
+        LocalDateTime ts = today
+                ? LocalDateTime.now().minusMinutes(5L + (long)(Math.random() * 230))
+                : LocalDateTime.now().minusDays(1).minusMinutes((long)(Math.random() * 360));
+        o.setCreatedAt(ts);
+        o.setUpdatedAt(ts);
+        return orderRepository.save(o);
     }
 
     private User seller(String name, String mobile, String flat, SellerApprovalStatus status, String society, String building) {

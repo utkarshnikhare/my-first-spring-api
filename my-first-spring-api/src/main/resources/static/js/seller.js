@@ -33,7 +33,11 @@ function greeting() { var h = new Date().getHours(); return h < 12 ? 'Good morni
 function offeringStatusBadge(p) { return p.soldOut ? '<span class="oc-badge soldout">SOLD OUT</span>' : '<span class="oc-badge live">LIVE</span>'; }
 function statusDot(paid, cancelled) { return cancelled ? '<span class="status-dot red"></span>' : paid ? '<span class="status-dot green"></span>' : '<span class="status-dot orange"></span>'; }
 function localDateStr(d) { var y = d.getFullYear(), m = ('0' + (d.getMonth() + 1)).slice(-2), day = ('0' + d.getDate()).slice(-2); return y + '-' + m + '-' + day; }
-function sellerDate(dateKey) { return dateKey === 'tomorrow' ? localDateStr(new Date(Date.now() + 864e5)) : localDateStr(new Date()); }
+function sellerDate(dateKey) {
+    if (dateKey === 'tomorrow') return localDateStr(new Date(Date.now() + 864e5));
+    if (dateKey && dateKey !== 'today' && dateKey !== 'pick') return dateKey; // already a YYYY-MM-DD string
+    return localDateStr(new Date());
+}
 
 // SCREEN 2: ADD OFFERING ENTRY POINT
 async function sellerAddView() {
@@ -135,16 +139,23 @@ async function sellerCreateView() {
 // SCREEN 7A: ORDER SUMMARY
 async function sellerOrdersView() {
     var h = '<div class="view-enter"><div class="page-head"><h1>Orders</h1></div>';
-    h += '<div class="date-tabs"><button class="date-tab active" data-action="set-date" data-date="today">Today</button><button class="date-tab" data-action="set-date" data-date="tomorrow">Tomorrow</button></div>';
+    h += '<div class="date-tabs"><button class="date-tab' + (S.selectedDate === 'today' ? ' active' : '') + '" data-action="set-date" data-date="today">Today</button><button class="date-tab' + (S.selectedDate === 'tomorrow' ? ' active' : '') + '" data-action="set-date" data-date="tomorrow">Tomorrow</button><button class="date-tab' + (S.selectedDate !== 'today' && S.selectedDate !== 'tomorrow' ? ' active' : '') + '" data-action="set-date" data-date="pick">Pick date</button></div>';
     try {
         var summary = await api('/api/seller-app/orders/summary?date=' + sellerDate(S.selectedDate));
-        h += '<div class="daily-total-card"><div class="dtc-number">' + summary.totalOrderCount + '</div><div class="dtc-label">Total Orders</div><div class="dtc-badges">';
-        h += '<span class="dtc-badge green">Green ' + summary.paidCount + ' Paid</span>';
-        h += '<span class="dtc-badge orange">Orange ' + summary.pendingCount + ' Pending</span>';
-        h += '<span class="dtc-badge red">Red ' + summary.cancelledCount + ' Cancelled</span></div></div>';
-        if (!summary.products || summary.products.length === 0) { h += emptyHtml('Orders', 'No orders', 'Orders for this date appear here.'); }
-        else { summary.products.forEach(function (p) { h += '<div class="order-product-card"><div class="opc-header"><span class="opc-name">' + esc(p.productName) + '</span><span class="opc-revenue">' + money(p.revenue) + '</span></div><div class="opc-meta">' + p.totalOrders + ' orders . ' + p.totalPlates + ' plates</div><a class="btn btn-secondary btn-sm btn-block" style="margin-top:8px" href="#/order-detail/' + p.productId + '">View Orders</a></div>'; }); }
-    } catch (e) { h += emptyHtml('Warn', 'Could not load orders', e.message); }
+        h += '<div class="daily-total-card"><div class="dtc-number">' + summary.totalOrderCount + '</div><div class="dtc-label">Total Orders</div>';
+        h += '<div class="dtc-badges"><span class="dtc-badge green">✓ ' + summary.paidCount + ' Paid</span><span class="dtc-badge orange">⏳ ' + summary.pendingCount + ' Pending</span><span class="dtc-badge red">✕ ' + summary.cancelledCount + ' Cancelled</span></div>';
+        if (summary.totalRevenue) { h += '<div style="margin-top:10px;font-size:0.82rem;color:var(--muted)">Revenue: <strong style="color:var(--accent)">' + money(summary.totalRevenue) + '</strong></div>'; }
+        h += '</div>';
+        if (!summary.products || summary.products.length === 0) { h += emptyHtml('📋', 'No orders', 'Orders for this date will appear here.'); }
+        else {
+            summary.products.forEach(function (p) {
+                h += '<div class="order-product-card"><div class="opc-header"><span class="opc-name">' + esc(p.productName) + '</span><span class="opc-revenue">' + money(p.revenue) + '</span></div>';
+                h += '<div class="opc-meta">' + p.totalOrders + ' orders · ' + p.totalPlates + ' plates</div>';
+                h += '<div class="opc-meta"><span class="dot-green">●</span> ' + p.paidCount + ' paid · <span class="dot-orange">●</span> ' + p.pendingCount + ' pending</div>';
+                h += '<a class="btn btn-secondary btn-sm btn-block" style="margin-top:8px" href="#/order-detail/' + p.productId + '">View Orders</a></div>';
+            });
+        }
+    } catch (e) { h += emptyHtml('⚠️', 'Could not load orders', e.message); }
     h += '</div>';
     return h;
 }
@@ -186,15 +197,45 @@ async function sellerEarningsView() {
 
 // SCREEN 7B: ORDER DRILL-DOWN
 async function sellerOrderDetailView(productId) {
-    var h = '<div class="view-enter"><div class="page-head"><h1>Order Details</h1></div>';
+    S.selectedSort = S.selectedSort || 'all';
+    var h = '<div class="view-enter">';
+    h += '<div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button><h2 style="flex:1">Order Details</h2></div>';
+    h += '<div class="date-tabs"><button class="date-tab' + (S.selectedDate === 'today' ? ' active' : '') + '" data-action="set-date" data-date="today">Today</button><button class="date-tab' + (S.selectedDate === 'tomorrow' ? ' active' : '') + '" data-action="set-date" data-date="tomorrow">Tomorrow</button><button class="date-tab' + (S.selectedDate !== 'today' && S.selectedDate !== 'tomorrow' ? ' active' : '') + '" data-action="set-date" data-date="pick">Pick date</button></div>';
+    if (S.selectedDate === 'pick') { h += '<div style="margin-bottom:12px"><input type="date" class="sort-select" data-action="set-date-calendar" value="' + sellerDate(S.selectedDate) + '" style="width:100%"></div>'; }
     try {
         var detail = await api('/api/seller-app/orders/product/' + productId + '?date=' + sellerDate(S.selectedDate));
         h += '<div class="drilldown-header"><h3>' + esc(detail.productName) + '</h3>';
-        h += '<div class="dd-stats">Revenue: <strong>' + money(detail.totalRevenue) + '</strong> . Plates: <strong>' + detail.totalPlates + '</strong></div>';
-        h += '<div class="dd-stats"><span class="dtc-badge green">Paid: ' + detail.paidCount + '</span> <span class="dtc-badge orange">Pending: ' + detail.pendingCount + '</span> <span class="dtc-badge red">Cancelled: ' + detail.cancelledCount + '</span></div></div>';
-        h += '<select class="sort-select" id="sortSelect" data-action="set-sort"><option value="all">All</option><option value="paid">Paid Only</option><option value="unpaid">Unpaid Only</option></select>';
-        if (!detail.customers || detail.customers.length === 0) { h += emptyHtml('Cust', 'No customer orders', 'Individual orders appear here.'); }
-        else { detail.customers.forEach(function (c) { h += '<div class="' + (c.cancelled ? 'customer-row cancelled' : 'customer-row') + '">' + statusDot(c.paid, c.cancelled) + '<span class="cr-body"><span class="cr-name">' + esc(c.buyerName) + '</span><span class="cr-loc">' + esc([c.society, c.buyerFlat].filter(Boolean).join(', ')) + '</span></span><span class="cr-qty">x' + c.quantity + '</span></div>'; }); }
+        h += '<div class="dd-stats">Revenue: <strong>' + money(detail.totalRevenue) + '</strong> · Plates: <strong>' + detail.totalPlates + '</strong></div>';
+        h += '<div class="dd-badges"><span class="dtc-badge green">Paid: ' + detail.paidCount + '</span> <span class="dtc-badge orange">Pending: ' + detail.pendingCount + '</span> <span class="dtc-badge red">Cancelled: ' + detail.cancelledCount + '</span></div></div>';
+        h += '<select class="sort-select" data-action="set-detail-sort"><option value="all"' + (S.selectedSort === 'all' ? ' selected' : '') + '>All Customers</option><option value="paid"' + (S.selectedSort === 'paid' ? ' selected' : '') + '>Paid Only</option><option value="pending"' + (S.selectedSort === 'pending' ? ' selected' : '') + '>Pending Only</option><option value="cancelled"' + (S.selectedSort === 'cancelled' ? ' selected' : '') + '>Cancelled Only</option></select>';
+        var customers = (detail.customers || []).slice();
+        if (S.selectedSort === 'paid') customers = customers.filter(function (c) { return c.paid; });
+        else if (S.selectedSort === 'pending') customers = customers.filter(function (c) { return !c.paid && !c.cancelled; });
+        else if (S.selectedSort === 'cancelled') customers = customers.filter(function (c) { return c.cancelled; });
+        if (customers.length === 0) { h += emptyHtml('📋', 'No customer orders', 'No orders match this filter.'); }
+        else {
+            h += '<div class="customer-count">' + customers.length + ' customer' + (customers.length !== 1 ? 's' : '') + '</div>';
+            customers.forEach(function (c) {
+                var statusClass = c.cancelled ? 'cancelled' : (c.paid ? 'paid' : 'pending');
+                var statusLabel = c.cancelled ? 'Cancelled' : (c.paid ? 'Paid' : 'Pending');
+                h += '<div class="order-detail-card ' + (c.cancelled ? 'cancelled' : '') + '">';
+                h += '<div class="odc-top"><span class="odc-order-id">#' + esc(c.orderNumber || ('SM-' + c.orderId)) + '</span><span class="odc-status-pill ' + statusClass + '">' + statusLabel + '</span></div>';
+                h += '<div class="odc-buyer-row"><span class="odc-buyer">' + esc(c.buyerName || 'Unknown') + '</span><span class="odc-qty">×' + c.quantity + ' ' + esc(c.unit || 'plate') + (c.quantity > 1 ? 's' : '') + '</span></div>';
+                if (c.buyerMobile) { h += '<div class="odc-mobile">📱 ' + esc(c.buyerMobile) + '</div>'; }
+                h += '<div class="odc-items"><div class="odc-item-name">' + esc(detail.productName) + '</div>';
+                if (c.pricePerUnit) { h += '<div class="odc-item-meta">' + money(c.pricePerUnit) + ' × ' + c.quantity + '</div>'; }
+                if (c.totalAmount) { h += '<div class="odc-item-total">Total: ' + money(c.totalAmount) + '</div>'; }
+                h += '</div>';
+                var addrParts = [];
+                if (c.society) addrParts.push(c.society);
+                if (c.building) addrParts.push(c.building);
+                if (c.buyerFlat) addrParts.push(c.buyerFlat);
+                if (addrParts.length > 0) { h += '<div class="odc-address">📍 ' + esc(addrParts.join(', ')) + '</div>'; }
+                if (c.orderStatus) { h += '<div class="odc-address"><strong>Order Status:</strong> ' + esc(c.orderStatus) + '</div>'; }
+                if (c.remark) { h += '<div class="odc-remark">"' + esc(c.remark) + '"</div>'; }
+                h += '</div>';
+            });
+        }
     } catch (e) { h += emptyHtml('Warn', 'Could not load details', e.message); }
     h += '</div>';
     return h;
@@ -281,7 +322,9 @@ document.addEventListener('click', async function (e) {
             }
             case 'set-view-mode': S.viewMode = t.dataset.mode; await sellerRender(); break;
             case 'set-date': S.selectedDate = t.dataset.date; await sellerRender(); break;
+            case 'set-date-calendar': S.selectedDate = t.value; await sellerRender(); break;
             case 'set-sort': S.sortFilter = t.value; break;
+            case 'set-detail-sort': S.selectedSort = t.value; await sellerRender(); break;
             case 'parse-message': {
                 var msg = $('#qpMessage').value;
                 if (!msg.trim()) { toast('Please paste a message first', 'error'); return; }

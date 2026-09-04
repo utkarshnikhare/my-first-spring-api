@@ -705,6 +705,10 @@ select, textarea, input { max-width: 100%; }
 
     /* Sheets: full-width bottom sheets with internal scrolling */
     .sheet { width: 100%; max-height: 88dvh; }
+
+    /* Order detail cards: single column grid on phones */
+    .odc-grid { grid-template-columns: 1fr; }
+    .odc-top-row, .odc-buyer-row { flex-wrap: wrap; }
 }
 
 /* ---------- Small phones (≤360px): tighten without shrinking type ---------- */
@@ -766,8 +770,38 @@ select, textarea, input { max-width: 100%; }
 .fav-chip, .cat-tile, .kc-actions, .oc-controls,
 .summary-item, .receipt-line, .order-card, .oc-top-row,
 .si-top, .qty-counter, .modal-actions, .form-actions,
-.card, .order-card, .fav-list-item { min-width: 0; }
+.card, .order-card, .fav-list-item, .odc-buyer-row,
+.odc-order-card, .odc-grid, .customer-row,
+.drilldown-header, .order-product-card { min-width: 0; }
 .si-name, .fli-name, .kc-name, .cat-tile span,
-.order-card .si-name, .receipt-line span, .oc-desc { overflow-wrap: anywhere; word-break: break-word; }
-.pill, .badge, .oc-badge, .qty-btn { flex-shrink: 0; }
+.order-card .si-name, .receipt-line span, .oc-desc,
+.odc-buyer, .odc-food, .odc-amount, .opc-name,
+.dd-stats, .customer-count { overflow-wrap: anywhere; word-break: break-word; }
+.pill, .badge, .oc-badge, .qty-btn, .odc-qty,
+.odc-badge { flex-shrink: 0; }
+
+/* Order detail cards (Buyer My Orders detail + Seller drill-down) */
+.odc-order-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 14px; margin-bottom: 10px; }
+.odc-order-card.cancelled { opacity: 0.6; }
+.odc-order-card.cancelled .odc-buyer-row:first-child { text-decoration: line-through; }
+.odc-top-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
+.odc-order-id { font-weight: 700; font-size: 0.85rem; color: var(--accent); }
+.odc-date { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+.odc-buyer-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.odc-buyer { font-weight: 700; font-size: 0.92rem; }
+.odc-qty { font-weight: 800; font-size: 0.88rem; color: var(--accent); white-space: nowrap; }
+.odc-food { font-size: 0.85rem; color: var(--text); }
+.odc-amount { font-weight: 800; font-size: 0.9rem; }
+.odc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; font-size: 0.78rem; }
+.odc-grid > div { background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+.odc-grid .odc-label { color: var(--muted); font-weight: 600; font-size: 0.68rem; text-transform: uppercase; }
+.odc-grid .odc-value { font-weight: 700; margin-top: 2px; }
+.odc-remark { background: var(--bg); border-radius: 8px; padding: 8px 10px; margin-top: 8px; font-size: 0.8rem; color: var(--muted); font-style: italic; }
+.odc-badge { display: inline-block; padding: 3px 8px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; }
+.odc-badge.paid { background: var(--accent-soft); color: var(--accent); }
+.odc-badge.pending { background: var(--amber-soft); color: var(--amber); }
+.odc-badge.cancelled { background: var(--danger-soft); color: var(--danger); }
+.dot-green { color: var(--accent); }
+.dot-orange { color: var(--amber); }
+.dot-red { color: var(--danger); }
 

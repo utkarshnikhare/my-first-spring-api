@@ -411,6 +411,7 @@ public class SellerAppService {
         for (Order order : orders) {
             int qtyForProduct = 0;
             BigDecimal itemRevenue = BigDecimal.ZERO;
+            OrderItem matchedItem = null;
             for (OrderItem item : order.getItems()) {
                 if (item.getProduct().getId().equals(productId)) {
                     qtyForProduct += (item.getQuantity() != null ? item.getQuantity() : 0);
@@ -418,6 +419,7 @@ public class SellerAppService {
                             ? item.getPrice().multiply(BigDecimal.valueOf(
                                     item.getQuantity() != null ? item.getQuantity() : 0))
                             : BigDecimal.ZERO);
+                    if (matchedItem == null) matchedItem = item;
                 }
             }
             if (qtyForProduct > 0) {
@@ -436,15 +438,24 @@ public class SellerAppService {
                 row.setOrderId(order.getId());
                 row.setOrderNumber(order.getOrderNumber());
                 row.setQuantity(qtyForProduct);
+                row.setUnit(product.getPriceUnit());
+                row.setPricePerUnit(matchedItem != null ? matchedItem.getPrice() : null);
+                BigDecimal lineTotal = matchedItem != null && matchedItem.getPrice() != null
+                        ? matchedItem.getPrice().multiply(BigDecimal.valueOf(qtyForProduct))
+                        : itemRevenue;
+                row.setTotalAmount(lineTotal);
                 if (order.getBuyer() != null) {
                     row.setBuyerName(order.getBuyer().getName());
+                    row.setBuyerMobile(order.getBuyer().getMobileNumber());
                     row.setBuyerFlat(order.getBuyer().getFlatHouseNumber());
+                    row.setBuilding(order.getBuyer().getBuilding());
                     row.setSociety(order.getBuyer().getSociety());
                 } else {
                     row.setBuyerName("Unknown");
                 }
                 row.setPaid(paid);
                 row.setCancelled(cancelled);
+                row.setOrderStatus(order.getOrderStatus() != null ? order.getOrderStatus().name() : null);
                 row.setRemark(order.getCustomInstructions());
                 rows.add(row);
             }

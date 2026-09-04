@@ -865,21 +865,27 @@ async function ordersView() {
                     h += emptyHtml('🗂️', 'Nothing in "' + filter + '"', 'Try another filter to see your orders.');
                 } else {
                     h += list.map(function (o) {
-                        var inner = '<a class="order-card" href="#/order/' + o.id + '" style="display:block; text-decoration:none; color:inherit">' +
-                            '<div class="oc-top-row">' +
-                            '<div><div class="si-name">#' + esc(o.orderNumber) + '</div>' +
-                            '<p class="si-sub">🏪 ' + esc(o.kitchen ? o.kitchen.displayName : '') + ' · ' +
-                            new Date(o.createdAt).toLocaleDateString() + '</p></div>' +
-                            (ORDER_BADGES[o.orderStatus] || '') + '</div>';
-                        (o.items || []).forEach(function (it) {
-                            inner += '<div class="receipt-line"><span>' + esc(it.productName) + ' × ' + it.quantity + '</span><span>' + money(it.price * it.quantity) + '</span></div>';
-                        });
-                        inner += '<div class="receipt-line" style="font-weight:800"><span>Total</span><span>' + money(o.totalAmount) + '</span></div>' +
-                            '<div style="display:flex; gap:8px; margin-top:8px">' +
-                            (o.paymentStatus === 'PAID' ? '<span class="pill pill-green">💰 PAID (Demo)</span>' : '<span class="pill pill-amber">💰 Payment pending</span>') +
-                            '</div>' +
+                        var cancelled = o.orderStatus === 'CANCELLED';
+                        var paid = o.paymentStatus === 'PAID';
+                        var badgeClass = cancelled ? 'cancelled' : (paid ? 'paid' : 'pending');
+                        var badgeText = cancelled ? 'Cancelled' : (paid ? 'Paid' : 'Pending');
+                        var itemLines = (o.items || []).map(function (it) {
+                            return '<div class="odc-buyer-row"><span class="odc-food">' + esc(it.productName) + '</span><span class="odc-qty">×' + it.quantity + ' · ' + money(it.price * it.quantity) + '</span></div>';
+                        }).join('');
+                        var orderDate = new Date(o.createdAt);
+                        var grid = '<div class="odc-grid">' +
+                            '<div><div class="odc-label">Kitchen</div><div class="odc-value">' + esc(o.kitchen ? o.kitchen.displayName : '—') + '</div></div>' +
+                            '<div><div class="odc-label">Order Date</div><div class="odc-value">' + orderDate.toLocaleDateString() + ' · ' + orderDate.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) + '</div></div>' +
+                            '<div><div class="odc-label">Order Status</div><div class="odc-value">' + (ORDER_BADGES[o.orderStatus] || o.orderStatus) + '</div></div>' +
+                            '<div><div class="odc-label">Total</div><div class="odc-value">' + money(o.totalAmount) + '</div></div>' +
+                            '</div>';
+                        var remark = o.customInstructions ? '<div class="odc-remark">📝 ' + esc(o.customInstructions) + '</div>' : '';
+                        return '<a class="odc-order-card ' + (cancelled ? 'cancelled' : '') + '" href="#/order/' + o.id + '" style="display:block; text-decoration:none; color:inherit">' +
+                            '<div class="odc-top-row"><span class="odc-order-id">#' + esc(o.orderNumber) + '</span><span class="odc-badge ' + badgeClass + '">' + badgeText + '</span></div>' +
+                            itemLines +
+                            grid +
+                            remark +
                             '<p class="tiny muted" style="margin-top:6px">Tap for details →</p></a>';
-                        return inner;
                     }).join('');
                 }
             }
