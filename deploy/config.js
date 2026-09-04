@@ -8,7 +8,7 @@ const CONFIG = {
      * API Base URL
      * - Development: http://localhost:8081
      * - Production: Set to your deployed server URL
-     * - Served from a tunnel or non-local host: same-origin relative URLs
+     * - Tunnel: Set to your localtunnel/ngrok URL
      */
     API_BASE_URL: (() => {
         // Auto-detect: if served from localhost, use localhost:8081

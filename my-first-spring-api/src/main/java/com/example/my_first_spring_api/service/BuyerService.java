@@ -31,7 +31,7 @@ public class BuyerService {
 
     /**
      * Demo login: authenticates a buyer/seller by mobile number only (no code step).
-     * For client demo so the app opens and operates without OTP.
+     * For client demo so the app opens and operates with a mobile number only.
      */
     @Transactional
     public User demoLoginAndAuthenticate(String mobileNumber, String name, String flatHouseNumber,

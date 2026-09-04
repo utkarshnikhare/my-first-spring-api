@@ -37,7 +37,7 @@ public class AuthController {
 
     /**
      * Demo login: authenticates a buyer/seller by mobile number only (no code step).
-     * For client demo so the app opens and operates without OTP.
+     * For client demo so the app opens and operates with a mobile number only.
      */
     @PostMapping("/demo-login")
     public ResponseEntity<AuthResponseDto> demoLogin(@Valid @RequestBody Map<String, String> body,

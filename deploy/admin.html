@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="SocioMart Admin — Approvals, seller registry, analytics, platform console.">
+    <meta name="theme-color" content="#4F46E5">
+    <title>SocioMart Admin</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%234F46E5'/><text x='50' y='70' font-size='54' text-anchor='middle'>🛡️</text></svg>">
+    <link rel="stylesheet" href="/css/styles.css?v=10">
+    <link rel="stylesheet" href="/css/admin.css?v=1">
+</head>
+<body class="admin-body">
+    <!-- Admin top bar -->
+    <header class="admin-topbar hidden" id="adminTopbar">
+        <div class="admin-brand">🛡️ SocioMart <span>Admin</span></div>
+        <div class="admin-identity">
+            <span class="admin-role-badge" id="adminRoleBadge">ADMIN</span>
+            <span class="admin-identity-name" id="adminName">—</span>
+            <button class="icon-btn" type="button" data-action="logout" title="Logout" aria-label="Logout">⏻</button>
+        </div>
+    </header>
+
+    <!-- Persistent bottom navigation (Super Admin-only tab hides in JS) -->
+    <nav class="bottom-nav admin-nav hidden" id="adminNav" aria-label="Admin navigation">
+        <a href="#/home" data-nav="home" class="nav-item active">
+            <span class="nav-icon" aria-hidden="true">🏠</span>
+            <span class="nav-label">Home</span>
+        </a>
+        <a href="#/pending" data-nav="pending" class="nav-item">
+            <span class="nav-icon" aria-hidden="true">⏳</span>
+            <span class="nav-label">Pending</span>
+        </a>
+        <a href="#/sellers" data-nav="sellers" class="nav-item">
+            <span class="nav-icon" aria-hidden="true">👥</span>
+            <span class="nav-label">Sellers</span>
+        </a>
+        <a href="#/analytics" data-nav="analytics" class="nav-item">
+            <span class="nav-icon" aria-hidden="true">📊</span>
+            <span class="nav-label">Analytics</span>
+        </a>
+        <a href="#/console" data-nav="console" class="nav-item">
+            <span class="nav-icon" aria-hidden="true">⚙️</span>
+            <span class="nav-label">Console</span>
+        </a>
+    </nav>
+
+    <main id="view" class="view admin-view" aria-live="polite">
+        <div class="page-loading">
+            <div class="spinner" role="status" aria-label="Loading"></div>
+        </div>
+    </main>
+
+    <div id="modalRoot" class="modal-root" hidden></div>
+    <div id="sheetRoot" class="sheet-root" hidden></div>
+    <div id="toastRoot" class="toast-root" aria-live="assertive"></div>
+
+    <script src="/js/config.js"></script>
+    <script src="/js/common.js"></script>
+    <script src="/js/admin.js?v=1"></script>
+</body>
+</html>

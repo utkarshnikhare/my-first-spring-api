@@ -1,0 +1,22 @@
+[build]
+  publish = "."
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  force = false
+  conditions = {Role = ["admin"]}
+
+# Handle SPA routing
+[[redirects]]
+  from = "/*"
+  to = "/seller.html"
+  status = 200
+  force = false
+  conditions = {Path = ["!/css/*", "!/js/*", "!/images/*"]}
