@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
-/** OTP-gated buyer enquiries (identity-bound action). */
+/** Session-gated buyer enquiries (identity-bound action). */
 @RestController
 @RequestMapping("/api/enquiries")
 public class EnquiryController {

@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 
 /**
  * A buyer's saved kitchen or food item. Exactly one of kitchen/product is set.
- * Toggling a favourite is an identity-bound action, so it is OTP-gated.
+ * Toggling a favourite is an identity-bound action, so it is session-gated.
  */
 @Entity
 @Table(name = "favourites")

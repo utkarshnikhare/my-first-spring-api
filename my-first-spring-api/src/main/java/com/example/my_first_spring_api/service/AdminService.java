@@ -22,7 +22,7 @@ import java.util.Map;
 @Service
 public class AdminService {
 
-    /** Bootstrap accounts created on first run (login via normal OTP flow). */
+    /** Bootstrap accounts created on first run (login via mobile demo login). */
     public static final String SUPER_ADMIN_MOBILE = "9000000001";
     public static final String ADMIN_MOBILE = "9000000002";
 

@@ -1,9 +1,8 @@
 package com.example.my_first_spring_api.controller;
 
 import com.example.my_first_spring_api.dto.AuthResponseDto;
-import com.example.my_first_spring_api.dto.OtpRequest;
-import com.example.my_first_spring_api.dto.OtpVerifyRequest;
 import com.example.my_first_spring_api.model.User;
+import com.example.my_first_spring_api.model.UserRole;
 import com.example.my_first_spring_api.service.BuyerService;
 import com.example.my_first_spring_api.service.OrderService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -36,29 +35,19 @@ public class AuthController {
         this.securityContextRepository = securityContextRepository;
     }
 
-    @PostMapping("/otp/request")
-    public ResponseEntity<Map<String, String>> requestOtp(@Valid @RequestBody OtpRequest request) {
-        String otp = buyerService.requestOtp(request.getMobileNumber());
-        return ResponseEntity.ok(Map.of(
-                "message", "OTP sent successfully to " + request.getMobileNumber(),
-                "mobileNumber", request.getMobileNumber(),
-                "otp", otp
-        ));
-    }
+    /**
+     * Demo login: authenticates a buyer/seller by mobile number only (no code step).
+     * For client demo so the app opens and operates without OTP.
+     */
+    @PostMapping("/demo-login")
+    public ResponseEntity<AuthResponseDto> demoLogin(@Valid @RequestBody Map<String, String> body,
+                                                      HttpServletRequest request,
+                                                      HttpServletResponse response) {
+        String mobileNumber = body.getOrDefault("mobileNumber", "");
+        String name = body.get("name");
+        String flatHouseNumber = body.get("flatHouseNumber");
 
-    @PostMapping("/otp/verify")
-    public ResponseEntity<AuthResponseDto> verifyOtp(@Valid @RequestBody OtpVerifyRequest request,
-                                                     HttpServletRequest httpRequest,
-                                                     HttpServletResponse httpResponse) {
-        HttpSession oldSession = httpRequest.getSession(false);
-        Object draftOrderId = oldSession != null ? oldSession.getAttribute(OrderService.DRAFT_ORDER_SESSION_KEY) : null;
-        if (oldSession != null) oldSession.invalidate();
-        HttpSession session = httpRequest.getSession(true);
-        if (draftOrderId != null) session.setAttribute(OrderService.DRAFT_ORDER_SESSION_KEY, draftOrderId);
-
-        User buyer = buyerService.verifyOtpAndAuthenticate(
-                request.getMobileNumber(), request.getOtpCode(),
-                request.getName(), request.getFlatHouseNumber(), session);
+        User buyer = buyerService.demoLoginAndAuthenticate(mobileNumber, name, flatHouseNumber, request.getSession(true));
 
         Authentication authentication = new UsernamePasswordAuthenticationToken(
                 buyer.getId(), null,
@@ -66,10 +55,10 @@ public class AuthController {
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
-        securityContextRepository.saveContext(context, httpRequest, httpResponse);
+        securityContextRepository.saveContext(context, request, response);
 
         return ResponseEntity.ok(new AuthResponseDto(
-                true, "Mobile number verified successfully",
+                true, "Logged in successfully",
                 buyer.getId(), buyer.getName(), buyer.getMobileNumber(),
                 buyer.getFlatHouseNumber(), buyer.getRole().name(), buyer.getSellerApprovalStatus()));
     }

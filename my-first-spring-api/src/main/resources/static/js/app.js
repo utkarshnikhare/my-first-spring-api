@@ -146,7 +146,7 @@ async function toggleFavourite(type, id, btnEl) {
             if (!(err instanceof ApiError && err.status === 401)) toast(err.message, 'error');
         }
     };
-    // Deferred login: favourites require identity — open OTP gate when needed.
+    // Deferred login: favourites require identity — open login gate when needed.
     requireAuth(doToggle);
 }
 

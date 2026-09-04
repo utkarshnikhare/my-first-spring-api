@@ -1,9 +1,9 @@
 /**
- * SocioMart Admin App v1.0 — Shell + OTP role gate (Increment A).
+ * SocioMart Admin App v1.0 — Shell + mobile demo-login role gate (Increment A).
  * Screens B (Pending Approvals(, C (Seller Registry(, D (Analytics(, E (Super Console(
  * arrive in subsequent increments; placeholders render until then.
  */
-var A = { me: null, role: null, otpMobile: null };
+var A = { me: null, role: null, loginMobile: null };
 var adminRoutes = {
     '#/home': adminHomeView,
     '#/pending': adminPendingView,
@@ -68,9 +68,9 @@ function renderLoginScreen() {
         '<div class="login-wrap"><div class="admin-login">' +
         '<div class="al-brand">🛡️ SocioMart Admin</div>' +
         '<h2>Admin Sign In</h2>' +
-        '<p class="muted small">Enter your mobile to receive a one-time password. This console accepts ADMIN &amp; SUPER_ADMIN accounts.</p>' +
+        '<p class="muted small">Enter your mobile number to sign in. This console accepts ADMIN &amp; SUPER_ADMIN accounts.</p>' +
         '<div class="form-group"><label for="alMobile">Mobile number</label><input id="alMobile" inputmode="numeric" maxlength="10" placeholder="10-digit mobile" autocomplete="tel"></div>' +
-        '<button class="btn btn-primary btn-block" type="button" data-action="otp-request">Get OTP</button>' +
+        '<button class="btn btn-primary btn-block" type="button" data-action="admin-login">Sign In</button>' +
         '<a class="al-back" href="/index.html">← Back to buyer app</a>' +
         '</div></div>';
 }
@@ -88,30 +88,11 @@ function renderBlockedScreen(role) {
 async function adminAction(action, t) {
     try {
         switch (action) {
-            case 'otp-request':
-            case 'otp-resend': {
-                var mobile = A.otpMobile || ($('#alMobile') ? $('#alMobile').value : '');
+            case 'admin-login': {
+                var mobile = A.loginMobile || ($('#alMobile') ? $('#alMobile').value : '');
                 if (!mobile || !/^[6-9]\d{9}$/.test(mobile)) throw new Error('Enter a valid 10-digit mobile number');
-                A.otpMobile = mobile;
-                var res = await api('/api/auth/otp/request', { method: 'POST', body: { mobileNumber: mobile } });
-                toast('OTP sent to ' + mobile, 'success');
-                viewEl().innerHTML =
-                    '<div class="login-wrap"><div class="admin-login">' +
-                    '<div class="al-brand">🛡️ SocioMart Admin</div>' +
-                    '<h2>Enter OTP</h2>' +
-                    '<div class="al-info">OTP sent to <strong>' + esc(mobile) + '</strong>.' + (res && res.otp ? ' Dev preview: <strong>' + esc(res.otp) + '</strong>' : '') + '</div>' +
-                    '<div class="form-group"><label for="alOtp">4-digit OTP</label><input id="alOtp" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="one-time-code"></div>' +
-                    '<button class="btn btn-primary btn-block" type="button" data-action="otp-verify">Verify &amp; Enter</button>' +
-                    '<button class="btn btn-outline btn-block" type="button" data-action="otp-resend">Resend OTP</button>' +
-                    '<a class="al-back" href="javascript:void(0)" data-action="otp-back">← Change mobile</a>' +
-                    '</div></div>';
-                break;
-            }
-            case 'otp-back': renderLoginScreen(); break;
-            case 'otp-verify': {
-                var otp = $('#alOtp') ? $('#alOtp').value : '';
-                if (!/^\d{4}$/.test(otp)) throw new Error('Enter the 4-digit OTP');
-                var resp = await api('/api/auth/otp/verify', { method: 'POST', body: { mobileNumber: A.otpMobile, otpCode: otp } });
+                A.loginMobile = mobile;
+                var resp = await api('/api/auth/demo-login', { method: 'POST', body: { mobileNumber: mobile } });
                 if (resp && resp.authenticated && (resp.role === 'ADMIN' || resp.role === 'SUPER_ADMIN')) {
                     A.me = resp; A.role = resp.role;
                     showAdminApp();
@@ -122,9 +103,10 @@ async function adminAction(action, t) {
                 }
                 break;
             }
+            case 'login-back': renderLoginScreen(); break;
             case 'logout':
                 await api('/api/auth/logout', { method: 'POST' });
-                A.me = null; A.role = null; A.otpMobile = null;
+                A.me = null; A.role = null; A.loginMobile = null;
                 document.body.classList.remove('admin-authed');
                 location.href = '/index.html';
                 break;
@@ -171,7 +153,7 @@ async function adminHomeView() {
     if (A.role === 'SUPER_ADMIN') {
         h += '<div class="admin-card" data-action="go-tab" data-hash="#/console"><div class="ac-icon">⚙️</div><div class="ac-title">Platform Console</div><div class="ac-desc">Admin accounts, feature flags, seller grants, platform settings.</div><span class="ac-chip next">Screen E — next increment</span></div>';
     }
-    h += '<div class="placeholder-note">Shell + OTP role gate is live (Increment A(. The screens above arrive in the next increments.</div>';
+    h += '<div class="placeholder-note">Shell + mobile demo-login role gate is live (Increment A(. The screens above arrive in the next increments.</div>';
     return h;
 }
 function adminPlaceholderView(title, copy, icon) {

@@ -5,7 +5,6 @@ import com.example.my_first_spring_api.exception.BuyerNotAuthenticatedException;
 import com.example.my_first_spring_api.exception.InvalidKitchenSelectionException;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.exception.OrderNotFoundException;
-import com.example.my_first_spring_api.exception.OtpVerificationException;
 import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.exception.TemplateNotFoundException;
@@ -64,7 +63,7 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(new ApiErrorDto("CONFLICT", ex.getMessage(), 409), HttpStatus.CONFLICT);
     }
 
-    @ExceptionHandler({OtpVerificationException.class, InvalidKitchenSelectionException.class, IllegalArgumentException.class})
+    @ExceptionHandler({InvalidKitchenSelectionException.class, IllegalArgumentException.class})
     public ResponseEntity<ApiErrorDto> handleBadRequest(RuntimeException ex) {
         logger.warn("Bad request: {}", ex.getMessage());
         return new ResponseEntity<>(new ApiErrorDto("BAD_REQUEST", ex.getMessage(), 400), HttpStatus.BAD_REQUEST);

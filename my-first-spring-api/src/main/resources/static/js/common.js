@@ -1,7 +1,7 @@
 /**
  * SocioMart Buyer App v1.0 — Common utilities
  * DOM helpers · API fetcher · single-kitchen cart (Spec 1.2) ·
- * deferred-OTP auth gate (Spec 1.1) · modal & bottom-sheet infra
+ * deferred auth gate (Spec 1.1) · modal & bottom-sheet infra
  */
 
 // ==================== DOM Helpers ====================
@@ -245,11 +245,11 @@ function commitItem(newItem, kitchen) {
     toast('Added to your order from ' + kitchen.displayName, 'success');
 }
 
-// ==================== Deferred OTP Auth Gate (Spec 1.1) ====================
+// ==================== Deferred Auth Gate (Spec 1.1) ====================
 /**
  * Identity-bound actions (place order, toggle favourite, submit enquiry) call
- * requireAuth(). If the buyer is not logged in, the OTP modal opens and the
- * action resumes automatically after successful verification.
+ * requireAuth(). If the buyer is not logged in, the login modal opens and the
+ * action resumes automatically after successful login.
  */
 
 function requireAuth(onAuthenticated) {
@@ -262,55 +262,28 @@ function openAuthModal() {
     openModal(
         '<div class="modal-icon">🔐</div>' +
         '<h3>Login required</h3>' +
-        '<p>Verify your mobile number to continue. You can keep browsing freely.</p>' +
+        '<p>Enter your mobile number to continue. You can keep browsing freely.</p>' +
         '<form id="authForm" style="margin-top:14px; text-align:left">' +
         '<div class="form-group">' +
         '<label class="form-label" for="authMobile">Mobile number</label>' +
         '<input class="form-input" id="authMobile" name="mobileNumber" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" required>' +
         '</div>' +
-        '<div class="form-group" id="authOtpGroup" hidden>' +
-        '<label class="form-label" for="authOtp">OTP</label>' +
-        '<input class="form-input" id="authOtp" name="otpCode" inputmode="numeric" maxlength="4" placeholder="4-digit OTP">' +
-        '<p class="tiny muted" id="authOtpHint" style="margin-top:6px"></p>' +
-        '</div>' +
-        '<button class="btn btn-primary btn-block" type="submit" id="authSubmit">Login with OTP</button>' +
+        '<button class="btn btn-primary btn-block" type="submit" id="authSubmit">Log in</button>' +
         '</form>');
     $('#authForm').addEventListener('submit', function (e) {
         e.preventDefault();
-        if ($('#authOtpGroup').hidden) handleAuthRequest();
-        else handleAuthVerify();
+        handleAuthLogin();
     });
 }
 
-async function handleAuthRequest() {
+async function handleAuthLogin() {
     var mobile = $('#authMobile').value.trim();
     if (!/^\d{10}$/.test(mobile)) { toast('Enter a valid 10-digit mobile number', 'error'); return; }
     var btn = $('#authSubmit');
     btn.disabled = true;
-    btn.innerHTML = '<span class="btn-spinner"></span> Sending...';
+    btn.innerHTML = '<span class="btn-spinner"></span> Logging in...';
     try {
-        var resp = await api('/api/auth/otp/request', { method: 'POST', body: { mobileNumber: mobile } });
-        state.authMobile = mobile;
-        $('#authOtpGroup').hidden = false;
-        $('#authOtpHint').textContent = resp && resp.otp ? ('Demo OTP: ' + resp.otp) : '';
-        btn.disabled = false;
-        btn.textContent = 'Verify OTP';
-        toast('OTP sent', 'success');
-    } catch (err) {
-        btn.disabled = false;
-        btn.textContent = 'Login with OTP';
-        toast('Failed to send OTP: ' + err.message, 'error');
-    }
-}
-
-async function handleAuthVerify() {
-    var otp = $('#authOtp').value.trim();
-    if (!/^\d{4}$/.test(otp)) { toast('Enter the 4-digit OTP', 'error'); return; }
-    var btn = $('#authSubmit');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="btn-spinner"></span> Verifying...';
-    try {
-        var me = await api('/api/auth/otp/verify', { method: 'POST', body: { mobileNumber: state.authMobile, otpCode: otp } });
+        var me = await api('/api/auth/demo-login', { method: 'POST', body: { mobileNumber: mobile } });
         state.user = me;
         closeModal();
         toast('Welcome, ' + (me.name || 'neighbour') + '!', 'success');
@@ -320,8 +293,8 @@ async function handleAuthVerify() {
         else if (typeof render === 'function') render();
     } catch (err) {
         btn.disabled = false;
-        btn.textContent = 'Verify OTP';
-        toast('OTP verification failed: ' + err.message, 'error');
+        btn.textContent = 'Log in';
+        toast('Login failed: ' + err.message, 'error');
     }
 }
 

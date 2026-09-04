@@ -52,13 +52,13 @@ public class SecurityConfig {
                                 "/manifest.webmanifest"
                         ).permitAll()
                         .anyRequest().authenticated())
-                .exceptionHandling(ex -> ex
+                                .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) -> {
                             response.setStatus(401);
-                    response.setContentType("application/json");
-                    response.getWriter().write(
-                            "{\"error\":\"AUTHENTICATION_REQUIRED\",\"message\":\"Authentication required. Please log in.\"}");
-                }))
+                            response.setContentType("application/json");
+                            response.getWriter().write(
+                                    "{\"error\":\"AUTHENTICATION_REQUIRED\",\"message\":\"Authentication required. Please log in.\"}");
+                        }))
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.ALWAYS)
                         .sessionFixation(sessionFixation -> sessionFixation.migrateSession()))

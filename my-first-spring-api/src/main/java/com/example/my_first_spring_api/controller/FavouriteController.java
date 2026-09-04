@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * OTP-gated favourites (identity-bound action). Returns 401 when the buyer is
+ * Session-gated favourites (identity-bound action). Returns 401 when the buyer is
  * not authenticated — the SPA intercepts this and opens the deferred login modal.
  */
 @RestController

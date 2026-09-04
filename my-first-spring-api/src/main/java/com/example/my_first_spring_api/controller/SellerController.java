@@ -38,7 +38,7 @@ public class SellerController {
 
     private User requireSeller(HttpSession session) {
         User user = authService.getCurrentBuyer(session);
-        if (user == null) throw new BuyerNotAuthenticatedException("Authentication required. Please verify your mobile number via OTP.");
+        if (user == null) throw new BuyerNotAuthenticatedException("Authentication required. Please log in.");
         if (user.getRole() != UserRole.SELLER) throw new SellerNotAuthorizedException("Only sellers can perform this action");
         return user;
     }

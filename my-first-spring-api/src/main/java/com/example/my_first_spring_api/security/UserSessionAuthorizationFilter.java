@@ -19,7 +19,7 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * Translates the existing OTP session attribute (BUYER_USER = user id) into
+ * Translates the authenticated session attribute (BUYER_USER = user id) into
  * Spring Security authorities (ROLE_BUYER / ROLE_SELLER / ROLE_ADMIN /
  * ROLE_SUPER_ADMIN) for the duration of one request. This lets SecurityConfig
  * use centralised hasRole(...) rules without scattering checks, and without

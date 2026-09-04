@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * One-time platform bootstrap:
- *  - creates the built-in Super Admin and Admin accounts (OTP login),
+ *  - creates the built-in Super Admin and Admin accounts (mobile demo login),
  *  - grandfathers sellers that existed before the approval workflow,
  *  - seeds the initial seller feature catalogue.
  * Every step is idempotent and safe to run on every startup.

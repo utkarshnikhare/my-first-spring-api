@@ -21,28 +21,21 @@ public class BuyerService {
     public static final String BUYER_SESSION_KEY = "BUYER_USER";
 
     private final UserRepository userRepository;
-    private final OtpService otpService;
     private final AnalyticsService analyticsService;
 
     @Autowired
-    public BuyerService(UserRepository userRepository, OtpService otpService,
-                        AnalyticsService analyticsService) {
+    public BuyerService(UserRepository userRepository, AnalyticsService analyticsService) {
         this.userRepository = userRepository;
-        this.otpService = otpService;
         this.analyticsService = analyticsService;
     }
 
+    /**
+     * Demo login: authenticates a buyer/seller by mobile number only (no code step).
+     * For client demo so the app opens and operates without OTP.
+     */
     @Transactional
-    public String requestOtp(String mobileNumber) {
-        return otpService.generateOtp(mobileNumber);
-    }
-
-    @Transactional
-    public User verifyOtpAndAuthenticate(String mobileNumber, String otpCode,
-                                        String name, String flatHouseNumber,
-                                        HttpSession session) {
-        otpService.verifyOtp(mobileNumber, otpCode);
-
+    public User demoLoginAndAuthenticate(String mobileNumber, String name, String flatHouseNumber,
+                                          HttpSession session) {
         Optional<User> existing = userRepository.findByMobileNumber(mobileNumber);
         User buyer;
         if (existing.isPresent()) {
@@ -91,7 +84,7 @@ public class BuyerService {
         User buyer = getCurrentBuyer(session);
         if (buyer == null) {
             throw new BuyerNotAuthenticatedException(
-                    "Authentication required. Please log in..");
+                    "Authentication required. Please log in.");
         }
         return buyer;
     }

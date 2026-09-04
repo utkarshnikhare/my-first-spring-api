@@ -771,8 +771,8 @@ async function ordersView() {
         '</div>';
 
     if (!state.user) {
-        h += emptyHtml('🔐', 'Login to view your history', 'Your orders and enquiries appear here once you verify your mobile number.',
-            '<button class="btn btn-primary" type="button" data-action="open-login" style="margin-top:14px">Login with OTP</button>');
+        h += emptyHtml('🔐', 'Login to view your history', 'Your orders and enquiries appear here.',
+            '<button class="btn btn-primary" type="button" data-action="open-login" style="margin-top:14px">Log in</button>');
         h += '</div>';
         return h;
     }
@@ -841,7 +841,7 @@ async function profileView() {
             '<p class="muted small" style="margin:6px 0 16px">Login with your mobile number to place orders, save favourites and send enquiries.</p>' +
             '<form data-form="profile-login">' +
             '<div class="form-group"><input class="form-input" name="mobileNumber" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" required></div>' +
-            '<button class="btn btn-primary btn-block" type="submit">Login with OTP</button></form>' +
+            '<button class="btn btn-primary btn-block" type="submit">Log in</button></form>' +
             '<p class="tiny muted" style="margin-top:10px">You can keep browsing without logging in.</p>' +
             '</div></div>';
         return h;
