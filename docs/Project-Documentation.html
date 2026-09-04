@@ -89,14 +89,14 @@
 <h2>2. Technology Stack</h2>
 <table>
   <tr><th>Layer</th><th>Technology</th><th>Why It Was Chosen</th></tr>
-  <tr><td>Language</td><td>Java 17</td><td>Stable LTS, strong typing, industry standard for enterprise APIs</td></tr>
-  <tr><td>Framework</td><td>Spring Boot 3.5.x</td><td>Fast REST development, built-in dependency injection, security, validation</td></tr>
+    <tr><td>Language</td><td>Java 21</td><td>Stable LTS, strong typing, industry standard for enterprise APIs</td></tr>
+  <tr><td>Framework</td><td>Spring Boot 4.1.1</td><td>Fast REST development, built-in dependency injection, security, validation</td></tr>
   <tr><td>Data Layer</td><td>Spring Data JPA + Hibernate</td><td>Object-relational mapping without boilerplate SQL; automatic schema from entities</td></tr>
-  <tr><td>Database</td><td>MySQL 8</td><td>Relational integrity for orders/payments; widely hosted</td></tr>
+  <tr><td>Database</td><td>H2 (in-memory/file)</td><td>Relational integrity for orders/payments; reseeded with Indian food demo data on every boot</td></tr>
   <tr><td>Build Tool</td><td>Maven (mvnw wrapper)</td><td>Reproducible builds — no local install needed, works in CI</td></tr>
   <tr><td>Frontend</td><td>HTML5 + CSS3 + Vanilla JS (SPA)</td><td>Zero build step, instant load, served straight from Spring's static folder</td></tr>
   <tr><td>Sessions</td><td>HttpSession cookies</td><td>Simple, secure login state for buyer/seller flows</td></tr>
-  <tr><td>Public Access</td><td>Cloudflare Tunnel (cloudflared)</td><td>Free 24×7 HTTPS public URL with a self-healing watchdog — see §11</td></tr>
+  <tr><td>Public Access</td><td>Render (Docker, free tier)</td><td>Free HTTPS public URL — single service serves both Buyer (/) and Seller (/seller.html) with shared H2 state</td></tr>
   <tr><td>CI</td><td>GitHub Actions</td><td>Every push is auto-compiled so broken code can never reach main</td></tr>
   <tr><td>Docs &amp; Testing</td><td>Edge headless (PDF), PowerShell E2E harness</td><td>Screenshot-driven docs, 45-assertion regression suite</td></tr>
 </table>
@@ -269,24 +269,21 @@
 
 <!-- ============ 11. DEPLOYMENT ============ -->
 <h2>11. Deployment &amp; 24×7 Public Access</h2>
-<h3>11.1 The 24-Hour Public Link</h3>
-<p>Options evaluated: <b>ngrok</b> (free URL dies after 2h and rotates), <b>LocalTunnel</b> (unstable, queue prompts), <b>pagekite</b> (paid), and <b>Cloudflare Tunnel</b> (free, unlimited duration, HTTPS, CDN, mobile-friendly). <b>Cloudflare Tunnel was selected.</b></p>
-<p>A self-healing watchdog (<code>tunnel.ps1</code>) runs in the background to survive a full 24 hours:</p>
-<ul>
-  <li>starts <code>cloudflared</code> with the stabler <b>http2 protocol</b> pinned to the local app port;</li>
-  <li>health-checks the public URL every 60s with <b>3 retries</b> before acting — one transient blip never kills the tunnel (v1 was too aggressive and kept recreating/rotating URLs);</li>
-  <li>writes the current public URL to <code>public-link.txt</code> and logs everything to <code>watchdog.log</code>.</li>
-</ul>
-<div class="box"><b>Live public URL (at documentation time):</b><br>
-<span class="mono" style="font-size:11pt; font-weight:bold;">https://diy-counties-past-mitchell.trycloudflare.com</span><br>
-The app itself runs on <span class="mono">http://localhost:8081</span>; the tunnel forwards public HTTPS traffic to it. Re-run <code>tunnel.ps1</code> to obtain a fresh URL any time.</div>
+<h3>11.1 Production Deployment</h3>
+<p>Hosting provider: <b>Render.com</b> — free Docker web service (free tier, no credit card required). The app is built from the existing <code>Dockerfile</code> (multi-stage Maven → JRE 21) and deployed as a Render Blueprint via <code>render.yaml</code>. <b>One service serves both Buyer (/) and Seller (/seller.html)</b> with a shared in-process H2 database — no split instances, no data desync.</p>
+<p>Render injects the <code>PORT</code> environment variable automatically; the app binds to <code>${PORT:8081}</code> (see <code>application.properties</code>). Render auto-deploys on every push to <code>main</code>. The free tier sleeps after ~15 min of inactivity; a free uptime pinger (e.g. cron-job.org hitting <code>/api/kitchens</code> every 10 min) keeps the service warm.</p>
+<div class="box"><b>Public URLs (single Render service):</b><br>
+<span class="mono" style="font-size:11pt; font-weight:bold;">https://sociomart-demo.onrender.com/</span> — Buyer view<br>
+<span class="mono" style="font-size:11pt; font-weight:bold;">https://sociomart-demo.onrender.com/seller.html</span> — Seller dashboard<br>
+<span class="mono" style="font-size:11pt; ">https://sociomart-demo.onrender.com/api/kitchens</span> — health probe<br>
+Both frontends run in the same Spring Boot process and share the same H2 database and HTTP session state.</div>
 <h3>11.2 GitHub Organisation</h3>
 <table>
   <tr><th>Item</th><th>Status</th></tr>
-  <tr><td>Source of truth</td><td><span class="mono">github.com/utkarshnikhare/my-first-spring-api</span> — branch <code>main</code>, working tree clean, local == remote</td></tr>
-  <tr><td>Commit history</td><td>Incremental, descriptive commits (hardening → CI → E2E suite → docs)</td></tr>
-  <tr><td><code>.gitignore</code></td><td>Excludes logs, build output, throwaway artifacts, tokens; explicitly allows the E2E suite</td></tr>
-  <tr><td>CI</td><td><code>.github/workflows/ci.yml</code> — every push runs <code>mvnw clean compile</code>; broken code cannot reach main</td></tr>
+    <tr><td>Source of truth</td><td><span class="mono">github.com/utkarshnikhare/my-first-spring-api</span> — branch <code>main</code> — deployed on <b>Render</b> as a single Docker service (sociomart-demo)</td></tr>
+  <tr><td>Commit history</td><td>Incremental, descriptive commits (hardening → CI → E2E suite → Render deployment)</td></tr>
+  <tr><td><code>.gitignore</code></td><td>Excludes logs, build output, throwaway artifacts, tokens; allows the E2E suite and start runners</td></tr>
+  <tr><td>CI</td><td><code>.github/workflows/ci.yml</code> — every push runs <code>mvn clean compile</code> on JDK 21; broken code cannot reach main</td></tr>
   <tr><td>Secrets</td><td>None committed — DB credentials stay in local config, excluded by gitignore rules</td></tr>
 </table>
 

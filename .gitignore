@@ -16,7 +16,6 @@ projectmy-first-spring-api/
 
 # Allow the committed one-command runners (everything else *.ps1 stays ignored)
 !start.ps1
-!tunnel.ps1
 !e2e-deep-test.ps1
 
 # docs screenshot tooling (local only)

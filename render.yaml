@@ -3,6 +3,10 @@
 # select this repository. Render builds the Docker image and serves the app.
 # Free tier: the service sleeps after ~15 min without traffic; the first
 # request after a sleep takes ~60-90s to wake (cold start).
+#
+# NOTE: Render auto-injects the PORT environment variable at runtime.
+# The app binds to ${PORT:8081} (see application.properties), so we do NOT
+# hard-code PORT here — letting Render control it avoids routing mismatches.
 
 services:
   - type: web
@@ -13,7 +17,5 @@ services:
     healthCheckPath: /api/kitchens
     autoDeploy: true
     envVars:
-      - key: PORT
-        value: 8081
       - key: SPRING_PROFILES_ACTIVE
         value: demo

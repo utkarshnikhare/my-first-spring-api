@@ -460,6 +460,10 @@ public class OrderService {
             Integer max = product.getMaxQuantity();
             int restored = product.getRemainingQuantity() + e.getValue();
             product.setRemainingQuantity(max != null ? Math.min(max, restored) : restored);
+            // Reversed action of consumeStock: freeing a cancelled order must also
+            // release the booked units so the demand bar returns to its true level.
+            int booked = (product.getBookedQuantity() == null ? 0 : product.getBookedQuantity()) - e.getValue();
+            product.setBookedQuantity(Math.max(0, booked));
             productRepository.save(product);
         }
     }

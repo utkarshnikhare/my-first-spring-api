@@ -30,10 +30,11 @@ function Api($sess, $method, $uri, $body) {
   }
 }
 function Login($sess, $mobile, $name, $flat) {
-  $r1 = Api $sess 'POST' '/api/auth/otp/request' @{ mobileNumber = $mobile }
-  $vb = @{ mobileNumber = $mobile; otpCode = $r1.Body.otp }
+  # OTP was removed (client demo): /api/auth/demo-login authenticates by mobile only.
+  # Existing seeded sellers (e.g. Aarti 9100000001) resolve to their SELLER role.
+  $vb = @{ mobileNumber = $mobile }
   if ($name) { $vb.name = $name; $vb.flatHouseNumber = $flat }
-  return Api $sess 'POST' '/api/auth/otp/verify' $vb
+  return Api $sess 'POST' '/api/auth/demo-login' $vb
 }
 $today = (Get-Date).ToString('yyyy-MM-dd')
 
