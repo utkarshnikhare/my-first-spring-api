@@ -200,5 +200,54 @@ $null = Api $aarti 'PATCH' ("/api/seller-app/products/" + $pub5.Body.id + "/inve
 $r = Api $aarti 'PATCH' ("/api/seller-app/products/" + $pub5.Body.id + "/inventory") @{ delta = -1 }
 Check 'N8 decrement below zero rejected 400' ($r.Status -eq 400) ("status=" + $r.Status)
 
+# ===== O) Buyer demo payment flow: PAID -> CONFIRMED, My Orders, Order Detail =====
+# Restock Poha (section M left it sold out) so the paid-flow can order it
+$stock2 = Api $aarti 'PATCH' ("/api/seller-app/products/" + $poha.id + "/inventory") @{ delta = 5 }
+Check 'O0 restock Poha +5 accepted' (($stock2.Status -eq 200) -and ([int]$stock2.Body.remainingQuantity -ge 5)) ("status=" + $stock2.Status + " rem=" + $stock2.Body.remainingQuantity)
+# Pre-place baselines for shared-state deltas
+$sumPre = Api $aarti 'GET' '/api/seller-app/orders/summary' $null
+$preRev = [double]$sumPre.Body.totalRevenue
+$earnPre = Api $aarti 'GET' '/api/seller-app/earnings' $null
+$preConf = [double]$earnPre.Body.confirmedToday
+$drillPre = Api $aarti 'GET' ("/api/seller-app/orders/product/" + $poha.id) $null
+$prePlates = [int]$drillPre.Body.totalPlates
+$buyer2 = New-Sess
+$null = Login $buyer2 '9100000088' 'Paid Buyer' 'Y-777'
+$draft2 = Api $buyer2 'POST' ("/api/buyer/orders/draft?kitchenId=" + $kid) @(@{ productId = $poha.id; quantity = 1 })
+Check 'O1 draft for paid flow created (total 40)' (($draft2.Status -eq 200) -and ([double]$draft2.Body.totalAmount -eq 40)) ("status=" + $draft2.Status + " total=" + $draft2.Body.totalAmount)
+$paid = Api $buyer2 'POST' '/api/buyer/orders/place' @{ paymentStatus = 'PAID'; buyerDetails = @{ name = 'Paid Buyer'; mobileNumber = '9100000088'; flatHouseNumber = 'Y-777' }; customInstructions = 'demo upi payment' }
+Check 'O2 demo payment: order placed PAID' (($paid.Status -eq 200) -and ($paid.Body.paymentStatus -eq 'PAID')) ("status=" + $paid.Status + " pay=" + $paid.Body.paymentStatus)
+Check 'O3 demo payment: order auto-CONFIRMED' (($paid.Status -eq 200) -and ($paid.Body.orderStatus -eq 'CONFIRMED')) ("status=" + $paid.Body.orderStatus)
+$paidId = $paid.Body.id
+$placeAgain = Api $buyer2 'POST' '/api/buyer/orders/place' @{ paymentStatus = 'PAID' }
+Check 'O4 idempotent: re-place without new draft rejected (no duplicate)' (($placeAgain.Status -eq 400) -or ($placeAgain.Status -eq 409)) ("status=" + $placeAgain.Status)
+$my2 = Api $buyer2 'GET' '/api/buyer/orders/my' $null
+$mine = @($my2.Body.active) | Where-Object { $_.id -eq $paidId } | Select-Object -First 1
+Check 'O5 My Orders lists the paid order (active)' ($null -ne $mine) ("status=" + $my2.Status)
+Check 'O6 My Orders entry shows PAID + CONFIRMED + total 40' (($null -ne $mine) -and ($mine.paymentStatus -eq 'PAID') -and ($mine.orderStatus -eq 'CONFIRMED') -and ([double]$mine.totalAmount -eq 40)) ("pay=" + $mine.paymentStatus + " st=" + $mine.orderStatus + " tot=" + $mine.totalAmount)
+$det = Api $buyer2 'GET' ("/api/buyer/orders/" + $paidId) $null
+Check 'O7 order detail 200 with item, qty, unit price' (($det.Status -eq 200) -and (@($det.Body.items)[0].productName -eq $poha.name) -and (@($det.Body.items)[0].quantity -eq 1) -and ([double](@($det.Body.items)[0].price) -eq 40)) ("status=" + $det.Status + " item=" + @($det.Body.items)[0].productName)
+Check 'O8 order detail: kitchen + payment + remarks present' (($det.Status -eq 200) -and ($null -ne $det.Body.kitchen.displayName) -and ($det.Body.paymentStatus -eq 'PAID') -and ($det.Body.customInstructions -eq 'demo upi payment')) ("kitchen=" + $det.Body.kitchen.displayName + " remarks=" + $det.Body.customInstructions)
+$nf2 = Api $buyer2 'GET' '/api/buyer/orders/999999' $null
+Check 'O9 unknown order detail -> 404 not 500' (($nf2.Status -eq 404) -and ($nf2.Body.error -eq 'NOT_FOUND')) ("status=" + $nf2.Status)
+$foreign = Api $buyer 'GET' ("/api/buyer/orders/" + $paidId) $null
+Check 'O10 another buyer cannot read my order detail (404)' (($foreign.Status -eq 404) -or ($foreign.Status -eq 403)) ("status=" + $foreign.Status)
+$payPatch = Api $buyer2 'PATCH' ("/api/buyer/orders/" + $paidId + "/payment-status") @{ paymentStatus = 'PENDING' }
+Check 'O11 payment-status update endpoint works' (($payPatch.Status -eq 200) -and ($payPatch.Body.paymentStatus -eq 'PENDING')) ("status=" + $payPatch.Status)
+$payBack = Api $buyer2 'PATCH' ("/api/buyer/orders/" + $paidId + "/payment-status") @{ paymentStatus = 'PAID' }
+Check 'O12 payment-status restored to PAID' (($payBack.Status -eq 200) -and ($payBack.Body.paymentStatus -eq 'PAID')) ("status=" + $payBack.Status)
+# Shared state: PAID/CONFIRMED order must move seller aggregates
+$sumPost = Api $aarti 'GET' '/api/seller-app/orders/summary' $null
+Check 'O13 seller revenue delta +40 after paid order' ([double]$sumPost.Body.totalRevenue -eq ($preRev + 40)) ("rev=" + $sumPost.Body.totalRevenue + " pre=" + $preRev)
+$earnPost = Api $aarti 'GET' '/api/seller-app/earnings' $null
+Check 'O14 seller confirmedToday delta +40 after paid order' ([double]$earnPost.Body.confirmedToday -eq ($preConf + 40)) ("conf=" + $earnPost.Body.confirmedToday + " pre=" + $preConf)
+$drillPost = Api $aarti 'GET' ("/api/seller-app/orders/product/" + $poha.id) $null
+Check 'O15 drill-down plates delta +1 after paid order' ([int]$drillPost.Body.totalPlates -eq ($prePlates + 1)) ("plates=" + $drillPost.Body.totalPlates + " pre=" + $prePlates)
+$dashPost = Api $aarti 'GET' '/api/seller-app/dashboard' $null
+Check 'O16 dashboard totalOrders includes the paid order' ([int]$dashPost.Body.totalOrders -ge 1) ("orders=" + $dashPost.Body.totalOrders)
+
+Write-Output ("RESULT PASS=" + $script:pass + " FAIL=" + $script:fail)
+if ($script:fail -gt 0) { exit 1 } else { exit 0 }
+
 Write-Output ("RESULT PASS=" + $script:pass + " FAIL=" + $script:fail)
 if ($script:fail -gt 0) { exit 1 } else { exit 0 }

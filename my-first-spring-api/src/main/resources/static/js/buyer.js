@@ -595,71 +595,134 @@ async function goCheckout() {
     }
 }
 
-// ==================== Screen 6: Payment & order confirmation ====================
+// ==================== Screen 6: Payment & order confirmation (internal demo) ====================
+
+/**
+ * Internal demo payment flow — no external gateways, no OTP, no redirects.
+ * Reads the real backend DRAFT so the receipt shows true DB data.
+ * Methods: UPI (Demo) · Demo Card · Cash on Delivery.
+ * PAID  → backend places order as CONFIRMED (paid immediately in demo).
+ * COD   → backend places order as ORDERED / payment PENDING (pay on delivery).
+ */
+var PAY_METHODS = [
+    { id: 'upi', icon: '📱', name: 'UPI (Demo)', sub: 'Simulated UPI — no real money moves' },
+    { id: 'card', icon: '💳', name: 'Demo Card', sub: 'Simulated card — no card details collected' },
+    { id: 'cod', icon: '💵', name: 'Cash on Delivery', sub: 'Pay cash when the order arrives' }
+];
 
 async function paymentView() {
-    var cart = getCart();
-    if (!cart || !cart.items || !cart.items.length) {
-        return '<div class="view-enter">' + emptyHtml('🧾', 'No active order', 'Your order was already submitted.',
-            '<a class="btn btn-primary" href="#/home" style="margin-top:14px">Back to Home</a>') + '</div>';
-    }
-    var kitchen = null;
-    try {
-        var detail = await api('/api/kitchens/id/' + cart.kitchenId);
-        kitchen = detail.kitchen;
-    } catch (e) { kitchen = null; }
-    var upiId = (kitchen && kitchen.upiId) || 'sociomart@upi';
-    var qrData = encodeURIComponent('upi://pay?pa=' + upiId + '&pn=' + encodeURIComponent(cart.kitchenName) + '&am=' + cartTotal() + '&cu=INR');
-
     var h = '<div class="view-enter">';
-    h += '<div class="top-row"><h2 style="flex:1">Payment</h2></div>';
+    var draft = null;
+    try {
+        draft = await api('/api/buyer/orders/draft');
+    } catch (e) { draft = null; }
+    if (!draft || !draft.items || !draft.items.length) {
+        h += backBarHtml('Payment') +
+            emptyHtml('🧾', 'No active order', 'Your order was already submitted or your session expired.',
+                '<a class="btn btn-primary" href="#/food" style="margin-top:14px">Browse Food &amp; Kitchens</a>');
+        h += '</div>';
+        return h;
+    }
 
-    // Order receipt
+    h += '<div class="top-row">' +
+        '<button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button>' +
+        '<h2 style="flex:1">Payment</h2></div>';
+
+    // Order summary (real draft data from the shared database)
     h += '<div class="card pad" style="margin-bottom:12px">' +
-        '<div style="text-align:center"><span class="pill pill-purple">Order #SM' + Date.now().toString().slice(-4) + '</span></div>';
-    cart.items.forEach(function (item) {
-        h += '<div class="receipt-line"><span>' + esc(item.name) + ' × ' + item.qty + '</span><span>' + money(item.price * item.qty) + '</span></div>';
+        '<div style="display:flex; align-items:center; justify-content:space-between">' +
+        '<h3 style="margin:0">Order Summary</h3>' +
+        '<span class="pill pill-purple">' + esc(draft.orderNumber || '') + '</span></div>' +
+        '<p class="muted small" style="margin:6px 0 10px">🏪 ' + esc(draft.kitchen && draft.kitchen.displayName ? draft.kitchen.displayName : '') + '</p>';
+    (draft.items || []).forEach(function (it) {
+        h += '<div class="receipt-line"><span>' + esc(it.productName) + ' × ' + it.quantity + '</span><span>' + money(it.price * it.quantity) + '</span></div>';
     });
     h += '<div class="receipt-line" style="font-weight:800; border-top:1px solid var(--border); margin-top:6px; padding-top:10px">' +
-        '<span>Total</span><span>' + money(cartTotal()) + '</span></div></div>';
+        '<span>Total payable</span><span>' + money(draft.totalAmount) + '</span></div></div>';
 
-    // Claim-based UPI payment instructions
-    h += '<div class="card pad"><h3>Pay via UPI</h3>' +
-        '<p class="muted small" style="margin-top:4px">Scan the seller\'s QR or copy the UPI ID, then confirm below.</p>' +
-        '<div class="qr-box"><img alt="UPI QR code" src="https://api.qrserver.com/v1/create-qr-code/?size=190x190&data=' + qrData + '">' +
-        '<div class="upi-row" style="width:100%"><span class="upi-id">' + esc(upiId) + '</span>' +
-        '<button class="btn btn-secondary btn-sm" type="button" data-action="copy-upi" data-upi="' + esc(upiId) + '">Copy</button></div></div>' +
-        '<div class="modal-actions">' +
-        '<button class="btn btn-outline" type="button" data-action="pay-later">I\'ll pay later</button>' +
-        '<button class="btn btn-primary" type="button" data-action="have-paid">I have paid</button>' +
+    // Payment method selection (demo only)
+    h += '<div class="card pad" style="margin-bottom:12px"><h3 style="margin-bottom:8px">Payment method</h3>' +
+        '<p class="tiny muted" style="margin-bottom:10px">This is a client demo — payments are simulated inside SocioMart. No real money, cards, OTPs or external sites are involved.</p>' +
+        PAY_METHODS.map(function (m) {
+            var sel = (state.payMethod || 'upi') === m.id;
+            return '<label class="pay-method' + (sel ? ' selected' : '') + '" data-action="select-pay-method" data-method="' + m.id + '">' +
+                '<span class="pm-radio" aria-hidden="true"></span>' +
+                '<span class="pm-icon" aria-hidden="true">' + m.icon + '</span>' +
+                '<span class="pm-body"><span class="pm-name">' + m.name + '</span>' +
+                '<span class="pm-sub">' + m.sub + '</span></span>' +
+                '</label>';
+        }).join('') + '</div>';
+
+    var isCod = (state.payMethod || 'upi') === 'cod';
+    h += '<div class="sticky-footer-bar"><div class="inner">' +
+        '<button class="btn btn-primary btn-block" type="button" id="payNowBtn" data-action="confirm-payment"' +
+        (isCod ? ' data-cod="1"' : '') + '>' +
+        (isCod ? 'PLACE ORDER (PAY ON DELIVERY) — ' : 'PAY NOW — ') + money(draft.totalAmount) + '</button>' +
         '</div></div>';
 
     h += '</div>';
     return h;
 }
 
-async function submitOrder(claimedPaid) {
-    var cart = getCart();
-    if (!cart || !cart.items || !cart.items.length) { toast('Your order is empty', 'error'); return; }
+/** Confirm payment: processing state → place real order via API → success screen. */
+async function confirmPayment(btnEl) {
+    if (state.placingOrder) return; // idempotency guard: no double submissions
     var note = (state.pendingCheckout && state.pendingCheckout.note) || '';
-    var items = cart.items.map(function (i) {
-        return { productId: i.productId, quantity: i.qty, scheduledDate: i.scheduledDate || null, scheduledSlot: i.scheduledSlot || null };
-    });
+    var cod = btnEl && btnEl.dataset.cod === '1';
+    state.placingOrder = true;
+    var original = btnEl ? btnEl.innerHTML : '';
+    if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.innerHTML = '<span class="btn-spinner"></span> ' + (cod ? 'Placing order...' : 'Processing payment...');
+    }
     try {
         await withAuthGate(async function () {
-            await api('/api/buyer/orders/draft?kitchenId=' + cart.kitchenId, { method: 'POST', body: items });
-            await api('/api/buyer/orders/place', {
+            var placed = await api('/api/buyer/orders/place', {
                 method: 'POST',
-                body: { paymentStatus: claimedPaid ? 'PAID' : 'PENDING', customInstructions: note }
+                body: { paymentStatus: cod ? 'PENDING' : 'PAID', customInstructions: note }
             });
             clearCart();
             state.pendingCheckout = null;
-            toast(claimedPaid ? 'Order confirmed — payment pending verification' : 'Order placed — payment pending', claimedPaid ? 'success' : 'info');
-            navigate('#/home'); // Spec: both actions route back to Screen 1
+            state.lastOrder = placed;
+            navigate('#/payment-success');
         });
     } catch (err) {
+        if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = original; }
         if (!(err instanceof ApiError && err.status === 401)) toast(err.message, 'error');
+    } finally {
+        state.placingOrder = false;
     }
+}
+
+// ==================== Screen 6b: Payment success / order confirmation ====================
+
+function paymentSuccessView() {
+    var o = state.lastOrder;
+    if (!o) {
+        return '<div class="view-enter">' + emptyHtml('🧾', 'No recent order', 'Place an order to see its confirmation here.',
+            '<a class="btn btn-primary" href="#/food" style="margin-top:14px">Browse Food &amp; Kitchens</a>') + '</div>';
+    }
+    var paid = o.paymentStatus === 'PAID';
+    var h = '<div class="view-enter" style="text-align:center; padding-top:14px">';
+    h += '<div style="font-size:3.2rem" aria-hidden="true">✅</div>' +
+        '<h1 style="margin:8px 0 4px">Order Confirmed</h1>' +
+        '<p class="muted small">' + (paid ? 'Demo payment successful — thank you!' : 'Order placed — pay cash on delivery.') + '</p>';
+    h += '<div class="card pad" style="margin-top:14px; text-align:left">' +
+        '<div class="receipt-line"><span>Order</span><span>#' + esc(o.orderNumber || '') + '</span></div>' +
+        '<div class="receipt-line"><span>Kitchen</span><span>🏪 ' + esc(o.kitchen && o.kitchen.displayName ? o.kitchen.displayName : '') + '</span></div>';
+    (o.items || []).forEach(function (it) {
+        h += '<div class="receipt-line"><span>' + esc(it.productName) + ' × ' + it.quantity + '</span><span>' + money(it.price * it.quantity) + '</span></div>';
+    });
+    h += '<div class="receipt-line" style="font-weight:800; border-top:1px solid var(--border); margin-top:6px; padding-top:10px">' +
+        '<span>Total</span><span>' + money(o.totalAmount) + '</span></div>' +
+        '<div style="display:flex; gap:8px; margin-top:12px">' +
+        (paid ? '<span class="pill pill-green">Payment: PAID (Demo)</span>' : '<span class="pill pill-amber">Payment: Due on delivery</span>') +
+        (ORDER_BADGES[o.orderStatus] || '') + '</div></div>';
+    h += '<div style="display:flex; gap:10px; margin-top:16px">' +
+        '<a class="btn btn-primary" style="flex:1" href="#/orders">View My Orders</a>' +
+        '<a class="btn btn-secondary" style="flex:1" href="#/home">Back to Home</a></div>';
+    h += '</div>';
+    return h;
 }
 
 // ==================== Screen 7: Search-by-item comparison ====================
@@ -783,22 +846,42 @@ async function ordersView() {
             var all = [].concat(orders.active || [], orders.completed || []);
             if (!all.length) {
                 h += emptyHtml('📋', 'No orders yet', 'When you place your first order it will show up here.',
-                    '<a class="btn btn-primary" href="#/food" style="margin-top:14px">Browse Food & Kitchens</a>');
+                    '<a class="btn btn-primary" href="#/food" style="margin-top:14px">Browse Food &amp; Kitchens</a>');
             } else {
-                h += all.map(function (o) {
-                    var inner = '<div class="order-card"><div class="oc-top-row">' +
-                        '<div><div class="si-name">#' + esc(o.orderNumber) + '</div>' +
-                        '<p class="si-sub">🏪 ' + esc(o.kitchen ? o.kitchen.displayName : '') + ' · ' +
-                        new Date(o.createdAt).toLocaleDateString() + '</p></div>' +
-                        (ORDER_BADGES[o.orderStatus] || '') + '</div>';
-                    (o.items || []).forEach(function (it) {
-                        inner += '<div class="receipt-line"><span>' + esc(it.productName) + ' × ' + it.quantity + '</span></div>';
-                    });
-                    inner += '<div class="receipt-line" style="font-weight:800"><span>Total</span><span>' + money(o.totalAmount) + '</span></div>' +
-                        '<p class="tiny muted" style="margin-top:4px">' +
-                        (o.paymentStatus === 'PAID' ? 'Payment claimed — awaiting seller verification' : 'Payment pending') + '</p></div>';
-                    return inner;
-                }).join('');
+                var filter = state.ordersFilter || 'all';
+                var groups = {
+                    all: all,
+                    active: all.filter(function (o) { return o.orderStatus !== 'CANCELLED' && o.orderStatus !== 'DELIVERED' && o.orderStatus !== 'COMPLETED'; }),
+                    completed: all.filter(function (o) { return o.orderStatus === 'DELIVERED' || o.orderStatus === 'COMPLETED'; }),
+                    cancelled: all.filter(function (o) { return o.orderStatus === 'CANCELLED'; })
+                };
+                h += '<div class="segmented" style="margin:10px 0 4px">' +
+                    ['all', 'active', 'completed', 'cancelled'].map(function (f) {
+                        return '<button type="button" class="' + (filter === f ? 'active' : '') + '" data-action="set-orders-filter" data-filter="' + f + '">' +
+                            f.charAt(0).toUpperCase() + f.slice(1) + '</button>';
+                    }).join('') + '</div>';
+                var list = groups[filter];
+                if (!list || !list.length) {
+                    h += emptyHtml('🗂️', 'Nothing in "' + filter + '"', 'Try another filter to see your orders.');
+                } else {
+                    h += list.map(function (o) {
+                        var inner = '<a class="order-card" href="#/order/' + o.id + '" style="display:block; text-decoration:none; color:inherit">' +
+                            '<div class="oc-top-row">' +
+                            '<div><div class="si-name">#' + esc(o.orderNumber) + '</div>' +
+                            '<p class="si-sub">🏪 ' + esc(o.kitchen ? o.kitchen.displayName : '') + ' · ' +
+                            new Date(o.createdAt).toLocaleDateString() + '</p></div>' +
+                            (ORDER_BADGES[o.orderStatus] || '') + '</div>';
+                        (o.items || []).forEach(function (it) {
+                            inner += '<div class="receipt-line"><span>' + esc(it.productName) + ' × ' + it.quantity + '</span><span>' + money(it.price * it.quantity) + '</span></div>';
+                        });
+                        inner += '<div class="receipt-line" style="font-weight:800"><span>Total</span><span>' + money(o.totalAmount) + '</span></div>' +
+                            '<div style="display:flex; gap:8px; margin-top:8px">' +
+                            (o.paymentStatus === 'PAID' ? '<span class="pill pill-green">💰 PAID (Demo)</span>' : '<span class="pill pill-amber">💰 Payment pending</span>') +
+                            '</div>' +
+                            '<p class="tiny muted" style="margin-top:6px">Tap for details →</p></a>';
+                        return inner;
+                    }).join('');
+                }
             }
         } catch (e) {
             h += emptyHtml('⚠️', 'Could not load orders', e.message);
@@ -824,6 +907,61 @@ async function ordersView() {
             h += emptyHtml('⚠️', 'Could not load enquiries', e.message);
         }
     }
+    h += '</div>';
+    return h;
+}
+
+// ==================== Screen 8b: Buyer Order Detail ====================
+
+async function orderDetailView(hash) {
+    var orderId = hash.split('/')[2];
+    var o;
+    try {
+        o = await api('/api/buyer/orders/' + encodeURIComponent(orderId));
+    } catch (e) {
+        return '<div class="view-enter">' + backBarHtml('Order Detail') +
+            emptyHtml('🔍', 'Order not found', e.message,
+                '<a class="btn btn-primary" href="#/orders" style="margin-top:14px">Back to My Orders</a>') + '</div>';
+    }
+    var paid = o.paymentStatus === 'PAID';
+    var h = '<div class="view-enter">';
+    h += '<div class="top-row">' +
+        '<button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button>' +
+        '<h2 style="flex:1">Order Detail</h2></div>';
+
+    h += '<div class="card pad" style="margin-bottom:12px">' +
+        '<div style="display:flex; align-items:center; justify-content:space-between">' +
+        '<div><div class="si-name" style="font-size:1.05rem">#' + esc(o.orderNumber) + '</div>' +
+        '<p class="si-sub">🏪 ' + esc(o.kitchen ? o.kitchen.displayName : '') + '</p></div>' +
+        (ORDER_BADGES[o.orderStatus] || '') + '</div>' +
+        '<p class="tiny muted" style="margin-top:6px">Placed ' + new Date(o.createdAt).toLocaleString() + '</p></div>';
+
+    h += '<div class="card pad" style="margin-bottom:12px"><h3 style="margin-bottom:8px">Items</h3>';
+    (o.items || []).forEach(function (it) {
+        h += '<div class="receipt-line"><span>' + esc(it.productName) + ' × ' + it.quantity + '</span><span>' + money(it.price * it.quantity) + '</span></div>' +
+            '<p class="tiny muted" style="margin:0 0 6px">' + money(it.price) + ' each' +
+            (it.scheduledDate ? ' · ' + esc(prettyDate(it.scheduledDate)) : '') +
+            (it.scheduledSlot ? ' · ' + esc(it.scheduledSlot) : '') + '</p>';
+    });
+    h += '<div class="receipt-line" style="font-weight:800; border-top:1px solid var(--border); margin-top:6px; padding-top:10px">' +
+        '<span>Item total</span><span>' + money(o.totalAmount) + '</span></div></div>';
+
+    h += '<div class="card pad" style="margin-bottom:12px">' +
+        '<div style="display:flex; justify-content:space-between; padding:4px 0"><span class="cc-label">Payment status</span>' +
+        (paid ? '<span class="pill pill-green">PAID (Demo)</span>' : '<span class="pill pill-amber">PENDING</span>') + '</div>' +
+        '<div style="display:flex; justify-content:space-between; padding:4px 0"><span class="cc-label">Order status</span>' +
+        '<span class="cc-value">' + esc(o.orderStatus || '') + '</span></div>' +
+        (o.buyer ? '<div style="display:flex; justify-content:space-between; padding:4px 0"><span class="cc-label">Deliver to</span>' +
+            '<span class="cc-value">' + esc([o.buyer.flatHouseNumber, state.user && state.user.building, state.user && state.user.society].filter(Boolean).join(', ') || '—') + '</span></div>' : '') +
+        (o.customInstructions ? '<div style="margin-top:8px"><span class="cc-label">Remarks</span>' +
+            '<p class="si-sub" style="margin:4px 0 0">' + esc(o.customInstructions) + '</p></div>' : '') +
+        '</div>';
+
+    h += '<div style="display:flex; gap:10px">' +
+        '<a class="btn btn-secondary" style="flex:1" href="#/orders">← My Orders</a>' +
+        (o.kitchen && o.kitchen.id ? '<a class="btn btn-secondary" style="flex:1" href="#/kitchen/' + o.kitchen.id + '">Visit Kitchen</a>' : '') +
+        '</div>';
+
     h += '</div>';
     return h;
 }

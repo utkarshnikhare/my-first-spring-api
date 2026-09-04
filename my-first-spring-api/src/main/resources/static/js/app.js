@@ -7,6 +7,10 @@ var state = {
     kitchenTab: 'LIVE_NOW',   // Screen 3 tabs
     favTab: 'kitchens',       // Screen 8 favourites tabs
     ordersTab: 'orders',      // Screen 8 orders/enquiries tabs
+    ordersFilter: 'all',      // Screen 8 order filter: all/active/completed/cancelled
+    payMethod: 'upi',         // Screen 6 demo payment method: upi/card/cod
+    placingOrder: false,      // idempotency guard for payment confirmation
+    lastOrder: null,          // placed order for the confirmation screen
     authMobile: '',
     pendingAuthAction: null,
     pendingCheckout: null
@@ -18,6 +22,7 @@ var routes = {
     '#/kitchens': kitchensView,
     '#/summary': orderSummaryView,
     '#/payment': paymentView,
+    '#/payment-success': paymentSuccessView,
     '#/favourites': favouritesView,
     '#/orders': ordersView,
     '#/profile': profileView
@@ -27,6 +32,7 @@ function resolveRoute(hash) {
     if (routes[hash]) return { fn: routes[hash], arg: hash };
     if (hash.startsWith('#/category/')) return { fn: categoryView, arg: hash };
     if (hash.startsWith('#/kitchen/')) return { fn: kitchenPageView, arg: hash };
+    if (hash.startsWith('#/order/')) return { fn: orderDetailView, arg: hash };
     if (hash.startsWith('#/search/')) return { fn: comparisonView, arg: hash };
     return { fn: homeView, arg: '#/home' };
 }
@@ -85,6 +91,7 @@ document.addEventListener('click', async function (e) {
             case 'set-kitchen-tab': state.kitchenTab = t.dataset.tab; await render(); break;
             case 'set-fav-tab': state.favTab = t.dataset.tab; await render(); break;
             case 'set-orders-tab': state.ordersTab = t.dataset.tab; await render(); break;
+            case 'set-orders-filter': state.ordersFilter = t.dataset.filter; await render(); break;
             case 'open-login': openAuthModal(); break;
             case 'read-more': {
                 var full = decodeURIComponent(t.dataset.full || '');
@@ -107,13 +114,8 @@ document.addEventListener('click', async function (e) {
             case 'cart-qty': await cartQty(Number(t.dataset.idx), Number(t.dataset.dir)); break;
             case 'cart-remove': await cartRemove(Number(t.dataset.idx)); break;
             case 'go-checkout': await goCheckout(); break;
-            case 'have-paid': await submitOrder(true); break;
-            case 'pay-later': await submitOrder(false); break;
-            case 'copy-upi': {
-                try { await navigator.clipboard.writeText(t.dataset.upi); toast('UPI ID copied', 'success'); }
-                catch (e4) { toast('Copy failed — long-press to copy', 'error'); }
-                break;
-            }
+            case 'select-pay-method': state.payMethod = t.dataset.method; await render(); break;
+            case 'confirm-payment': await confirmPayment(t); break;
             case 'logout': {
                 try { await api('/api/auth/logout', { method: 'POST' }); } catch (e5) {}
                 state.user = null;

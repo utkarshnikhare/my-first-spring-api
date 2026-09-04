@@ -313,21 +313,42 @@ document.addEventListener('click', async function (e) {
             case 'preview-kitchen': toast('Opening kitchen preview...', 'info'); break;
             case 'add-photo': toast('Photo upload (demo)', 'info'); break;
             case 'upload-avatar': toast('Avatar upload (demo)', 'info'); break;
+            case 'seller-retry': location.reload(); break;
             case 'set-availability': $all('.radio-option').forEach(function (el) { el.classList.remove('selected'); }); t.classList.add('selected'); var av = $('#availDate'); if (av) av.value = sellerDate(t.dataset.val || 'today'); break;
         }
     } catch (err) { toast(err.message, 'error'); }
 });
 
-// BOOT
+// BOOT — never leaves the page on an infinite spinner: any boot failure
+// renders a visible error state with a Retry button.
 window.addEventListener('hashchange', sellerRender);
 window.addEventListener('DOMContentLoaded', async function () {
-    if (!location.hash) location.hash = '#/home';
-    // Auto-login as demo seller (Aarti) without OTP for client demo
     try {
-        await api('/api/seller-app/demo-login', { method: 'POST' });
-    } catch (e) {
-        // If demo-login fails, proceed anyway (will fail on API calls)
+        if (!location.hash) location.hash = '#/home';
+        // Auto-login as demo seller (Aarti) without OTP for client demo
+        try {
+            await api('/api/seller-app/demo-login', { method: 'POST' });
+        } catch (e) {
+            console.warn('demo-login failed:', e && e.message);
+        }
+        await sellerRender();
+    } catch (bootErr) {
+        var view = viewEl();
+        if (view) view.innerHTML = '<div class="view-enter">' +
+            emptyHtml('⚠️', 'Seller app failed to load', (bootErr && bootErr.message) || 'Unknown error',
+                '<button class="btn btn-primary" type="button" data-action="seller-retry" style="margin-top:14px">Retry</button>') +
+            '</div>';
     }
-    await sellerRender();
 });
+// Watchdog: if the spinner is still showing after 20s, replace it with an
+// error state instead of spinning forever.
+setTimeout(async function () {
+    var view = viewEl();
+    if (view && view.querySelector('.page-loading')) {
+        view.innerHTML = '<div class="view-enter">' +
+            emptyHtml('⏳', 'Still loading…', 'The server is not responding. Check your connection and retry.',
+                '<button class="btn btn-primary" type="button" data-action="seller-retry" style="margin-top:14px">Retry</button>') +
+            '</div>';
+    }
+}, 20000);
 

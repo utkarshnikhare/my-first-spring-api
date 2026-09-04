@@ -587,3 +587,42 @@ h3 { font-size: 1rem; font-weight: 700; }
 .notif-item { padding: 8px; border-radius: 10px; font-size: .8rem; }
 .notif-item:hover { background: var(--bg); }
 .notif-item.unread { background: var(--brand-soft); }
+
+/* ==================== Screen 6: Demo payment methods ==================== */
+
+.pay-method {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+.pay-method:last-child { margin-bottom: 0; }
+.pay-method.selected {
+    border-color: var(--accent);
+    background: var(--accent-soft, rgba(124, 58, 237, .06));
+}
+.pm-radio {
+    width: 18px; height: 18px;
+    border: 2px solid var(--border);
+    border-radius: 50%;
+    flex-shrink: 0;
+    position: relative;
+}
+.pay-method.selected .pm-radio { border-color: var(--accent); }
+.pay-method.selected .pm-radio::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border-radius: 50%;
+    background: var(--accent);
+}
+.pm-icon { font-size: 1.5rem; flex-shrink: 0; }
+.pm-body { display: flex; flex-direction: column; min-width: 0; }
+.pm-name { font-weight: 700; font-size: .95rem; }
+.pm-sub { font-size: .78rem; color: var(--text-muted, #6b7280); }
