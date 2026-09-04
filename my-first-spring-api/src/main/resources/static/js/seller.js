@@ -319,23 +319,32 @@ document.addEventListener('click', async function (e) {
     } catch (err) { toast(err.message, 'error'); }
 });
 
-// BOOT — never leaves the page on an infinite spinner: any boot failure
+// BOOT - never leaves the page on an infinite spinner: any boot failure
 // renders a visible error state with a Retry button.
-window.addEventListener('hashchange', sellerRender);
+// The demo-login MUST complete before the first render: setting location.hash
+// fires 'hashchange' immediately, and a render triggered before the session
+// cookie exists makes GET /api/seller-app/dashboard return 401 (boot race).
+var sellerBooted = false;
+window.addEventListener('hashchange', function () { if (sellerBooted) sellerRender(); });
 window.addEventListener('DOMContentLoaded', async function () {
     try {
-        if (!location.hash) location.hash = '#/home';
         // Auto-login as demo seller (Aarti) without OTP for client demo
         try {
             await api('/api/seller-app/demo-login', { method: 'POST' });
         } catch (e) {
             console.warn('demo-login failed:', e && e.message);
         }
-        await sellerRender();
+        if (!location.hash) {
+            sellerBooted = true;          // gate first: the queued hashchange fires the single render
+            location.hash = '#/home';
+        } else {
+            sellerBooted = true;          // hash already present: no event will fire, render explicitly
+            await sellerRender();
+        }
     } catch (bootErr) {
         var view = viewEl();
         if (view) view.innerHTML = '<div class="view-enter">' +
-            emptyHtml('⚠️', 'Seller app failed to load', (bootErr && bootErr.message) || 'Unknown error',
+            emptyHtml('\u26A0\uFE0F', 'Seller app failed to load', (bootErr && bootErr.message) || 'Unknown error',
                 '<button class="btn btn-primary" type="button" data-action="seller-retry" style="margin-top:14px">Retry</button>') +
             '</div>';
     }
@@ -346,7 +355,7 @@ setTimeout(async function () {
     var view = viewEl();
     if (view && view.querySelector('.page-loading')) {
         view.innerHTML = '<div class="view-enter">' +
-            emptyHtml('⏳', 'Still loading…', 'The server is not responding. Check your connection and retry.',
+            emptyHtml('\u231B', 'Still loading...', 'The server is not responding. Check your connection and retry.',
                 '<button class="btn btn-primary" type="button" data-action="seller-retry" style="margin-top:14px">Retry</button>') +
             '</div>';
     }

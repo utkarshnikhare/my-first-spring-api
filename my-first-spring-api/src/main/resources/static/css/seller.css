@@ -110,10 +110,10 @@
 .history-card .hc-meta { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
 .history-card .hc-price { font-weight: 800; color: var(--accent); font-size: 0.88rem; }
 
-   SocioMart Seller App v1.0 — Mobile-first seller experience
-   5-tab nav: Home · Kitchen · Orders · History · Earnings
+/* ============================================================
+   SocioMart Seller App v1.0 - Mobile-first seller experience
+   5-tab nav: Home / Kitchen / Orders / History / Earnings
    ============================================================ */
-
 .seller-nav { --nav-active: var(--accent); --nav-active-soft: var(--accent-soft); }
 .seller-nav .nav-item.active { color: var(--accent); }
 .seller-nav .nav-item.active::before { background: var(--accent); }
@@ -193,9 +193,9 @@
 
 /* Offering Card */
 .offering-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 14px; margin-bottom: 12px; }
-.oc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.oc-name { font-weight: 800; font-size: 1rem; text-transform: uppercase; }
-.oc-badge { font-size: 0.7rem; font-weight: 800; padding: 3px 8px; border-radius: 8px; }
+.oc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; min-width: 0; }
+.oc-name { font-weight: 800; font-size: 1rem; text-transform: uppercase; min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+.oc-badge { font-size: 0.7rem; font-weight: 800; padding: 3px 8px; border-radius: 8px; flex-shrink: 0; }
 .oc-badge.live { background: var(--accent-soft); color: var(--accent); }
 .oc-badge.soldout { background: var(--danger-soft); color: var(--danger); }
 .oc-badge.closed { background: #F3F4F6; color: #6B7280; }
@@ -256,5 +256,86 @@
 
 /* Required marker */
 .required { color: var(--danger); }
+
+/* ============================================================
+   RESPONSIVE LAYER — mobile-first, same design language
+   ============================================================ */
+
+/* --- Long-content safety: flex rows never blow out --- */
+.oc-header, .opc-header, .sdh-top-row, .ep-row, .parse-field,
+.toggle-row, .customer-row, .history-card, .earning-item { min-width: 0; }
+
+.oc-header .oc-name, .opc-header .opc-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.hc-name, .cr-name, .pf-value, .si-name { overflow-wrap: anywhere; }
+.hc-body, .cr-body { min-width: 0; }
+.customer-row .cr-qty { flex-shrink: 0; }
+.ep-row, .parse-field { gap: 12px; }
+.ep-row .ep-value, .parse-field .pf-value { text-align: right; overflow-wrap: anywhere; }
+.oc-time-row { flex-wrap: wrap; row-gap: 4px; }
+.sdh-top-row { gap: 10px; }
+.sdh-greeting { overflow-wrap: anywhere; }
+
+/* Fixed publish CTA: never covered by nav or device safe area */
+.sticky-footer-btn { bottom: calc(70px + env(safe-area-inset-bottom)); }
+
+/* --- Very small phones (320–380px): compact, nothing clipped --- */
+@media (max-width: 380px) {
+    .form-row-3 { grid-template-columns: 1fr; }
+    .metric-row, .metric-cards-row { gap: 8px; }
+    .metric-card { padding: 12px 6px; }
+    .metric-card .metric-value { font-size: 1.2rem; }
+    .metric-card .metric-label { font-size: 0.62rem; }
+    .daily-total-card .dtc-number { font-size: 1.8rem; }
+    .dtc-badges { flex-wrap: wrap; }
+    .date-tab { padding: 8px 10px; font-size: 0.78rem; white-space: nowrap; }
+    .seller-header h1, .sdh-title { font-size: 1.12rem; }
+    .oc-price { font-size: 0.95rem; }
+    .photo-tile { width: 52px; height: 52px; }
+    .kitchen-avatar { width: 68px; height: 68px; font-size: 1.7rem; }
+    .date-tabs { flex-wrap: wrap; }
+}
+
+/* --- Touch devices: comfortable tap targets --- */
+@media (pointer: coarse) {
+    .stepper button { width: 42px; height: 42px; }
+    .stepper .stepper-value { min-width: 34px; }
+    .date-tab, .radio-option, .sort-select { padding-top: 10px; padding-bottom: 10px; }
+    .history-card input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--accent); }
+    .segmented button { padding: 10px 8px; }
+    .fav-pill { padding: 8px 12px; }
+    .toggle-switch { width: 48px; height: 28px; }
+    .toggle-switch::after { width: 24px; height: 24px; }
+    .toggle-switch.on::after { transform: translateX(20px); }
+}
+
+/* --- Tablet (≥768px): same design, more room --- */
+@media (min-width: 768px) {
+    .seller-view { max-width: 640px; margin: 0 auto; }
+    .metric-row, .metric-cards-row { gap: 14px; }
+    .metric-card { padding: 16px 12px; }
+}
+
+/* --- Desktop (≥1024px): polished, spacious --- */
+@media (min-width: 1024px) {
+    .seller-view { max-width: 680px; }
+    .pathway-card { padding: 18px; }
+}
+
+/* --- Landscape phones: nav compacts, nothing hidden --- */
+@media (max-height: 480px) and (orientation: landscape) {
+    .seller-header { margin: 4px 0 10px; }
+    .metric-row, .metric-cards-row { margin-bottom: 10px; }
+}
+
+/* --- Global overflow safety net (applied to all sizes) --- */
+.seller-view, .view { min-width: 0; }
+.oc-header, .oc-controls, .oc-time-row, .stepper,
+.seller-header, .section-head, .date-tabs, .modal-actions,
+.dtc-badges, .sdh-top-row, .ep-row, .parse-field,
+.history-card, .offering-card { min-width: 0; }
+.oc-name, .oc-stats, .oc-time-row, .history-name, .pathway-title,
+.metric-label, .metric-value, .item-name, .item-sub { overflow-wrap: anywhere; word-break: break-word; }
+.badge, .oc-badge, .pill, .status-pill, .metric-badge { flex-shrink: 0; }
+
 
 

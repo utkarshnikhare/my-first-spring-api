@@ -11,7 +11,7 @@
 
 /* Top bar */
 .admin-topbar {
-    position: fixed; top: 0; left:  ‌0; right:  ‌0; z-index: 95;
+    position: fixed; top: 0; left:  0; right:  0; z-index: 95;
     display: flex; justify-content: space-between; align-items: center; gap: 10px;
     padding: 10px 16px;
     background: var(--surface);
@@ -91,19 +91,47 @@
     background: var(--admin-1); color: var(--admin-3);
     display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.05rem;
 }
-.seller-row .sr-body { flex:  ‌1; min-width: 0; }
+.seller-row .sr-body { flex:  1; min-width: 0; }
 .seller-row .sr-name { font-weight: 800; font-size: 0.9rem; }
-.seller-row .sr-meta { font-size:  ‌0.75rem; color: var(--muted); margin-top: 2px; }
+.seller-row .sr-meta { font-size:  0.75rem; color: var(--muted); margin-top: 2px; }
 .seller-row .sr-actions { display: flex; flex-direction: column; gap: 6px; }
 .btn-sm { padding: 6px 10px; font-size: 0.75rem; border-radius: 8px; }
 .btn-success { background: var(--accent); color: #fff; border: none; }
 .modal .btn-danger { background: var(--danger); color: #fff; border: none; }
 .admin-textarea {
-    width: 100%; padding: 8px 10px; border:  ‌1px solid var(--border); border-radius: 10px;
-    font-size:  ‌0.85rem; background: var(--surface); color: var(--text); box-sizing: border-box; resize: vertical;
+    width: 100%; padding: 8px 10px; border:  1px solid var(--border); border-radius: 10px;
+    font-size:  0.85rem; background: var(--surface); color: var(--text); box-sizing: border-box; resize: vertical;
 }
 .admin-empty {
     background: var(--surface); border: 1px dashed var(--border); border-radius: 14px;
     padding: 20px; text-align: center; font-size: 0.88rem; color: var(--muted); margin-top: 8px;
 }
 .ac-chip.live { background: var(--accent-soft); color: var(--accent); }
+
+/* ============================================================
+   RESPONSIVE LAYER — admin shell
+   ============================================================ */
+
+/* Long content safety */
+.seller-row { min-width: 0; }
+.sr-name, .sr-meta { overflow-wrap: anywhere; }
+.seller-row .sr-actions { flex-shrink: 0; }
+.admin-section-head { gap: 10px; }
+.admin-brand { min-width: 0; overflow-wrap: anywhere; }
+
+/* Very small phones */
+@media (max-width: 380px) {
+    .admin-topbar { padding: 8px 10px; }
+    .admin-identity .admin-role-badge { display: none; }
+    .seller-row { flex-wrap: wrap; }
+    .seller-row .sr-actions { flex-direction: row; width: 100%; }
+    .seller-row .sr-actions .btn-sm { flex: 1; }
+}
+
+/* Tablet & desktop */
+@media (min-width: 768px) {
+    .admin-view { max-width: 640px; margin: 0 auto; }
+}
+@media (min-width: 1024px) {
+    .admin-view { max-width: 720px; }
+}

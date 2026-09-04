@@ -626,3 +626,148 @@ h3 { font-size: 1rem; font-weight: 700; }
 .pm-body { display: flex; flex-direction: column; min-width: 0; }
 .pm-name { font-weight: 700; font-size: .95rem; }
 .pm-sub { font-size: .78rem; color: var(--text-muted, #6b7280); }
+
+/* =====================================================================
+   RESPONSIVE SYSTEM (appendix) — SAME design language, better adaptation.
+   Strategy: base hardening for all viewports → ≤430 phone → ≤360 small
+   phone → 601–900 tablet → ≥768/≥1024 desktop spaciousness → landscape,
+   coarse-pointer, reduced-motion and focus states. No redesign.
+   ===================================================================== */
+
+/* ---------- Base hardening (all viewports) ---------- */
+
+img { max-width: 100%; height: auto; }
+body { overflow-x: hidden; overflow-x: clip; }
+
+/* Flex rows must never be blown out by long content (root-cause fix) */
+.card, .order-card, .summary-item, .si-top, .si-controls, .total-row,
+.oc-top-row, .receipt-line, .top-row, .section-head, .seller-header,
+.upi-row, .customer-row, .qty-row {
+    min-width: 0;
+}
+
+/* Text wraps naturally instead of clipping or pushing siblings out */
+h1, h2, h3, h4, p, .si-name, .si-sub, .si-price, .opc-name, .opc-meta,
+.cr-name, .cr-loc, .cr-qty, .fli-name, .fli-sub, .loc-pill, .pill,
+.nav-label, .dtc-badge, .date-tab, .sheet-title, .sheet-sub {
+    overflow-wrap: break-word;
+}
+.si-price, .cr-qty, .si-controls .oc-more { flex-shrink: 0; }
+
+/* Keep the entrance fade, remove the vertical jump that caused
+   "content moving up/down" on every screen change */
+@keyframes viewIn {
+    from { opacity: 0; transform: translateY(3px); }
+    to { opacity: 1; transform: none; }
+}
+
+/* Stable viewport height on mobile browsers (collapsing address bar) */
+.view { min-height: 100vh; min-height: 100svh; }
+
+/* Dropdowns and textareas can never exceed their card */
+select, textarea, input { max-width: 100%; }
+
+/* Visible keyboard focus for laptop/desktop navigation */
+:focus-visible { outline: 2px solid var(--brand-3); outline-offset: 2px; }
+
+/* ---------- Phone (≤430px): stacking + touch comfort ---------- */
+
+@media (max-width: 430px) {
+    /* Action buttons that sit side-by-side on desktop stack on phones */
+    .modal-actions { flex-wrap: wrap; }
+    .modal-actions .btn { flex: 1 1 100%; }
+
+    /* Rows that cannot fit at narrow widths wrap gracefully */
+    .date-tabs, .dtc-badges, .oc-controls, .section-head { flex-wrap: wrap; }
+
+    /* Multi-column form grids become single column */
+    .form-row-2, .form-row-3 { grid-template-columns: 1fr; }
+
+    /* Gallery: 4 columns is too tight on phones */
+    .gallery-grid { grid-template-columns: repeat(3, 1fr); }
+
+    /* Comfortable touch targets (Apple/Google 44px guideline) */
+    .icon-btn, .qty-btn { width: 42px; height: 42px; }
+    .qty-btn { min-width: 42px; min-height: 42px; }
+    .slot-chip, .date-tab { padding-block: 10px; }
+
+    /* Modals always fit the viewport and scroll internally */
+    .modal-backdrop { padding: 14px; align-items: flex-end; }
+    .modal {
+        width: 100%; max-height: calc(100dvh - 28px);
+        overflow-y: auto; -webkit-overflow-scrolling: touch;
+        border-radius: 20px 20px 0 0;
+    }
+
+    /* Fixed bars respect device safe areas (iPhone home indicator) */
+    .view { padding-bottom: calc(var(--nav-h) + 28px + env(safe-area-inset-bottom)); }
+    .view-order-bar { bottom: calc(var(--nav-h) + 10px + env(safe-area-inset-bottom)); }
+
+    /* Sheets: full-width bottom sheets with internal scrolling */
+    .sheet { width: 100%; max-height: 88dvh; }
+}
+
+/* ---------- Small phones (≤360px): tighten without shrinking type ---------- */
+
+@media (max-width: 360px) {
+    .tiles-grid, .items-grid { gap: 9px; }
+    .cat-grid { gap: 7px; }
+    h1 { font-size: 1.3rem; }
+    .seller-header h1 { font-size: 1.15rem; }
+    .daily-total-card .dtc-number { font-size: 1.7rem; }
+    .metric-row, .metric-cards-row { gap: 8px; }
+    .nav-label { font-size: .6rem; }
+    .loc-pill { padding: 7px 10px; font-size: .78rem; }
+    .modal { padding: 18px 16px; }
+}
+
+/* ---------- Tablet & desktop: same design, more breathing room ---------- */
+
+@media (min-width: 768px) {
+    .view { max-width: 640px; }
+    .items-grid { grid-template-columns: repeat(3, 1fr); }
+    .sheet { border-radius: 22px; bottom: 24px; }
+}
+
+@media (min-width: 1024px) {
+    .view { max-width: 680px; padding-top: 24px; }
+    .cat-grid { grid-template-columns: repeat(8, 1fr); }
+}
+
+/* ---------- Phone landscape: compact nav, no content hidden ---------- */
+
+@media (max-height: 480px) and (orientation: landscape) {
+    :root { --nav-h: 52px; }
+    .nav-label { display: none; }
+    .nav-icon { font-size: 1.35rem; }
+}
+
+/* ---------- Touch devices: 16px inputs prevent iOS focus zoom ---------- */
+
+@media (pointer: coarse) {
+    .form-input, .form-textarea, .form-select,
+    input[type="text"], input[type="tel"], input[type="number"],
+    input[type="date"], input[type="email"], input[type="search"],
+    textarea, select {
+        font-size: 16px;
+    }
+}
+
+/* ---------- Respect reduced-motion preference ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+    .view-enter, .modal, .toast, .view-order-bar { animation: none; }
+    .sheet { animation: none; }
+    * { transition-duration: .01ms !important; }
+}
+
+/* --- Global overflow safety net (all sizes) --- */
+.view, .seller-view { min-width: 0; }
+.fav-chip, .cat-tile, .kc-actions, .oc-controls,
+.summary-item, .receipt-line, .order-card, .oc-top-row,
+.si-top, .qty-counter, .modal-actions, .form-actions,
+.card, .order-card, .fav-list-item { min-width: 0; }
+.si-name, .fli-name, .kc-name, .cat-tile span,
+.order-card .si-name, .receipt-line span, .oc-desc { overflow-wrap: anywhere; word-break: break-word; }
+.pill, .badge, .oc-badge, .qty-btn { flex-shrink: 0; }
+
