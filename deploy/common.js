@@ -1,7 +1,7 @@
 /**
  * SocioMart Buyer App v1.0 — Common utilities
  * DOM helpers · API fetcher · single-kitchen cart (Spec 1.2) ·
- * deferred-OTP auth gate (Spec 1.1) · modal & bottom-sheet infra
+ * deferred auth gate (Spec 1.1) · modal & bottom-sheet infra
  */
 
 // ==================== DOM Helpers ====================
@@ -65,6 +65,13 @@ function formVals(form) {
     });
     return out;
 }
+
+function emptyHtml(icon, title, message, actionHtml) {
+    return '<div class="empty"><span class="empty-icon">' + icon + '</span>' +
+        '<div class="empty-title">' + esc(title) + '</div>' +
+        '<p>' + esc(message) + '</p>' + (actionHtml || '') + '</div>';
+}
+
 
 // ==================== API Fetcher ====================
 
@@ -245,7 +252,7 @@ function commitItem(newItem, kitchen) {
     toast('Added to your order from ' + kitchen.displayName, 'success');
 }
 
-// ==================== Deferred OTP Auth Gate (Spec 1.1) ====================
+// ==================== Deferred Auth Gate (Spec 1.1) ====================
 /**
  * Identity-bound actions (place order, toggle favourite, submit enquiry) call
  * requireAuth(). If the buyer is not logged in, the login modal opens and the

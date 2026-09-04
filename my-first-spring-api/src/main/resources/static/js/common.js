@@ -66,6 +66,13 @@ function formVals(form) {
     return out;
 }
 
+function emptyHtml(icon, title, message, actionHtml) {
+    return '<div class="empty"><span class="empty-icon">' + icon + '</span>' +
+        '<div class="empty-title">' + esc(title) + '</div>' +
+        '<p>' + esc(message) + '</p>' + (actionHtml || '') + '</div>';
+}
+
+
 // ==================== API Fetcher ====================
 
 async function api(path, opts) {
