@@ -1,45 +1,72 @@
 /* ============================================================
-   SocioMart Buyer App v1.0 — "Discover. Connect."
-   Dark-purple storefront brand · mobile-first SPA styles
+   SocioMart — Unified Community Marketplace Theme
+   Warm · Organic · Trustworthy · Premium
    ============================================================ */
 
 :root {
-    --brand: #2E1065;          /* dark purple (logo background) */
-    --brand-2: #4C1D95;
-    --brand-3: #7C3AED;
-    --brand-soft: #EDE9FE;
-    --accent: #16A34A;         /* AVAILABLE NOW green */
-    --accent-soft: #DCFCE7;
+    /* Deep plum / espresso primary brand */
+    --brand: #3D2B1F;          /* espresso / dark brown */
+    --brand-2: #5C3D2E;        /* warm plum */
+    --brand-3: #7A4E3A;        /* terracotta plum */
+    --brand-soft: #F5E6D8;     /* warm cream tint */
+
+    /* Action / CTA terracotta */
+    --accent: #C2652A;         /* terracotta / action orange */
+    --accent-soft: #FCE8D8;    /* warm terracotta tint */
+    --accent-hover: #A85423;   /* darker terracotta for hover */
+
+    /* Positive states - green */
+    --green: #16A34A;
+    --green-soft: #DCFCE7;
+
+    /* Pending / attention - amber */
     --amber: #D97706;
     --amber-soft: #FEF3C7;
-    --blue: #2563EB;
-    --blue-soft: #DBEAFE;
-    --purple: #7C3AED;
-    --purple-soft: #EDE9FE;
+
+    /* Destructive / sold out - red */
     --danger: #DC2626;
     --danger-soft: #FEE2E2;
-    --bg: #F6F4FB;
-    --surface: #FFFFFF;
-    --text: #1E1B2E;
-    --muted: #6B6480;
-    --border: #E6E2F0;
-    --shadow: 0 2px 10px rgba(46, 16, 101, .08);
-    --shadow-lg: 0 10px 30px rgba(46, 16, 101, .16);
+
+    /* Info - blue */
+    --blue: #2563EB;
+    --blue-soft: #DBEAFE;
+
+    /* Purple (kept as warm alias) */
+    --purple: #7A4E3A;
+    --purple-soft: #F5E6D8;
+
+    /* Surfaces */
+    --bg: #FAF6F1;             /* warm cream / off-white */
+    --surface: #FFFFFF;        /* white cards */
+    --surface-2: #F7F2EC;      /* slightly elevated cream */
+
+    /* Text */
+    --text: #2A1F1A;           /* deep warm brown (not pure black) */
+    --muted: #7D6E64;          /* warm grey-brown */
+
+    /* Borders & shadows */
+    --border: #E8DDD2;         /* warm border */
+    --shadow: 0 2px 10px rgba(61, 43, 31, .06);
+    --shadow-lg: 0 10px 30px rgba(61, 43, 31, .12);
+
+    /* Geometry */
     --radius: 16px;
     --nav-h: 62px;
 }
 
 html[data-theme="dark"] {
-    --bg: #16121F;
-    --surface: #211B31;
+    --bg: #1A1410;
+    --surface: #241C17;
+    --surface-2: #2E241D;
     --text: #F1EDF9;
     --muted: #A79FC0;
-    --border: #352C4D;
-    --brand-soft: #3A2A63;
-    --accent-soft: #12351F;
+    --border: #3D2F26;
+    --brand-soft: #3D2B1F;
+    --accent-soft: #3D2410;
+    --green-soft: #12351F;
     --amber-soft: #3D2E0D;
     --blue-soft: #16294D;
-    --purple-soft: #322253;
+    --purple-soft: #3D2B1F;
     --danger-soft: #46161A;
     --shadow: 0 2px 10px rgba(0, 0, 0, .4);
     --shadow-lg: 0 10px 30px rgba(0, 0, 0, .5);
@@ -109,9 +136,9 @@ h3 { font-size: 1rem; font-weight: 700; }
 }
 .btn:active { transform: scale(.97); }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
-.btn-primary { background: linear-gradient(135deg, var(--brand-2), var(--brand-3)); color: #fff; box-shadow: 0 4px 14px rgba(124, 58, 237, .35); }
-.btn-primary:hover { box-shadow: 0 6px 18px rgba(124, 58, 237, .45); }
-.btn-secondary { background: var(--brand-soft); color: var(--brand-2); }
+.btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent-hover)); color: #fff; box-shadow: 0 4px 14px rgba(194, 101, 42, .30); }
+.btn-primary:hover { box-shadow: 0 6px 18px rgba(194, 101, 42, .45); }
+.btn-secondary { background: var(--brand-soft); color: var(--brand); }
 .btn-outline { background: transparent; border: 1.5px solid var(--border); color: var(--text); }
 .btn-danger { background: var(--danger-soft); color: var(--danger); }
 .btn-block { display: flex; width: 100%; }
@@ -605,7 +632,7 @@ h3 { font-size: 1rem; font-weight: 700; }
 .pay-method:last-child { margin-bottom: 0; }
 .pay-method.selected {
     border-color: var(--accent);
-    background: var(--accent-soft, rgba(124, 58, 237, .06));
+    background: var(--accent-soft, rgba(194, 101, 42, .06));
 }
 .pm-radio {
     width: 18px; height: 18px;

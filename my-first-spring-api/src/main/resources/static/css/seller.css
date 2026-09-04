@@ -15,7 +15,7 @@
 .daily-total-card .dtc-label { font-size: 0.82rem; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
 .dtc-badges { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
 .dtc-badge { font-size: 0.72rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; white-space: nowrap; }
-.dtc-badge.green { background: var(--accent-soft); color: var(--accent); }
+.dtc-badge.green { background: var(--green-soft); color: var(--green); }
 .dtc-badge.orange { background: var(--amber-soft); color: var(--amber); }
 .dtc-badge.red { background: var(--danger-soft); color: var(--danger); }
 .order-product-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 14px; margin-bottom: 10px; }
@@ -42,7 +42,7 @@
 .odc-buyer-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
 .odc-buyer { font-weight: 700; font-size: 0.92rem; }
 .odc-qty { font-weight: 800; font-size: 0.88rem; color: var(--accent); white-space: nowrap; }
-.dot-green { color: var(--accent); }
+.dot-green { color: var(--green); }
 .dot-orange { color: var(--amber); }
 .dot-red { color: var(--danger); }
 .filter-row { margin-bottom: 10px; }
@@ -74,7 +74,7 @@
 .earnings-header-card .ehc-row { display: flex; justify-content: space-around; border-top: 1px solid var(--border); padding-top: 10px; }
 .ehc-row .ehc-item .ehc-val { font-weight: 800; font-size: 1rem; }
 .ehc-row .ehc-item .ehc-sub { font-size: 0.7rem; color: var(--muted); }
-.ehc-val.green { color: var(--accent); }
+.ehc-val.green { color: var(--green); }
 .ehc-val.orange { color: var(--amber); }
 .earning-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 8px; }
 .earning-item .ei-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
@@ -82,7 +82,7 @@
 .earning-item .ei-name { font-weight: 800; font-size: 0.88rem; }
 .earning-item .ei-orders { font-size: 0.75rem; color: var(--muted); }
 .earning-item .ei-revenue { text-align: right; }
-.earning-item .ei-confirmed { font-weight: 800; font-size: 0.85rem; color: var(--accent); }
+.earning-item .ei-confirmed { font-weight: 800; font-size: 0.85rem; color: var(--green); }
 .earning-item .ei-pending { font-size: 0.75rem; color: var(--amber); }
 
 /* Sticky footer button */
@@ -164,7 +164,7 @@
 .offering-card .oc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .offering-card .oc-name { font-weight: 800; font-size: 1rem; text-transform: uppercase; }
 .oc-badge { font-size: 0.7rem; font-weight: 800; padding: 3px 8px; border-radius: 8px; }
-.oc-badge.live { background: var(--accent-soft); color: var(--accent); }
+.oc-badge.live { background: var(--green-soft); color: var(--green); }
 .oc-badge.soldout { background: var(--danger-soft); color: var(--danger); }
 .oc-badge.closed { background: #F3F4F6; color: #6B7280; }
 .oc-stats { font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
@@ -185,7 +185,7 @@
 .ep-row:last-child { border-bottom: none; }
 .ep-row .ep-label { color: var(--muted); font-weight: 600; }
 .ep-row .ep-value { font-weight: 800; }
-.ep-row .ep-value.green { color: var(--accent); }
+.ep-row .ep-value.green { color: var(--green); }
 .ep-row .ep-value.orange { color: var(--amber); }
 
 /* Add offering button */
@@ -223,7 +223,7 @@
 .oc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; min-width: 0; }
 .oc-name { font-weight: 800; font-size: 1rem; text-transform: uppercase; min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
 .oc-badge { font-size: 0.7rem; font-weight: 800; padding: 3px 8px; border-radius: 8px; flex-shrink: 0; }
-.oc-badge.live { background: var(--accent-soft); color: var(--accent); }
+.oc-badge.live { background: var(--green-soft); color: var(--green); }
 .oc-badge.soldout { background: var(--danger-soft); color: var(--danger); }
 .oc-badge.closed { background: #F3F4F6; color: #6B7280; }
 .oc-stats { font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
