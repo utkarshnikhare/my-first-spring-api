@@ -39,6 +39,7 @@ public class DemoDataSeeder {
     private static final String DEMO_SEED_FLAG = "demo_data_seeded";
     private static final String DEMO_BUYERS_FLAG = "demo_buyers_seeded";
     private static final String DEMO_ORDERS_FLAG = "demo_orders_seeded";
+    private int orderCounter = 0;
 
     private final UserRepository userRepository;
     private final KitchenRepository kitchenRepository;
@@ -297,7 +298,7 @@ public class DemoDataSeeder {
         o.setOrderStatus(OrderStatus.valueOf(ordStatus));
         o.setPaymentStatus(PaymentStatus.valueOf(payStatus));
         o.setCustomInstructions(remark.isBlank() ? null : remark);
-        o.setOrderNumber("SM-" + (1000 + (int)(Math.random() * 8999)));
+        o.setOrderNumber("SM-" + (5000 + orderCounter++));
         o = orderRepository.save(o);
         OrderItem item = new OrderItem(p, qty, p.getPrice());
         o.addItem(item);

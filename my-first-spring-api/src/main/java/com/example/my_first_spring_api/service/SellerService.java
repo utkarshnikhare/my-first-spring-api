@@ -205,9 +205,17 @@ public class SellerService {
     }
 
     private KitchenDto toKitchenDto(Kitchen kitchen) {
-        return new KitchenDto(kitchen.getId(), kitchen.getName(), kitchen.getDisplayName(),
+        KitchenDto dto = new KitchenDto(kitchen.getId(), kitchen.getName(), kitchen.getDisplayName(),
                 kitchen.getDescription(), kitchen.getImageUrl(), kitchen.getRating(),
                 kitchen.getAvailableToday(), kitchen.getSeller() != null ? kitchen.getSeller().getId() : null);
+        dto.setShortDescription(kitchen.getShortDescription());
+        dto.setSociety(kitchen.getSociety());
+        dto.setBuilding(kitchen.getBuilding());
+        dto.setWhatsappLink(kitchen.getWhatsappLink());
+        dto.setInstagramLink(kitchen.getInstagramLink());
+        dto.setUpiId(kitchen.getUpiId());
+        dto.setOrderDeadline(kitchen.getOrderDeadline());
+        return dto;
     }
 
     private ProductDto toProductDto(Product product) {

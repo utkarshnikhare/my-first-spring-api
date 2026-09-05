@@ -35,20 +35,32 @@ function statusDot(paid, cancelled) { return cancelled ? '<span class="status-do
 function localDateStr(d) { var y = d.getFullYear(), m = ('0' + (d.getMonth() + 1)).slice(-2), day = ('0' + d.getDate()).slice(-2); return y + '-' + m + '-' + day; }
 function sellerDate(dateKey) {
     if (dateKey === 'tomorrow') return localDateStr(new Date(Date.now() + 864e5));
-    if (dateKey && dateKey !== 'today' && dateKey !== 'pick') return dateKey; // already a YYYY-MM-DD string
+    if (dateKey && dateKey !== 'today' && dateKey !== 'pick') return dateKey;
     return localDateStr(new Date());
+}
+function foodEmoji(name) {
+    var n = (name || '').toLowerCase();
+    if (n.indexOf('poha') >= 0 || n.indexOf('misal') >= 0) return '🍲';
+    if (n.indexOf('dosa') >= 0 || n.indexOf('idli') >= 0 || n.indexOf('sambar') >= 0) return '🍚';
+    if (n.indexOf('paratha') >= 0 || n.indexOf('roti') >= 0 || n.indexOf('naan') >= 0) return '🫓';
+    if (n.indexOf('biryani') >= 0) return '🍛';
+    if (n.indexOf('sweet') >= 0 || n.indexOf('kheer') >= 0 || n.indexOf('gulab') >= 0) return '🍮';
+    if (n.indexOf('samosa') >= 0 || n.indexOf('pak') >= 0) return '🥟';
+    if (n.indexOf('lassi') >= 0) return '🥗';
+    if (n.indexOf('noodle') >= 0) return '🍜';
+    return '🍽️';
 }
 
 // SCREEN 2: ADD OFFERING ENTRY POINT
 async function sellerAddView() {
     var h = '<div class="view-enter">';
-    h += '<div class="page-head"><h1>What would you like to do?</h1><p class="muted small">Choose how you want to add your new offering.</p></div>';
+    h += '<div class="page-head"><h1>Add Offering</h1><p class="muted small">Choose how you want to add your new offering.</p></div>';
     try { S.favTemplates = await api('/api/seller-app/templates'); } catch (e) { S.favTemplates = []; }
-    h += '<div class="pathway-card" data-action="go-use-favourite"><div class="pc-icon">Star</div><div class="pc-title">Use Favourite</div><div class="pc-desc">Quickly post from saved templates (max 3).</div>';
-    if (S.favTemplates.length > 0) { h += '<div class="favourite-pills">'; S.favTemplates.forEach(function (t) { h += '<span class="fav-pill" data-action="use-template" data-tid="' + t.id + '">Star ' + esc(t.name) + '</span>'; }); h += '</div>'; }
+    h += '<div class="pathway-card" data-action="go-use-favourite"><div class="pc-icon">⭐</div><div class="pc-title">Create from Favourite</div><div class="pc-desc">Quickly post from saved templates (max 3).</div>';
+    if (S.favTemplates.length > 0) { h += '<div class="favourite-pills">'; S.favTemplates.forEach(function (t) { h += '<span class="fav-pill" data-action="use-template" data-tid="' + t.id + '">⭐ ' + esc(t.name) + '</span>'; }); h += '</div>'; }
     h += '</div>';
-    h += '<div class="pathway-card" data-action="go-create"><div class="pc-icon">Sparkle</div><div class="pc-title">Create New</div><div class="pc-desc">Fill in all details manually.</div></div>';
-    h += '<div class="pathway-card" data-action="go-quick-post"><div class="pc-icon">Clipboard</div><div class="pc-title">Quick Post</div><div class="pc-desc">Paste a WhatsApp message - we auto-fill details.</div></div>';
+    h += '<div class="pathway-card" data-action="go-create"><div class="pc-icon">✨</div><div class="pc-title">Create New Offering</div><div class="pc-desc">Fill in all details manually.</div></div>';
+    h += '<div class="pathway-card" data-action="go-quick-post"><div class="pc-icon">📋</div><div class="pc-title">Quick Create</div><div class="pc-desc">Paste a WhatsApp message — we auto-fill details.</div></div>';
     h += '</div>';
     return h;
 }
@@ -56,11 +68,11 @@ async function sellerAddView() {
 // SCREEN 1: SELLER DASHBOARD (HOME)
 async function sellerHomeView() {
     var h = '<div class="view-enter">';
-    h += '<div class="seller-header"><div><h1>' + greeting() + ', Aarti</h1><p class="sub">Your SocioMart Dashboard</p></div><span class="bell-wrap"><button class="icon-btn" type="button" data-action="noop">Bell</button></span></div>';
+    h += '<div class="seller-header"><div class="sdh-text"><p class="sdh-greeting">' + greeting() + ', Aarti</p><h1 class="sdh-title">Your Dashboard</h1></div><span class="notif-bell"><button class="icon-btn" type="button" data-action="noop" aria-label="Notifications">🔔<span class="bell-badge">3</span></button><button class="icon-btn" type="button" data-action="toggle-theme" aria-label="Toggle theme">🌓</button></span></div>';
     try {
         var dash = await api('/api/seller-app/dashboard');
         S.kitchen = { id: dash.kitchenId, name: dash.kitchenName };
-        h += '<div class="metric-row">';
+        h += '<div class="metric-cards-row">';
         h += '<div class="metric-card"><div class="metric-value">' + dash.viewsToday + '</div><div class="metric-label">Views Today</div></div>';
         h += '<div class="metric-card"><div class="metric-value">' + dash.followers + '</div><div class="metric-label">Followers</div></div>';
         h += '<div class="metric-card"><div class="metric-value">' + dash.totalOrders + '</div><div class="metric-label">Total Orders</div></div></div>';
@@ -69,19 +81,22 @@ async function sellerHomeView() {
         else {
             dash.offerings.forEach(function (p) {
                 h += '<div class="offering-card">';
+                h += '<div class="oc-photo"></div>';
+                h += '<div class="oc-body">';
                 h += '<div class="oc-header"><span class="oc-name">' + esc(p.name) + '</span>' + offeringStatusBadge(p) + '</div>';
                 var booked = p.bookedQuantity || 0, remaining = p.remainingQuantity, maxQty = p.maxQuantity;
-                h += '<div class="oc-stats"><strong>' + booked + '</strong> booked . ' + (remaining != null ? remaining + ' available' : 'No limit') + '</div>';
+                h += '<div class="oc-stats"><strong>' + booked + '</strong> booked · ' + (remaining != null ? remaining + ' available' : 'No limit') + '</div>';
                 h += '<div class="oc-time-row"><span>Cutoff: <span class="time-label">' + esc(p.cutoffTime || '--') + '</span></span><span>Delivery: <span class="time-label">' + esc(p.readyByTime || '--') + '</span></span></div>';
-                if (maxQty != null && remaining != null && remaining >= 0 && !p.soldOut) { h += '<div class="stepper"><button type="button" data-action="inv-dec" data-pid="' + p.id + '">-</button><span class="stepper-value" id="inv-' + p.id + '">' + remaining + '</span><button type="button" data-action="inv-inc" data-pid="' + p.id + '">+</button></div>'; }
+                if (maxQty != null && remaining != null && remaining >= 0 && !p.soldOut) { h += '<div class="stepper"><button type="button" data-action="inv-dec" data-pid="' + p.id + '" aria-label="Decrease">-</button><span class="stepper-value" id="inv-' + p.id + '">' + remaining + '</span><button type="button" data-action="inv-inc" data-pid="' + p.id + '" aria-label="Increase">+</button></div>'; }
                 if (!p.soldOut) { h += '<button class="btn-soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Mark Sold Out</button>'; }
-                h += '<a class="btn btn-secondary btn-sm btn-block" style="margin-top:8px" href="#/order-detail/' + p.id + '">View Orders</a></div>';
+                h += '<a class="btn btn-secondary btn-sm btn-block btn-mt-sm" href="#/order-detail/' + p.id + '">View Orders</a>';
+                h += '</div></div>';
             });
         }
         h += '<button class="btn-add-offering" type="button" data-action="go-add">+ Add Offering</button>';
         h += '<div class="earnings-preview"><h3>Earnings Summary</h3>';
         h += '<div class="ep-row"><span class="ep-label">Confirmed Today</span><span class="ep-value green">' + money(dash.confirmedToday) + '</span></div>';
-        h += '<div class="ep-row"><span class="ep-label">Pending</span><span class="ep-value orange">Clock ' + money(dash.pending) + '</span></div>';
+        h += '<div class="ep-row"><span class="ep-label">Pending</span><span class="ep-value orange">' + money(dash.pending) + '</span></div>';
         h += '<div class="ep-row"><span class="ep-label">This Month</span><span class="ep-value">' + money(dash.thisMonth) + '</span></div></div>';
     } catch (e) { h += emptyHtml('Warn', 'Could not load dashboard', e.message); }
     h += '</div>';
@@ -108,10 +123,10 @@ async function sellerHistoryView() {
 // SCREEN 4: QUICK POST
 async function sellerQuickPostView() {
     var h = '<div class="view-enter">';
-    h += '<div class="page-head"><h1>Quick Post</h1><p class="muted small">Paste your WhatsApp promotional message.</p></div>';
+    h += '<div class="page-head"><h1>Quick Create</h1><p class="muted small">Paste your WhatsApp promotional message.</p></div>';
     h += '<div class="segmented"><button type="button" class="active" data-action="set-view-mode" data-mode="editor">Editor View</button><button type="button" data-action="set-view-mode" data-mode="buyer">Buyer View</button></div>';
     h += '<textarea class="qp-textarea" id="qpMessage" placeholder="Paste your WhatsApp message here..."></textarea>';
-    h += '<button class="btn btn-primary btn-block" type="button" data-action="parse-message">POST</button><div id="parseResult"></div></div>';
+    h += '<button class="btn btn-primary btn-block" type="button" data-action="parse-message">Parse Message</button><div id="parseResult"></div></div>';
     return h;
 }
 
@@ -131,7 +146,7 @@ async function sellerCreateView() {
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open <span class="req">*</span></label><input class="form-input" name="orderWindowStart" type="time" value="08:00"></div>';
     h += '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label><input class="form-input" name="orderWindowEnd" type="time" value="10:00"></div></div>';
     h += '<div class="form-group"><label class="form-label">Quantity Available <span class="req">*</span></label><input class="form-input" name="maxQuantity" type="number" placeholder="Blank for unlimited"></div>';
-    h += '<div class="toggle-row"><div><div class="toggle-label">Mark as Favourite</div><div class="toggle-note">Save as template (max 3).</div></div><div class="toggle-switch" id="favToggle" data-action="toggle-favourite"></div></div>';
+    h += '<div class="toggle-row"><div><div class="toggle-text">Mark as Favourite</div><div class="toggle-note">Save as template (max 3).</div></div><div class="toggle-switch" id="favToggle" data-action="toggle-favourite"></div></div>';
     h += '<button class="btn btn-primary btn-block" type="submit">Publish Offering</button></form></div>';
     return h;
 }
@@ -144,7 +159,7 @@ async function sellerOrdersView() {
         var summary = await api('/api/seller-app/orders/summary?date=' + sellerDate(S.selectedDate));
         h += '<div class="daily-total-card"><div class="dtc-number">' + summary.totalOrderCount + '</div><div class="dtc-label">Total Orders</div>';
         h += '<div class="dtc-badges"><span class="dtc-badge green">✓ ' + summary.paidCount + ' Paid</span><span class="dtc-badge orange">⏳ ' + summary.pendingCount + ' Pending</span><span class="dtc-badge red">✕ ' + summary.cancelledCount + ' Cancelled</span></div>';
-        if (summary.totalRevenue) { h += '<div style="margin-top:10px;font-size:0.82rem;color:var(--muted)">Revenue: <strong style="color:var(--accent)">' + money(summary.totalRevenue) + '</strong></div>'; }
+        if (summary.totalRevenue) { h += '<div class="tiny muted mt-2">Revenue: <strong class="text-brand">' + money(summary.totalRevenue) + '</strong></div>'; }
         h += '</div>';
         if (!summary.products || summary.products.length === 0) { h += emptyHtml('📋', 'No orders', 'Orders for this date will appear here.'); }
         else {
@@ -152,7 +167,7 @@ async function sellerOrdersView() {
                 h += '<div class="order-product-card"><div class="opc-header"><span class="opc-name">' + esc(p.productName) + '</span><span class="opc-revenue">' + money(p.revenue) + '</span></div>';
                 h += '<div class="opc-meta">' + p.totalOrders + ' orders · ' + p.totalPlates + ' plates</div>';
                 h += '<div class="opc-meta"><span class="dot-green">●</span> ' + p.paidCount + ' paid · <span class="dot-orange">●</span> ' + p.pendingCount + ' pending</div>';
-                h += '<a class="btn btn-secondary btn-sm btn-block" style="margin-top:8px" href="#/order-detail/' + p.productId + '">View Orders</a></div>';
+                 h += '<a class="btn btn-secondary btn-sm btn-block btn-mt-sm" href="#/order-detail/' + p.productId + '">View Orders</a></div>';
             });
         }
     } catch (e) { h += emptyHtml('⚠️', 'Could not load orders', e.message); }
@@ -163,12 +178,12 @@ async function sellerOrdersView() {
 // SCREEN 6: MANAGE KITCHEN
 async function sellerKitchenView() {
     var h = '<div class="view-enter"><div class="page-head"><h1>Manage Kitchen</h1></div>';
-    h += '<div class="kitchen-status-badge">Green Kitchen Page Published</div>';
-    h += '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="preview-kitchen" style="margin-bottom:14px">Preview Kitchen Page</button>';
+    h += '<div class="kitchen-status-badge">Kitchen Published</div>';
+    h += '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="preview-kitchen">Preview Kitchen Page</button>';
     var kitchen = null;
     try { kitchen = await api('/api/seller/kitchen'); S.myKitchen = kitchen; S.kitchen = kitchen; } catch (e) { }
     h += '<form class="seller-form" id="kitchenForm">';
-    h += '<div class="kitchen-avatar-upload"><div class="kitchen-avatar" data-action="upload-avatar">' + (kitchen && kitchen.imageUrl ? '<img src="' + esc(kitchen.imageUrl) + '" class="avatar-img">' : 'Cam') + '</div></div>';
+    h += '<div class="kitchen-avatar-upload"><div class="kitchen-avatar" data-action="upload-avatar">' + (kitchen && kitchen.imageUrl ? '<img src="' + esc(kitchen.imageUrl) + '" class="avatar-img">' : '') + '</div></div>';
     h += '<div class="form-group"><label class="form-label">Kitchen Name</label><input class="form-input" name="displayName" value="' + esc(kitchen && kitchen.displayName ? kitchen.displayName : 'Aarti Kitchen') + '"></div>';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Society</label><input class="form-input" name="society" value="' + esc(kitchen && kitchen.society ? kitchen.society : 'Sunshine Society') + '"></div><div class="form-group"><label class="form-label">Building</label><input class="form-input" name="building" value="' + esc(kitchen && kitchen.building ? kitchen.building : 'Building B') + '"></div></div>';
     h += '<div class="form-group"><label class="form-label">Speciality</label><input class="form-input" name="shortDescription" value="' + esc(kitchen && kitchen.shortDescription ? kitchen.shortDescription : 'Homemade Maharashtrian Food') + '"></div>';
@@ -186,10 +201,10 @@ async function sellerEarningsView() {
     try {
         var e = await api('/api/seller-app/earnings');
         h += '<div class="earnings-header-card"><div class="ehc-label">CONFIRMED TODAY</div><div class="ehc-main">' + money(e.confirmedToday) + '</div>';
-        h += '<div class="ehc-row"><div class="ehc-item"><div class="ehc-val orange">Clock ' + money(e.pending) + '</div><div class="ehc-sub">PENDING</div></div><div class="ehc-item"><div class="ehc-val">' + money(e.thisMonth) + '</div><div class="ehc-sub">THIS MONTH</div></div></div></div>';
+        h += '<div class="ehc-row"><div class="ehc-item"><div class="ehc-val orange">' + money(e.pending) + '</div><div class="ehc-sub">PENDING</div></div><div class="ehc-item"><div class="ehc-val">' + money(e.thisMonth) + '</div><div class="ehc-sub">THIS MONTH</div></div></div></div>';
         if (!e.items || e.items.length === 0) { h += emptyHtml('Earn', 'No earnings yet', 'Your earnings breakdown appears here.'); }
-        else { e.items.forEach(function (item) { h += '<div class="earning-item"><span class="ei-icon">Dish</span><span class="ei-body"><span class="ei-name">' + esc(item.productName) + '</span><span class="ei-orders">' + item.totalOrders + ' orders</span></span><span class="ei-revenue"><span class="ei-confirmed">' + money(item.confirmedRevenue) + '</span><br><span class="ei-pending">Clock ' + money(item.pendingRevenue) + '</span></span></div>'; }); }
-        h += '<a class="btn btn-secondary btn-block" style="margin-top:14px" href="#/history">VIEW FULL HISTORY</a>';
+        else { e.items.forEach(function (item) { h += '<div class="earning-item"><span class="ei-icon">🍽️</span><span class="ei-body"><span class="ei-name">' + esc(item.productName) + '</span><span class="ei-orders">' + item.totalOrders + ' orders</span></span><span class="ei-revenue"><span class="ei-confirmed">' + money(item.confirmedRevenue) + '</span><br><span class="ei-pending">' + money(item.pendingRevenue) + '</span></span></div>'; }); }
+        h += '<a class="btn btn-secondary btn-block" href="#/history">VIEW FULL HISTORY</a>';
     } catch (err) { h += emptyHtml('Warn', 'Could not load earnings', err.message); }
     h += '</div>';
     return h;
@@ -199,14 +214,14 @@ async function sellerEarningsView() {
 async function sellerOrderDetailView(productId) {
     S.selectedSort = S.selectedSort || 'all';
     var h = '<div class="view-enter">';
-    h += '<div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button><h2 style="flex:1">Order Details</h2></div>';
+    h += '<div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button><h2 class="flex-1">Order Details</h2></div>';
     h += '<div class="date-tabs"><button class="date-tab' + (S.selectedDate === 'today' ? ' active' : '') + '" data-action="set-date" data-date="today">Today</button><button class="date-tab' + (S.selectedDate === 'tomorrow' ? ' active' : '') + '" data-action="set-date" data-date="tomorrow">Tomorrow</button><button class="date-tab' + (S.selectedDate !== 'today' && S.selectedDate !== 'tomorrow' ? ' active' : '') + '" data-action="set-date" data-date="pick">Pick date</button></div>';
-    if (S.selectedDate === 'pick') { h += '<div style="margin-bottom:12px"><input type="date" class="sort-select" data-action="set-date-calendar" value="' + sellerDate(S.selectedDate) + '" style="width:100%"></div>'; }
+    if (S.selectedDate === 'pick') { h += '<div class="section-gap"><input type="date" class="sort-select w-full" data-action="set-date-calendar" value="' + sellerDate(S.selectedDate) + '"></div>'; }
     try {
         var detail = await api('/api/seller-app/orders/product/' + productId + '?date=' + sellerDate(S.selectedDate));
         h += '<div class="drilldown-header"><h3>' + esc(detail.productName) + '</h3>';
         h += '<div class="dd-stats">Revenue: <strong>' + money(detail.totalRevenue) + '</strong> · Plates: <strong>' + detail.totalPlates + '</strong></div>';
-        h += '<div class="dd-badges"><span class="dtc-badge green">Paid: ' + detail.paidCount + '</span> <span class="dtc-badge orange">Pending: ' + detail.pendingCount + '</span> <span class="dtc-badge red">Cancelled: ' + detail.cancelledCount + '</span></div></div>';
+        h += '<div class="dtc-badges"><span class="dtc-badge green">Paid: ' + detail.paidCount + '</span> <span class="dtc-badge orange">Pending: ' + detail.pendingCount + '</span> <span class="dtc-badge red">Cancelled: ' + detail.cancelledCount + '</span></div></div>';
         h += '<select class="sort-select" data-action="set-detail-sort"><option value="all"' + (S.selectedSort === 'all' ? ' selected' : '') + '>All Customers</option><option value="paid"' + (S.selectedSort === 'paid' ? ' selected' : '') + '>Paid Only</option><option value="pending"' + (S.selectedSort === 'pending' ? ' selected' : '') + '>Pending Only</option><option value="cancelled"' + (S.selectedSort === 'cancelled' ? ' selected' : '') + '>Cancelled Only</option></select>';
         var customers = (detail.customers || []).slice();
         if (S.selectedSort === 'paid') customers = customers.filter(function (c) { return c.paid; });
@@ -286,6 +301,7 @@ document.addEventListener('click', async function (e) {
         switch (a) {
             case 'go-back': history.back(); break;
             case 'noop': break;
+            case 'toggle-theme': toggleTheme(); break;
             case 'go-add': sellerNavigate('#/add'); break;
             case 'go-create': sellerNavigate('#/create'); break;
             case 'go-quick-post': sellerNavigate('#/quick-post'); break;
@@ -314,10 +330,17 @@ document.addEventListener('click', async function (e) {
             }
             case 'mark-soldout': {
                 var pid = Number(t.dataset.pid);
-                if (confirm('Mark as Sold Out?')) {
-                    await api('/api/seller-app/products/' + pid + '/sold-out', { method: 'POST' });
-                    toast('Marked as Sold Out', 'success'); sellerRender();
-                }
+                confirmModal({
+                    icon: '🔴',
+                    title: 'Mark as Sold Out?',
+                    message: 'This will mark the offering as sold out and hide it from buyers.',
+                    okLabel: 'Yes, Sold Out',
+                    onOk: async function () {
+                        await api('/api/seller-app/products/' + pid + '/sold-out', { method: 'POST' });
+                        toast('Marked as Sold Out', 'success');
+                        sellerRender();
+                    }
+                });
                 break;
             }
             case 'set-view-mode': S.viewMode = t.dataset.mode; await sellerRender(); break;
@@ -334,7 +357,7 @@ document.addEventListener('click', async function (e) {
                     var html = '<div class="parse-result-box"><h4>Extracted Details (Review before publishing)</h4>';
                     html += '<div class="parse-field"><span class="pf-label">Name</span><span class="pf-value ' + (result.name ? '' : 'missing') + '">' + (result.name || 'Missing') + '</span></div>';
                     html += '<div class="parse-field"><span class="pf-label">Price</span><span class="pf-value ' + (result.price ? '' : 'missing') + '">' + (result.price ? ('Rs ' + result.price) : 'Missing') + '</span></div>';
-                    html += '<button class="btn btn-primary btn-block" style="margin-top:10px" data-action="go-create">Review and Publish</button></div>';
+                    html += '<button class="btn btn-primary btn-block" data-action="go-create">Review and Publish</button></div>';
                     box.innerHTML = html;
                 }
                 break;
@@ -362,45 +385,38 @@ document.addEventListener('click', async function (e) {
     } catch (err) { toast(err.message, 'error'); }
 });
 
-// BOOT - never leaves the page on an infinite spinner: any boot failure
-// renders a visible error state with a Retry button.
-// The demo-login MUST complete before the first render: setting location.hash
-// fires 'hashchange' immediately, and a render triggered before the session
-// cookie exists makes GET /api/seller-app/dashboard return 401 (boot race).
+// BOOT - never leaves the page on an infinite spinner
 var sellerBooted = false;
 window.addEventListener('hashchange', function () { if (sellerBooted) sellerRender(); });
 window.addEventListener('DOMContentLoaded', async function () {
     try {
-        // Auto-login as demo seller (Aarti) without OTP for client demo
+        initTheme();
         try {
             await api('/api/seller-app/demo-login', { method: 'POST' });
         } catch (e) {
             console.warn('demo-login failed:', e && e.message);
         }
         if (!location.hash) {
-            sellerBooted = true;          // gate first: the queued hashchange fires the single render
+            sellerBooted = true;
             location.hash = '#/home';
         } else {
-            sellerBooted = true;          // hash already present: no event will fire, render explicitly
+            sellerBooted = true;
             await sellerRender();
         }
     } catch (bootErr) {
         var view = viewEl();
         if (view) view.innerHTML = '<div class="view-enter">' +
-            emptyHtml('\u26A0\uFE0F', 'Seller app failed to load', (bootErr && bootErr.message) || 'Unknown error',
-                '<button class="btn btn-primary" type="button" data-action="seller-retry" style="margin-top:14px">Retry</button>') +
+            emptyHtml('⚠️', 'Seller app failed to load', (bootErr && bootErr.message) || 'Unknown error',
+                '<button class="btn btn-primary btn-mt-md" type="button" data-action="seller-retry">Retry</button>') +
             '</div>';
     }
 });
-// Watchdog: if the spinner is still showing after 20s, replace it with an
-// error state instead of spinning forever.
 setTimeout(async function () {
     var view = viewEl();
     if (view && view.querySelector('.page-loading')) {
         view.innerHTML = '<div class="view-enter">' +
-            emptyHtml('\u231B', 'Still loading...', 'The server is not responding. Check your connection and retry.',
-                '<button class="btn btn-primary" type="button" data-action="seller-retry" style="margin-top:14px">Retry</button>') +
+            emptyHtml('⏳', 'Still loading...', 'The server is not responding. Check your connection and retry.',
+                '<button class="btn btn-primary btn-mt-md" type="button" data-action="seller-retry">Retry</button>') +
             '</div>';
     }
 }, 20000);
-

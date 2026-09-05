@@ -21,6 +21,7 @@ var routes = {
     '#/food': foodHubView,
     '#/kitchens': kitchensView,
     '#/summary': orderSummaryView,
+    '#/confirm': confirmOrderView,
     '#/payment': paymentView,
     '#/payment-success': paymentSuccessView,
     '#/favourites': favouritesView,
@@ -48,6 +49,8 @@ async function render() {
         view.innerHTML = html || '';
         updateNav(hash);
         updateCartBar();
+        if (view.querySelector('.sticky-footer-bar')) view.classList.add('has-sticky-footer');
+        else view.classList.remove('has-sticky-footer');
         window.scrollTo(0, 0);
     } catch (err) {
         view.innerHTML = '<div class="view-enter">' + emptyHtml('⚠️', 'Something went wrong', err.message) + '</div>';
@@ -85,6 +88,7 @@ document.addEventListener('click', async function (e) {
                 if (panel) panel.hidden = !panel.hidden;
                 break;
             }
+            case 'toggle-theme': toggleTheme(); break;
             case 'set-mode': state.viewMode = t.dataset.mode; await render(); break;
             case 'set-cat-mode': state.catMode = t.dataset.mode; await render(); break;
             case 'switch-cat': navigate('#/category/' + t.dataset.cat); break;
@@ -114,6 +118,7 @@ document.addEventListener('click', async function (e) {
             case 'cart-qty': await cartQty(Number(t.dataset.idx), Number(t.dataset.dir)); break;
             case 'cart-remove': await cartRemove(Number(t.dataset.idx)); break;
             case 'go-checkout': await goCheckout(); break;
+            case 'go-payment': navigate('#/payment'); break;
             case 'select-pay-method': state.payMethod = t.dataset.method; await render(); break;
             case 'confirm-payment': await confirmPayment(t); break;
             case 'logout': {

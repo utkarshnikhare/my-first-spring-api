@@ -414,7 +414,7 @@ public class OrderService {
     }
 
     private String generateOrderNumber() {
-        return "SM" + System.currentTimeMillis() % 10000000000L;
+        return "SM" + (System.nanoTime() % 10000000000L);
     }
 
     private void consumeStock(Order order) {
@@ -427,22 +427,20 @@ public class OrderService {
         }
         for (Map.Entry<Long, Integer> e : totals.entrySet()) {
             Product product = productRepository.findById(e.getKey()).orElse(null);
-            if (product == null || product.getRemainingQuantity() == null) continue;
-            if (product.getRemainingQuantity() < e.getValue()) {
-                throw new IllegalArgumentException("Only " + product.getRemainingQuantity() + " left of '" +
-                        product.getName() + "'. Please reduce quantity and try again.");
+            if (product == null) continue;
+            if (product.getRemainingQuantity() != null) {
+                if (product.getRemainingQuantity() < e.getValue()) {
+                    throw new IllegalArgumentException("Only " + product.getRemainingQuantity() + " left of '" +
+                            product.getName() + "'. Please reduce quantity and try again.");
+                }
+                int updated = productRepository.consumeStock(e.getKey(), e.getValue());
+                if (updated == 0) {
+                    throw new IllegalArgumentException("Not enough stock left for '" + product.getName() + "'. Please reduce quantity.");
+                }
+            } else {
+                product.setBookedQuantity((product.getBookedQuantity() == null ? 0 : product.getBookedQuantity()) + e.getValue());
+                productRepository.save(product);
             }
-        }
-        for (Map.Entry<Long, Integer> e : totals.entrySet()) {
-            Product product = productRepository.findById(e.getKey()).orElse(null);
-            if (product == null || product.getRemainingQuantity() == null) continue;
-            int updated = productRepository.consumeStock(e.getKey(), e.getValue());
-            if (updated == 0) {
-                throw new IllegalArgumentException("Not enough stock left for '" + product.getName() + "'. Please reduce quantity.");
-            }
-            // Live demand progress bar ("18 / 50 booked") — units booked per offering.
-            product.setBookedQuantity((product.getBookedQuantity() == null ? 0 : product.getBookedQuantity()) + e.getValue());
-            productRepository.save(product);
         }
     }
 

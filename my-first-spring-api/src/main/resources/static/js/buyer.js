@@ -16,6 +16,7 @@ function topBarHtml(opts) {
         '<span class="bell-wrap">' +
         '<button class="icon-btn" type="button" data-action="toggle-notifs" aria-label="Notifications">🔔' +
         '<span class="bell-badge">3</span></button>' +
+        '<button class="icon-btn" type="button" data-action="toggle-theme" aria-label="Toggle theme">🌓</button>' +
         '<div class="notif-panel" id="notifPanel" hidden>' +
         '<div class="notif-item unread">🟢 Your kitchen Aarti Kitchen confirmed today\'s menu</div>' +
         '<div class="notif-item unread">🍽️ Poha is live from 4 kitchens near you</div>' +
@@ -26,7 +27,7 @@ function topBarHtml(opts) {
 function backBarHtml(title) {
     return '<div class="top-row">' +
         '<button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button>' +
-        '<h2 style="flex:1">' + esc(title) + '</h2>' +
+        '<h2 class="flex-1 font-700">' + esc(title) + '</h2>' +
         '<span class="bell-wrap"><button class="icon-btn" type="button" data-action="noop" aria-label="Notifications">🔔<span class="bell-badge">3</span></button></span>' +
         '</div>';
 }
@@ -45,7 +46,7 @@ function kitchenCardHtml(k) {
     var items = (k.itemNames || []);
     var preview = items.slice(0, 5).map(esc).join(' · ');
     var more = items.length > 5 ? ' <strong>+' + (items.length - 5) + ' more</strong>' : '';
-    var emoji = k.imageUrl ? '' : '🏪';
+    var emoji = '';
     return '<div class="kitchen-card">' +
         '<div class="kc-top">' +
         '<div class="kc-avatar">' + emoji + '</div>' +
@@ -89,24 +90,30 @@ function emptyHtml(icon, title, message, actionHtml) {
 async function homeView() {
     var h = '<div class="view-enter">' + topBarHtml();
 
-    // Hero with logo + tagline "Discover. Connect."
+    // Hero with branding
     h += '<div class="hero">' +
         '<div class="hero-brand"><div class="hero-logo">🏪</div>' +
-        '<span class="hero-tagline">Discover. Connect.</span></div>' +
+        '<span class="hero-tagline">COMMUNITY MARKETPLACE</span></div>' +
         '<h1>Welcome to SocioMart</h1>' +
-        '<p class="sub">Your community marketplace.</p>' +
+        '<p class="sub">Fresh homemade food from trusted home kitchens near you.</p>' +
         '<p class="prompt">What are you looking for?</p>' +
         '</div>';
 
     // Tiles grid — Food & Kitchens is the active module
     h += '<div class="tiles-grid">' +
-        '<a class="tile" href="#/food" style="border-color:var(--accent)">' +
+        '<a class="tile" href="#/food">' +
         '<span class="tile-icon">🍽️</span><span class="tile-name">Food &amp; Kitchens</span>' +
         '<span class="pill pill-green">● AVAILABLE NOW</span></a>' +
         '</div>';
 
+    // Favourites row
+    h += '<div class="section-gap"><div class="top-row mb-2">' +
+        '<h3>❤️ Favourite Kitchens</h3>' +
+        '<a class="small text-sm font-700 text-brand no-underline" href="#/favourites">See all →</a></div>' +
+        '<div id="favRow">' + await favRowInner() + '</div></div>';
+
     // Footer — marketplace summary
-    h += '<p class="muted small section-gap" style="text-align:center; padding: 8px 12px 0">' +
+    h += '<p class="muted small section-gap text-center py-1">' +
         'SocioMart connects you with home kitchens and fresh food from people you trust. ' +
         'Order today or pre-order for later.' +
         '</p></div>';
@@ -135,7 +142,7 @@ async function favRowInner() {
 // ==================== Screen 2: Food & Kitchens (category hub) ====================
 
 function itemGroupCard(g) {
-    var emoji = g.imageUrl ? '' : emojiFor(g.name);
+    var emoji = '';
     return '<a class="item-card" href="#/search/' + encodeURIComponent(g.name) + '">' +
         '<div class="ic-img">' + emoji + '</div>' +
         '<div class="ic-body"><div class="ic-name">' + esc(g.name) + '</div>' +
@@ -196,9 +203,9 @@ async function foodHubView() {
     }
 
     // Favourites row
-    h += '<div class="section-gap"><div class="top-row" style="margin-bottom:8px">' +
+    h += '<div class="section-gap"><div class="top-row mb-2">' +
         '<h3>❤️ Favourite Kitchens</h3>' +
-        '<a class="small" style="color:var(--brand-3); font-weight:700; text-decoration:none" href="#/favourites">See all →</a></div>' +
+        '<a class="small text-sm font-700 text-brand no-underline" href="#/favourites">See all →</a></div>' +
         '<div id="favRow">' + await favRowInner() + '</div></div>';
 
     h += '</div>';
@@ -221,7 +228,7 @@ async function kitchensView() {
 
     try {
         var counts = await api('/api/discovery/counts');
-        h += '<p class="muted small" style="margin-bottom:14px">' +
+        h += '<p class="muted small mb-3">' +
             counts.live + ' Live · ' + counts.tomorrow + ' Tomorrow · ' + counts.preorder + ' Pre-order · ' +
             counts.all + ' All</p>';
 
@@ -269,7 +276,7 @@ async function categoryView(hash) {
 
     try {
         var data = await api('/api/discovery/items?category=' + cat);
-        h += '<div class="top-row" style="margin-bottom:10px"><h3>Explore ' + esc(m[1].toLowerCase()) + ' — ' +
+        h += '<div class="top-row mb-2"><h3>Explore ' + esc(m[1].toLowerCase()) + ' — ' +
             data.count + ' items</h3></div>';
         h += '<div class="segmented">' +
             '<button type="button" class="' + (mode === 'items' ? 'active' : '') + '" data-action="set-cat-mode" data-mode="items">By Items</button>' +
@@ -310,7 +317,7 @@ async function kitchenPageView(hash) {
             '<button class="icon-btn ghost" type="button" data-action="go-back" aria-label="Back">←</button>' +
             '<button class="icon-btn ghost" type="button" data-action="share-kitchen" aria-label="Share">🔗</button></div>' +
             '<div class="kh-identity">' +
-            '<div class="kh-avatar">' + (k.imageUrl ? '' : '🏪') + '</div>' +
+            '<div class="kh-avatar"></div>' +
             '<div><div class="kh-name">' + esc(k.displayName) + '</div>' +
             '<div class="kh-loc">📍 ' + esc((k.society || LOCATION) + (k.building ? ', ' + k.building : '')) + '</div></div></div>' +
             '<div class="kh-tags">' +
@@ -321,38 +328,38 @@ async function kitchenPageView(hash) {
             '<div class="kh-socials">' +
             (k.whatsappLink ? '<a class="kh-tag" href="' + esc(k.whatsappLink) + '" target="_blank" rel="noopener">💬 WhatsApp</a>' : '') +
             (k.instagramLink ? '<a class="kh-tag" href="' + esc(k.instagramLink) + '" target="_blank" rel="noopener">📸 Instagram</a>' : '') +
-            '<button class="kh-tag" type="button" data-action="open-enquiry" data-kid="' + k.id + '" data-kname="' + esc(k.displayName) + '" style="cursor:pointer">✉️ Enquire</button>' +
+            '<button class="kh-tag cursor-pointer" type="button" data-action="open-enquiry" data-kid="' + k.id + '" data-kname="' + esc(k.displayName) + '">✉️ Enquire</button>' +
             '</div></div>';
 
         // About + gallery
         var about = k.description || k.shortDescription || 'A community kitchen on SocioMart.';
         var shortAbout = about.length > 120 ? about.slice(0, 120) : null;
-        h += '<div class="card pad" style="margin-bottom:12px">' +
+        h += '<div class="card pad card-mb">' +
             '<p class="about-text" id="aboutText">' + esc(shortAbout || about) +
             (shortAbout ? '… <button class="oc-more" type="button" data-action="read-more" data-full="' + encodeURIComponent(about) + '">Read more →</button>' : '') + '</p>' +
-            '<h3 class="section-gap" style="margin-bottom:8px">Kitchen Gallery</h3>' +
+            '<h3 class="section-gap mb-2">Kitchen Gallery</h3>' +
             '<div class="gallery-strip">' +
             '<div class="gallery-ph">📷</div><div class="gallery-ph">🍛</div><div class="gallery-ph">🥘</div><div class="gallery-ph">☕</div>' +
-            '</div><button class="oc-more" type="button" data-action="noop" style="margin-top:6px">View all →</button></div>';
+            '</div><button class="oc-more" type="button" data-action="noop" class="mt-1">View all →</button></div>';
 
         // Section 1: Available Today
-        h += '<h3 class="section-gap" style="margin-bottom:10px">🍽️ Available Today</h3>';
+        h += '<h3 class="section-gap mb-2">🍽️ Available Today</h3>';
         h += today.length ? today.map(function (p) { return offeringCardHtml(p, k, false); }).join('')
             : emptyHtml('🍽️', 'Nothing available today', 'This kitchen has no offerings for today — check pre-orders below.');
 
         // Section 2: Pre-order
-        h += '<h3 class="section-gap" style="margin-bottom:10px">🔮 Pre-order</h3>';
+        h += '<h3 class="section-gap mb-2">🔮 Pre-order</h3>';
         h += preorder.length ? preorder.map(function (p) { return offeringCardHtml(p, k, true); }).join('')
             : '<p class="muted small">No pre-order offerings right now.</p>';
 
         // Coming Up strip (secondary tease of upcoming scheduled dishes)
         var upcoming = preorder.filter(function (p) { return p.availableDate; });
         if (upcoming.length) {
-            h += '<h3 class="section-gap" style="margin-bottom:10px">📅 Coming Up</h3><div class="upcoming-strip">' +
+            h += '<h3 class="section-gap mb-2">📅 Coming Up</h3><div class="upcoming-strip">' +
                 upcoming.slice(0, 6).map(function (p) {
                     return '<div class="upcoming-card"><span class="date-pill">' + esc(prettyDate(p.availableDate)) + '</span>' +
-                        '<div style="font-weight:800; font-size:.82rem">' + esc(p.name) + '</div>' +
-                        '<div class="tiny muted" style="margin-top:2px">' + money(p.price) + ' · ' + esc(p.priceUnit || 'serving') + '</div></div>';
+                        '<div class="font-800 text-sm">' + esc(p.name) + '</div>' +
+                        '<div class="tiny muted mt-1">' + money(p.price) + ' · ' + esc(p.priceUnit || 'serving') + '</div></div>';
                 }).join('') + '</div>';
         }
     } catch (e) {
@@ -375,7 +382,7 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
     var kitchenJson = encodeURIComponent(JSON.stringify({ id: kitchen.id, displayName: kitchen.displayName }));
     return '<div class="offering-card' + (soldOut ? ' sold-out' : '') + '">' +
         '<button class="heart-btn oc-heart" type="button" data-action="toggle-fav-product" data-pid="' + p.id + '" aria-label="Favourite">🤍</button>' +
-        '<div class="oc-photo">' + emojiFor(p.name) + '</div>' +
+        '<div class="oc-photo"></div>' +
         '<div class="oc-body">' +
         '<div class="oc-name-row"><span class="oc-name">' + esc(p.name) + '</span></div>' +
         '<p class="oc-desc">' + esc((p.description || '').slice(0, 70)) +
@@ -411,9 +418,9 @@ function openOrderSheet(productJson, kitchenJson) {
 
     // Type 2: fixed date context revealed here (cutoffs only inside ordering flow)
     if (fixed) {
-        h += '<div class="card pad" style="margin-top:12px; background:var(--purple-soft); border:none">' +
+        h += '<div class="card pad card-mt card-purple">' +
             '<span class="pill pill-purple">🔮 ' + esc(prettyDate(p.availableDate)) + '</span>' +
-            '<p class="small" style="margin-top:6px">For <strong>' + esc(prettyDate(p.availableDate)) + '</strong>' +
+            '<p class="small mt-1">For <strong>' + esc(prettyDate(p.availableDate)) + '</strong>' +
             (p.cutoffTime ? ', cutoff ' + prettyTime(p.cutoffTime) : '') + '</p></div>';
     }
 
@@ -423,7 +430,7 @@ function openOrderSheet(productJson, kitchenJson) {
         sheet.date = dates[0];
         var slots = (p.timeSlots || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
         sheet.slot = slots[0] || null;
-        h += '<div class="form-group" style="margin-top:14px"><label class="form-label">Choose date</label>' +
+        h += '<div class="form-group card-mt"><label class="form-label">Choose date</label>' +
             '<div class="slot-row">' + dates.map(function (d) {
                 return '<button type="button" class="slot-chip" data-action="set-sheet-date" data-date="' + d + '">' + prettyDate(d) + '</button>';
             }).join('') + '</div></div>';
@@ -442,7 +449,7 @@ function openOrderSheet(productJson, kitchenJson) {
         '<button class="qty-btn" type="button" data-action="sheet-qty" data-dir="1" ' + (sheet.qty >= max ? 'disabled' : '') + '>+</button>' +
         '</div></div>';
 
-    h += '<p class="tiny muted" style="text-align:center; margin-bottom:10px" id="sheetTotal">Total: ' + money(p.price * sheet.qty) + '</p>' +
+        h += '<p class="tiny muted mt-1" id="sheetTotal">Total: ' + money(p.price * sheet.qty) + '</p>' +
         '<button class="btn btn-primary btn-block" type="button" data-action="sheet-add">Add to Order</button>';
 
     openSheet(h);
@@ -500,7 +507,7 @@ function sheetAdd() {
 function openEnquirySheet(kitchenId, kitchenName) {
     openSheet('<h3 class="sheet-title">✉️ Enquire with ' + esc(kitchenName) + '</h3>' +
         '<p class="sheet-sub">Ask about ingredients, timings or custom requests.</p>' +
-        '<form data-form="enquiry" data-kid="' + kitchenId + '" style="margin-top:14px">' +
+        '<form data-form="enquiry" data-kid="' + kitchenId + '" class="card-mt">' +
         '<div class="form-group"><textarea class="form-textarea" name="message" rows="3" ' +
         'placeholder="e.g. Do you make gluten-free parathas?" required></textarea></div>' +
         '<button class="btn btn-primary btn-block" type="submit">Send Enquiry</button></form>');
@@ -514,17 +521,17 @@ async function orderSummaryView() {
     if (!cart || !cart.items || !cart.items.length) {
         h += backBarHtml('Order Summary') +
             emptyHtml('🛒', 'Your order is empty', 'Add something delicious from a community kitchen first.',
-                '<a class="btn btn-primary" href="#/food" style="margin-top:14px">Browse Food & Kitchens</a>');
+                '<a class="btn btn-primary" href="#/food" class="card-mt">Browse Food & Kitchens</a>');
         h += '</div>';
         return h;
     }
 
     h += '<div class="top-row">' +
         '<button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button>' +
-        '<h2 style="flex:1">Order Summary</h2></div>';
-    h += '<p class="muted small" style="margin-bottom:12px">🏪 ' + esc(cart.kitchenName) + '</p>';
+        '<h2 class="flex-1 font-700">Order Summary</h2></div>';
+    h += '<p class="muted small text-sm card-mb">🏪 ' + esc(cart.kitchenName) + '</p>';
 
-    h += '<div class="card pad" style="margin-bottom:12px">';
+    h += '<div class="card pad card-mb">';
     cart.items.forEach(function (item, idx) {
         h += '<div class="summary-item">' +
             '<div class="si-top"><span class="si-name">' + esc(item.name) + '</span>' +
@@ -540,13 +547,13 @@ async function orderSummaryView() {
             '<span class="qty-val">' + item.qty + '</span>' +
             '<button class="qty-btn" type="button" data-action="cart-qty" data-idx="' + idx + '" data-dir="1">+</button>' +
             '</div>' +
-            '<button class="oc-more" type="button" data-action="cart-remove" data-idx="' + idx + '" style="color:var(--danger)">Remove</button>' +
+            '<button class="oc-more text-danger" type="button" data-action="cart-remove" data-idx="' + idx + '">Remove</button>' +
             '</div></div>';
     });
     h += '<div class="total-row"><span>Item total</span><span>' + money(cartTotal()) + '</span></div></div>';
 
-    h += '<div class="card pad" style="margin-bottom:12px">' +
-        '<div class="form-group" style="margin-bottom:0">' +
+    h += '<div class="card pad card-mb">' +
+        '<div class="form-group mb-0">' +
         '<label class="form-label" for="orderNote">Anything you\'d like the seller to know?</label>' +
         '<textarea class="form-textarea" id="orderNote" rows="2" ' +
         'placeholder="e.g. Less spicy please, ring the bell twice"></textarea></div></div>';
@@ -588,11 +595,88 @@ async function goCheckout() {
         await withAuthGate(async function () {
             await api('/api/buyer/orders/draft?kitchenId=' + cart.kitchenId, { method: 'POST', body: items });
             state.pendingCheckout = { note: note };
-            navigate('#/payment');
+            navigate('#/confirm'); // Draft created once (idempotent) → review → payment
         });
     } catch (err) {
         if (!(err instanceof ApiError && err.status === 401)) toast(err.message, 'error');
     }
+}
+
+// ==================== Screen 5b: Confirm Order (review before payment) ====================
+
+/**
+ * Confirm Order page — dynamic review of the real backend DRAFT.
+ * No API mutations here: opening/reloading this page can never create a
+ * duplicate order. Only the Payment screen's Pay button places the order.
+ */
+async function confirmOrderView() {
+    var h = '<div class="view-enter">';
+    var draft = null;
+    try {
+        draft = await api('/api/buyer/orders/draft');
+    } catch (e) { draft = null; }
+    if (!draft || !draft.items || !draft.items.length) {
+        h += backBarHtml('Confirm Order') +
+            emptyHtml('🧾', 'No active order', 'Your order was already submitted or your selection expired.',
+                '<a class="btn btn-primary" href="#/food" class="card-mt">Browse Food &amp; Kitchens</a>');
+        h += '</div>';
+        return h;
+    }
+
+    h += '<div class="top-row">' +
+        '<button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button>' +
+        '<h2 class="flex-1 font-700">Confirm Order</h2></div>';
+
+    // 1+2: What am I ordering & from which kitchen
+    h += '<div class="card pad card-mb">' +
+        '<div class="flex items-center justify-between gap-2">' +
+        '<h3 class="font-700">' + esc(draft.kitchen && draft.kitchen.displayName ? draft.kitchen.displayName : 'Kitchen') + '</h3>' +
+        '<span class="pill pill-purple">' + esc(draft.orderNumber || '') + '</span></div>' +
+        '<p class="muted small mt-1">Review your order before payment</p></div>';
+
+    // 3+4: Items, quantity, prices
+    h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Your items</h3>';
+    (draft.items || []).forEach(function (it) {
+        h += '<div class="summary-item">' +
+            '<div class="si-top"><span class="si-name">' + esc(it.productName) + '</span>' +
+            '<span class="si-price">' + money(it.price * it.quantity) + '</span></div>' +
+            '<p class="si-sub">Quantity: ' + it.quantity + ' · ' + money(it.price) + ' each</p>' +
+            (it.scheduledDate || it.scheduledSlot
+                ? '<p class="si-sub">📅 ' + esc(prettyDate(it.scheduledDate)) + (it.scheduledSlot ? ' · ' + esc(it.scheduledSlot) : '') + '</p>'
+                : '') +
+            '</div>';
+    });
+    h += '<div class="total-row"><span>Order total</span><span>' + money(draft.totalAmount) + '</span></div></div>';
+
+    // 5: Delivery
+    h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Delivery</h3>' +
+        '<p class="muted small">📦 Today · standard community delivery slot' +
+        ((draft.items || []).some(function (it) { return it.scheduledDate || it.scheduledSlot; })
+            ? ' (pre-order items show their chosen date/slot above)' : '') + '</p></div>';
+
+    // 6: Delivery address from the logged-in buyer profile
+    var u = state.user || {};
+    h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Deliver to</h3>' +
+        '<p class="font-700 mb-1">' + esc(u.name || 'Buyer') + '</p>' +
+        '<p class="muted small">' +
+        esc([u.society || LOCATION, u.building, u.flatHouseNumber].filter(Boolean).join(' · ')) +
+        (u.mobileNumber ? '<br>📱 ' + esc(u.mobileNumber) : '') + '</p></div>';
+
+    // Remark carried from the Order Summary note
+    var note = (state.pendingCheckout && state.pendingCheckout.note) || '';
+    if (note) {
+        h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Your note to the kitchen</h3>' +
+            '<p class="muted small">💬 ' + esc(note) + '</p></div>';
+    }
+
+    // 7: Confirm action — moves to Payment, creates nothing
+    h += '<div class="sticky-footer-bar"><div class="inner">' +
+        '<button class="btn btn-primary btn-block" type="button" data-action="go-payment">Confirm Order — ' +
+        money(draft.totalAmount) + ' →</button>' +
+        '</div></div>';
+
+    h += '</div>';
+    return h;
 }
 
 // ==================== Screen 6: Payment & order confirmation (internal demo) ====================
@@ -619,41 +703,55 @@ async function paymentView() {
     if (!draft || !draft.items || !draft.items.length) {
         h += backBarHtml('Payment') +
             emptyHtml('🧾', 'No active order', 'Your order was already submitted or your session expired.',
-                '<a class="btn btn-primary" href="#/food" style="margin-top:14px">Browse Food &amp; Kitchens</a>');
+                '<a class="btn btn-primary" href="#/food" class="card-mt">Browse Food &amp; Kitchens</a>');
         h += '</div>';
         return h;
     }
 
     h += '<div class="top-row">' +
         '<button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button>' +
-        '<h2 style="flex:1">Payment</h2></div>';
+        '<h2 class="flex-1 font-700">Payment</h2></div>';
 
     // Order summary (real draft data from the shared database)
-    h += '<div class="card pad" style="margin-bottom:12px">' +
-        '<div style="display:flex; align-items:center; justify-content:space-between">' +
-        '<h3 style="margin:0">Order Summary</h3>' +
+    h += '<div class="card pad card-mb">' +
+        '<div class="flex items-center justify-between">' +
+        '<h3 class="font-700">Order Summary</h3>' +
         '<span class="pill pill-purple">' + esc(draft.orderNumber || '') + '</span></div>' +
-        '<p class="muted small" style="margin:6px 0 10px">🏪 ' + esc(draft.kitchen && draft.kitchen.displayName ? draft.kitchen.displayName : '') + '</p>';
+        '<p class="muted small my-2">🏪 ' + esc(draft.kitchen && draft.kitchen.displayName ? draft.kitchen.displayName : '') + '</p>';
     (draft.items || []).forEach(function (it) {
         h += '<div class="receipt-line"><span>' + esc(it.productName) + ' × ' + it.quantity + '</span><span>' + money(it.price * it.quantity) + '</span></div>';
     });
-    h += '<div class="receipt-line" style="font-weight:800; border-top:1px solid var(--border); margin-top:6px; padding-top:10px">' +
+    h += '<div class="receipt-line font-800 border-top mt-2 pt-2">' +
         '<span>Total payable</span><span>' + money(draft.totalAmount) + '</span></div></div>';
 
     // Payment method selection (demo only)
-    h += '<div class="card pad" style="margin-bottom:12px"><h3 style="margin-bottom:8px">Payment method</h3>' +
-        '<p class="tiny muted" style="margin-bottom:10px">This is a client demo — payments are simulated inside SocioMart. No real money, cards, OTPs or external sites are involved.</p>' +
+    var method = state.payMethod || 'upi';
+    h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Payment method</h3>' +
+        '<p class="tiny muted mb-2">This is a client demo — payments are simulated inside SocioMart. No real money, cards, OTPs or external sites are involved.</p>' +
         PAY_METHODS.map(function (m) {
-            var sel = (state.payMethod || 'upi') === m.id;
+            var sel = method === m.id;
             return '<label class="pay-method' + (sel ? ' selected' : '') + '" data-action="select-pay-method" data-method="' + m.id + '">' +
                 '<span class="pm-radio" aria-hidden="true"></span>' +
                 '<span class="pm-icon" aria-hidden="true">' + m.icon + '</span>' +
                 '<span class="pm-body"><span class="pm-name">' + m.name + '</span>' +
                 '<span class="pm-sub">' + m.sub + '</span></span>' +
                 '</label>';
-        }).join('') + '</div>';
+        }).join('');
 
-    var isCod = (state.payMethod || 'upi') === 'cod';
+    // Demo UPI details — clearly fictional, shown for the UPI method
+    if (method === 'upi') {
+        h += '<div class="upi-box">' +
+            '<div class="upi-box-title">Pay to this UPI ID</div>' +
+            '<div class="upi-row"><span class="upi-id">demo@sociomart</span>' +
+            '<button class="btn btn-secondary btn-sm" type="button" data-action="copy-upi" data-upi="demo@sociomart">Copy</button></div>' +
+            '<p class="tiny muted mt-2">Demo payment only — this UPI ID is sample data for demonstration purposes and is not connected to any real account.</p>' +
+            '</div>';
+    }
+
+    h += '<div class="receipt-line card-mt"><span class="muted">Payment status</span>' +
+        '<span class="pill pill-amber">Pending</span></div></div>';
+
+    var isCod = method === 'cod';
     h += '<div class="sticky-footer-bar"><div class="inner">' +
         '<button class="btn btn-primary btn-block" type="button" id="payNowBtn" data-action="confirm-payment"' +
         (isCod ? ' data-cod="1"' : '') + '>' +
@@ -700,27 +798,27 @@ function paymentSuccessView() {
     var o = state.lastOrder;
     if (!o) {
         return '<div class="view-enter">' + emptyHtml('🧾', 'No recent order', 'Place an order to see its confirmation here.',
-            '<a class="btn btn-primary" href="#/food" style="margin-top:14px">Browse Food &amp; Kitchens</a>') + '</div>';
+            '<a class="btn btn-primary card-mt" href="#/food">Browse Food &amp; Kitchens</a>') + '</div>';
     }
     var paid = o.paymentStatus === 'PAID';
-    var h = '<div class="view-enter" style="text-align:center; padding-top:14px">';
-    h += '<div style="font-size:3.2rem" aria-hidden="true">✅</div>' +
-        '<h1 style="margin:8px 0 4px">Order Confirmed</h1>' +
+    var h = '<div class="view-enter pt-3 text-center">';
+    h += '<div class="font-size-3-2" aria-hidden="true">✅</div>' +
+        '<h1 class="font-800 my-2">Order Confirmed</h1>' +
         '<p class="muted small">' + (paid ? 'Demo payment successful — thank you!' : 'Order placed — pay cash on delivery.') + '</p>';
-    h += '<div class="card pad" style="margin-top:14px; text-align:left">' +
+    h += '<div class="card pad card-mt text-left">' +
         '<div class="receipt-line"><span>Order</span><span>#' + esc(o.orderNumber || '') + '</span></div>' +
         '<div class="receipt-line"><span>Kitchen</span><span>🏪 ' + esc(o.kitchen && o.kitchen.displayName ? o.kitchen.displayName : '') + '</span></div>';
     (o.items || []).forEach(function (it) {
         h += '<div class="receipt-line"><span>' + esc(it.productName) + ' × ' + it.quantity + '</span><span>' + money(it.price * it.quantity) + '</span></div>';
     });
-    h += '<div class="receipt-line" style="font-weight:800; border-top:1px solid var(--border); margin-top:6px; padding-top:10px">' +
+    h += '<div class="receipt-line font-800 border-top mt-2 pt-2">' +
         '<span>Total</span><span>' + money(o.totalAmount) + '</span></div>' +
-        '<div style="display:flex; gap:8px; margin-top:12px">' +
+        '<div class="flex gap-2 card-mt">' +
         (paid ? '<span class="pill pill-green">Payment: PAID (Demo)</span>' : '<span class="pill pill-amber">Payment: Due on delivery</span>') +
         (ORDER_BADGES[o.orderStatus] || '') + '</div></div>';
-    h += '<div style="display:flex; gap:10px; margin-top:16px">' +
-        '<a class="btn btn-primary" style="flex:1" href="#/orders">View My Orders</a>' +
-        '<a class="btn btn-secondary" style="flex:1" href="#/home">Back to Home</a></div>';
+    h += '<div class="flex gap-3 card-mt">' +
+        '<a class="btn btn-primary flex-1" href="#/orders">View My Orders</a>' +
+        '<a class="btn btn-secondary flex-1" href="#/home">Back to Home</a></div>';
     h += '</div>';
     return h;
 }
@@ -731,23 +829,23 @@ async function comparisonView(hash) {
     var itemName = decodeURIComponent(hash.split('/')[2] || '');
     var h = '<div class="view-enter">';
     h += '<div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button>' +
-        '<h2 style="flex:1">' + esc(itemName) + '</h2></div>';
+        '<h2 class="flex-1">' + esc(itemName) + '</h2></div>';
 
     try {
         var data = await api('/api/discovery/offers?item=' + encodeURIComponent(itemName));
         var offers = data.offers || [];
-        h += '<p class="muted small" style="margin-bottom:14px">Currently available from ' + offers.length +
+        h += '<p class="muted small mb-3">Currently available from ' + offers.length +
             ' kitchen' + (offers.length === 1 ? '' : 's') + '</p>';
 
         if (!offers.length) {
             h += emptyHtml('🔍', 'No offers right now', 'No kitchen currently lists "' + itemName +
                 '". Try the Food & Kitchens hub for other dishes.',
-                '<a class="btn btn-primary" href="#/food" style="margin-top:14px">Back to Food & Kitchens</a>');
+                '<a class="btn btn-primary" href="#/food" class="card-mt">Back to Food & Kitchens</a>');
         } else {
             h += offers.map(function (o) {
                 return '<div class="compare-card">' +
                     '<div class="cc-top">' +
-                    '<div class="kc-avatar">' + (o.kitchenImageUrl ? '' : '🏪') + '</div>' +
+                    '<div class="kc-avatar"></div>' +
                     '<div class="kc-info"><div class="kc-name">' + esc(o.kitchenDisplayName) + '</div>' +
                     '<p class="kc-desc">' + esc(o.tagline || '') + '</p>' +
                     '<div class="kc-meta">' + statusPill(o.status) +
@@ -794,7 +892,7 @@ async function favouritesView() {
         }
         var list = favs ? (tab === 'kitchens' ? favs.kitchens : favs.food) : (tab === 'kitchens' ? DEMO_FAVOURITES : []);
         if (!list || !list.length) {
-            var demoNote = !state.user ? '<p class="tiny muted" style="margin-top:6px">Showing demo favourites — log in to see yours.</p>' : '';
+            var demoNote = !state.user ? '<p class="tiny muted mt-1">Showing demo favourites — log in to see yours.</p>' : '';
             h += emptyHtml('❤️', tab === 'kitchens' ? 'No favourite kitchens yet' : 'No favourite food yet',
                 tab === 'kitchens' ? 'Tap the heart on any kitchen to save it here.' : 'Tap the heart on any dish to save it here.') + demoNote;
         } else {
@@ -835,7 +933,7 @@ async function ordersView() {
 
     if (!state.user) {
         h += emptyHtml('🔐', 'Login to view your history', 'Your orders and enquiries appear here.',
-            '<button class="btn btn-primary" type="button" data-action="open-login" style="margin-top:14px">Log in</button>');
+            '<button class="btn btn-primary" type="button" data-action="open-login" class="card-mt">Log in</button>');
         h += '</div>';
         return h;
     }
@@ -846,7 +944,7 @@ async function ordersView() {
             var all = [].concat(orders.active || [], orders.completed || []);
             if (!all.length) {
                 h += emptyHtml('📋', 'No orders yet', 'When you place your first order it will show up here.',
-                    '<a class="btn btn-primary" href="#/food" style="margin-top:14px">Browse Food &amp; Kitchens</a>');
+                    '<a class="btn btn-primary" href="#/food" class="card-mt">Browse Food &amp; Kitchens</a>');
             } else {
                 var filter = state.ordersFilter || 'all';
                 var groups = {
@@ -855,7 +953,7 @@ async function ordersView() {
                     completed: all.filter(function (o) { return o.orderStatus === 'DELIVERED' || o.orderStatus === 'COMPLETED'; }),
                     cancelled: all.filter(function (o) { return o.orderStatus === 'CANCELLED'; })
                 };
-                h += '<div class="segmented" style="margin:10px 0 4px">' +
+                h += '<div class="segmented my-1">' +
                     ['all', 'active', 'completed', 'cancelled'].map(function (f) {
                         return '<button type="button" class="' + (filter === f ? 'active' : '') + '" data-action="set-orders-filter" data-filter="' + f + '">' +
                             f.charAt(0).toUpperCase() + f.slice(1) + '</button>';
@@ -880,12 +978,12 @@ async function ordersView() {
                             '<div><div class="odc-label">Total</div><div class="odc-value">' + money(o.totalAmount) + '</div></div>' +
                             '</div>';
                         var remark = o.customInstructions ? '<div class="odc-remark">📝 ' + esc(o.customInstructions) + '</div>' : '';
-                        return '<a class="odc-order-card ' + (cancelled ? 'cancelled' : '') + '" href="#/order/' + o.id + '" style="display:block; text-decoration:none; color:inherit">' +
+                        return '<a class="odc-order-card block no-underline ' + (cancelled ? 'cancelled' : '') + '" href="#/order/' + o.id + '">' +
                             '<div class="odc-top-row"><span class="odc-order-id">#' + esc(o.orderNumber) + '</span><span class="odc-badge ' + badgeClass + '">' + badgeText + '</span></div>' +
                             itemLines +
                             grid +
                             remark +
-                            '<p class="tiny muted" style="margin-top:6px">Tap for details →</p></a>';
+                            '<p class="tiny muted mt-1">Tap for details →</p></a>';
                     }).join('');
                 }
             }
@@ -901,8 +999,8 @@ async function ordersView() {
                 h += enquiries.map(function (en) {
                     return '<div class="order-card"><div class="oc-top-row">' +
                         '<div><div class="si-name">🏪 ' + esc(en.kitchenName) + '</div>' +
-                        '<p class="si-sub" style="margin-top:4px">' + esc(en.message) + '</p>' +
-                        '<p class="tiny muted" style="margin-top:4px">' + new Date(en.createdAt).toLocaleString() + '</p></div>' +
+                        '<p class="si-sub mt-1">' + esc(en.message) + '</p>' +
+                        '<p class="tiny muted mt-1">' + new Date(en.createdAt).toLocaleString() + '</p></div>' +
                         (en.status === 'SELLER_RESPONDED'
                             ? '<span class="pill pill-green">🟢 Seller responded</span>'
                             : '<span class="pill pill-amber">🟠 Waiting for response</span>') +
@@ -927,45 +1025,45 @@ async function orderDetailView(hash) {
     } catch (e) {
         return '<div class="view-enter">' + backBarHtml('Order Detail') +
             emptyHtml('🔍', 'Order not found', e.message,
-                '<a class="btn btn-primary" href="#/orders" style="margin-top:14px">Back to My Orders</a>') + '</div>';
+                '<a class="btn btn-primary" href="#/orders" class="card-mt">Back to My Orders</a>') + '</div>';
     }
     var paid = o.paymentStatus === 'PAID';
     var h = '<div class="view-enter">';
     h += '<div class="top-row">' +
         '<button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button>' +
-        '<h2 style="flex:1">Order Detail</h2></div>';
+        '<h2 class="flex-1">Order Detail</h2></div>';
 
-    h += '<div class="card pad" style="margin-bottom:12px">' +
-        '<div style="display:flex; align-items:center; justify-content:space-between">' +
-        '<div><div class="si-name" style="font-size:1.05rem">#' + esc(o.orderNumber) + '</div>' +
+    h += '<div class="card pad card-mb">' +
+        '<div class="flex items-center justify-between">' +
+        '<div><div class="si-name text-sm">#' + esc(o.orderNumber) + '</div>' +
         '<p class="si-sub">🏪 ' + esc(o.kitchen ? o.kitchen.displayName : '') + '</p></div>' +
         (ORDER_BADGES[o.orderStatus] || '') + '</div>' +
-        '<p class="tiny muted" style="margin-top:6px">Placed ' + new Date(o.createdAt).toLocaleString() + '</p></div>';
+        '<p class="tiny muted mt-1">Placed ' + new Date(o.createdAt).toLocaleString() + '</p></div>';
 
-    h += '<div class="card pad" style="margin-bottom:12px"><h3 style="margin-bottom:8px">Items</h3>';
+    h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Items</h3>';
     (o.items || []).forEach(function (it) {
         h += '<div class="receipt-line"><span>' + esc(it.productName) + ' × ' + it.quantity + '</span><span>' + money(it.price * it.quantity) + '</span></div>' +
-            '<p class="tiny muted" style="margin:0 0 6px">' + money(it.price) + ' each' +
+            '<p class="tiny muted mb-1">' + money(it.price) + ' each' +
             (it.scheduledDate ? ' · ' + esc(prettyDate(it.scheduledDate)) : '') +
             (it.scheduledSlot ? ' · ' + esc(it.scheduledSlot) : '') + '</p>';
     });
-    h += '<div class="receipt-line" style="font-weight:800; border-top:1px solid var(--border); margin-top:6px; padding-top:10px">' +
+    h += '<div class="receipt-line font-800 border-top mt-2 pt-2">' +
         '<span>Item total</span><span>' + money(o.totalAmount) + '</span></div></div>';
 
-    h += '<div class="card pad" style="margin-bottom:12px">' +
-        '<div style="display:flex; justify-content:space-between; padding:4px 0"><span class="cc-label">Payment status</span>' +
+    h += '<div class="card pad card-mb">' +
+        '<div class="flex justify-between py-1"><span class="cc-label">Payment status</span>' +
         (paid ? '<span class="pill pill-green">PAID (Demo)</span>' : '<span class="pill pill-amber">PENDING</span>') + '</div>' +
-        '<div style="display:flex; justify-content:space-between; padding:4px 0"><span class="cc-label">Order status</span>' +
+        '<div class="flex justify-between py-1"><span class="cc-label">Order status</span>' +
         '<span class="cc-value">' + esc(o.orderStatus || '') + '</span></div>' +
-        (o.buyer ? '<div style="display:flex; justify-content:space-between; padding:4px 0"><span class="cc-label">Deliver to</span>' +
+        (o.buyer ? '<div class="flex justify-between py-1"><span class="cc-label">Deliver to</span>' +
             '<span class="cc-value">' + esc([o.buyer.flatHouseNumber, state.user && state.user.building, state.user && state.user.society].filter(Boolean).join(', ') || '—') + '</span></div>' : '') +
-        (o.customInstructions ? '<div style="margin-top:8px"><span class="cc-label">Remarks</span>' +
-            '<p class="si-sub" style="margin:4px 0 0">' + esc(o.customInstructions) + '</p></div>' : '') +
+        (o.customInstructions ? '<div class="card-mt"><span class="cc-label">Remarks</span>' +
+            '<p class="si-sub mt-1">' + esc(o.customInstructions) + '</p></div>' : '') +
         '</div>';
 
-    h += '<div style="display:flex; gap:10px">' +
-        '<a class="btn btn-secondary" style="flex:1" href="#/orders">← My Orders</a>' +
-        (o.kitchen && o.kitchen.id ? '<a class="btn btn-secondary" style="flex:1" href="#/kitchen/' + o.kitchen.id + '">Visit Kitchen</a>' : '') +
+    h += '<div class="flex gap-3">' +
+        '<a class="btn btn-secondary flex-1" href="#/orders">← My Orders</a>' +
+        (o.kitchen && o.kitchen.id ? '<a class="btn btn-secondary flex-1" href="#/kitchen/' + o.kitchen.id + '">Visit Kitchen</a>' : '') +
         '</div>';
 
     h += '</div>';
@@ -979,39 +1077,40 @@ async function profileView() {
 
     if (!state.user) {
         // Logged-out state: login prompt (Spec Screen 8)
-        h += '<div class="card pad" style="text-align:center">' +
-            '<div style="font-size:2.4rem; margin-bottom:8px">👋</div>' +
+        h += '<div class="card pad text-center">' +
+            '<div class="font-size-2-4 mb-2">👋</div>' +
             '<h2>Welcome to SocioMart</h2>' +
-            '<p class="muted small" style="margin:6px 0 16px">Login with your mobile number to place orders, save favourites and send enquiries.</p>' +
+            '<p class="muted small my-2">Login with your mobile number to place orders, save favourites and send enquiries.</p>' +
             '<form data-form="profile-login">' +
             '<div class="form-group"><input class="form-input" name="mobileNumber" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" required></div>' +
             '<button class="btn btn-primary btn-block" type="submit">Log in</button></form>' +
-            '<p class="tiny muted" style="margin-top:10px">You can keep browsing without logging in.</p>' +
+            '<p class="tiny muted" class="mt-2">You can keep browsing without logging in.</p>' +
             '</div></div>';
         return h;
     }
 
     // Logged-in state
     var u = state.user;
-    h += '<div class="card pad" style="margin-bottom:12px">' +
-        '<div style="display:flex; align-items:center; gap:14px">' +
-        '<div class="kc-avatar" style="width:60px; height:60px; font-size:1.7rem">' + esc((u.name || '?').charAt(0).toUpperCase()) + '</div>' +
+    h += '<div class="card pad card-mb">' +
+        '<div class="flex items-center gap-3">' +
+        '<div class="kc-avatar kc-avatar-sm">' + esc((u.name || '?').charAt(0).toUpperCase()) + '</div>' +
         '<div><h2>' + esc(u.name || 'Buyer') + '</h2>' +
         '<p class="muted small">📱 ' + esc(u.mobileNumber || '') + '</p></div></div></div>';
 
-    h += '<form data-form="profile-edit"><div class="card pad" style="margin-bottom:12px">' +
+    h += '<form data-form="profile-edit"><div class="card pad card-mb">' +
         '<div class="profile-row"><span class="pr-label">Name</span>' +
-        '<input class="form-input" name="name" value="' + esc(u.name || '') + '" style="max-width:200px; padding:8px 10px"></div>' +
+        '<input class="form-input form-input-sm" name="name" value="' + esc(u.name || '') + '"></div>' +
         '<div class="profile-row"><span class="pr-label">Community / Society</span>' +
-        '<input class="form-input" name="society" value="' + esc(u.society || LOCATION) + '" style="max-width:200px; padding:8px 10px"></div>' +
+        '<input class="form-input form-input-sm" name="society" value="' + esc(u.society || LOCATION) + '"></div>' +
         '<div class="profile-row"><span class="pr-label">Building</span>' +
-        '<input class="form-input" name="building" value="' + esc(u.building || '') + '" style="max-width:200px; padding:8px 10px"></div>' +
+        '<input class="form-input form-input-sm" name="building" value="' + esc(u.building || '') + '"></div>' +
         '<div class="profile-row"><span class="pr-label">Flat #</span>' +
-        '<input class="form-input" name="flatHouseNumber" value="' + esc(u.flatHouseNumber || '') + '" style="max-width:200px; padding:8px 10px"></div>' +
-        '<button class="btn btn-secondary btn-block btn-sm" type="submit" style="margin-top:12px">Save Profile</button></div></form>';
+        '<input class="form-input form-input-sm" name="flatHouseNumber" value="' + esc(u.flatHouseNumber || '') + '"></div>' +
+        '<button class="btn btn-secondary btn-block btn-sm mt-2" type="submit">Save Profile</button></div></form>';
 
     h += '<div class="card pad"><button class="btn btn-danger btn-block" type="button" data-action="logout">Log Out</button></div>';
 
     h += '</div>';
     return h;
 }
+

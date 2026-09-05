@@ -122,8 +122,8 @@ async function adminAction(action, t) {
             case 'open-reject': {
                 openModal(
                     '<h3>Reject ' + esc(t.dataset.name) + '?</h3>' +
-                    '<p class="muted small">Add a reason (shown to the seller( — optional.</p>' +
-                    '<div class="form-group"><textarea id="rejectReason" class="admin-textarea" rows="2" maxlength="200" placeholder="Reason (optional("></textarea></div>' +
+                     '<p class="muted small">Add a reason (shown to the seller) — optional.</p>' +
+                     '<div class="form-group"><textarea id="rejectReason" class="admin-textarea" rows="2" maxlength="200" placeholder="Reason (optional)"></textarea></div>' +
                     '<div class="modal-actions">' +
                     '<button class="btn btn-outline" type="button" data-action="cancel-reject">Cancel</button>' +
                     '<button class="btn btn-danger" type="button" data-action="confirm-reject" data-id="' + t.dataset.id + '">Reject</button>' +
@@ -160,7 +160,7 @@ function adminPlaceholderView(title, copy, icon) {
     return async function () {
         return '<div class="view-enter">' +
             '<div class="section-head admin-section-head"><div><h1>' + title + '</h1><p class="muted small">' + copy + '</p></div></div>' +
-            '<div class="placeholder-note"><div style="font-size:2rem;margin-bottom:6px">' + icon + '</div><strong>' + title + '</strong> — arrives in a later increment.</div></div>';
+            '<div class="placeholder-note"><div class="font-size-2 mb-2">' + icon + '</div><strong>' + title + '</strong> — arrives in a later increment.</div></div>';
     };
 }
 async function adminPendingView() {
