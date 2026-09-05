@@ -57,6 +57,10 @@ public class FavouriteService {
             favouriteRepository.delete(existing.get());
             return false;
         }
+        long total = favouriteRepository.countByUserId(buyer.getId());
+        if (total >= 3) {
+            throw new IllegalArgumentException("You can favourite up to 3 items only.");
+        }
         Favourite f = new Favourite();
         f.setUser(buyer);
         f.setKitchen(kitchen);
@@ -71,6 +75,10 @@ public class FavouriteService {
         if (existing.isPresent()) {
             favouriteRepository.delete(existing.get());
             return false;
+        }
+        long total = favouriteRepository.countByUserId(buyer.getId());
+        if (total >= 3) {
+            throw new IllegalArgumentException("You can favourite up to 3 items only.");
         }
         Favourite f = new Favourite();
         f.setUser(buyer);

@@ -14,6 +14,7 @@ public interface FavouriteRepository extends JpaRepository<Favourite, Long> {
     Optional<Favourite> findByUserIdAndKitchenId(Long userId, Long kitchenId);
     Optional<Favourite> findByUserIdAndProductId(Long userId, Long productId);
     long countByUser(User user);
+    long countByUserId(Long userId);
     boolean existsByKitchen(Kitchen kitchen);
     boolean existsByProduct(Product product);
     long countByKitchen(Kitchen kitchen);

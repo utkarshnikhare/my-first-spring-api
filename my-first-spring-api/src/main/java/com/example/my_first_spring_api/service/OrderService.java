@@ -317,6 +317,9 @@ public class OrderService {
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
         if (order.getBuyer() == null || !order.getBuyer().getId().equals(buyer.getId())) throw new OrderNotFoundException(orderId);
         order.setPaymentStatus(paymentStatus);
+        if (paymentStatus == PaymentStatus.PAID && order.getOrderStatus() == OrderStatus.ORDERED) {
+            order.setOrderStatus(OrderStatus.CONFIRMED);
+        }
         orderRepository.save(order);
         return toOrderDto(order);
     }
