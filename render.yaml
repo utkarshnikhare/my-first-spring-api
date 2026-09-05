@@ -7,6 +7,7 @@
 # NOTE: Render auto-injects the PORT environment variable at runtime.
 # The app binds to ${PORT:8081} (see application.properties), so we do NOT
 # hard-code PORT here — letting Render control it avoids routing mismatches.
+# Updated: 2026-09-05 — payment/favourites/validation fixes
 
 services:
   - type: web
