@@ -323,7 +323,6 @@ public class OrderService {
         orderRepository.save(order);
         return toOrderDto(order);
     }
-    // Trigger redeployment
 
     @Transactional(readOnly = true)
     public List<OrderDto> getSellerOrders(User seller) {

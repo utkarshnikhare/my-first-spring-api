@@ -1,4 +1,4 @@
-# SocioMart — Technical Deployment Report (2026-09-05)
+# SocioMart — Technical Deployment Report (2026-09-04)
 
 ## Hosting provider selected
 **Render.com — free web service (Docker runtime)**, configured via `render.yaml` (Blueprint) + existing `Dockerfile`.
