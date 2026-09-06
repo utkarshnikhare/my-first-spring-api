@@ -1,5 +1,7 @@
 # ---------- Build stage: compile with Maven on JDK 21 ----------
 FROM maven:3.9.6-eclipse-temurin-21 AS build
+ARG BUILD_TIMESTAMP=2026-09-06T03:00:00Z
+LABEL build.timestamp=${BUILD_TIMESTAMP}
 WORKDIR /build
 
 # Cache dependencies: copy pom first, download, then add sources
