@@ -46,9 +46,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HandlerMethodValidationException.class)
     public ResponseEntity<Map<String, String>> handleHandlerMethodValidation(HandlerMethodValidationException ex) {
         Map<String, String> errors = new HashMap<>();
-        ex.getParameterValidationErrors().forEach(err -> {
-            String field = err.getParameter().getParameterName();
-            String message = err.getErrorMessages().isEmpty() ? "Invalid value" : err.getErrorMessages().get(0);
+        ex.getParameterValidationResults().forEach(err -> {
+            String field = err.getMethodParameter().getParameterName();
+            String message = err.getResolvableErrors().isEmpty() ? "Invalid value" : err.getResolvableErrors().get(0).getDefaultMessage();
             errors.put(field != null ? field : "request", message);
         });
         return new ResponseEntity<>(errors, HttpStatus.BAD_REQUEST);
