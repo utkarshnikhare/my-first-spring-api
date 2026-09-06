@@ -292,6 +292,8 @@ function updateCartBar() {
     var n = cartItemCount();
     bar.hidden = n === 0;
     $('#vobCount').textContent = n;
+    var word = $('#vobItemWord');
+    if (word) word.textContent = (n === 1 ? 'item' : 'items');
     $('#vobTotal').textContent = money(cartTotal());
     var view = $('#view');
     if (view) {

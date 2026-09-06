@@ -1139,10 +1139,17 @@
     flex-shrink: 0;
     margin-top: 3px;
 }
-.history-card .hc-body { flex: 1; min-width: 0; }
+.history-card .hc-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
 .history-card .hc-name {
     font-weight: 800;
     font-size: .92rem;
+    display: block;
     overflow-wrap: anywhere;
 }
 .history-card .hc-meta {

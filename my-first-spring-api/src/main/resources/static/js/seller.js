@@ -183,7 +183,7 @@ async function sellerKitchenView() {
     var kitchen = null;
     try { kitchen = await api('/api/seller/kitchen'); S.myKitchen = kitchen; S.kitchen = kitchen; } catch (e) { }
     h += '<form class="seller-form" id="kitchenForm">';
-    h += '<div class="kitchen-avatar-upload"><div class="kitchen-avatar" data-action="upload-avatar">' + (kitchen && kitchen.imageUrl ? '<img src="' + esc(kitchen.imageUrl) + '" class="avatar-img">' : '') + '</div></div>';
+    h += '<div class="kitchen-avatar-upload"><div class="kitchen-avatar" data-action="upload-avatar" role="button" tabindex="0" aria-label="Upload kitchen photo">' + (kitchen && kitchen.imageUrl ? '<img src="' + esc(kitchen.imageUrl) + '" class="avatar-img" alt="Kitchen photo">' : '📷') + '</div></div>';
     h += '<div class="form-group"><label class="form-label">Kitchen Name</label><input class="form-input" name="displayName" value="' + esc(kitchen && kitchen.displayName ? kitchen.displayName : 'Aarti Kitchen') + '"></div>';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Society</label><input class="form-input" name="society" value="' + esc(kitchen && kitchen.society ? kitchen.society : 'Sunshine Society') + '"></div><div class="form-group"><label class="form-label">Building</label><input class="form-input" name="building" value="' + esc(kitchen && kitchen.building ? kitchen.building : 'Building B') + '"></div></div>';
     h += '<div class="form-group"><label class="form-label">Speciality</label><input class="form-input" name="shortDescription" value="' + esc(kitchen && kitchen.shortDescription ? kitchen.shortDescription : 'Homemade Maharashtrian Food') + '"></div>';

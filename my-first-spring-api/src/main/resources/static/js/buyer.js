@@ -46,7 +46,7 @@ function kitchenCardHtml(k) {
     var items = (k.itemNames || []);
     var preview = items.slice(0, 5).map(esc).join(' · ');
     var more = items.length > 5 ? ' <strong>+' + (items.length - 5) + ' more</strong>' : '';
-    var emoji = '';
+    var emoji = k.imageUrl ? '<img src="' + esc(k.imageUrl) + '" alt="' + esc(k.displayName) + '">' : '🏪';
     return '<div class="kitchen-card">' +
         '<div class="kc-top">' +
         '<div class="kc-avatar">' + emoji + '</div>' +
@@ -142,7 +142,7 @@ async function favRowInner() {
 // ==================== Screen 2: Food & Kitchens (category hub) ====================
 
 function itemGroupCard(g) {
-    var emoji = '';
+    var emoji = g.imageUrl ? '<img src="' + esc(g.imageUrl) + '" alt="' + esc(g.name) + '">' : emojiFor(g.name);
     return '<a class="item-card" href="#/search/' + encodeURIComponent(g.name) + '">' +
         '<div class="ic-img">' + emoji + '</div>' +
         '<div class="ic-body"><div class="ic-name">' + esc(g.name) + '</div>' +
@@ -317,7 +317,7 @@ async function kitchenPageView(hash) {
             '<button class="icon-btn ghost" type="button" data-action="go-back" aria-label="Back">←</button>' +
             '<button class="icon-btn ghost" type="button" data-action="share-kitchen" aria-label="Share">🔗</button></div>' +
             '<div class="kh-identity">' +
-            '<div class="kh-avatar"></div>' +
+            '<div class="kh-avatar">' + (k.imageUrl ? '<img src="' + esc(k.imageUrl) + '" alt="' + esc(k.displayName) + '">' : '🏪') + '</div>' +
             '<div><div class="kh-name">' + esc(k.displayName) + '</div>' +
             '<div class="kh-loc">📍 ' + esc((k.society || LOCATION) + (k.building ? ', ' + k.building : '')) + '</div></div></div>' +
             '<div class="kh-tags">' +
@@ -854,7 +854,7 @@ async function comparisonView(hash) {
             h += offers.map(function (o) {
                 return '<div class="compare-card">' +
                     '<div class="cc-top">' +
-                    '<div class="kc-avatar"></div>' +
+                    '<div class="kc-avatar">' + (o.kitchenImageUrl ? '<img src="' + esc(o.kitchenImageUrl) + '" alt="' + esc(o.kitchenDisplayName) + '">' : '🏪') + '</div>' +
                     '<div class="kc-info"><div class="kc-name">' + esc(o.kitchenDisplayName) + '</div>' +
                     '<p class="kc-desc">' + esc(o.tagline || '') + '</p>' +
                     '<div class="kc-meta">' + statusPill(o.status) +
