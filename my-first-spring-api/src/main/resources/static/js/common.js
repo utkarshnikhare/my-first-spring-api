@@ -153,6 +153,19 @@ function toast(message, type) {
 
 // ==================== Theme ====================
 
+var THEME_META_COLORS = { light: '#FCF9F5', dark: '#1A1410' };
+
+/** Sync every theme toggle button's pressed state + the browser UI colour. */
+function applyThemeUiState() {
+    var theme = document.documentElement.getAttribute('data-theme') || 'light';
+    $all('[data-action="toggle-theme"]').forEach(function (btn) {
+        btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+        btn.title = theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
+    });
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', THEME_META_COLORS[theme] || THEME_META_COLORS.light);
+}
+
 function toggleTheme() {
     var html = document.documentElement;
     var next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
@@ -160,15 +173,21 @@ function toggleTheme() {
     try {
         localStorage.setItem('sociomart-theme', next);
     } catch (e) {}
+    applyThemeUiState();
 }
 function initTheme() {
-    var saved;
+    var saved = null;
     try {
         saved = localStorage.getItem('sociomart-theme');
     } catch (e) {}
+    if (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        // Sensible default: respect the OS preference until the user chooses.
+        saved = 'dark';
+    }
     if (saved) {
         document.documentElement.setAttribute('data-theme', saved);
     }
+    applyThemeUiState();
 }
 
 // ==================== Modal ====================

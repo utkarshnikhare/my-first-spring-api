@@ -42,6 +42,14 @@
     background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
     box-shadow: var(--shadow); padding: 24px; width: min(420px, 100%);
 }
+.al-brand-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.al-brand-row .al-brand { margin-bottom: 0; }
 .al-brand { font-size: 1.15rem; font-weight: 800; display: flex; align-items: center; gap: 9px; margin-bottom: 16px; color: var(--admin-2); }
 .admin-login h2,.admin-blocked h2 { font-size: 1.2rem; margin-bottom: 8px; }
 .admin-login .form-group { margin-bottom: 14px; }
@@ -130,6 +138,40 @@
 .ac-chip.live { background: var(--accent-soft); color: var(--accent); }
 
 /* ============================================================
+   DARK THEME ADAPTATION — indigo accents tuned for dark surfaces
+   (the light-indigo chips/borders above are light-theme tuned)
+   ============================================================ */
+
+html[data-theme="dark"] {
+    --admin-1: #262A52;
+    --admin-2: #818CF8;
+    --admin-3: #C7D2FE;
+}
+html[data-theme="dark"] .admin-role-badge.super {
+    background: linear-gradient(135deg, #4F46E5, #3730A3);
+    color: #fff;
+}
+html[data-theme="dark"] .al-info {
+    border-color: #6366F1;
+}
+html[data-theme="dark"] .ac-chip.next {
+    background: #2A2E45;
+    color: #A5ADC2;
+}
+html[data-theme="dark"] .admin-login .form-group input:focus,
+html[data-theme="dark"] .admin-textarea:focus {
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, .28);
+}
+html[data-theme="dark"] .seller-row .sr-avatar { border: 1px solid var(--border); }
+
+/* Focus visibility for keyboard users */
+.admin-card:focus-visible,
+.seller-row:focus-visible {
+    outline: 2px solid var(--admin-2);
+    outline-offset: 2px;
+}
+
+/* ============================================================
    RESPONSIVE LAYER — admin shell
    ============================================================ */
 
@@ -138,7 +180,19 @@
 .sr-name, .sr-meta { overflow-wrap: anywhere; }
 .seller-row .sr-actions { flex-shrink: 0; }
 .admin-section-head { gap: 10px; }
-.admin-brand { min-width: 0; overflow-wrap: anywhere; }
+/* Brand must never wrap mid-word (topbar is a compact identity row) */
+.admin-brand { white-space: nowrap; flex-shrink: 0; }
+.admin-identity { flex-shrink: 0; }
+.admin-identity-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Narrow phones: compact topbar — hide the display name, keep role badge */
+@media (max-width: 480px) {
+    .admin-topbar { padding: 10px 12px; }
+    .admin-brand { font-size: .88rem; }
+    .admin-identity-name { display: none; }
+    .admin-identity .icon-btn { width: 36px; height: 36px; font-size: 1rem; }
+    .admin-role-badge { font-size: .62rem; padding: 3px 8px; }
+}
 
 /* Very small phones */
 @media (max-width: 380px) {

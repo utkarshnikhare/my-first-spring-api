@@ -49,6 +49,7 @@ async function render() {
         view.innerHTML = html || '';
         updateNav(hash);
         updateCartBar();
+        if (typeof applyThemeUiState === 'function') applyThemeUiState();
         if (view.querySelector('.sticky-footer-bar')) view.classList.add('has-sticky-footer');
         else view.classList.remove('has-sticky-footer');
         window.scrollTo(0, 0);

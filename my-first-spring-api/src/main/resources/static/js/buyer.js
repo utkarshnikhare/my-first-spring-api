@@ -382,7 +382,7 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
     var kitchenJson = encodeURIComponent(JSON.stringify({ id: kitchen.id, displayName: kitchen.displayName }));
     return '<div class="offering-card' + (soldOut ? ' sold-out' : '') + '">' +
         '<button class="heart-btn oc-heart" type="button" data-action="toggle-fav-product" data-pid="' + p.id + '" aria-label="Favourite">🤍</button>' +
-        '<div class="oc-photo"></div>' +
+        '<div class="oc-photo">' + (p.imageUrl ? '<img src="' + esc(p.imageUrl) + '" alt="' + esc(p.name) + '">' : emojiFor(p.name)) + '</div>' +
         '<div class="oc-body">' +
         '<div class="oc-name-row"><span class="oc-name">' + esc(p.name) + '</span></div>' +
         '<p class="oc-desc">' + esc((p.description || '').slice(0, 70)) +
@@ -521,7 +521,7 @@ async function orderSummaryView() {
     if (!cart || !cart.items || !cart.items.length) {
         h += backBarHtml('Order Summary') +
             emptyHtml('🛒', 'Your order is empty', 'Add something delicious from a community kitchen first.',
-                '<a class="btn btn-primary" href="#/food" class="card-mt">Browse Food & Kitchens</a>');
+                '<a class="btn btn-primary card-mt" href="#/food">Browse Food & Kitchens</a>');
         h += '</div>';
         return h;
     }
@@ -594,6 +594,15 @@ async function goCheckout() {
     try {
         await withAuthGate(async function () {
             await api('/api/buyer/orders/draft?kitchenId=' + cart.kitchenId, { method: 'POST', body: items });
+            // Session may be valid even when this tab's UI state isn't (e.g. login
+            // happened in another tab). Sync the UI identity so Confirm Order and
+            // My Orders show the real buyer. Display-state only — no flow change.
+            if (!state.user) {
+                try {
+                    var me = await api('/api/auth/me');
+                    if (me && me.authenticated) state.user = me;
+                } catch (e2) {}
+            }
             state.pendingCheckout = { note: note };
             navigate('#/confirm'); // Draft created once (idempotent) → review → payment
         });
@@ -618,7 +627,7 @@ async function confirmOrderView() {
     if (!draft || !draft.items || !draft.items.length) {
         h += backBarHtml('Confirm Order') +
             emptyHtml('🧾', 'No active order', 'Your order was already submitted or your selection expired.',
-                '<a class="btn btn-primary" href="#/food" class="card-mt">Browse Food &amp; Kitchens</a>');
+                '<a class="btn btn-primary card-mt" href="#/food">Browse Food &amp; Kitchens</a>');
         h += '</div>';
         return h;
     }
@@ -703,7 +712,7 @@ async function paymentView() {
     if (!draft || !draft.items || !draft.items.length) {
         h += backBarHtml('Payment') +
             emptyHtml('🧾', 'No active order', 'Your order was already submitted or your session expired.',
-                '<a class="btn btn-primary" href="#/food" class="card-mt">Browse Food &amp; Kitchens</a>');
+                '<a class="btn btn-primary card-mt" href="#/food">Browse Food &amp; Kitchens</a>');
         h += '</div>';
         return h;
     }
@@ -840,7 +849,7 @@ async function comparisonView(hash) {
         if (!offers.length) {
             h += emptyHtml('🔍', 'No offers right now', 'No kitchen currently lists "' + itemName +
                 '". Try the Food & Kitchens hub for other dishes.',
-                '<a class="btn btn-primary" href="#/food" class="card-mt">Back to Food & Kitchens</a>');
+                '<a class="btn btn-primary card-mt" href="#/food">Back to Food & Kitchens</a>');
         } else {
             h += offers.map(function (o) {
                 return '<div class="compare-card">' +
@@ -933,7 +942,7 @@ async function ordersView() {
 
     if (!state.user) {
         h += emptyHtml('🔐', 'Login to view your history', 'Your orders and enquiries appear here.',
-            '<button class="btn btn-primary" type="button" data-action="open-login" class="card-mt">Log in</button>');
+            '<button class="btn btn-primary card-mt" type="button" data-action="open-login">Log in</button>');
         h += '</div>';
         return h;
     }
@@ -944,7 +953,7 @@ async function ordersView() {
             var all = [].concat(orders.active || [], orders.completed || []);
             if (!all.length) {
                 h += emptyHtml('📋', 'No orders yet', 'When you place your first order it will show up here.',
-                    '<a class="btn btn-primary" href="#/food" class="card-mt">Browse Food &amp; Kitchens</a>');
+                    '<a class="btn btn-primary card-mt" href="#/food">Browse Food &amp; Kitchens</a>');
             } else {
                 var filter = state.ordersFilter || 'all';
                 var groups = {
@@ -1025,7 +1034,7 @@ async function orderDetailView(hash) {
     } catch (e) {
         return '<div class="view-enter">' + backBarHtml('Order Detail') +
             emptyHtml('🔍', 'Order not found', e.message,
-                '<a class="btn btn-primary" href="#/orders" class="card-mt">Back to My Orders</a>') + '</div>';
+                '<a class="btn btn-primary card-mt" href="#/orders">Back to My Orders</a>') + '</div>';
     }
     var paid = o.paymentStatus === 'PAID';
     var h = '<div class="view-enter">';

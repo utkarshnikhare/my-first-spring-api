@@ -66,7 +66,8 @@ function showAdminApp() {
 function renderLoginScreen() {
     viewEl().innerHTML =
         '<div class="login-wrap"><div class="admin-login">' +
-        '<div class="al-brand">🛡️ SocioMart Admin</div>' +
+        '<div class="al-brand-row"><div class="al-brand">🛡️ SocioMart Admin</div>' +
+        '<button class="icon-btn" type="button" data-action="toggle-theme" aria-label="Toggle theme">🌓</button></div>' +
         '<h2>Admin Sign In</h2>' +
         '<p class="muted small">Enter your mobile number to sign in. This console accepts ADMIN &amp; SUPER_ADMIN accounts.</p>' +
         '<div class="form-group"><label for="alMobile">Mobile number</label><input id="alMobile" inputmode="numeric" maxlength="10" placeholder="10-digit mobile" autocomplete="tel"></div>' +
@@ -104,6 +105,7 @@ async function adminAction(action, t) {
                 break;
             }
             case 'login-back': renderLoginScreen(); break;
+            case 'toggle-theme': if (typeof toggleTheme === 'function') toggleTheme(); break;
             case 'logout':
                 await api('/api/auth/logout', { method: 'POST' });
                 A.me = null; A.role = null; A.loginMobile = null;

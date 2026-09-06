@@ -277,6 +277,9 @@ h3 { font-size: 1.05rem; font-weight: 700; font-family: 'Montserrat', 'Segoe UI'
     box-shadow: var(--shadow-lg);
     animation: viewIn .25s ease;
 }
+/* The display:flex above would beat the UA's [hidden] rule — without this
+   the cart bar stays visible (showing "0 items") on every screen. */
+.view-order-bar[hidden] { display: none; }
 .vob-icon { font-size: 1.2rem; }
 .vob-text { flex: 1; font-size: .92rem; }
 .vob-cta { font-weight: 800; font-size: .88rem; }
@@ -668,6 +671,15 @@ h3 { font-size: 1.05rem; font-weight: 700; font-family: 'Montserrat', 'Segoe UI'
 .empty .empty-icon { font-size: 2.6rem; display: block; margin-bottom: 10px; }
 .empty .empty-title { font-weight: 800; font-size: 1rem; margin-bottom: 4px; }
 .empty p { color: var(--muted); font-size: .85rem; }
+.empty .btn { margin-top: 18px; }
+
+/* ===================== Card spacing utilities ===================== */
+/* Used across Buyer + Seller views to separate stacked cards.
+   Follows the 4/8/12/16/20 spacing rhythm (12→14 rounding to the
+   established --radius rhythm; card gaps elsewhere use 12–14px). */
+
+.card-mb { margin-bottom: 14px; }
+.card-mt { margin-top: 14px; }
 
 /* ===================== Toasts ===================== */
 

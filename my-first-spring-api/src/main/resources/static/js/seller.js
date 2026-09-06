@@ -19,8 +19,8 @@ async function sellerRender() {
     var view = viewEl();
     view.innerHTML = '<div class="page-loading"><div class="spinner"></div></div>';
     closeSheet();
-    try { view.innerHTML = await route.fn(route.arg) || ''; sellerUpdateNav(hash); window.scrollTo(0, 0); }
-    catch (err) { view.innerHTML = '<div class="view-enter">' + emptyHtml('Warn', 'Error', err.message) + '</div>'; }
+    try { view.innerHTML = await route.fn(route.arg) || ''; sellerUpdateNav(hash); if (typeof applyThemeUiState === 'function') applyThemeUiState(); window.scrollTo(0, 0); }
+    catch (err) { view.innerHTML = '<div class="view-enter">' + emptyHtml('⚠️', 'Something went wrong', err.message) + '</div>'; }
 }
 function sellerUpdateNav(hash) {
     $all('.nav-item').forEach(function (el) { el.classList.remove('active'); });
@@ -77,11 +77,11 @@ async function sellerHomeView() {
         h += '<div class="metric-card"><div class="metric-value">' + dash.followers + '</div><div class="metric-label">Followers</div></div>';
         h += '<div class="metric-card"><div class="metric-value">' + dash.totalOrders + '</div><div class="metric-label">Total Orders</div></div></div>';
         h += '<div class="section-head"><h2>My Offerings</h2></div>';
-        if (!dash.offerings || dash.offerings.length === 0) { h += emptyHtml('Dish', 'No offerings yet', 'Tap "+ Add Offering" to publish your first dish.'); }
+        if (!dash.offerings || dash.offerings.length === 0) { h += emptyHtml('🍽️', 'No offerings yet', 'Tap "+ Add Offering" to publish your first dish.'); }
         else {
             dash.offerings.forEach(function (p) {
                 h += '<div class="offering-card">';
-                h += '<div class="oc-photo"></div>';
+                h += '<div class="oc-photo">' + (p.imageUrl ? '<img src="' + esc(p.imageUrl) + '" alt="' + esc(p.name) + '">' : foodEmoji(p.name)) + '</div>';
                 h += '<div class="oc-body">';
                 h += '<div class="oc-header"><span class="oc-name">' + esc(p.name) + '</span>' + offeringStatusBadge(p) + '</div>';
                 var booked = p.bookedQuantity || 0, remaining = p.remainingQuantity, maxQty = p.maxQuantity;
@@ -98,7 +98,7 @@ async function sellerHomeView() {
         h += '<div class="ep-row"><span class="ep-label">Confirmed Today</span><span class="ep-value green">' + money(dash.confirmedToday) + '</span></div>';
         h += '<div class="ep-row"><span class="ep-label">Pending</span><span class="ep-value orange">' + money(dash.pending) + '</span></div>';
         h += '<div class="ep-row"><span class="ep-label">This Month</span><span class="ep-value">' + money(dash.thisMonth) + '</span></div></div>';
-    } catch (e) { h += emptyHtml('Warn', 'Could not load dashboard', e.message); }
+    } catch (e) { h += emptyHtml('⚠️', 'Could not load dashboard', e.message); }
     h += '</div>';
     return h;
 }
@@ -109,13 +109,13 @@ async function sellerHistoryView() {
     S.historySelected = [];
     try {
         var items = await api('/api/seller-app/history');
-        if (items.length === 0) { h += emptyHtml('Hist', 'No recent items', 'Items from the last 2 days appear here.'); }
+        if (items.length === 0) { h += emptyHtml('🕘', 'No recent items', 'Items from the last 2 days appear here.'); }
         else {
             h += '<div class="history-date-header">YESTERDAY AND TODAY</div>';
             items.forEach(function (p) { h += '<label class="history-card"><input type="checkbox" data-action="toggle-history" data-pid="' + p.id + '"><span class="hc-body"><span class="hc-name">' + esc(p.name) + '</span><span class="hc-meta">' + esc(p.cutoffTime || '') + '</span></span><span class="hc-price">' + money(p.price) + '</span></label>'; });
             h += '<button class="sticky-footer-btn" type="button" data-action="batch-republish">Publish Selected</button>';
         }
-    } catch (e) { h += emptyHtml('Warn', 'Could not load history', e.message); }
+    } catch (e) { h += emptyHtml('⚠️', 'Could not load history', e.message); }
     h += '</div>';
     return h;
 }
@@ -202,10 +202,10 @@ async function sellerEarningsView() {
         var e = await api('/api/seller-app/earnings');
         h += '<div class="earnings-header-card"><div class="ehc-label">CONFIRMED TODAY</div><div class="ehc-main">' + money(e.confirmedToday) + '</div>';
         h += '<div class="ehc-row"><div class="ehc-item"><div class="ehc-val orange">' + money(e.pending) + '</div><div class="ehc-sub">PENDING</div></div><div class="ehc-item"><div class="ehc-val">' + money(e.thisMonth) + '</div><div class="ehc-sub">THIS MONTH</div></div></div></div>';
-        if (!e.items || e.items.length === 0) { h += emptyHtml('Earn', 'No earnings yet', 'Your earnings breakdown appears here.'); }
+        if (!e.items || e.items.length === 0) { h += emptyHtml('💰', 'No earnings yet', 'Your earnings breakdown appears here.'); }
         else { e.items.forEach(function (item) { h += '<div class="earning-item"><span class="ei-icon">🍽️</span><span class="ei-body"><span class="ei-name">' + esc(item.productName) + '</span><span class="ei-orders">' + item.totalOrders + ' orders</span></span><span class="ei-revenue"><span class="ei-confirmed">' + money(item.confirmedRevenue) + '</span><br><span class="ei-pending">' + money(item.pendingRevenue) + '</span></span></div>'; }); }
         h += '<a class="btn btn-secondary btn-block" href="#/history">VIEW FULL HISTORY</a>';
-    } catch (err) { h += emptyHtml('Warn', 'Could not load earnings', err.message); }
+    } catch (err) { h += emptyHtml('⚠️', 'Could not load earnings', err.message); }
     h += '</div>';
     return h;
 }
@@ -251,7 +251,7 @@ async function sellerOrderDetailView(productId) {
                 h += '</div>';
             });
         }
-    } catch (e) { h += emptyHtml('Warn', 'Could not load details', e.message); }
+    } catch (e) { h += emptyHtml('⚠️', 'Could not load details', e.message); }
     h += '</div>';
     return h;
 }
