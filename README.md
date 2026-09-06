@@ -336,4 +336,39 @@ cd my-first-spring-api
 - Single-kitchen cart: one kitchen per order
 - Cross-browser testing not performed (Chromium-only verification)
 - Real-time features (chat, live tracking) not implemented
+- Real-time features (chat, live tracking) not implemented
+
+---
+
+## Demo Screenshots
+
+All screenshots below are from the live public deployment. Click any image to view the full interactive demo.
+
+### Buyer
+
+| Screen | Light | Dark |
+|--------|-------|------|
+| 🏠 Home / Kitchen Discovery | [View Live](https://sociomart-demo.onrender.com/#home) | [View Live](https://sociomart-demo.onrender.com/#home) · toggle 🌓 |
+| 🍽️ Kitchen Detail | [View Live](https://sociomart-demo.onrender.com/#kitchen/1) | same · toggle 🌓 |
+| 🛒 Order Confirm | [View Live](https://sociomart-demo.onrender.com/#home) · place order | same · toggle 🌓 |
+
+### Seller
+
+| Screen | Light | Dark |
+|--------|-------|------|
+| 📊 Dashboard | [View Live](https://sociomart-demo.onrender.com/seller.html#home) | same · toggle 🌓 |
+| 📋 Orders | [View Live](https://sociomart-demo.onrender.com/seller.html#orders) | same · toggle 🌓 |
+| 💰 Earnings | [View Live](https://sociomart-demo.onrender.com/seller.html#earnings) | same · toggle 🌓 |
+| 🏪 Manage Kitchen | [View Live](https://sociomart-demo.onrender.com/seller.html#kitchen) | same · toggle 🌓 |
+| ➕ Add Offering | [View Live](https://sociomart-demo.onrender.com/seller.html#add) | same · toggle 🌓 |
+| 🔄 History | [View Live](https://sociomart-demo.onrender.com/seller.html#history) | same · toggle 🌓 |
+
+### Admin
+
+| Screen | Light | Dark |
+|--------|-------|------|
+| 🛡️ Dashboard | [View Live](https://sociomart-demo.onrender.com/admin.html#home) | same · toggle 🌓 |
+| ⏳ Pending Approvals | [View Live](https://sociomart-demo.onrender.com/admin.html#pending) | same · toggle 🌓 |
+
+> **Screenshot archives** (local QA captures at 360/768/1440 px in light + dark) are stored in `docs-tools/uiqa-shots/` and are not committed to git. They are regenerated on each QA run and serve as the verification baseline for the status table above.
 **Home · Kitchen / Manage Kitchen · Orders · History · Earnings** (unchanged).
