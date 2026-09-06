@@ -59,7 +59,6 @@ Review seller applications, approve or reject sellers, and monitor platform acti
 | **Admin** | Open `admin.html` — admin functions are accessible without authentication in demo mode. |
 
 > No real passwords, API keys, or secrets are embedded in the application.
-> No real passwords, API keys, or secrets are embedded in the application.
 
 ---
 
@@ -335,7 +334,6 @@ cd my-first-spring-api
 - Demo payment only: no real payment gateway integration
 - Single-kitchen cart: one kitchen per order
 - Cross-browser testing not performed (Chromium-only verification)
-- Real-time features (chat, live tracking) not implemented
 - Real-time features (chat, live tracking) not implemented
 
 ---
