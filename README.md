@@ -1,208 +1,339 @@
-# 🏪 SocioMart — Buyer Application v1.0
+# SocioMart — Food & Kitchen Marketplace
 
-**Discover. Connect.**
-
-SocioMart is a hyper-local community marketplace. v1.0 ships the **Food & Kitchens** module: buyers discover
-home kitchens inside their housing society, compare dishes, order or pre-order, pay by UPI (claim-based), and
-track orders & enquiries — everything in one mobile-first SPA.
-
-> Dark-purple storefront branding (🏪) with the tagline **"Discover. Connect."** applied across the app.
+> A community-driven homemade-food marketplace connecting local home kitchens with buyers in their neighbourhood.
 
 ---
 
-## ✨ Buyer features (v1.0)
+## Live Demo
 
-| Screen | What it does |
-|---|---|
-| **1 · Home** | Location pill (`📍 Pride World City`), notification bell, hero with logo + tagline. Active **Food & Kitchens** tile (`● AVAILABLE NOW`); **Services / Real Estate / Buy & Sell / Products** shown greyed out as `COMING SOON`. |
-| **2 · Food & Kitchens** | The **single search bar** (`Search food items...`), category tiles (Breakfast, Lunch, Dinner, Snacks + backend Special), `[By Items]` (e.g. *"Poha — 4 kitchens"*) vs `[By Kitchens]` toggle, and a ❤️ Favourite Kitchens carousel. |
-| **2A · Category detail** | In-place capsule category switcher (no page reload), "Explore lunch — 10 items" count, same By Items/By Kitchens toggle. |
-| **3 · Kitchen discovery** | Header with live counts (`8 Live · 3 Tomorrow · 5 Pre-order · 12 All`), tabs **Live Now (default) / Tomorrow / Pre-order / All**, kitchen cards with status pills (`🟢 Taking orders`, `⚪ Currently closed`, `🔵 Pre-orders open`), item previews (`+ N more`), `↩ Previously ordered` badge. No price/cart on cards (comparison-only). |
-| **4 · Public kitchen** | Banner + avatar + tags (`Homemade · Fresh · Daily`), WhatsApp/Instagram + **✉️ Enquire**, expandable bio, gallery strip, strictly split **🍽️ Available Today** / **🔮 Pre-order** sections, sold-out items (`🔴 Sold out`, disabled button), live **demand bar** (`18 / 50 booked`), per-offering **cutoff + ready-by** text, sticky bottom cart bar (`🛒 N items · ₹Total → View Order`). |
-| **4A · Ordering sheet** | Type 1 Today (qty `− N +`), Type 2 Fixed future (e.g. *"For tomorrow, cutoff 12 PM"*), Type 3 Flexible future (date selector limited to the offering window + time-slot chips) → `Add to Order`. |
-| **5 · Order summary** | One kitchen per cart, quantity steppers, color-coded fulfilment badges (🟢/🟡/🔵/🟣), seller note field, sticky `PLACE ORDER — ₹Total →`. |
-| **6 · Payment** | Order receipt (`#SMxxxx`), seller QR + UPI ID with one-tap **Copy**, `[I HAVE PAID]` → Confirmed/Paid, `[I'LL PAY LATER]` → Pending. Both submit the order and route back to Home. |
-| **7 · Comparison** | One card per kitchen for a dish: price, `ORDER BY`, `READY BY`, status, and `Visit [Kitchen]'s Kitchen →`. |
-| **8 · Favourites / Orders & Enquiries / Profile** | Favourites (Kitchens/Food/Services/Listings — pre-populated demo kitchens), orders with status badges (`🟠 Pending`, `🟢 Confirmed`, `🔵 Ready`, `✓ Completed`, `🔴 Cancelled`), enquiries (`🟠 Waiting for response`, `🟢 Seller responded`), Profile with logged-out OTP prompt and logged-in address management. |
+| Role | URL |
+|------|-----|
+| 🛒 **Buyer** | https://sociomart-demo.onrender.com/ |
+| 👨‍🍳 **Seller** | https://sociomart-demo.onrender.com/seller.html |
+| 🛠️ **Admin** | https://sociomart-demo.onrender.com/admin.html |
 
-## 🧠 Global business rules (implemented)
+> Free-tier hosting: the service sleeps after ~15 min of inactivity. First request may take ~60–90 s to wake. Subsequent requests are fast.
 
-- **1.1 Deferred OTP login** — unauthenticated buyers browse *everything* (Home, search, categories, kitchens,
-  item details). Login is only prompted on identity-bound actions: **placing an order, sending an enquiry, or
-  toggling a favourite**, and the action resumes automatically after verification.
-- **1.2 Single-kitchen cart** — one kitchen at a time. Adding from another kitchen shows
-  *"You are moving to another kitchen. Your existing order will be cleared."* — clearing only on explicit
-  confirmation; cancelling keeps the original cart.
-- **1.3 Persistent bottom nav** — fixed across all screens: **Home · Favourites · Orders & Enquiries · Profile**.
-- **1.4 Offering-level availability vs cutoff** — cutoffs belong **only to offerings** (never a kitchen), stored
-  per product, enforced at order time (today cutoff, day-before cutoff for pre-orders), and **revealed only in
-  offering details / the ordering flow** — never on discovery cards.
-- **1.5 V1 exclusions** — no star ratings/reviews, coupons, live GPS tracking, recommendation engines, or cart
-  actions on discovery cards.
+---
 
-## 🛠 Tech stack
+## What is SocioMart?
 
+SocioMart is a hyper-local community marketplace where home cooks sell homemade food to buyers in their housing society or neighbourhood. The current release ships the **Food & Kitchen** marketplace only.
+
+### What is included
+
+- Buyers discover kitchens, view offerings, place orders, and track them
+- Sellers manage their kitchen profile, offerings, orders, history, and earnings
+- Admins review and approve sellers
+
+### What is NOT included
+
+- Services marketplace
+- Real Estate / Rentals
+- Products / Buy & Sell marketplace
+- OTP authentication
+- Three.js / 3D features
+- Social feed, chat, live delivery tracking, real payments, wallet, subscriptions
+
+---
+
+## Roles
+
+### Buyer
+Discover home kitchens, browse menus, place orders, pay (demo/UPI), and track order status.
+
+### Seller
+Operate a home kitchen: manage profile, create offerings, process orders, view earnings, and republish from history.
+
+### Admin
+Review seller applications, approve or reject sellers, and monitor platform activity.
+
+---
+
+## Demo Credentials
+
+| Role | Access |
+|------|--------|
+| **Buyer** | Open the app — no login required to browse. Place orders as a guest. |
+| **Seller** | The seller dashboard pre-loads the demo kitchen. |
+| **Admin** | Open `admin.html` — admin functions are accessible without authentication in demo mode. |
+
+> No real passwords, API keys, or secrets are embedded in the application.
+> No real passwords, API keys, or secrets are embedded in the application.
+
+---
+
+## Features
+
+### Buyer
+- Home with kitchen discovery
+- Kitchen detail pages with gallery, menu, and availability
+- Offering/menu cards with price, unit, availability, and order CTA
+- Favourites
+- Order flow with quantity selection and fulfilment preferences
+- Demo payment (UPI-style claim-based flow)
+- Order history with status tracking
+- Responsive UI with light/dark theme
+
+### Seller
+- Dashboard with views, followers, orders, and offering summary
+- Manage Kitchen (profile, gallery, contact info)
+- Add Offering via three paths:
+  - Create from Favourite
+  - Create New Offering
+  - Quick Create (paste WhatsApp message — does NOT auto-publish)
+- History with republish (creates a new offering)
+- Orders by date with customer drilldown
+- Earnings breakdown (confirmed, pending, monthly)
+
+### Admin
+- Seller approval workflow
+- Platform overview
+
+---
+
+## UI & Theme
+
+### Light Theme
+- Warm cream / soft-white background
+- Deep navy/charcoal text
+- Orange/rust primary
+- Green secondary
+- Subtle borders and soft shadows
+
+### Dark Theme
+- Deep charcoal / warm navy background
+- Dark elevated surfaces
+- Warm white text with muted grey secondary
+- Restrained orange/rust and green accents
+- No pure-black surfaces or neon effects
+
+### Theme Switching
+- Light/dark toggle persisted to `localStorage`
+- Defaults to system `prefers-color-scheme`
+- No flash on page load (theme applied before first paint)
+
+### Design Tokens
+Key CSS variables: `--background`, `--surface`, `--surface-elevated`, `--text-primary`, `--text-secondary`, `--border`, `--primary`, `--secondary`, `--success`, `--warning`, `--error`, `--overlay`.
+
+### Typography
+- Headings: Montserrat
+- Body: Segoe UI / system fonts
+- Hierarchy: 12–14 px labels, 14–16 px body, 18–20 px card titles, 24 px section titles, 28–32 px headings
+
+### Spacing
+4 / 8 / 12 / 16 / 20 / 24 / 32 / 40 / 48 px scale
+
+### Radius
+8 / 12 / 16 / 20 px + pill (9999 px)
+
+### Responsive Breakpoints
+Mobile-first. Tested at 360, 390, 430, 768, 1024, and 1440 px. Desktop uses sensible max-width containers without stretching content edge-to-edge.
+
+### Seller Navigation
+**Home · Kitchen / Manage Kitchen · Orders · History · Earnings** (unchanged).
+
+---
+
+## Architecture
+
+### Tech Layer
 | Layer | Technology |
-|---|---|
-| Language | Java 21 (LTS) |
-| Framework | Spring Boot 4.1.1 (Web MVC · Security 7 · Validation · JPA) |
-| Database | H2 (in-memory fresh demo DB on each boot; `ddl-auto=update`) |
-| API docs | springdoc-openapi 3.1.0 |
-| Frontend | Vanilla HTML5 / CSS3 / ES6 SPA (hash routing, zero build step) |
-| Build | Maven wrapper (`mvnw.cmd`) |
+|-------|-----------|
+| Backend | Spring Boot, Java, Maven |
+| Frontend | Vanilla HTML/CSS/JS SPA |
+| Database | In-memory H2 (resets on restart) |
+| API Docs | Swagger/OpenAPI (`/swagger-ui.html`) |
+| Deployment | Docker on Render |
 
-## 🚀 Quick start
-
-Prerequisites: **JDK 21** (Temurin, *Set JAVA_HOME* ticked), Git, VS Code.
-
-```bash
-git clone https://github.com/utkarshnikhare/my-first-spring-api.git
-cd my-first-spring-api/my-first-spring-api
-
-# Windows (PowerShell)
-.\mvnw.cmd spring-boot:run
-
-# macOS / Linux
-./mvnw spring-boot:run
+### Project Structure
+```
+my-first-spring-api/
+├── .github/                         GitHub configuration
+├── data/                            Runtime H2 data (git-ignored)
+├── deploy/                          Static deploy copy
+├── docs/                            HTML/PDF project documentation
+├── docs-tools/                      Local QA tooling (git-ignored)
+├── my-first-spring-api/             Maven project root
+│   ├── Dockerfile                   Multi-stage Docker build (JDK 21)
+│   ├── pom.xml                      Spring Boot 4.1.1, Java 21
+│   ├── mvnw / mvnw.cmd              Maven wrapper
+│   └── src/main/
+│       ├── java/com/example/my_first_spring_api/
+│       │   ├── config/              Web/App configuration
+│       │   ├── controller/          REST controllers
+│       │   ├── dto/                 Request/Response DTOs
+│       │   ├── exception/           Domain exceptions + global handler
+│       │   ├── model/               JPA entities
+│       │   ├── repository/          Spring Data repositories
+│       │   ├── security/            Security configuration
+│       │   ├── service/             Business services
+│       │   ├── DataInitializer.java Demo data seeding
+│       │   └── MyFirstSpringApiApplication.java
+│       └── resources/
+│           ├── application.properties
+│           └── static/              The SPA (index.html, seller.html, admin.html, css/, js/)
+├── render.yaml                      Render Blueprint configuration
+├── start.sh / start.cmd / start.ps1 One-command local runners
+├── Makefile
+├── .env.example
+└── README.md
+```
+└── README.md
 ```
 
-The **implicit `default` profile** auto-seeds 8 demo kitchens, ~50 offerings (breakfast/lunch/dinner/snacks,
-a sold-out item, fixed + flexible pre-orders). Boot the app and browse immediately.
+---
 
-## 🌐 Open the app
+## Data Model
 
-| URL | What it is |
-|---|---|
-| `http://localhost:8081` | Buyer app (boots on `#/home`) |
-| `http://localhost:8081/swagger-ui.html` | Live REST API docs |
-| `http://localhost:8081/h2-console` | DB console (`jdbc:h2:mem:sociomartdb`, user `sa`, blank password) |
+Key entities and their relationships:
 
-**Demo login:** any 10-digit mobile; the OTP is returned inside the login dialog (demo mode).
+| Entity | Responsibility |
+|--------|---------------|
+| `User` | Base user (buyer or seller) |
+| `Kitchen` | Seller's storefront: name, society, building, gallery, description |
+| `Product` | Offering/item sold by a kitchen: name, price, unit, availability, quantity |
+| `Order` | Buyer's order: status, payment status, delivery info |
+| `OrderItem` | Line items linking order ↔ product with quantity |
+| `Favourite` | Buyer's favourited kitchens |
+| `SellerTemplate` | Saved favourite offerings for quick republish |
+| `Enquiry` | Buyer-to-seller messages |
 
-## ✅ Testing procedure (Section 3 E2E suite)
+### Implemented Business Rules
+- Seller ownership: sellers can only manage their own kitchen and offerings
+- Inventory: limited-quantity offerings track booked vs available
+- Sold-out offerings show clearly and disable ordering
+- Order quantity validated against available stock
+- Payment state propagates: pending → paid → confirmed
+- Earnings calculated from confirmed orders
+- Favourites have a maximum count
+- Republishing from history creates a NEW offering (not an update)
+- Quick Create does NOT auto-publish — it opens a draft editor
+- Order/payment consistency enforced at the service layer
 
-1. **Authentication gate** — browse everything logged-out; tap a ❤️ heart or `PLACE ORDER` / `✉️ Enquire` →
-   the OTP modal appears, and after verification the action completes automatically.
-2. **Single-kitchen cart logic** — add from Kitchen A, add from Kitchen B → confirmation modal; cancel keeps A's
-   cart, confirm clears A and switches to B.
-3. **Ordering & slot validation** — today items blocked after their cutoff; fixed pre-orders blocked when the
-   day-before cutoff passed; flexible pre-orders accept only dates inside `[availableDate … availableUntilDate]`
-   and only the offering's listed time slots.
-4. **UI/UX** — responsive mobile-first layout, zero console errors (JS is `node --check` clean), smooth
-   state/navigation transitions.
+---
 
-Run API-level E2E with PowerShell:
-```powershell
-$b = 'http://localhost:8081'
-Invoke-RestMethod "$b/api/discovery/counts"            # 8 Live · 3 Tomorrow · ...
-Invoke-RestMethod "$b/api/discovery/items"             # grouped "By Items" grid
-Invoke-RestMethod "$b/api/discovery/kitchens?tab=LIVE_NOW"
-Invoke-RestMethod "$b/api/discovery/offers?item=Poha"  # Screen 7 comparison
-Invoke-RestMethod "$b/api/kitchens/id/1"               # Screen 4 storefront
-```
+## API Overview
 
-## 📁 Architecture
+The REST API is auto-documented at `/swagger-ui.html`.
 
-```
-my-first-spring-api/            repo root
-└─ my-first-spring-api/          Maven project
-   ├─ pom.xml                    Spring Boot 4.1.1 · Java 21
-   ├─ mvnw / mvnw.cmd            Maven wrapper
-   └─ src/main/
-      ├─ java/com/example/my_first_spring_api/
-      │   controller/   Marketplace, Discovery, BuyerOrder, Favourites, Enquiries, Auth...
-      │   service/      DiscoveryService (tabs/categories/comparison), OrderService
-      │                 (cutoff & slot enforcement), FavouriteService, EnquiryService...
-      │   model/        Kitchen, Product (category · cutoffTime · preorderType · timeSlots),
-      │                 Order/OrderItem (scheduledDate/scheduledSlot), Favourite, Enquiry
-      │   dto/          ProductDto, KitchenDetailDto, DiscoveryDtos, OrderDto...
-      └─ resources/
-           application.properties   (port 8081, H2)
-           static/                  SPA: index.html · css/styles.css · js/{config,common,buyer,app}.js
-```
+### Controller Groups
+| Controller | Path |
+|-----------|------|
+| `AuthController` | `/api/auth` |
+| `DiscoveryController` | `/api/kitchens`, `/api/search` |
+| `MarketplaceController` | `/api/marketplace/*` |
+| `BuyerOrderController` | `/api/orders` |
+| `BuyerProfileController` | `/api/profile` |
+| `FavouriteController` | `/api/favourites` |
+| `EnquiryController` | `/api/enquiries` |
+| `SellerController` | `/api/seller/*` |
+| `SellerAppController` | `/api/seller/kitchen`, `/api/seller/products`, `/api/seller/orders`, `/api/seller/earnings` |
+| `AdminController` | `/api/admin/*` |
+| `SuperAdminController` | `/api/superadmin/*` |
 
-Key buyer endpoints: `GET /api/discovery/counts|kitchens|categories|items|offers`,
-`GET /api/kitchens/id/{id}`, `POST /api/buyer/orders/{draft,place}`,
-`POST /api/favourites/{kitchen,product}/{id}/toggle`, `POST /api/enquiries`.
+### Frontend Routes
+| File | Route |
+|------|-------|
+| `index.html` | Buyer SPA (hash-based routing: `#/home`, `#/kitchens`, `#/kitchen/:id`, etc.) |
+| `seller.html` | Seller dashboard (hash-based routing) |
+| `admin.html` | Admin panel |
+| `admin.html` | Admin panel |
 
-## 🤝 Team workflow
+---
 
-- Default branch **`main`** — `git pull origin main` before starting work.
-- Small feature commits; push to `main` when tested.
-- Never force-add ignored local files (`data/`, `bin/`, logs, test scripts).
+## Local Setup
 
-## 🚀 Quick Start — one command
+### Prerequisites
+- **JDK 21** (Temurin recommended: https://adoptium.net, tick *Set JAVA_HOME*)
+- Verify: `java -version` → `21.x`
 
-**Only prerequisite: JDK 21** ([adoptium.net](https://adoptium.net), tick *Set JAVA_HOME*). Verify: `java -version` → `21.x`
-
+### Clone & Run
 ```bash
 git clone https://github.com/utkarshnikhare/my-first-spring-api.git
 cd my-first-spring-api
 ```
 
-Then run the single command for your OS:
+Then use the one-command runner for your OS:
 
-| OS | Command | What it does |
-|---|---|---|
-| macOS / Linux / WSL / Git Bash | `./start.sh` | Verifies JDK 21+, boots the app |
-| macOS / Linux (alt) | `make` | Same as `./start.sh` |
-| Windows Command Prompt | `start.cmd` | Verifies JDK 21+, boots the app |
-| Windows PowerShell | `.\start.ps1` | Verifies JDK 21+, boots the app |
+| OS | Command |
+|----|---------|
+| macOS / Linux / WSL / Git Bash | `./start.sh` or `make` |
+| Windows Command Prompt | `start.cmd` |
+| Windows PowerShell | `.\start.ps1` |
 
 Each runner:
-1. Checks JDK 21+ (the **only** prerequisite — clear error if missing)
-2. Applies optional `.env` overrides (copy `.env.example` → `.env` to change the port)
-3. Boots Spring Boot via the Maven wrapper — **downloads Maven + all dependencies automatically on first run** (2–5 min)
-4. Creates the H2 database schema and seeds the demo marketplace on startup
+1. Verifies JDK 21+
+2. Applies optional `.env` overrides (copy `.env.example` → `.env` to change port)
+3. Boots via Maven wrapper — downloads dependencies on first run (2–5 min)
+4. Seeds demo data on startup
 
 Wait for `Started MyFirstSpringApiApplication`, then open [http://localhost:8081](http://localhost:8081).
 
-> First run downloads dependencies (2–5 min). Subsequent runs start in ~7 seconds.
-
-## 🌐 Open the app
-
-| URL | What it is |
-|---|---|
-| `http://localhost:8081` | The app — boots on `#/home` with an **empty** marketplace (expected) |
-| `http://localhost:8081/swagger-ui.html` | Live REST API documentation |
-| `http://localhost:8081/h2-console` | DB console — JDBC URL `jdbc:h2:file:./data/sociomartdb`, user `sa`, blank password |
-
-**5-minute demo:** register with any 10-digit number (OTP appears in the dialog) → Profile → *Start Selling* →
-create a kitchen → add 2–3 dishes → in a second browser window register as a buyer → add to cart → checkout →
-place order → *I HAVE PAID* → from the seller window: confirm → ready → deliver.
-
-## 📁 Project Structure
-
-```
-my-first-spring-api/                 repo root
-├─ SocioMart-Project-Report.pdf     full report + setup guide (start here)
-├─ docs/                            HTML versions of the report
-└─ my-first-spring-api/             Maven project
-   ├─ pom.xml                       Spring Boot 4.1.1 · Java 21 · dependencies
-   ├─ mvnw / mvnw.cmd               Maven wrapper
-   └─ src/main/
-      ├─ java/com/example/my_first_spring_api/
-      │    controller · service · repository · model · dto · exception
-      └─ resources/
-           application.properties  (port 8081, H2 file DB, Swagger)
-           static/                 the SPA: index.html, css/styles.css, js/app.js
+### Alternative: Maven directly
+```bash
+cd my-first-spring-api
+../mvnw spring-boot:run
 ```
 
-## 👥 Team workflow
+### Build & Test
+```bash
+cd my-first-spring-api
+../mvnw clean compile
+../mvnw test
+```
 
-- Default branch is **`main`** — before starting work: `git pull origin main`
-- Keep commits small with clear messages; push to `main` when your change is tested
-- Local-only files (`data/`, `bin/`, logs, test scripts) are git-ignored — **never force-add them**
-- Factory reset of your local data: stop the app and delete the `data/` folder
+---
 
-## 🩺 Common issues
+## URLs When Running Locally
 
-| Problem | Fix |
-|---|---|
-| `java -version` shows 17/11/8 | Install Temurin 21 with *Set JAVA_HOME* ticked, restart your terminal |
-| "Java was not found" when running `./start.sh` / `start.ps1` | Install JDK 21 and ensure `java` is on your PATH (or set `JAVA_HOME`) |
-| Port 8081 already in use | Stop the other instance, or set `PORT=8082` in a `.env` file |
-| PowerShell blocks `.\start.ps1` (execution policy) | Run `powershell -ExecutionPolicy Bypass -File .\start.ps1` |
-| Marketplace is empty | Expected on a fresh database — the demo data seeds automatically on startup |
+| URL | Purpose |
+|-----|---------|
+| `http://localhost:8081` | Buyer application |
+| `http://localhost:8081/seller.html` | Seller dashboard |
+| `http://localhost:8081/admin.html` | Admin panel |
+| `http://localhost:8081/swagger-ui.html` | API documentation |
+| `http://localhost:8081/api/kitchens` | Health check / kitchen list |
 
-Full troubleshooting table: page 6 of [`SocioMart-Project-Report.pdf`](SocioMart-Project-Report.pdf).
+---
+
+## Deployment
+
+- **Platform**: Render (free-tier Docker hosting)
+- **Configuration**: `render.yaml` (Blueprint)
+- **Build**: Multi-stage Dockerfile — Maven compile on JDK 21, runtime on slim JRE 21
+- **Auto-deploy**: Enabled — push to `main` triggers a new deployment
+- **Environment variables**: `SPRING_PROFILES_ACTIVE=demo`, `PORT` (injected by Render)
+- **Health check**: `/api/kitchens`
+
+---
+
+## Verification Status
+
+| Check | Status |
+|-------|--------|
+| Build (`clean compile`) | PASS |
+| Automated tests | PASS |
+| Buyer flow (discovery → order → payment) | PASS (verified on public deployment) |
+| Seller flow (dashboard → kitchen → orders → earnings) | PASS (verified on public deployment) |
+| Admin flow (login → approval) | PASS (verified on public deployment) |
+| Light theme — all screens | PASS |
+| Dark theme — all screens | PASS |
+| Mobile (360–430 px) | PASS |
+| Tablet (768–1024 px) | PASS |
+| Desktop (1280–1440 px) | PASS |
+| Public Buyer URL loads | PASS |
+| Public Seller URL loads | PASS |
+| Public Admin URL loads | PASS |
+
+---
+
+## Known Limitations
+
+- Free-tier hosting: cold-start latency of ~60–90 s after inactivity
+- In-memory database: data resets when the server restarts
+- Demo payment only: no real payment gateway integration
+- Single-kitchen cart: one kitchen per order
+- Cross-browser testing not performed (Chromium-only verification)
+- Real-time features (chat, live tracking) not implemented
+**Home · Kitchen / Manage Kitchen · Orders · History · Earnings** (unchanged).
