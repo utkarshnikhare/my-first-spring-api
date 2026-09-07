@@ -32,6 +32,22 @@ function money(n) {
     return '₹' + (Number.isInteger(num) ? String(num) : num.toFixed(2));
 }
 
+/**
+ * Graceful image fallback (guardrail M): swap a broken image for the
+ * container's emoji so no broken-image icon or console error remains.
+ * Containers may carry a data-emoji attribute; kitchens default to 🏪,
+ * everything else to a plate. Safe to call multiple times per element.
+ */
+function imgFallback(imgEl) {
+    if (!imgEl || imgEl.getAttribute('data-fb')) return;
+    imgEl.setAttribute('data-fb', '1');
+    var parent = imgEl.parentElement;
+    if (!parent) { imgEl.style.display = 'none'; return; }
+    var emoji = parent.getAttribute('data-emoji');
+    if (!emoji) emoji = /avatar|fav-chip|fli-emoji|kc-/.test(parent.className) ? '🏪' : '🍽️';
+    parent.textContent = emoji;
+}
+
 function emojiFor(name) {
     var n = (name || '').toLowerCase();
     if (n.indexOf('dosa') >= 0 || n.indexOf('idli') >= 0 || n.indexOf('rice') >= 0 || n.indexOf('biryani') >= 0) return '🍚';
