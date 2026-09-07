@@ -5,6 +5,53 @@
  * 5 Order summary · 6 Payment · 7 Comparison · 8 Favourites/Orders/Profile
  */
 
+// ==================== Favourites UI helpers ====================
+
+var FAV_CACHE = null; // Set of favourited kitchen ids; null = not loaded yet
+
+function favSet() {
+    return FAV_CACHE && FAV_CACHE.size ? FAV_CACHE : new Set();
+}
+
+async function loadFavSet() {
+    FAV_CACHE = new Set();
+    if (!state.user) return FAV_CACHE;
+    try {
+        var favs = await api('/api/favourites');
+        (favs || []).forEach(function (f) {
+            if (f && f.kitchenId) FAV_CACHE.add(String(f.kitchenId));
+        });
+    } catch (e) { /* not authenticated — hearts render unfavourited */ }
+    return FAV_CACHE;
+}
+
+function heartBtnHtml(kid, label) {
+    var faved = favSet().has(String(kid));
+    return '<button class="heart-btn' + (faved ? ' faved' : '') + '" type="button" ' +
+        'data-action="toggle-fav-kitchen" data-kid="' + kid + '" ' +
+        'aria-label="' + (faved ? 'Remove ' + esc(label) + ' from favourites' : 'Save ' + esc(label) + ' to favourites') + '" ' +
+        'aria-pressed="' + (faved ? 'true' : 'false') + '" title="' + (faved ? 'Remove from favourites' : 'Save to favourites') + '">' +
+        (faved ? '❤️' : '🤍') + '</button>';
+}
+
+/** Local demo imagery: warm gradient tile with a data-emoji fallback glyph. */
+function demoImg(emoji, cls) {
+    return '<div class="' + (cls || 'demo-img') + '" data-emoji="' + emoji + '"></div>';
+}
+
+/** Render a tile that shows an emoji glyph, or an <img> that degrades back
+ *  to the emoji (via data-emoji) whenever the remote image cannot load. */
+function dishImg(containerCls, emoji, url, alt) {
+    return '<div class="' + containerCls + '" data-emoji="' + emoji + '">' +
+        (url ? '<img src="' + esc(url) + '" alt="' + esc(alt) + '" onerror="imgFallback(this)">' : emoji) +
+        '</div>';
+}
+
+/** A kitchen's imageUrl is only usable when it is a real http(s) link (not example.com). */
+function usableImageUrl(url) {
+    return url && (url.slice(0, 8) === 'https://' || url.slice(0, 7) === 'http://') && url.indexOf('example.com') < 0;
+}
+
 // ==================== Shared UI fragments ====================
 
 var LOCATION = 'Pride World City';
@@ -46,20 +93,22 @@ function kitchenCardHtml(k) {
     var items = (k.itemNames || []);
     var preview = items.slice(0, 5).map(esc).join(' · ');
     var more = items.length > 5 ? ' <strong>+' + (items.length - 5) + ' more</strong>' : '';
-    var emoji = k.imageUrl ? '<img src="' + esc(k.imageUrl) + '" alt="' + esc(k.displayName) + '">' : '🏪';
+    var kUrl = '#/kitchen/' + k.id;
     return '<div class="kitchen-card">' +
         '<div class="kc-top">' +
-        '<div class="kc-avatar">' + emoji + '</div>' +
+        '<a class="kc-avatar" href="' + kUrl + '" aria-label="Open ' + esc(k.displayName || '') + '">' +
+        (usableImageUrl(k.imageUrl) ? '<img src="' + esc(k.imageUrl) + '" alt="' + esc(k.displayName) + '" onerror="imgFallback(this)">' : '🏪') + '</a>' +
         '<div class="kc-info">' +
-        '<div class="kc-name"><span>' + esc(k.displayName) + '</span>' +
-        '<button class="heart-btn" type="button" data-action="toggle-fav-kitchen" data-kid="' + k.id + '" aria-label="Favourite">🤍</button></div>' +
+        '<div class="kc-name-row"><a class="kc-name" href="' + kUrl + '">' + esc(k.displayName) + '</a>' +
+        heartBtnHtml(k.id, k.displayName) + '</div>' +
         '<p class="kc-desc">' + esc(k.shortDescription || '') + '</p>' +
         '<div class="kc-meta">' + statusPill(k.status) +
-        '<span class="pill pill-grey">' + (k.orderableItemCount || 0) + ' items today</span>' +
+        '<span class="pill pill-grey">' + (k.orderableItemCount || 0) + ' item' + ((k.orderableItemCount || 0) === 1 ? '' : 's') + ' today</span>' +
+        (k.rating ? '<span class="pill-gold">★ ' + esc(String(k.rating)) + '</span>' : '') +
         (k.previouslyOrdered ? '<span class="trust-badge">↩ Previously ordered</span>' : '') +
         '</div></div></div>' +
         (preview ? '<p class="kc-items">' + preview + more + '</p>' : '') +
-        '<div class="kc-actions"><a class="btn btn-secondary btn-sm" href="#/kitchen/' + k.id + '">View Kitchen →</a></div>' +
+        '<div class="kc-actions"><a class="btn btn-secondary btn-sm" href="' + kUrl + '">View Kitchen →</a></div>' +
         '</div>';
 }
 
@@ -130,11 +179,13 @@ var DEMO_FAVOURITES = [
 async function favRowInner() {
     try {
         var favs = state.user ? await api('/api/favourites') : null;
-        var kitchens = (favs && favs.kitchens && favs.kitchens.length) ? favs.kitchens : DEMO_FAVOURITES;
+        // /api/favourites returns a flat array of FavouriteDto (backend), NOT a {kitchens} envelope.
+        var kitchens = (favs && favs.length) ? favs : DEMO_FAVOURITES;
         if (!kitchens.length) return emptyHtml('❤️', 'No favourites yet', 'Tap the heart on any kitchen to save it here.');
         return '<div class="fav-row">' + kitchens.slice(0, 6).map(function (k) {
             return '<a class="fav-chip" href="' + (k.kitchenId ? '#/kitchen/' + k.kitchenId : '#/kitchens') + '">' +
-                '<span class="fc-emoji">🏪</span><div class="fc-name">' + esc(k.name) + '</div></a>';
+                '<span class="fc-emoji">' + (usableImageUrl(k.imageUrl) ? '<img src="' + esc(k.imageUrl) + '" alt="' + esc(k.name) + '" onerror="imgFallback(this)">' : '🏪') + '</span>' +
+                '<div class="fc-name">' + esc(k.name) + '</div></a>';
         }).join('') + '</div>';
     } catch (e) { return ''; }
 }
@@ -142,15 +193,15 @@ async function favRowInner() {
 // ==================== Screen 2: Food & Kitchens (category hub) ====================
 
 function itemGroupCard(g) {
-    var emoji = g.imageUrl ? '<img src="' + esc(g.imageUrl) + '" alt="' + esc(g.name) + '">' : emojiFor(g.name);
     return '<a class="item-card" href="#/search/' + encodeURIComponent(g.name) + '">' +
-        '<div class="ic-img">' + emoji + '</div>' +
+        dishImg('ic-img', emojiFor(g.name), usableImageUrl(g.imageUrl) ? g.imageUrl : '', g.name) +
         '<div class="ic-body"><div class="ic-name">' + esc(g.name) + '</div>' +
         '<div class="ic-sub">' + g.kitchenCount + ' kitchen' + (g.kitchenCount === 1 ? '' : 's') + '</div></div></a>';
 }
 
 async function foodHubView() {
     var mode = state.viewMode || 'items';
+    await loadFavSet();
     var h = '<div class="view-enter">' + topBarHtml();
     h += '<div class="page-head"><h1>Food &amp; Kitchens</h1>' +
         '<p class="muted small">What\'s available in your community today?</p></div>';
@@ -224,13 +275,22 @@ var DISCOVERY_TABS = [
 async function kitchensView() {
     var tab = state.kitchenTab || 'LIVE_NOW';
     var h = '<div class="view-enter">';
-    h += backBarHtml('Kitchens in your community');
+    h += backBarHtml('All Kitchens');
+    await loadFavSet();
 
     try {
         var counts = await api('/api/discovery/counts');
-        h += '<p class="muted small mb-3">' +
-            counts.live + ' Live · ' + counts.tomorrow + ' Tomorrow · ' + counts.preorder + ' Pre-order · ' +
-            counts.all + ' All</p>';
+
+        // Marketplace header — shareable page, works from a direct URL, keeps nav intact
+        h += '<div class="shop-header">' +
+            '<h1>🏪 All Kitchens</h1>' +
+            '<p class="shop-sub">Fresh homemade food from trusted home kitchens in your community — order today or pre-order for later.</p>' +
+            '<div class="shop-stats">' +
+            '<span class="shop-stat">🟢 ' + counts.live + ' Live</span>' +
+            '<span class="shop-stat">📅 ' + counts.tomorrow + ' Tomorrow</span>' +
+            '<span class="shop-stat">🔮 ' + counts.preorder + ' Pre-order</span>' +
+            '<span class="shop-stat">🏪 ' + counts.all + ' All</span>' +
+            '</div></div>';
 
         h += '<div class="capsule-row">' + DISCOVERY_TABS.map(function (t) {
             return '<button type="button" class="capsule ' + (t.id === tab ? 'active' : '') + '" data-action="set-kitchen-tab" data-tab="' + t.id + '">' + t.label + '</button>';
@@ -245,12 +305,13 @@ async function kitchensView() {
                 ALL: ['🏪', 'No kitchens registered yet', 'Be the first — tell a neighbour to open their kitchen on SocioMart!']
             };
             var m = msgs[tab] || msgs.LIVE_NOW;
-            h += emptyHtml(m[0], m[1], m[2]);
+            h += '<div class="empty-live">' + emptyHtml(m[0], m[1], m[2]) + '</div>';
         } else {
             h += '<div class="kitchen-list">' + kitchens.map(kitchenCardHtml).join('') + '</div>';
         }
     } catch (e) {
-        h += emptyHtml('⚠️', 'Could not load kitchens', e.message);
+        h += '<div class="empty-live">' + emptyHtml('⚠️', 'Could not load kitchens', e.message,
+            '<button class="btn btn-primary card-mt" type="button" data-action="set-kitchen-tab" data-tab="' + tab + '">Try again</button>') + '</div>';
     }
     h += '</div>';
     return h;
@@ -275,6 +336,7 @@ async function categoryView(hash) {
     }).join('') + '</div>';
 
     try {
+        await loadFavSet();
         var data = await api('/api/discovery/items?category=' + cat);
         h += '<div class="top-row mb-2"><h3>Explore ' + esc(m[1].toLowerCase()) + ' — ' +
             data.count + ' items</h3></div>';
@@ -311,29 +373,36 @@ async function kitchenPageView(hash) {
             ? detail.preorderProducts
             : (detail.products || []).filter(function (p) { return p.isPreorder; });
 
-        // Hero — banner, avatar, identity, tags, socials, status
+        // Hero — banner, avatar, identity, tags, socials (no kitchen-level
+        // "Orders Open" indicator; item-level timing lives on each offering card)
+        var khAvatar = dishImg('kh-avatar', '🏪', usableImageUrl(k.imageUrl) ? k.imageUrl : '', k.displayName || 'kitchen');
         h += '<div class="kitchen-hero">' +
             '<div class="kh-actions">' +
             '<button class="icon-btn ghost" type="button" data-action="go-back" aria-label="Back">←</button>' +
             '<button class="icon-btn ghost" type="button" data-action="share-kitchen" aria-label="Share">🔗</button></div>' +
             '<div class="kh-identity">' +
-            '<div class="kh-avatar">' + (k.imageUrl ? '<img src="' + esc(k.imageUrl) + '" alt="' + esc(k.displayName) + '">' : '🏪') + '</div>' +
+            khAvatar +
             '<div><div class="kh-name">' + esc(k.displayName) + '</div>' +
             '<div class="kh-loc">📍 ' + esc((k.society || LOCATION) + (k.building ? ', ' + k.building : '')) + '</div>' +
-            (k.society ? '<div class="kh-loc muted small">Orders are currently limited to ' + esc(k.society) + ' and may be limited to selected societies.</div>' : '') +
+            (k.rating ? '<div class="kh-loc"><span class="pill-gold">★ ' + esc(String(k.rating)) + '</span> <span class="tiny muted">home kitchen rating</span></div>' : '') +
             '</div></div>' +
             '<div class="kh-tags">' +
             '<span class="kh-tag">Homemade</span><span class="kh-tag">Fresh</span><span class="kh-tag">Daily</span></div>' +
-            '<div class="kh-status">' + (k.availableToday
-                ? '<span class="pill pill-green">🟢 Orders Open · until ' + esc(prettyTime(k.orderDeadline || '21:00')) + '</span>'
-                : '<span class="pill pill-grey">⚪ Currently closed</span>') + '</div>' +
             '<div class="kh-socials">' +
-            (k.whatsappLink ? '<a class="kh-tag" href="' + esc(k.whatsappLink) + '" target="_blank" rel="noopener">💬 WhatsApp</a>' : '') +
-            (k.instagramLink ? '<a class="kh-tag" href="' + esc(k.instagramLink) + '" target="_blank" rel="noopener">📸 Instagram</a>' : '') +
-            '<button class="kh-tag cursor-pointer" type="button" data-action="open-enquiry" data-kid="' + k.id + '" data-kname="' + esc(k.displayName) + '">✉️ Enquire</button>' +
+            (k.whatsappLink ? '<a class="kh-tag kh-social-link" href="' + esc(k.whatsappLink) + '" target="_blank" rel="noopener">💬 WhatsApp</a>' : '') +
+            (k.instagramLink ? '<a class="kh-social-link instagram" href="' + esc(k.instagramLink) + '" target="_blank" rel="noopener" aria-label="Follow ' + esc(k.displayName) + ' on Instagram">📸 Instagram</a>' : '') +
+            '<button class="kh-tag kh-social-link cursor-pointer" type="button" data-action="open-enquiry" data-kid="' + k.id + '" data-kname="' + esc(k.displayName) + '">✉️ Enquire</button>' +
             '</div></div>';
 
-        // About + gallery
+        // Service area — informative, not a warning (area comes from the seller's onboarding data)
+        if (k.society) {
+            h += '<div class="service-area">' +
+                '<span class="sa-icon" aria-hidden="true">🏘️</span>' +
+                '<div><span class="sa-title">Service area</span>' +
+                'Orders are currently limited to <strong>' + esc(k.society) + '</strong> and may be limited to selected societies.</div></div>';
+        }
+
+        // About + gallery (local demo imagery)
         var about = k.description || k.shortDescription || 'A community kitchen on SocioMart.';
         var shortAbout = about.length > 120 ? about.slice(0, 120) : null;
         h += '<div class="card pad card-mb">' +
@@ -341,8 +410,11 @@ async function kitchenPageView(hash) {
             (shortAbout ? '… <button class="oc-more" type="button" data-action="read-more" data-full="' + encodeURIComponent(about) + '">Read more →</button>' : '') + '</p>' +
             '<h3 class="section-gap mb-2">Kitchen Gallery</h3>' +
             '<div class="gallery-strip">' +
-            '<div class="gallery-ph">📷</div><div class="gallery-ph">🍛</div><div class="gallery-ph">🥘</div><div class="gallery-ph">☕</div>' +
-            '</div><button class="oc-more" type="button" data-action="noop" class="mt-1">View all →</button></div>';
+            '<div class="gallery-ph" data-emoji="🏠">🏠</div>' +
+            '<div class="gallery-ph" data-emoji="🍛">🍛</div>' +
+            '<div class="gallery-ph" data-emoji="🥘">🥘</div>' +
+            '<div class="gallery-ph" data-emoji="☕">☕</div>' +
+            '</div><p class="tiny muted mt-1">A peek at the kitchen — fresh, home-cooked and made with care.</p></div>';
 
         // Section 1: Available Today
         h += '<h3 class="section-gap mb-2">🍽️ Available Today</h3>';
@@ -361,7 +433,8 @@ async function kitchenPageView(hash) {
                 upcoming.slice(0, 6).map(function (p) {
                     return '<div class="upcoming-card"><span class="date-pill">' + esc(prettyDate(p.availableDate)) + '</span>' +
                         '<div class="font-800 text-sm">' + esc(p.name) + '</div>' +
-                        '<div class="tiny muted mt-1">' + money(p.price) + ' · ' + esc(p.priceUnit || 'serving') + '</div></div>';
+                        '<div class="tiny muted mt-1">' + money(p.price) + ' · ' + esc(p.priceUnit || 'serving') + '</div>' +
+                        '<div class="tiny muted mt-1">⏰ Order by ' + (p.cutoffTime ? esc(prettyTime(p.cutoffTime)) : '—') + '</div></div>';
                 }).join('') + '</div>';
         }
     } catch (e) {
@@ -376,28 +449,35 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
     var max = p.maxQuantity || ((p.bookedQuantity || 0) + (p.remainingQuantity || 0)) || 50;
     var booked = p.bookedQuantity || 0;
     var pct = max > 0 ? Math.min(100, Math.round(booked / max * 100)) : 0;
-    var cutoffTxt = p.cutoffTime ? ('Order by ' + prettyTime(p.cutoffTime)) : '';
-    var timingTxt = p.readyByTime ? (' · Ready ' + p.readyByTime) : '';
-    if (isPreorderSection && p.availableDate) {
-        cutoffTxt = 'For ' + prettyDate(p.availableDate).toLowerCase() + ', order by ' + (p.cutoffTime ? prettyTime(p.cutoffTime) : '—');
-    }
+    var isPre = !!p.isPreorder || !!isPreorderSection;
     var kitchenJson = encodeURIComponent(JSON.stringify({ id: kitchen.id, displayName: kitchen.displayName }));
-    return '<div class="offering-card' + (soldOut ? ' sold-out' : '') + '">' +
-        '<div class="oc-photo">' + (p.imageUrl ? '<img src="' + esc(p.imageUrl) + '" alt="' + esc(p.name) + '">' : emojiFor(p.name)) + '</div>' +
+    var timingHtml;
+    if (isPre) {
+        var cut = p.cutoffTime ? prettyTime(p.cutoffTime) : '—';
+        timingHtml = '<span class="oc-cutoff">⏰ Order cutoff: ' + esc(cut) + '</span>' +
+            '<div class="oc-delivers">📅 ' + esc(prettyDate(p.availableDate)) + '</div>';
+    } else {
+        var t1 = p.cutoffTime ? ('Order by ' + prettyTime(p.cutoffTime)) : '';
+        var t2 = p.readyByTime ? (' · Ready ' + p.readyByTime) : '';
+        timingHtml = '<p class="oc-timing">⏰ ' + esc(t1 + t2) + '</p>';
+    }
+    return '<div class="offering-card' + (soldOut ? ' sold-out' : '') + (isPre ? ' is-preorder' : '') + '">' +
+        dishImg('oc-photo', emojiFor(p.name), usableImageUrl(p.imageUrl) ? p.imageUrl : '', p.name) +
         '<div class="oc-body">' +
-        '<div class="oc-name-row"><span class="oc-name">' + esc(p.name) + '</span></div>' +
+        '<div class="oc-name-row"><span class="oc-name">' + esc(p.name) + '</span>' +
+        (isPre ? '<span class="oc-preorder-badge">🔮 Pre-order</span>' : '') + '</div>' +
         '<p class="oc-desc">' + esc((p.description || '').slice(0, 70)) +
         ((p.description || '').length > 70 ? '… <button class="oc-more" type="button" data-action="read-more" data-full="' + encodeURIComponent(p.description) + '">More →</button>' : '') + '</p>' +
         '<div class="oc-price">' + money(p.price) + ' <span class="unit">/ ' + esc(p.priceUnit || 'serving') + '</span></div>' +
+        timingHtml +
         '<div class="demand-bar"><div class="demand-track"><div class="demand-fill" style="width:' + pct + '%"></div></div>' +
         '<div class="demand-label">' + booked + ' / ' + max + ' booked</div></div>' +
-        '<p class="oc-timing">⏰ ' + esc(cutoffTxt + timingTxt) + '</p>' +
         (soldOut
             ? '<div class="oc-footer"><span class="pill pill-red">🔴 Sold out</span>' +
               '<button class="btn btn-outline btn-sm" disabled>Sold out</button></div>'
-            : '<div class="oc-footer"><span class="pill ' + (isPreorderSection ? 'pill-blue">🔵 Pre-order' : 'pill-green">🟢 Today') + '</span>' +
+            : '<div class="oc-footer"><span class="pill ' + (isPre ? 'pill-blue">🔵 Pre-order' : 'pill-green">🟢 Today') + '</span>' +
               '<button class="btn btn-primary btn-sm" type="button" data-action="open-order-sheet" data-product="' + encodeURIComponent(JSON.stringify(p)) + '" data-kitchen="' + kitchenJson + '">' +
-              (isPreorderSection ? 'PRE-ORDER' : 'ORDER') + '</button></div>') +
+              (isPre ? 'PRE-ORDER' : 'ORDER') + '</button></div>') +
         '</div></div>';
 }
 
@@ -560,7 +640,8 @@ async function orderSummaryView() {
         'placeholder="e.g. Less spicy please, ring the bell twice"></textarea></div></div>';
 
     h += '<div class="sticky-footer-bar"><div class="inner">' +
-        '<button class="btn btn-primary btn-block" type="button" data-action="go-checkout">PLACE ORDER — ' + money(cartTotal()) + ' →</button>' +
+        '<button class="btn btn-submit btn-block" type="button" data-action="go-checkout">Place Order ✓ — ' + money(cartTotal()) + ' →</button>' +
+        '<p class="tiny muted text-center mt-1">Review your items, then choose your payment status on the next step.</p>' +
         '</div></div>';
 
     h += '</div>';
@@ -640,7 +721,8 @@ async function placeOrderWithStatus(paymentStatus) {
 /**
  * Confirm Order page — dynamic review of the real backend DRAFT.
  * No API mutations here: opening/reloading this page can never create a
- * duplicate order. Only the Payment screen's Pay button places the order.
+ * duplicate order. Only the "Place Order" button (with the chosen payment
+ * status) submits the order via POST /api/buyer/orders/place.
  */
 async function confirmOrderView() {
     var h = '<div class="view-enter">';
@@ -702,12 +784,25 @@ async function confirmOrderView() {
             '<p class="muted small">💬 ' + esc(note) + '</p></div>';
     }
 
-    // 7: Place Order actions — directly creates the order with selected payment status
+    // 7: Payment-status selection (UI only — no gateway, cards or UPI) + Place Order
+    var pref = state.payPreference || 'PAID';
+    h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Payment status</h3>' +
+        '<div class="pay-status' + (pref === 'PAID' ? ' selected' : '') + '" role="radio" aria-checked="' + (pref === 'PAID' ? 'true' : 'false') + '" data-action="select-pay-status" data-status="PAID">' +
+        '<span class="ps-radio" aria-hidden="true"></span>' +
+        '<span class="ps-icon" aria-hidden="true">✅</span>' +
+        '<span class="ps-body"><span class="ps-name">Paid</span>' +
+        '<span class="ps-sub">Confirm this order as paid now. Demo selection only.</span></span></div>' +
+        '<div class="pay-status' + (pref === 'WILL_PAY_LATER' ? ' selected' : '') + '" role="radio" aria-checked="' + (pref === 'WILL_PAY_LATER' ? 'true' : 'false') + '" data-action="select-pay-status" data-status="WILL_PAY_LATER">' +
+        '<span class="ps-radio" aria-hidden="true"></span>' +
+        '<span class="ps-icon" aria-hidden="true">⏳</span>' +
+        '<span class="ps-body"><span class="ps-name">Will Pay Later</span>' +
+        '<span class="ps-sub">Pay when the order is delivered or picked up.</span></span></div>' +
+        '<p class="pay-status-note mt-1">🔒 This is only a payment-status selection for your order record — no payment is processed here.</p></div>';
+
     h += '<div class="sticky-footer-bar"><div class="inner">' +
-        '<button class="btn btn-primary btn-block" type="button" data-action="place-order-paid" style="margin-bottom:8px">' +
-        'Place Order (Paid) — ' + money(draft.totalAmount) + '</button>' +
-        '<button class="btn btn-secondary btn-block" type="button" data-action="place-order-later">' +
-        'Place Order (Will Pay Later) — ' + money(draft.totalAmount) + '</button>' +
+        '<button class="btn btn-submit btn-block" type="button" data-action="place-order" id="placeOrderBtn">' +
+        'Place Order ✓ — ' + money(draft.totalAmount) + '</button>' +
+        '<p class="tiny muted text-center mt-1">Review everything above before submitting.</p>' +
         '</div></div>';
 
     h += '</div>';
@@ -911,36 +1006,32 @@ async function comparisonView(hash) {
 // ==================== Screen 8: Favourites ====================
 
 async function favouritesView() {
-    var tab = state.favTab || 'kitchens';
-    var h = '<div class="view-enter"><div class="page-head"><h1>Favourites</h1></div>';
+    // Favourites are kitchen-only (no favourite food-item UI).
+    await loadFavSet();
+    var h = '<div class="view-enter"><div class="page-head"><h1>❤️ Favourite Kitchens</h1>' +
+        '<p class="muted small">Save up to 3 community kitchens for quick access.</p></div>';
 
-    h += '<div class="segmented">' +
-        ['kitchens', 'food'].map(function (t) {
-            return '<button type="button" class="' + (tab === t ? 'active' : '') + '" data-action="set-fav-tab" data-tab="' + t + '">' +
-                t.charAt(0).toUpperCase() + t.slice(1) + '</button>';
-        }).join('') + '</div>';
-
-    if (tab === 'kitchens' || tab === 'food') {
-        var favs = null;
-        if (state.user) {
-            try { favs = await api('/api/favourites'); } catch (e) { favs = null; }
-        }
-        var list = favs ? (tab === 'kitchens' ? favs.kitchens : favs.food) : (tab === 'kitchens' ? DEMO_FAVOURITES : []);
-        if (!list || !list.length) {
-            var demoNote = !state.user ? '<p class="tiny muted mt-1">Showing demo favourites — log in to see yours.</p>' : '';
-            h += emptyHtml('❤️', tab === 'kitchens' ? 'No favourite kitchens yet' : 'No favourite food yet',
-                tab === 'kitchens' ? 'Tap the heart on any kitchen to save it here.' : 'Tap the heart on any dish to save it here.') + demoNote;
-        } else {
-            h += list.map(function (f) {
-                var href = f.kitchenId ? '#/kitchen/' + f.kitchenId : '#/food';
-                return '<a class="fav-list-item" href="' + href + '">' +
-                    '<span class="fli-emoji">' + (tab === 'kitchens' ? '🏪' : emojiFor(f.name)) + '</span>' +
-                    '<span class="fli-body"><span class="fli-name">' + esc(f.name) + '</span>' +
-                    '<span class="fli-sub">' + esc(f.subtitle || f.kitchenName || '') + '</span></span>' +
-                    (f.price ? '<span class="si-price">' + money(f.price) + '</span>' : '') +
-                    '</a>';
-            }).join('');
-        }
+    var favs = null;
+    if (state.user) {
+        try { favs = await api('/api/favourites'); } catch (e) { favs = null; }
+    }
+    var list = favs && favs.length ? favs : DEMO_FAVOURITES;
+    if (!list || !list.length) {
+        var demoNote = !state.user ? '<p class="tiny muted mt-1">Showing demo favourites — log in to see yours.</p>' : '';
+        h += emptyHtml('❤️', 'No favourite kitchens yet', 'Tap the heart on any kitchen to save it here.') + demoNote;
+    } else {
+        h += list.map(function (f) {
+            var kid = f.kitchenId || null;
+            var faved = kid && favSet().has(String(kid));
+            var href = kid ? '#/kitchen/' + kid : '#/kitchens';
+            return '<div class="fav-list-item">' +
+                '<a class="fli-emoji" href="' + href + '" aria-label="Open ' + esc(f.name) + '">' +
+                (usableImageUrl(f.imageUrl) ? '<img src="' + esc(f.imageUrl) + '" alt="' + esc(f.name) + '" onerror="imgFallback(this)">' : '🏪') + '</a>' +
+                '<span class="fli-body"><a class="fli-name" href="' + href + '">' + esc(f.name) + '</a>' +
+                '<span class="fli-sub">' + esc(f.subtitle || 'Community kitchen on SocioMart') + '</span></span>' +
+                (faved && kid ? heartBtnHtml(kid, f.name) : '') +
+                '</div>';
+        }).join('');
     }
     h += '</div>';
     return h;

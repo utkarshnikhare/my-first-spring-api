@@ -393,7 +393,13 @@ h3 { font-size: 1.05rem; font-weight: 700; font-family: 'Montserrat', 'Segoe UI'
 
 /* ===================== Kitchen cards (Screens 2/3) ===================== */
 
-.kitchen-list { display: flex; flex-direction: column; gap: 14px; }
+.kitchen-list { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 600px) {
+    .kitchen-list { grid-template-columns: 1fr 1fr; }
+}
+@media (min-width: 1024px) {
+    .kitchen-list { grid-template-columns: repeat(3, 1fr); }
+}
 .kitchen-card {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px;
@@ -415,9 +421,27 @@ h3 { font-size: 1.05rem; font-weight: 700; font-family: 'Montserrat', 'Segoe UI'
 .kc-name { font-weight: 800; font-size: 1rem; display: flex; align-items: center; gap: 8px; }
 .kc-desc { font-size: .82rem; color: var(--muted); margin-top: 3px; line-height: 1.4; }
 .kc-meta { margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.heart-btn { background: none; border: none; cursor: pointer; font-size: 1.2rem; padding: 4px; line-height: 1; opacity: .85; transition: transform .15s ease; }
-.heart-btn:hover { transform: scale(1.15); }
-.heart-btn.faved { opacity: 1; }
+.heart-btn {
+    background: none; border: none; cursor: pointer;
+    width: 40px; height: 40px; padding: 0; line-height: 1;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%; font-size: 1.15rem; color: var(--text);
+    opacity: .95; transition: transform .15s ease, background .2s ease, color .2s ease, box-shadow .2s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+.heart-btn:hover { transform: scale(1.12); background: var(--danger-soft); }
+.heart-btn:active { transform: scale(.88); }
+.heart-btn:focus-visible { outline: 2px solid var(--brand-3); outline-offset: 2px; }
+.heart-btn[aria-pressed="true"],
+.heart-btn.faved { background: var(--danger-soft); color: var(--danger); opacity: 1; }
+.heart-btn.shake { animation: heartShake .4s ease; }
+@keyframes heartShake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+}
 .kc-items { margin-top: 10px; font-size: .8rem; color: var(--muted); line-height: 1.4; }
 .kc-items strong { color: var(--text); }
 .trust-badge {
@@ -996,3 +1020,163 @@ select, textarea, input { max-width: 100%; }
 
 
 
+/* =====================================================================
+   UI/UX PASS — Marketplace listings, favourites, pre-orders, payment
+   status selection, service area & reusable demo-imagery primitives.
+   All rules are additive to the approved SocioMart theme.
+   ===================================================================== */
+
+/* ---------- Shareable "All Kitchens" marketplace page ---------- */
+
+.shop-header {
+    display: flex; flex-direction: column; gap: 6px;
+    margin: 4px 0 8px;
+}
+.shop-header h1 {
+    font-size: 1.5rem; font-weight: 800; letter-spacing: -.02em;
+    display: flex; align-items: center; gap: 10px;
+}
+.shop-header .shop-sub { color: var(--muted); font-size: .86rem; line-height: 1.45; }
+.shop-stats {
+    display: flex; gap: 8px; flex-wrap: wrap; margin: 2px 0 4px;
+}
+.shop-stat {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 999px; padding: 6px 12px;
+    font-size: .76rem; font-weight: 700; color: var(--text);
+    box-shadow: var(--shadow);
+}
+.pill-gold {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--amber-soft); color: var(--amber);
+    border-radius: 999px; padding: 3px 9px; font-size: .72rem; font-weight: 800;
+}
+
+/* Kitchen card name row (heart sits in its own flex cell, never clipped) */
+.kc-name-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; min-width: 0; }
+.kc-name { flex: 1; min-width: 0; font-weight: 800; font-size: 1rem; overflow-wrap: anywhere; word-break: break-word; }
+.kc-meta .pill, .kc-meta .trust-badge, .kc-meta .pill-gold { flex-shrink: 0; }
+
+/* ---------- Service area informational card ---------- */
+
+.service-area {
+    display: flex; align-items: flex-start; gap: 10px;
+    background: var(--green-soft); border: 1px solid var(--secondary);
+    border-radius: 14px; padding: 11px 13px; margin: 6px 0 14px;
+    color: var(--secondary); font-size: .82rem; line-height: 1.45;
+}
+.service-area .sa-icon { flex: 0 0 auto; font-size: 1.1rem; }
+.service-area strong { font-weight: 800; }
+.service-area .sa-title { display: block; font-weight: 800; font-size: .74rem; letter-spacing: .04em; text-transform: uppercase; }
+
+/* ---------- Demo imagery (local SVG fallbacks for missing/broken images) ---------- */
+
+.demo-img {
+    background:
+/* ---------- Pre-order presentation (item level, data driven) ---------- */
+
+.offering-card.is-preorder {
+    border-color: var(--blue);
+    background: linear-gradient(180deg, var(--surface) 0%, var(--blue-soft) 100%);
+}
+.oc-preorder-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--blue-soft); color: var(--blue);
+    border-radius: 999px; padding: 3px 10px; font-size: .7rem; font-weight: 800;
+    letter-spacing: .05em; text-transform: uppercase;
+}
+.oc-cutoff {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--amber-soft); color: var(--amber);
+    border-radius: 8px; padding: 3px 9px; font-size: .72rem; font-weight: 800;
+    margin-top: 4px;
+}
+.oc-delivers { font-size: .76rem; color: var(--text); font-weight: 700; margin-top: 2px; }
+
+/* ---------- Payment-status selection (UI only — no gateway) ---------- */
+
+.pay-status {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 14px; margin-bottom: 10px;
+    border: 1.5px solid var(--border); border-radius: 14px;
+    cursor: pointer; transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+    -webkit-tap-highlight-color: transparent;
+    background: var(--surface);
+}
+.pay-status:last-child { margin-bottom: 0; }
+.pay-status:focus-visible { outline: 2px solid var(--brand-3); outline-offset: 2px; }
+.pay-status .ps-radio {
+    width: 20px; height: 20px; border: 2px solid var(--border); border-radius: 50%;
+    flex-shrink: 0; position: relative;
+}
+.pay-status.selected .ps-radio::after {
+    content: ''; position: absolute; inset: 4px; border-radius: 50%; background: currentColor;
+}
+.pay-status .ps-icon { flex: 0 0 auto; font-size: 1.35rem; }
+.pay-status .ps-body { flex: 1; min-width: 0; }
+.pay-status .ps-name { font-weight: 800; font-size: .94rem; }
+.pay-status .ps-sub { font-size: .76rem; color: var(--muted); margin-top: 1px; line-height: 1.35; }
+.pay-status.selected[data-status="PAID"] {
+    border-color: var(--secondary); background: var(--green-soft); color: var(--secondary);
+}
+.pay-status.selected[data-status="WILL_PAY_LATER"] {
+    border-color: var(--amber); background: var(--amber-soft); color: var(--amber);
+}
+.pay-status-note {
+    display: flex; gap: 8px; align-items: flex-start;
+    background: var(--bg); border: 1px dashed var(--border); border-radius: 12px;
+    padding: 9px 12px; font-size: .78rem; color: var(--muted);
+}
+
+/* Final submission button on the order screens */
+.btn-submit {
+    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    color: #fff; box-shadow: 0 5px 18px rgba(194, 101, 42, .45);
+    padding: 14px 20px; font-size: 1rem; font-weight: 800;
+}
+.btn-submit:hover { box-shadow: 0 9px 24px rgba(194, 101, 42, .55); }
+
+/* ---------- Orders & Enquiries review polish ---------- */
+
+.enq-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; margin-bottom: 12px;
+}
+.enq-kitchen { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: .92rem; min-width: 0; }
+.enq-time { font-size: .74rem; color: var(--muted); }
+.odc-badge.will-pay-later { background: var(--amber-soft); color: var(--amber); }
+.odc-badge.paid { background: var(--green-soft); color: var(--green); }
+.order-meta-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+
+/* Better visual hierarchy on My Orders list cards */
+.odc-order-card .odc-head {
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+}
+.odc-order-card .odc-head .odc-head-left { min-width: 0; flex: 1; }
+.odc-order-card .odc-kitchen { font-weight: 800; font-size: .95rem; }
+.odc-order-card .odc-order-id { font-weight: 700; font-size: .82rem; color: var(--accent); }
+.odc-order-card .odc-date { font-size: .74rem; color: var(--muted); }
+.odc-pay-line { display: inline-flex; align-items: center; gap: 5px; font-size: .76rem; font-weight: 700; color: var(--text); }
+.odc-pay-line .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* ---------- Empty states: a little more life for live-marketplace zero results ---------- */
+
+.empty.empty-live { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius); }
+.empty .empty-icon { filter: saturate(.9); opacity: .9; }
+        linear-gradient(135deg, var(--brand-soft) 0%, var(--accent-soft) 55%, var(--green-soft) 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.6rem; color: var(--text);
+}
+/* When an <img> fails to load it hides itself and the parent reveals a data-emoji glyph */
+.img-fallback::after { content: attr(data-emoji); font-size: 2rem; }
+
+/* Instagram link (shown only when the seller provides one) */
+.kh-social-link { display: inline-flex; align-items: center; gap: 6px; }
+.kh-social-link.instagram {
+    background: linear-gradient(45deg, #f9c34d, #f77737, #d62976, #962fbf);
+    color: #fff; border: none;
+    border-radius: 999px; padding: 5px 12px; font-size: .74rem; font-weight: 700;
+    text-decoration: none;
+}
+.kh-social-link.instagram:hover { filter: brightness(1.06); }

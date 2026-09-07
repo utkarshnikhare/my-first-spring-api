@@ -9,6 +9,7 @@ var state = {
     ordersTab: 'orders',      // Screen 8 orders/enquiries tabs
     ordersFilter: 'all',      // Screen 8 order filter: all/active/completed/cancelled
     payMethod: 'upi',         // Screen 6 demo payment method: upi/card/cod
+    payPreference: 'PAID',    // Confirm Order payment-status selection: PAID | WILL_PAY_LATER
     placingOrder: false,      // idempotency guard for payment confirmation
     lastOrder: null,          // placed order for the confirmation screen
     authMobile: '',
@@ -123,6 +124,10 @@ document.addEventListener('click', async function (e) {
             case 'place-order-paid': await placeOrderWithStatus('PAID'); break;
             case 'place-order-later': await placeOrderWithStatus('WILL_PAY_LATER'); break;
             case 'select-pay-method': state.payMethod = t.dataset.method; await render(); break;
+            case 'select-pay-status': // Confirm Order: Paid / Will Pay Later (UI selection only)
+                state.payPreference = t.dataset.status === 'WILL_PAY_LATER' ? 'WILL_PAY_LATER' : 'PAID';
+                await render(); break;
+            case 'place-order': await placeOrderWithStatus(state.payPreference || 'PAID'); break;
             case 'confirm-payment': await confirmPayment(t); break;
             case 'logout': {
                 try { await api('/api/auth/logout', { method: 'POST' }); } catch (e5) {}
@@ -146,11 +151,21 @@ async function toggleFavourite(type, id, btnEl) {
     var doToggle = async function () {
         try {
             var resp = await api('/api/favourites/' + type + '/' + id + '/toggle', { method: 'POST' });
+            // Keep the client-side favourites cache in sync so every heart on the
+            // page (and the Favourites screen) reflects the new state immediately.
+            if (FAV_CACHE) {
+                if (resp.favourited) FAV_CACHE.add(String(id));
+                else FAV_CACHE.delete(String(id));
+            }
             if (btnEl) {
                 btnEl.classList.toggle('faved', resp.favourited);
                 btnEl.textContent = resp.favourited ? '❤️' : '🤍';
+                btnEl.setAttribute('aria-pressed', resp.favourited ? 'true' : 'false');
+                btnEl.setAttribute('aria-label', (resp.favourited ? 'Remove from favourites' : 'Save to favourites'));
             }
             toast(resp.favourited ? ('Saved ' + label + ' to favourites') : ('Removed from favourites'), 'success');
+            // On the Favourites screen the list itself must update immediately.
+            if (location.hash === '#/favourites' && type === 'kitchen') await render();
         } catch (err) {
             if (!(err instanceof ApiError && err.status === 401)) toast(err.message, 'error');
         }
