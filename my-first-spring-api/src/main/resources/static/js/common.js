@@ -306,14 +306,15 @@ function updateCartBar() {
     var bar = $('#viewOrderBar');
     if (!bar) return;
     var n = cartItemCount();
-    bar.hidden = n === 0;
+    var view = $('#view');
+    var hasStickyFooter = view && view.querySelector('.sticky-footer-bar');
+    bar.hidden = (n === 0) || !!hasStickyFooter;
     $('#vobCount').textContent = n;
     var word = $('#vobItemWord');
     if (word) word.textContent = (n === 1 ? 'item' : 'items');
     $('#vobTotal').textContent = money(cartTotal());
-    var view = $('#view');
     if (view) {
-        if (n === 0) view.classList.remove('has-cart-bar');
+        if (n === 0 || hasStickyFooter) view.classList.remove('has-cart-bar');
         else view.classList.add('has-cart-bar');
     }
 }
