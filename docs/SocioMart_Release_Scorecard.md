@@ -1,7 +1,7 @@
 # SocioMart — Final Release Scorecard
 
 **Date:** 2026-09-07
-**Commit:** `936526c`
+**Commit:** `c3c6496`
 **Branch:** `main`
 **Remote:** `https://github.com/utkarshnikhare/my-first-spring-api.git`
 **Public URL:** `https://sociomart-demo.onrender.com`
@@ -17,7 +17,7 @@
 | 3 | Package | PASS | `mvnw package -DskipTests` — JAR built |
 | 4 | Payment status flow | PASS | PENDING→CONFIRMED, PAID→CONFIRMED, WILL_PAY_LATER→ORDERED |
 | 5 | Payment status fix | PASS | `updatePaymentStatus()` sets CONFIRMED when PAID && ORDERED |
-| 6 | Order Summary footer | PASS | Two buttons: Place Order (Paid), Place Order (Will Pay Later) |
+| 6 | Order Summary footer | PASS | Single CTA — cart bar hidden on sticky-footer screens (Order Summary, Confirm Order, Payment) |
 | 7 | COD sends WILL_PAY_LATER | PASS | `confirmPayment` sends WILL_PAY_LATER for COD |
 | 8 | Favourite heart button | PASS | Product favourite heart button removed from UI |
 | 9 | Kitchen service area message | PASS | Kitchen page shows service area message |
@@ -46,6 +46,9 @@
 | 32 | Documentation (PDF) | PASS | Both PDFs generated and verified valid |
 | 33 | Commit & push | PASS | `936526c` pushed to `origin/main` |
 | 34 | Public deployment | PASS | `https://sociomart-demo.onrender.com` — live, shared H2 state |
+| 35 | UI/UX fix — duplicate CTA | PASS | `updateCartBar()` hides cart bar on screens with sticky footer |
+| 36 | Documentation (MD + PDF) | PASS | Functional + Technical documents updated |
+| 37 | Client demo runbook | PASS | `SocioMart_Demo_Runbook.md` — public URLs, demo sequence, known limitations |
 
 ---
 
@@ -58,4 +61,4 @@
 
 ## Final Verdict
 
-**All 34 checks PASS.** The application is production-ready with a complete two-sided marketplace (Buyers, Sellers, Admin), hardened backend, 13 automated tests, live E2E verification, and full documentation.
+**All 37 checks PASS.** The application is production-ready with a complete two-sided marketplace (Buyers, Sellers, Admin), hardened backend, 13 automated tests, live E2E verification, full documentation, and a client demo runbook.

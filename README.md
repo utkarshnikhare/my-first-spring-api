@@ -113,7 +113,7 @@ Review seller applications, approve or reject sellers, and monitor platform acti
 - No flash on page load (theme applied before first paint)
 
 ### Design Tokens
-Key CSS variables: `--background`, `--surface`, `--surface-elevated`, `--text-primary`, `--text-secondary`, `--border`, `--primary`, `--secondary`, `--success`, `--warning`, `--error`, `--overlay`.
+Key CSS variables: `--bg`, `--surface`, `--surface-2`, `--text`, `--muted`, `--border`, `--brand`, `--brand-2`, `--brand-3`, `--accent`, `--secondary`, `--green`, `--amber`, `--danger`, `--blue`, `--purple`, `--radius`, `--nav-h`.
 
 ### Typography
 - Headings: Montserrat
@@ -139,11 +139,41 @@ Mobile-first. Tested at 360, 390, 430, 768, 1024, and 1440 px. Desktop uses sens
 ### Tech Layer
 | Layer | Technology |
 |-------|-----------|
-| Backend | Spring Boot, Java, Maven |
-| Frontend | Vanilla HTML/CSS/JS SPA |
-| Database | In-memory H2 (resets on restart) |
+| Backend | Spring Boot 4.1.1, Java 21, Maven |
+| Frontend | Vanilla HTML/CSS/JS SPA (3 separate apps: Buyer, Seller, Admin) |
+| Database | In-memory H2 (resets on restart, auto-seeded with demo data) |
 | API Docs | Swagger/OpenAPI (`/swagger-ui.html`) |
-| Deployment | Docker on Render |
+| Deployment | Docker on Render (free tier) |
+| CI | GitHub Actions |
+
+### System Architecture
+```
+┌─────────────────────────── Browser (SPA) ───────────────────────────┐
+│  index.html (buyer)  ·  seller.html (seller)  ·  admin.html (admin) │
+│         js/app.js  ·  js/seller.js  ·  js/admin.js                 │
+└──────────────────────────────┬──────────────────────────────────────┘
+                                │  JSON over HTTP (fetch, cookie session)
+┌──────────────────────────────▼──────────────────────────────────────┐
+│  Controller Layer   AuthController · BuyerOrderController ·         │
+│  (REST endpoints)   BuyerProfileController · BuyerPublicController ·│
+│                     DiscoveryController · EnquiryController ·        │
+│                     FavouriteController · MarketplaceController ·   │
+│                     SellerController · SellerAppController ·        │
+│                     AdminController · SuperAdminController          │
+├─────────────────────────────────────────────────────────────────────┤
+│  Service Layer      OrderService · BuyerService · SellerService ·   │
+│  (business rules,   SellerAppService · AdminService ·               │
+│   @Transactional)   DiscoveryService · EnquiryService ·             │
+│                     FavouriteService · AnalyticsService ·           │
+│                     KitchenService · MarketplaceService             │
+├─────────────────────────────────────────────────────────────────────┤
+│  Repository Layer   Spring Data JPA interfaces (13 repositories)    │
+├─────────────────────────────────────────────────────────────────────┤
+│  H2 Database        users · kitchens · products · orders ·          │
+│                     order_items · seller_templates · favourites ·   │
+│                     enquiries · analytics_events · platform_settings │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
 ### Project Structure
 ```
@@ -151,23 +181,24 @@ my-first-spring-api/
 ├── .github/                         GitHub configuration
 ├── data/                            Runtime H2 data (git-ignored)
 ├── deploy/                          Static deploy copy
-├── docs/                            HTML/PDF project documentation
+├── docs/                            MD/PDF project documentation + screenshots
 ├── docs-tools/                      Local QA tooling (git-ignored)
 ├── my-first-spring-api/             Maven project root
-│   ├── Dockerfile                   Multi-stage Docker build (JDK 21)
+│   ├── Dockerfile                   Multi-stage Docker build (JDK 21 → JRE 21)
 │   ├── pom.xml                      Spring Boot 4.1.1, Java 21
 │   ├── mvnw / mvnw.cmd              Maven wrapper
 │   └── src/main/
 │       ├── java/com/example/my_first_spring_api/
 │       │   ├── config/              Web/App configuration
-│       │   ├── controller/          REST controllers
-│       │   ├── dto/                 Request/Response DTOs
+│       │   ├── controller/          12 REST controllers
+│       │   ├── dto/                 27 Request/Response DTOs
 │       │   ├── exception/           Domain exceptions + global handler
-│       │   ├── model/               JPA entities
-│       │   ├── repository/          Spring Data repositories
-│       │   ├── security/            Security configuration
-│       │   ├── service/             Business services
+│       │   ├── model/               17 JPA entities
+│       │   ├── repository/          13 Spring Data repositories
+│       │   ├── security/            Security configuration + session filter
+│       │   ├── service/             12 business services
 │       │   ├── DataInitializer.java Demo data seeding
+│       │   ├── DemoDataSeeder.java  Idempotent demo data seeder
 │       │   └── MyFirstSpringApiApplication.java
 │       └── resources/
 │           ├── application.properties
@@ -176,8 +207,6 @@ my-first-spring-api/
 ├── start.sh / start.cmd / start.ps1 One-command local runners
 ├── Makefile
 ├── .env.example
-└── README.md
-```
 └── README.md
 ```
 
@@ -217,27 +246,27 @@ Key entities and their relationships:
 The REST API is auto-documented at `/swagger-ui.html`.
 
 ### Controller Groups
-| Controller | Path |
-|-----------|------|
-| `AuthController` | `/api/auth` |
-| `DiscoveryController` | `/api/kitchens`, `/api/search` |
-| `MarketplaceController` | `/api/marketplace/*` |
-| `BuyerOrderController` | `/api/orders` |
-| `BuyerProfileController` | `/api/profile` |
-| `FavouriteController` | `/api/favourites` |
-| `EnquiryController` | `/api/enquiries` |
-| `SellerController` | `/api/seller/*` |
-| `SellerAppController` | `/api/seller/kitchen`, `/api/seller/products`, `/api/seller/orders`, `/api/seller/earnings` |
-| `AdminController` | `/api/admin/*` |
-| `SuperAdminController` | `/api/superadmin/*` |
+| Controller | Path | Description |
+|-----------|------|-------------|
+| `AuthController` | `/api/auth` | Authentication (demo-login, logout, become-seller) |
+| `BuyerPublicController` | `/api/buyer` | Public buyer endpoints |
+| `BuyerOrderController` | `/api/buyer/orders` | Order management (draft, place, my orders) |
+| `BuyerProfileController` | `/api/buyer/profile` | Buyer profile management |
+| `DiscoveryController` | `/api/discovery` | Kitchen discovery (kitchens, offers, search) |
+| `EnquiryController` | `/api/enquiries` | Buyer-to-seller enquiries |
+| `FavouriteController` | `/api/favourites` | Kitchen favourites (max 3) |
+| `MarketplaceController` | `/api/marketplace` | Marketplace operations |
+| `SellerController` | `/api/seller` | Seller kitchen & product management |
+| `SellerAppController` | `/api/seller-app` | Seller dashboard (dashboard, orders, earnings) |
+| `AdminController` | `/api/admin` | Admin operations (dashboard, buyers, sellers, kitchens, offerings, orders, enquiries) |
+| `SuperAdminController` | `/api/superadmin` | Super Admin operations (admins, features, settings, analytics) |
 
 ### Frontend Routes
 | File | Route |
 |------|-------|
-| `index.html` | Buyer SPA (hash-based routing: `#/home`, `#/kitchens`, `#/kitchen/:id`, etc.) |
-| `seller.html` | Seller dashboard (hash-based routing) |
-| `admin.html` | Admin panel |
-| `admin.html` | Admin panel |
+| `index.html` | Buyer SPA (hash-based routing: `#/home`, `#/kitchens`, `#/kitchen/:id`, `#/summary`, `#/confirm`, `#/payment`, `#/orders`, `#/favourites`, `#/profile`) |
+| `seller.html` | Seller dashboard (hash-based routing: `#/home`, `#/kitchen`, `#/orders`, `#/history`, `#/earnings`) |
+| `admin.html` | Admin panel (hash-based routing: `#/home`, `#/pending`, `#/sellers`, `#/kitchens`, `#/orders`, `#/buyers`, `#/offerings`, `#/enquiries`, `#/analytics`, `#/console`) |
 
 ---
 
@@ -312,10 +341,12 @@ cd my-first-spring-api
 | Check | Status |
 |-------|--------|
 | Build (`clean compile`) | PASS |
-| Automated tests | PASS |
+| Automated tests (13/13) | PASS |
+| Package (`package -DskipTests`) | PASS |
 | Buyer flow (discovery → order → payment) | PASS (verified on public deployment) |
 | Seller flow (dashboard → kitchen → orders → earnings) | PASS (verified on public deployment) |
-| Admin flow (login → approval) | PASS (verified on public deployment) |
+| Admin flow (login → approval → dashboard) | PASS (verified on public deployment) |
+| Duplicate Place Order CTA fix | PASS (cart bar hidden on sticky-footer screens) |
 | Light theme — all screens | PASS |
 | Dark theme — all screens | PASS |
 | Mobile (360–430 px) | PASS |
@@ -324,6 +355,11 @@ cd my-first-spring-api
 | Public Buyer URL loads | PASS |
 | Public Seller URL loads | PASS |
 | Public Admin URL loads | PASS |
+
+### Latest Release
+- **Commit:** `c3c6496` (HEAD -> main, origin/main)
+- **UI Fix:** Duplicate Place Order CTA resolved — cart bar now hidden on Order Summary, Confirm Order, and Payment screens where sticky footer already provides the CTA
+- **Docs:** Functional + Technical documents updated (MD + PDF)
 
 ---
 
