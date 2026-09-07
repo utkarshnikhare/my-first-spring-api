@@ -1093,10 +1093,16 @@ async function ordersView() {
                         var payStatus = o.paymentStatus || '';
                         var badgeClass = cancelled ? 'cancelled' : (payStatus === 'PAID' ? 'paid' : 'pending');
                         // Surface the real payment status clearly: Paid vs Will Pay Later vs Pending.
-                        var badgeText = cancelled ? 'Cancelled' :
-                            (payStatus === 'PAID' ? 'Paid' :
-                            (payStatus === 'WILL_PAY_LATER' ? 'Will Pay Later' :
-                            (payStatus || 'Pending')));
+                        var badgeText;
+                        if (cancelled) {
+                            badgeText = 'Cancelled';
+                        } else if (payStatus === 'PAID') {
+                            badgeText = 'Paid';
+                        } else if (payStatus === 'WILL_PAY_LATER') {
+                            badgeText = 'Will Pay Later';
+                        } else {
+                            badgeText = payStatus || 'Pending';
+                        }
                         var itemLines = (o.items || []).map(function (it) {
                             return '<div class="odc-buyer-row"><span class="odc-food">' + esc(it.productName) + '</span><span class="odc-qty">×' + it.quantity + ' · ' + money(it.price * it.quantity) + '</span></div>';
                         }).join('');
