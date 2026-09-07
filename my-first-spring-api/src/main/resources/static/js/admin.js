@@ -43,6 +43,17 @@ function adminUpdateNav(hash) {
 }
 function adminNavigate(hash) { if (location.hash === hash) adminRender(); else location.hash = hash; }
 function greeting() { var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
+/** Readable date/time for admin rows, e.g. "7 Sep 2026, 10:42 AM". */
+function adminDate(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return esc(String(iso));
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var h12 = d.getHours() % 12 || 12;
+    var ampm = d.getHours() < 12 ? 'AM' : 'PM';
+    return d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear() +
+        ', ' + h12 + ':' + String(d.getMinutes()).padStart(2, '0') + ' ' + ampm;
+}
 
 // ==================== AUTH GATE ====================
 async function adminGate() {
@@ -156,23 +167,42 @@ async function adminAction(action, t) {
 async function adminHomeView() {
     var data = await api('/api/admin/dashboard');
     var h = '<div class="view-enter">';
-    h += '<div class="section-head admin-section-head"><div><h1>' + greeting() + ', ' + esc(A.me ? (A.me.name || A.me.mobileNumber || 'Admin') : 'Admin') + '</h1><p class="muted small">SocioMart Admin Console</p></div></div>';
+    h += '<div class="section-head admin-section-head"><div><h1>' + greeting() + ', ' + esc(A.me ? (A.me.name || A.me.mobileNumber || 'Admin') : 'Admin') + '</h1><p class="muted small">Marketplace overview — live shared-database figures</p></div></div>';
 
-    h += '<div class="admin-card" data-action="go-tab" data-hash="#/pending"><div class="ac-icon">⏳</div><div class="ac-title">Pending Approvals</div><div class="ac-desc">' + (data.pendingSellers || 0) + ' sellers awaiting review</div><span class="ac-chip live">Live</span></div>';
-    h += '<div class="admin-card" data-action="go-tab" data-hash="#/sellers"><div class="ac-icon">👥</div><div class="ac-title">Sellers</div><div class="ac-desc">Total: ' + (data.totalSellers || 0) + ' | Approved: ' + (data.approvedSellers || 0) + '</div><span class="ac-chip next">Screen</span></div>';
-    h += '<div class="admin-card" data-action="go-tab" data-hash="#/kitchens"><div class="ac-icon">🏪</div><div class="ac-title">Kitchens</div><div class="ac-desc">Total: ' + (data.totalKitchens || 0) + ' | Live: ' + (data.liveKitchens || 0) + '</div><span class="ac-chip next">Screen</span></div>';
-    h += '<div class="admin-card" data-action="go-tab" data-hash="#/orders"><div class="ac-icon">📦</div><div class="ac-title">Orders</div><div class="ac-desc">Total: ' + (data.totalOrders || 0) + ' | Today: ' + (data.ordersToday || 0) + '</div><span class="ac-chip next">Screen</span></div>';
-    h += '<div class="admin-card" data-action="go-tab" data-hash="#/analytics"><div class="ac-icon">📊</div><div class="ac-title">Platform Analytics</div><div class="ac-desc">GMV: ' + money(data.totalOrderValue || 0) + ' | Paid: ' + money(data.paidValue || 0) + '</div><span class="ac-chip next">Screen</span></div>';
+    // Operational stat grid — every figure comes from /api/admin/dashboard (no hardcoding)
+    h += '<div class="dash-grid">';
+    function dashCard(icon, num, label, sub, hash) {
+        var open = hash ? '<a class="dash-card" href="' + hash + '" data-action="go-tab" data-hash="' + hash + '">'
+                        : '<div class="dash-card">';
+        var close = hash ? '</a>' : '</div>';
+        return open +
+            '<div class="dc-top"><span class="dc-icon">' + icon + '</span><span class="dc-num">' + num + '</span></div>' +
+            '<div class="dc-label">' + label + '</div>' +
+            (sub ? '<div class="dc-sub">' + sub + '</div>' : '') +
+            close;
+    }
+    h += dashCard('🛒', data.totalBuyers || 0, 'Buyers', 'registered accounts', '#/buyers');
+    h += dashCard('👥', data.totalSellers || 0, 'Sellers', (data.approvedSellers || 0) + ' approved · ' + (data.pendingSellers || 0) + ' pending', '#/sellers');
+    h += dashCard('⏳', data.pendingSellers || 0, 'Pending Approvals', 'awaiting review', '#/pending');
+    h += dashCard('🏪', data.totalKitchens || 0, 'Kitchens', (data.liveKitchens || 0) + ' live · ' + (data.kitchensWithZeroLiveOfferings || 0) + ' with no live items', '#/kitchens');
+    h += dashCard('🍽️', data.totalOfferings || 0, 'Offerings', (data.liveOfferings || 0) + ' live · ' + (data.preorderOfferings || 0) + ' pre-order · ' + (data.soldOutOfferings || 0) + ' sold out', '#/offerings');
+    h += dashCard('📦', data.totalOrders || 0, 'Orders', 'today: ' + (data.ordersToday || 0) + ' · this month: ' + (data.ordersThisMonth || 0), '#/orders');
+    h += dashCard('✉️', data.totalEnquiries || 0, 'Enquiries', (data.openEnquiries || 0) + ' awaiting response · ' + (data.resolvedEnquiries || 0) + ' responded', '#/enquiries');
+    h += dashCard('❤️', data.totalFavourites || 0, 'Favourites', 'kitchens saved by buyers', '');
+    h += '</div>';
 
-    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Order Value</h3>';
-    h += '<div class="flex gap-2"><div class="flex-1"><div class="muted small">Total</div><div class="font-700">' + money(data.totalOrderValue || 0) + '</div></div>';
-    h += '<div class="flex-1"><div class="muted small">Today</div><div class="font-700">' + money(data.todayOrderValue || 0) + '</div></div>';
-    h += '<div class="flex-1"><div class="muted small">This Month</div><div class="font-700">' + money(data.monthOrderValue || 0) + '</div></div></div></div>';
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Order Value</h3>' +
+        '<p class="muted tiny" style="margin:0 0 8px">Total value of orders placed on the marketplace (not platform revenue).</p>';
+    h += '<div class="flex gap-2 wrap"><div class="flex-1 min-140"><div class="muted small">Total</div><div class="font-700 font-size-2">' + money(data.totalOrderValue || 0) + '</div></div>';
+    h += '<div class="flex-1 min-140"><div class="muted small">Today</div><div class="font-700 font-size-2">' + money(data.todayOrderValue || 0) + '</div></div>';
+    h += '<div class="flex-1 min-140"><div class="muted small">This Month</div><div class="font-700 font-size-2">' + money(data.monthOrderValue || 0) + '</div></div></div></div>';
 
-    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Payments</h3>';
-    h += '<div class="flex gap-2"><div class="flex-1"><div class="muted small">Paid</div><div class="font-700 green">' + (data.paidCount || 0) + ' · ' + money(data.paidValue || 0) + '</div></div>';
-    h += '<div class="flex-1"><div class="muted small">Will Pay Later</div><div class="font-700 orange">' + (data.willPayLaterCount || 0) + ' · ' + money(data.willPayLaterValue || 0) + '</div></div>';
-    h += '<div class="flex-1"><div class="muted small">Pending</div><div class="font-700">' + (data.pendingPaymentCount || 0) + ' · ' + money(data.pendingPaymentValue || 0) + '</div></div></div></div>';
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Payment Status</h3>' +
+        '<div class="flex gap-2 wrap">' +
+        '<div class="flex-1 min-140"><span class="pill pill-green">● Paid</span><div class="font-700 green mt-1">' + (data.paidCount || 0) + ' orders</div><div class="muted small">' + money(data.paidValue || 0) + '</div></div>' +
+        '<div class="flex-1 min-140"><span class="pill pill-amber">● Will Pay Later</span><div class="font-700 orange mt-1">' + (data.willPayLaterCount || 0) + ' orders</div><div class="muted small">' + money(data.willPayLaterValue || 0) + '</div></div>' +
+        '<div class="flex-1 min-140"><span class="pill pill-grey">● Pending</span><div class="font-700 mt-1">' + (data.pendingPaymentCount || 0) + ' orders</div><div class="muted small">' + money(data.pendingPaymentValue || 0) + '</div></div>' +
+        '</div></div>';
 
     h += '</div>';
     return h;
@@ -229,13 +259,22 @@ async function adminSellersView() {
         return h + '<div class="admin-empty">No sellers yet.</div></div>';
     }
     list.forEach(function (s) {
+        var st = s.sellerApprovalStatus || '';
+        var needsAction = st === 'PENDING' || st === 'REJECTED';
         h += '<div class="seller-row">' +
             '<div class="sr-avatar">' + esc(String(s.name || '?').charAt(0).toUpperCase()) + '</div>' +
             '<div class="sr-body">' +
-            '<div class="sr-name">' + esc(s.name || 'Unknown') + ' <span class="pill pill-' + (s.sellerApprovalStatus === 'APPROVED' ? 'green' : s.sellerApprovalStatus === 'PENDING' ? 'amber' : 'grey') + '">' + esc(s.sellerApprovalStatus || '') + '</span></div>' +
+            '<div class="sr-name">' + esc(s.name || 'Unknown') + ' <span class="pill pill-' + (st === 'APPROVED' ? 'green' : st === 'PENDING' ? 'amber' : 'grey') + '">' + esc(st || '') + '</span></div>' +
             '<div class="sr-meta">📱 ' + esc(s.mobileNumber || '—') + ' · ' + esc(s.kitchenName || 'No kitchen') + ' · ' + esc(s.area || '') + '</div>' +
             '<div class="sr-meta">Live: ' + (s.liveOfferings || 0) + '/' + (s.totalOfferings || 0) + ' offerings · Registered ' + adminDate(s.createdAt) + '</div>' +
-            '</div></div>';
+            '</div>' +
+            (needsAction
+                ? '<div class="sr-actions">' +
+                  '<button class="btn btn-success btn-sm" type="button" data-action="approve-seller" data-id="' + s.id + '">Approve</button>' +
+                  '<button class="btn btn-outline btn-sm" type="button" data-action="open-reject" data-id="' + s.id + '" data-name="' + esc(s.name || 'Seller') + '">Reject</button>' +
+                  '</div>'
+                : '') +
+            '</div>';
     });
     h += '</div>';
     return h;
@@ -289,12 +328,25 @@ async function adminOrdersView() {
         return h + '<div class="admin-empty">No orders yet.</div></div>';
     }
     list.forEach(function (o) {
+        var os = o.orderStatus || '';
+        var ps = o.paymentStatus || '';
+        var osPill = os === 'ORDERED' ? '<span class="pill pill-amber">🟠 ' + esc(os) + '</span>'
+            : os === 'CONFIRMED' ? '<span class="pill pill-green">🟢 ' + esc(os) + '</span>'
+            : os === 'READY' ? '<span class="pill pill-blue">🔵 ' + esc(os) + '</span>'
+            : os === 'DELIVERED' ? '<span class="pill pill-grey">✓ ' + esc(os) + '</span>'
+            : os === 'COMPLETED' ? '<span class="pill pill-green">✓ ' + esc(os) + '</span>'
+            : os === 'CANCELLED' ? '<span class="pill pill-red">🔴 ' + esc(os) + '</span>'
+            : '<span class="pill pill-grey">' + esc(os) + '</span>';
+        var psPill = ps === 'PAID' ? '<span class="pill pill-green">● Paid</span>'
+            : ps === 'WILL_PAY_LATER' ? '<span class="pill pill-amber">● Will Pay Later</span>'
+            : ps === 'PENDING' ? '<span class="pill pill-grey">● Pending</span>'
+            : (ps ? '<span class="pill pill-grey">' + esc(ps) + '</span>' : '');
         h += '<div class="seller-row">' +
             '<div class="sr-avatar">📦</div>' +
             '<div class="sr-body">' +
             '<div class="sr-name">#' + esc(o.orderNumber || String(o.id)) + ' · ' + esc(o.kitchenName || '') + '</div>' +
             '<div class="sr-meta">Buyer: ' + esc(o.buyerName || '—') + ' · ' + esc(o.buyerMobile || '') + '</div>' +
-            '<div class="sr-meta">' + money(o.totalAmount || 0) + ' · ' + esc(o.orderStatus || '') + ' · ' + esc(o.paymentStatus || '') + '</div>' +
+            '<div class="sr-meta os-badges">' + osPill + ' ' + psPill + ' <strong>' + money(o.totalAmount || 0) + '</strong></div>' +
             '<div class="sr-meta">' + adminDate(o.createdAt) + (o.society ? ' · ' + esc(o.society) : '') + '</div>' +
             '</div></div>';
     });
@@ -310,13 +362,16 @@ async function adminEnquiriesView() {
         return h + '<div class="admin-empty">No enquiries yet.</div></div>';
     }
     list.forEach(function (e) {
+        var es = e.status || '';
+        var esPill = es === 'WAITING_FOR_RESPONSE' ? '<span class="pill pill-amber">⏳ Awaiting response</span>'
+            : es === 'SELLER_RESPONDED' ? '<span class="pill pill-green">✓ Seller responded</span>'
+            : (es ? '<span class="pill pill-grey">' + esc(es) + '</span>' : '');
         h += '<div class="seller-row">' +
             '<div class="sr-avatar">✉️</div>' +
             '<div class="sr-body">' +
-            '<div class="sr-name">' + esc(e.kitchenName || 'Kitchen') + '</div>' +
+            '<div class="sr-name">' + esc(e.kitchenName || 'Kitchen') + ' ' + esPill + '</div>' +
             '<div class="sr-meta">From: ' + esc(e.userName || 'Buyer') + ' · ' + adminDate(e.createdAt) + '</div>' +
-            '<div class="sr-meta">' + esc(e.message || '') + '</div>' +
-            '<div class="sr-meta">Status: ' + esc(e.status || '') + '</div>' +
+            '<div class="sr-meta eq-message">“' + esc(e.message || '') + '”</div>' +
             '</div></div>';
     });
     h += '</div>';
@@ -331,7 +386,9 @@ function adminPlaceholderView(title, copy, icon) {
     };
 }
 
-var adminSellersView = adminPlaceholderView('Seller Registry', 'Browse and manage seller accounts by status', '👥');
+// adminSellersView is the real registry backed by GET /api/admin/sellers —
+// it was previously shadowed by a placeholder, dead-ending the Sellers tab
+// despite a fully working backend. The real view is defined above.
 var adminAnalyticsView = adminPlaceholderView('Platform Analytics', 'Platform usage, growth and traffic metrics', '📊');
 var adminConsoleView = adminPlaceholderView('Platform Console', 'Super Admin: accounts, features, grants, settings', '⚙️');
 

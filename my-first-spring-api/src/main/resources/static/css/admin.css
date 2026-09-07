@@ -194,6 +194,51 @@ html[data-theme="dark"] .seller-row .sr-avatar { border: 1px solid var(--border)
     .admin-role-badge { font-size: .62rem; padding: 3px 8px; }
 }
 
+/* ==================== Dashboard stat grid ==================== */
+
+.dash-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+@media (min-width: 640px) { .dash-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.dash-card {
+    display: block;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 13px;
+    text-decoration: none;
+    color: inherit;
+    min-width: 0;
+}
+a.dash-card { transition: border-color .15s, box-shadow .15s; }
+a.dash-card:hover { border-color: var(--brand); box-shadow: 0 4px 14px rgba(0,0,0,.07); }
+.dc-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dc-icon { font-size: 1.15rem; }
+.dc-num { font-weight: 800; font-size: 1.45rem; line-height: 1; }
+.dc-label { font-weight: 700; font-size: .82rem; margin-top: 6px; }
+.dc-sub { font-size: .7rem; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+
+/* Utility helpers used by the dashboard cards */
+.flex.wrap { flex-wrap: wrap; }
+.min-140 { min-width: 140px; flex: 1 1 140px; }
+.green { color: var(--secondary); }
+.orange { color: var(--brand); }
+
+/* Order rows: badge line */
+.os-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* Enquiry message readability */
+.eq-message { font-style: italic; color: var(--muted); line-height: 1.45; }
+
+/* Narrow phones: single-column dashboard, no clipped numbers */
+@media (max-width: 380px) {
+    .dash-grid { grid-template-columns: 1fr; }
+    .dc-num { font-size: 1.3rem; }
+}
+
 /* Very small phones */
 @media (max-width: 380px) {
     .admin-topbar { padding: 10px 12px; }
@@ -202,6 +247,7 @@ html[data-theme="dark"] .seller-row .sr-avatar { border: 1px solid var(--border)
     .seller-row .sr-actions { flex-direction: row; width: 100%; }
     .seller-row .sr-actions .btn-sm { flex: 1; }
 }
+
 
 /* Tablet & desktop */
 @media (min-width: 768px) {
