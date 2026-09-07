@@ -14,11 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * ADMIN (and SUPER_ADMIN) API surface — seller approval workflow, seller
- * status management and platform analytics. No admin UI exists yet; these
- * endpoints are the connection points for the future Admin screens.
- */
 @RestController
 @RequestMapping("/api/admin")
 public class AdminController {
@@ -32,18 +27,45 @@ public class AdminController {
         this.buyerService = buyerService;
     }
 
-    /** Sellers who are waiting for approval. */
-    @GetMapping("/sellers/pending")
-    public ResponseEntity<List<Map<String, Object>>> pendingSellers() {
-        return ResponseEntity.ok(adminService.pendingSellers().stream()
-                .map(AdminController::toSellerSummary).collect(Collectors.toList()));
+    @GetMapping("/dashboard")
+    public ResponseEntity<Map<String, Object>> dashboard() {
+        return ResponseEntity.ok(adminService.dashboard());
     }
 
-    /** All sellers, optionally filtered by approval status. */
+    @GetMapping("/buyers")
+    public ResponseEntity<List<Map<String, Object>>> buyers() {
+        return ResponseEntity.ok(adminService.buyers());
+    }
+
     @GetMapping("/sellers")
     public ResponseEntity<List<Map<String, Object>>> sellers(
             @RequestParam(value = "status", required = false) SellerApprovalStatus status) {
-        return ResponseEntity.ok(adminService.listSellers(status).stream()
+        return ResponseEntity.ok(adminService.sellers(status));
+    }
+
+    @GetMapping("/kitchens")
+    public ResponseEntity<List<Map<String, Object>>> kitchens() {
+        return ResponseEntity.ok(adminService.kitchens());
+    }
+
+    @GetMapping("/offerings")
+    public ResponseEntity<List<Map<String, Object>>> offerings() {
+        return ResponseEntity.ok(adminService.offerings());
+    }
+
+    @GetMapping("/orders")
+    public ResponseEntity<List<Map<String, Object>>> orders() {
+        return ResponseEntity.ok(adminService.orders());
+    }
+
+    @GetMapping("/enquiries")
+    public ResponseEntity<List<Map<String, Object>>> enquiries() {
+        return ResponseEntity.ok(adminService.enquiries());
+    }
+
+    @GetMapping("/sellers/pending")
+    public ResponseEntity<List<Map<String, Object>>> pendingSellers() {
+        return ResponseEntity.ok(adminService.pendingSellers().stream()
                 .map(AdminController::toSellerSummary).collect(Collectors.toList()));
     }
 
@@ -71,7 +93,6 @@ public class AdminController {
                 body != null ? body.get("reason") : null, admin)));
     }
 
-    /** Platform traffic/analytics summary (also accessible to Super Admin). */
     @GetMapping("/analytics")
     public ResponseEntity<Map<String, Object>> analytics() {
         return ResponseEntity.ok(adminService.analyticsSummary());

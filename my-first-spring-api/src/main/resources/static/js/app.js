@@ -120,6 +120,8 @@ document.addEventListener('click', async function (e) {
             case 'cart-remove': await cartRemove(Number(t.dataset.idx)); break;
             case 'go-checkout': await goCheckout(); break;
             case 'go-payment': navigate('#/payment'); break;
+            case 'place-order-paid': await placeOrderWithStatus('PAID'); break;
+            case 'place-order-later': await placeOrderWithStatus('WILL_PAY_LATER'); break;
             case 'select-pay-method': state.payMethod = t.dataset.method; await render(); break;
             case 'confirm-payment': await confirmPayment(t); break;
             case 'logout': {
@@ -131,7 +133,6 @@ document.addEventListener('click', async function (e) {
                 break;
             }
             case 'toggle-fav-kitchen': await toggleFavourite('kitchen', Number(t.dataset.kid), t); break;
-            case 'toggle-fav-product': await toggleFavourite('product', Number(t.dataset.pid), t); break;
         }
     } catch (err) {
         toast(err.message, 'error');

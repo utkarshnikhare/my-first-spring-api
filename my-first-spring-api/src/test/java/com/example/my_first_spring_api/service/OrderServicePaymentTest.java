@@ -110,4 +110,24 @@ class OrderServicePaymentTest {
         assertThat(result.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(result.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
     }
+
+    @Test
+    void updatePaymentWillPayLaterDoesNotConfirmOrder() {
+        User buyer = new User("Test Buyer", "9999999999", "A-101", UserRole.BUYER);
+        buyer.setId(1L);
+        Kitchen kitchen = new Kitchen("test-kitchen", "Test Kitchen", "desc", null, null);
+        kitchen.setId(1L);
+        Order order = new Order(buyer, kitchen);
+        order.setId(104L);
+        order.setOrderStatus(OrderStatus.ORDERED);
+        order.setPaymentStatus(PaymentStatus.PENDING);
+
+        when(orderRepository.findById(104L)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var result = orderService.updatePaymentStatus(104L, PaymentStatus.WILL_PAY_LATER, buyer);
+
+        assertThat(result.getPaymentStatus()).isEqualTo(PaymentStatus.WILL_PAY_LATER);
+        assertThat(result.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
+    }
 }

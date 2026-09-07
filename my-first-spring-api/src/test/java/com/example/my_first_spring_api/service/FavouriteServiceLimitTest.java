@@ -20,7 +20,6 @@ class FavouriteServiceLimitTest {
 
     @Mock FavouriteRepository favouriteRepository;
     @Mock KitchenRepository kitchenRepository;
-    @Mock ProductRepository productRepository;
 
     @InjectMocks FavouriteService favouriteService;
 
@@ -34,8 +33,8 @@ class FavouriteServiceLimitTest {
     }
 
     @Test
-    void addThreeFavouritesSucceeds() {
-        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, null);
+    void addThreeKitchenFavouritesSucceeds() {
+        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, buyer);
         kitchen.setId(1L);
         when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
         when(favouriteRepository.findByUserIdAndKitchenId(1L, 1L)).thenReturn(Optional.empty());
@@ -48,8 +47,8 @@ class FavouriteServiceLimitTest {
     }
 
     @Test
-    void addFourthFavouriteRejected() {
-        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, null);
+    void addFourthKitchenFavouriteRejected() {
+        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, buyer);
         kitchen.setId(1L);
         when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
         when(favouriteRepository.findByUserIdAndKitchenId(1L, 1L)).thenReturn(Optional.empty());
@@ -59,8 +58,8 @@ class FavouriteServiceLimitTest {
     }
 
     @Test
-    void removeFavouriteThenAddNewSucceeds() {
-        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, null);
+    void removeKitchenFavouriteThenAddNewSucceeds() {
+        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, buyer);
         kitchen.setId(1L);
         Favourite existing = new Favourite();
         existing.setId(10L);
@@ -76,24 +75,18 @@ class FavouriteServiceLimitTest {
     }
 
     @Test
-    void productFavouritsEnforcedSeparatelyButCountedTogether() {
-        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, null);
+    void getFavouriteKitchensReturnsOnlyKitchens() {
+        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, buyer);
         kitchen.setId(1L);
-        Product product = new Product(kitchen, "Poha", "desc", java.math.BigDecimal.valueOf(40), null);
-        product.setId(1L);
+        Favourite f = new Favourite();
+        f.setId(1L);
+        f.setUser(buyer);
+        f.setKitchen(kitchen);
 
-        when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
-        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
-        when(favouriteRepository.findByUserIdAndKitchenId(1L, 1L)).thenReturn(Optional.empty());
-        when(favouriteRepository.findByUserIdAndProductId(1L, 1L)).thenReturn(Optional.empty());
-        when(favouriteRepository.countByUserId(1L)).thenReturn(0L, 1L, 2L);
-        when(favouriteRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(favouriteRepository.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(f));
 
-        assertThat(favouriteService.toggleKitchen(buyer, 1L)).isTrue();
-        assertThat(favouriteService.toggleProduct(buyer, 1L)).isTrue();
-        assertThat(favouriteService.toggleProduct(buyer, 1L)).isTrue();
-
-        when(favouriteRepository.countByUserId(1L)).thenReturn(3L);
-        assertThrows(IllegalArgumentException.class, () -> favouriteService.toggleProduct(buyer, 1L));
+        List<com.example.my_first_spring_api.dto.FavouriteDto> result = favouriteService.getFavouriteKitchens(buyer);
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getType()).isEqualTo("KITCHEN");
     }
 }

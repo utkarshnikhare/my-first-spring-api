@@ -223,11 +223,12 @@ public class OrderService {
         if (buyerDetails != null) updateBuyerDetails(buyer, buyerDetails);
         if (customInstructions != null && !customInstructions.isBlank()) order.setCustomInstructions(customInstructions);
         consumeStock(order);
-        // Claim-based UPI flow (Screen 6):
-        //  [I HAVE PAID]   → paymentStatus PAID, order CONFIRMED ("Payment pending verification")
-        //  [I'LL PAY LATER] → paymentStatus PENDING, order stays ORDERED ("Pending")
+        // Payment status handling:
+        //  PAID           → payment PAID, order CONFIRMED
+        //  WILL_PAY_LATER → payment WILL_PAY_LATER, order stays ORDERED
+        //  PENDING        → legacy fallback, treat as WILL_PAY_LATER
         boolean claimedPaid = paymentStatus == PaymentStatus.PAID;
-        order.setPaymentStatus(claimedPaid ? PaymentStatus.PAID : PaymentStatus.PENDING);
+        order.setPaymentStatus(claimedPaid ? PaymentStatus.PAID : PaymentStatus.WILL_PAY_LATER);
         order.setOrderStatus(claimedPaid ? OrderStatus.CONFIRMED : OrderStatus.ORDERED);
         order.recalculateTotal();
         orderRepository.save(order);

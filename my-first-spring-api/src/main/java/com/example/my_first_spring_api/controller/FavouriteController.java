@@ -30,9 +30,9 @@ public class FavouriteController {
     }
 
     @GetMapping
-    public ResponseEntity<Map<String, List<FavouriteDto>>> getMyFavourites(HttpSession session) {
+    public ResponseEntity<List<FavouriteDto>> getMyFavourites(HttpSession session) {
         User buyer = buyerService.requireCurrentBuyer(session);
-        return ResponseEntity.ok(favouriteService.getFavourites(buyer));
+        return ResponseEntity.ok(favouriteService.getFavouriteKitchens(buyer));
     }
 
     /** Toggle a kitchen favourite. Body: { "kitchenId": 1 }. */
@@ -40,14 +40,6 @@ public class FavouriteController {
     public ResponseEntity<Map<String, Object>> toggleKitchen(@PathVariable Long kitchenId, HttpSession session) {
         User buyer = buyerService.requireCurrentBuyer(session);
         boolean added = favouriteService.toggleKitchen(buyer, kitchenId);
-        return ResponseEntity.ok(Map.of("favourited", added));
-    }
-
-    /** Toggle a food item favourite. Body: { "productId": 5 }. */
-    @PostMapping("/product/{productId}/toggle")
-    public ResponseEntity<Map<String, Object>> toggleProduct(@PathVariable Long productId, HttpSession session) {
-        User buyer = buyerService.requireCurrentBuyer(session);
-        boolean added = favouriteService.toggleProduct(buyer, productId);
         return ResponseEntity.ok(Map.of("favourited", added));
     }
 }

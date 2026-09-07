@@ -1,6 +1,8 @@
 package com.example.my_first_spring_api;
 
 import com.example.my_first_spring_api.model.Category;
+import com.example.my_first_spring_api.model.Enquiry;
+import com.example.my_first_spring_api.model.EnquiryStatus;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Order;
 import com.example.my_first_spring_api.model.OrderItem;
@@ -16,6 +18,9 @@ import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.PlatformSettingRepository;
 import com.example.my_first_spring_api.repository.ProductRepository;
 import com.example.my_first_spring_api.repository.UserRepository;
+import com.example.my_first_spring_api.repository.EnquiryRepository;
+import com.example.my_first_spring_api.repository.FavouriteRepository;
+import com.example.my_first_spring_api.model.Favourite;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -39,6 +44,8 @@ public class DemoDataSeeder {
     private static final String DEMO_SEED_FLAG = "demo_data_seeded";
     private static final String DEMO_BUYERS_FLAG = "demo_buyers_seeded";
     private static final String DEMO_ORDERS_FLAG = "demo_orders_seeded";
+    private static final String DEMO_ENQUIRIES_FLAG = "demo_enquiries_seeded";
+    private static final String DEMO_FAVOURITES_FLAG = "demo_favourites_seeded";
     private int orderCounter = 0;
 
     private final UserRepository userRepository;
@@ -46,16 +53,21 @@ public class DemoDataSeeder {
     private final ProductRepository productRepository;
     private final PlatformSettingRepository platformSettingRepository;
     private final com.example.my_first_spring_api.repository.OrderRepository orderRepository;
+    private final EnquiryRepository enquiryRepository;
+    private final FavouriteRepository favouriteRepository;
 
     @Autowired
     public DemoDataSeeder(UserRepository userRepository, KitchenRepository kitchenRepository,
                            ProductRepository productRepository, PlatformSettingRepository platformSettingRepository,
-                           com.example.my_first_spring_api.repository.OrderRepository orderRepository) {
+                           com.example.my_first_spring_api.repository.OrderRepository orderRepository,
+                           EnquiryRepository enquiryRepository, FavouriteRepository favouriteRepository) {
         this.userRepository = userRepository;
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
         this.platformSettingRepository = platformSettingRepository;
         this.orderRepository = orderRepository;
+        this.enquiryRepository = enquiryRepository;
+        this.favouriteRepository = favouriteRepository;
     }
 
     /** Idempotent entry point called from DataInitializer on every startup. */
@@ -63,6 +75,8 @@ public class DemoDataSeeder {
         seedIfEmpty();
         seedBuyersIfEmpty();
         seedOrdersIfEmpty();
+        seedEnquiriesIfEmpty();
+        seedFavouritesIfEmpty();
     }
 
     @Transactional
@@ -91,35 +105,35 @@ public class DemoDataSeeder {
 
         // ---- 15 Active demo kitchens ----
         Kitchen kAarti = kitchen("aarti-kitchen", "Aarti Kitchen", "Homemade Maharashtrian Food",
-                "Authentic Maharashtrian dishes made with love — poha, misal, puran poli and more.", "aarti@okhdfc", 4.7, "9:00 AM", aarti);
+                "Authentic Maharashtrian dishes made with love — poha, misal, puran poli and more.", "aarti@okhdfc", 4.7, "9:00 AM", aarti, "https://example.com/aarti-kitchen.jpg", "https://instagram.com/aartikitchen");
         Kitchen kPunjabi = kitchen("punjabi-rasoi", "Punjabi Rasoi", "Punjabi Specialities",
-                "Rich and creamy Punjabi curries, tandoori breads and refreshing lassi.", "punjabi@okhdfc", 4.6, "10:00 PM", meena);
+                "Rich and creamy Punjabi curries, tandoori breads and refreshing lassi.", "punjabi@okhdfc", 4.6, "10:00 PM", meena, null, null);
         Kitchen kDakshin = kitchen("dakshin-kitchen", "Dakshin Kitchen", "South Indian Food",
-                "Authentic South Indian tiffin — idli, dosa, upma, pongal and filter coffee.", "dakshin@okhdfc", 4.8, "11:00 AM", ravi);
+                "Authentic South Indian tiffin — idli, dosa, upma, pongal and filter coffee.", "dakshin@okhdfc", 4.8, "11:00 AM", ravi, null, null);
         Kitchen kGujarati = kitchen("gujarati-ghar", "Gujarati Ghar", "Gujarati Cuisine",
-                "Traditional Gujarati thali with thepla, dhokla, khandvi and undhiyu.", "gujarati@okhdfc", 4.5, "9:30 PM", lakshmi);
+                "Traditional Gujarati thali with thepla, dhokla, khandvi and undhiyu.", "gujarati@okhdfc", 4.5, "9:30 PM", lakshmi, null, null);
         Kitchen kMarwar = kitchen("marwar-rasoi", "Marwar Rasoi", "Rajasthani Food",
-                "Royal Rajasthani cuisine — dal baati churma, gatte ki ker sangri and more.", "marwar@okhdfc", 4.7, "10:00 PM", suresh);
+                "Royal Rajasthani cuisine — dal baati churma, gatte ki ker sangri and more.", "marwar@okhdfc", 4.7, "10:00 PM", suresh, null, null);
         Kitchen kBangla = kitchen("bangla-bhojan", "Bangla Bhojan", "Bengali Specialities",
-                "Authentic Bengali cuisine — fish curry, mishti doi and rasgulla.", "bangla@okhdfc", 4.6, "9:00 PM", farah);
+                "Authentic Bengali cuisine — fish curry, mishti doi and rasgulla.", "bangla@okhdfc", 4.6, "9:00 PM", farah, null, null);
         Kitchen kDeccan = kitchen("deccan-kitchen", "Deccan Kitchen", "Hyderabadi Food",
-                "Famous Hyderabadi biryani, haleem and kebabs slow-cooked to perfection.", "deccan@okhdfc", 4.8, "11:00 PM", geeta);
+                "Famous Hyderabadi biryani, haleem and kebabs slow-cooked to perfection.", "deccan@okhdfc", 4.8, "11:00 PM", geeta, null, null);
         Kitchen kKonkan = kitchen("konkan-swad", "Konkan Swad", "Goan/Konkan Food",
-                "Coastal Goan and Konkan delicacies — fish curry, sol kadi and poee bread.", "konkan@okhdfc", 4.5, "10:30 PM", arjun);
+                "Coastal Goan and Konkan delicacies — fish curry, sol kadi and poee bread.", "konkan@okhdfc", 4.5, "10:30 PM", arjun, null, null);
         Kitchen kKerala = kitchen("kerala-taste", "Kerala Taste House", "Kerala Cuisine",
-                "Traditional Kerala sadya, appam, stew and spicy fish preparations.", "kerala@okhdfc", 4.7, "9:00 PM", priya);
+                "Traditional Kerala sadya, appam, stew and spicy fish preparations.", "kerala@okhdfc", 4.7, "9:00 PM", priya, null, null);
         Kitchen kMadras = kitchen("madras-kitchen", "Madras Kitchen", "Tamil Food",
-                "Classic Tamil meals — sambar, rasam, curd rice and filter coffee.", "madras@okhdfc", 4.6, "11:30 AM", vikram);
+                "Classic Tamil meals — sambar, rasam, curd rice and filter coffee.", "madras@okhdfc", 4.6, "11:30 AM", vikram, null, null);
         Kitchen kStreet = kitchen("desi-street-kitchen", "Desi Street Kitchen", "Indian Street Food",
-                "Samosa, vada pav, pav bhaji, bhel and all your favourite street foods.", "street@okhdfc", 4.4, "10:00 PM", anita);
+                "Samosa, vada pav, pav bhaji, bhel and all your favourite street foods.", "street@okhdfc", 4.4, "10:00 PM", anita, null, null);
         Kitchen kMithas = kitchen("mithas-kitchen", "Mithas Kitchen", "Traditional Indian Sweets & Desserts",
-                "Gulab jamun, rasgulla, jalebi, kheer and festive mithai.", "mithas@okhdfc", 4.8, "8:00 PM", rajesh);
+                "Gulab jamun, rasgulla, jalebi, kheer and festive mithai.", "mithas@okhdfc", 4.8, "8:00 PM", rajesh, null, null);
         Kitchen kGhar = kitchen("ghar-ka-swad", "Ghar Ka Swad", "Homemade Vegetarian Food",
-                "Simple, wholesome vegetarian meals just like home-cooked food.", "ghar@okhdfc", 4.5, "9:00 PM", sunita);
+                "Simple, wholesome vegetarian meals just like home-cooked food.", "ghar@okhdfc", 4.5, "9:00 PM", sunita, null, null);
         Kitchen kTiffin = kitchen("morning-tiffin", "Morning Tiffin House", "Breakfast & Snacks",
-                "Fresh breakfast tiffin — poha, upma, idli, dosa and chai.", "tiffin@okhdfc", 4.6, "10:30 AM", deepak);
+                "Fresh breakfast tiffin — poha, upma, idli, dosa and chai.", "tiffin@okhdfc", 4.6, "10:30 AM", deepak, null, null);
         Kitchen kMulti = kitchen("bharat-multi-cuisine", "Bharat Multi-Cuisine Kitchen", "Multi-Cuisine Indian Food",
-                "A diverse menu spanning North Indian, South Indian, Chinese and Continental.", "multi@okhdfc", 4.5, "10:00 PM", kavita);
+                "A diverse menu spanning North Indian, South Indian, Chinese and Continental.", "multi@okhdfc", 4.5, "10:00 PM", kavita, null, null);
         // ---- Aarti Kitchen (Maharashtrian) ----
         product(kAarti, "Poha", "Fluffy flattened-rice breakfast tempered with peanuts, curry leaves and turmeric", 40, "plate", 50, 30, 4.6);
         // Unlimited-quantity offering: 50 booked, no cap — shows "50 booked · No limit" (Spec 4.4).
@@ -131,6 +145,22 @@ public class DemoDataSeeder {
         product(kAarti, "Puran Poli", "Sweet flatbread stuffed with chana dal and jaggery, served with ghee", 50, "piece", 20, 12, 4.6);
         product(kAarti, "Sabudana Khichdi", "Tapioca pearls cooked with peanuts, potatoes and cumin — fasting special", 70, "plate", 25, 15, 4.5);
         product(kAarti, "Thalipeeth", "Multi-grain flatbread served with white butter and curd", 60, "plate", 20, 10, 4.4);
+
+        // Pre-order demo: Puran Poli for next Monday
+        Product prePuran = new Product(kAarti, "Puran Poli (Pre-order)", "Sweet flatbread stuffed with chana dal and jaggery, served with ghee — pre-order for Monday", BigDecimal.valueOf(70), "piece");
+        prePuran.setPriceUnit("piece");
+        prePuran.setAvailableToday(false);
+        prePuran.setAvailableDate(java.time.LocalDate.now().plusDays(7 - java.time.LocalDate.now().getDayOfWeek().getValue() + 1));
+        prePuran.setMaxQuantity(30);
+        prePuran.setRemainingQuantity(30);
+        prePuran.setRating(4.7);
+        prePuran.setIsPreorder(true);
+        prePuran.setPreorderType(PreorderType.FIXED);
+        prePuran.setCategory(Category.SPECIAL);
+        prePuran.setCutoffTime("12:00");
+        prePuran.setReadyByTime("1:30 PM Monday");
+        prePuran.setBookedQuantity(0);
+        productRepository.save(prePuran);
 
         // ---- Punjabi Rasoi ----
         product(kPunjabi, "Punjabi Chole", "Spicy chickpea curry with onions, tomatoes and fresh coriander", 120, "plate", 40, 25, 4.7);
@@ -287,7 +317,7 @@ public class DemoDataSeeder {
             User buyer = userRepository.findByMobileNumber(mobiles[i % mobiles.length]).orElse(null);
             if (buyer == null) continue;
             int qty = (i % 3) + 1;
-            String pay = (i % 3 == 0) ? "PAID" : (i % 3 == 1) ? "PENDING" : "PAID";
+            String pay = (i % 3 == 0) ? "PAID" : (i % 3 == 1) ? "WILL_PAY_LATER" : "PAID";
             String ord = (i == 3 && !today) ? "CANCELLED" : (pay.equals("PAID") ? "CONFIRMED" : "ORDERED");
             createOrder(buyer, products.get(i), qty, pay, ord, remarks[i], today);
         }
@@ -321,13 +351,13 @@ public class DemoDataSeeder {
     }
 
     private Kitchen kitchen(String slug, String displayName, String shortDescription, String description,
-                             String upi, double rating, String deadline, User seller) {
-        Kitchen k = new Kitchen(slug, displayName, description, null, seller);
+                             String upi, double rating, String deadline, User seller, String imageUrl, String instagramLink) {
+        Kitchen k = new Kitchen(slug, displayName, description, imageUrl, seller);
         k.setShortDescription(shortDescription);
         k.setSociety(seller.getSociety());
         k.setBuilding(seller.getBuilding());
         k.setWhatsappLink(null);
-        k.setInstagramLink(null);
+        k.setInstagramLink(instagramLink);
         k.setUpiId(upi);
         k.setAvailableToday(true);
         k.setOrderDeadline(deadline);
@@ -443,5 +473,50 @@ public class DemoDataSeeder {
         p.setTimeSlots("1:00 PM,4:00 PM,8:00 PM");
         p.setBookedQuantity(0);
         return productRepository.save(p);
+    }
+
+    // ==================== DEMO ENQUIRIES ====================
+
+    public void seedEnquiriesIfEmpty() {
+        if (platformSettingRepository.findBySettingKey(DEMO_ENQUIRIES_FLAG).isPresent()) return;
+        java.util.List<User> buyers = userRepository.findByRole(UserRole.BUYER);
+        java.util.List<Kitchen> kitchens = kitchenRepository.findAll();
+        if (buyers.isEmpty() || kitchens.isEmpty()) return;
+        String[] messages = {
+            "Do you make gluten-free options?",
+            "Can I customise the spice level?",
+            "What time do you start accepting orders?",
+            "Do you deliver to Palm Residency?",
+            "Can I order for a party of 20 people?"
+        };
+        for (int i = 0; i < Math.min(5, kitchens.size()); i++) {
+            User buyer = buyers.get(i % buyers.size());
+            Kitchen kitchen = kitchens.get(i);
+            Enquiry enquiry = new Enquiry();
+            enquiry.setUser(buyer);
+            enquiry.setKitchen(kitchen);
+            enquiry.setMessage(messages[i % messages.length]);
+            enquiry.setStatus(i % 3 == 0 ? EnquiryStatus.SELLER_RESPONDED : EnquiryStatus.WAITING_FOR_RESPONSE);
+            enquiry.setCreatedAt(LocalDateTime.now().minusDays(1).minusHours(i * 2));
+            enquiryRepository.save(enquiry);
+        }
+        platformSettingRepository.save(new PlatformSetting(DEMO_ENQUIRIES_FLAG, "true"));
+    }
+
+    // ==================== DEMO FAVOURITES ====================
+
+    public void seedFavouritesIfEmpty() {
+        if (platformSettingRepository.findBySettingKey(DEMO_FAVOURITES_FLAG).isPresent()) return;
+        java.util.List<User> buyers = userRepository.findByRole(UserRole.BUYER);
+        if (buyers.isEmpty()) return;
+        User buyer = buyers.get(0);
+        java.util.List<Kitchen> kitchens = kitchenRepository.findAll();
+        for (int i = 0; i < Math.min(3, kitchens.size()); i++) {
+            Favourite f = new Favourite();
+            f.setUser(buyer);
+            f.setKitchen(kitchens.get(i));
+            favouriteRepository.save(f);
+        }
+        platformSettingRepository.save(new PlatformSetting(DEMO_FAVOURITES_FLAG, "true"));
     }
 }

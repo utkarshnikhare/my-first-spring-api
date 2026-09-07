@@ -319,7 +319,9 @@ async function kitchenPageView(hash) {
             '<div class="kh-identity">' +
             '<div class="kh-avatar">' + (k.imageUrl ? '<img src="' + esc(k.imageUrl) + '" alt="' + esc(k.displayName) + '">' : '🏪') + '</div>' +
             '<div><div class="kh-name">' + esc(k.displayName) + '</div>' +
-            '<div class="kh-loc">📍 ' + esc((k.society || LOCATION) + (k.building ? ', ' + k.building : '')) + '</div></div></div>' +
+            '<div class="kh-loc">📍 ' + esc((k.society || LOCATION) + (k.building ? ', ' + k.building : '')) + '</div>' +
+            (k.society ? '<div class="kh-loc muted small">Orders are currently limited to ' + esc(k.society) + ' and may be limited to selected societies.</div>' : '') +
+            '</div></div>' +
             '<div class="kh-tags">' +
             '<span class="kh-tag">Homemade</span><span class="kh-tag">Fresh</span><span class="kh-tag">Daily</span></div>' +
             '<div class="kh-status">' + (k.availableToday
@@ -381,7 +383,6 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
     }
     var kitchenJson = encodeURIComponent(JSON.stringify({ id: kitchen.id, displayName: kitchen.displayName }));
     return '<div class="offering-card' + (soldOut ? ' sold-out' : '') + '">' +
-        '<button class="heart-btn oc-heart" type="button" data-action="toggle-fav-product" data-pid="' + p.id + '" aria-label="Favourite">🤍</button>' +
         '<div class="oc-photo">' + (p.imageUrl ? '<img src="' + esc(p.imageUrl) + '" alt="' + esc(p.name) + '">' : emojiFor(p.name)) + '</div>' +
         '<div class="oc-body">' +
         '<div class="oc-name-row"><span class="oc-name">' + esc(p.name) + '</span></div>' +
@@ -611,6 +612,29 @@ async function goCheckout() {
     }
 }
 
+/** Place the draft order directly with the selected payment status. */
+async function placeOrderWithStatus(paymentStatus) {
+    if (state.placingOrder) return;
+    var note = (state.pendingCheckout && state.pendingCheckout.note) || '';
+    state.placingOrder = true;
+    try {
+        await withAuthGate(async function () {
+            var placed = await api('/api/buyer/orders/place', {
+                method: 'POST',
+                body: { paymentStatus: paymentStatus, customInstructions: note }
+            });
+            clearCart();
+            state.pendingCheckout = null;
+            state.lastOrder = placed;
+            navigate('#/payment-success');
+        });
+    } catch (err) {
+        if (!(err instanceof ApiError && err.status === 401)) toast(err.message, 'error');
+    } finally {
+        state.placingOrder = false;
+    }
+}
+
 // ==================== Screen 5b: Confirm Order (review before payment) ====================
 
 /**
@@ -678,10 +702,12 @@ async function confirmOrderView() {
             '<p class="muted small">💬 ' + esc(note) + '</p></div>';
     }
 
-    // 7: Confirm action — moves to Payment, creates nothing
+    // 7: Place Order actions — directly creates the order with selected payment status
     h += '<div class="sticky-footer-bar"><div class="inner">' +
-        '<button class="btn btn-primary btn-block" type="button" data-action="go-payment">Confirm Order — ' +
-        money(draft.totalAmount) + ' →</button>' +
+        '<button class="btn btn-primary btn-block" type="button" data-action="place-order-paid" style="margin-bottom:8px">' +
+        'Place Order (Paid) — ' + money(draft.totalAmount) + '</button>' +
+        '<button class="btn btn-secondary btn-block" type="button" data-action="place-order-later">' +
+        'Place Order (Will Pay Later) — ' + money(draft.totalAmount) + '</button>' +
         '</div></div>';
 
     h += '</div>';
@@ -786,7 +812,7 @@ async function confirmPayment(btnEl) {
         await withAuthGate(async function () {
             var placed = await api('/api/buyer/orders/place', {
                 method: 'POST',
-                body: { paymentStatus: cod ? 'PENDING' : 'PAID', customInstructions: note }
+                body: { paymentStatus: cod ? 'WILL_PAY_LATER' : 'PAID', customInstructions: note }
             });
             clearCart();
             state.pendingCheckout = null;

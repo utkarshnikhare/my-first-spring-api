@@ -1,41 +1,353 @@
 package com.example.my_first_spring_api.service;
 
-import com.example.my_first_spring_api.model.SellerApprovalStatus;
-import com.example.my_first_spring_api.model.User;
-import com.example.my_first_spring_api.model.UserRole;
-import com.example.my_first_spring_api.repository.UserRepository;
+import com.example.my_first_spring_api.model.*;
+import com.example.my_first_spring_api.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
+import java.time.YearMonth;
+import java.util.*;
+import java.util.stream.Collectors;
 
-/**
- * Operational platform management used by ADMIN and SUPER_ADMIN accounts:
- * seller approval workflow, seller status management, admin account
- * management (Super Admin only) and the platform analytics summary.
- * Separated from FeatureService so higher-level platform controls stay
- * independent from day-to-day seller operations.
- */
 @Service
 public class AdminService {
 
-    /** Bootstrap accounts created on first run (login via mobile demo login). */
     public static final String SUPER_ADMIN_MOBILE = "9000000001";
     public static final String ADMIN_MOBILE = "9000000002";
 
     private final UserRepository userRepository;
+    private final OrderRepository orderRepository;
+    private final ProductRepository productRepository;
+    private final KitchenRepository kitchenRepository;
+    private final EnquiryRepository enquiryRepository;
+    private final FavouriteRepository favouriteRepository;
     private final AnalyticsService analyticsService;
 
     @Autowired
-    public AdminService(UserRepository userRepository, AnalyticsService analyticsService) {
+    public AdminService(UserRepository userRepository, AnalyticsService analyticsService,
+                        OrderRepository orderRepository, ProductRepository productRepository,
+                        KitchenRepository kitchenRepository, EnquiryRepository enquiryRepository,
+                        FavouriteRepository favouriteRepository) {
         this.userRepository = userRepository;
         this.analyticsService = analyticsService;
+        this.orderRepository = orderRepository;
+        this.productRepository = productRepository;
+        this.kitchenRepository = kitchenRepository;
+        this.enquiryRepository = enquiryRepository;
+        this.favouriteRepository = favouriteRepository;
     }
 
-    // ---------------- Seller approval workflow ----------------
+    // ==================== Dashboard ====================
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> dashboard() {
+        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
+        LocalDateTime startOfMonth = YearMonth.now().atDay(1).atStartOfDay();
+
+        List<User> allBuyers = userRepository.findByRole(UserRole.BUYER);
+        List<User> allSellers = userRepository.findByRole(UserRole.SELLER);
+        List<Kitchen> allKitchens = kitchenRepository.findAll();
+        List<Product> allProducts = productRepository.findAll();
+        List<Order> allOrders = orderRepository.findAll();
+        List<Enquiry> allEnquiries = enquiryRepository.findAll();
+
+        long totalBuyers = allBuyers.size();
+        long totalSellers = allSellers.size();
+        long approvedSellers = allSellers.stream().filter(s -> s.getSellerApprovalStatus() == SellerApprovalStatus.APPROVED).count();
+        long pendingSellers = allSellers.stream().filter(s -> s.getSellerApprovalStatus() == SellerApprovalStatus.PENDING).count();
+        long rejectedSellers = allSellers.stream().filter(s -> s.getSellerApprovalStatus() == SellerApprovalStatus.REJECTED).count();
+        long suspendedSellers = allSellers.stream().filter(s -> s.getSellerApprovalStatus() == SellerApprovalStatus.SUSPENDED).count();
+
+        long totalKitchens = allKitchens.size();
+        Set<Long> liveKitchenIds = new HashSet<>();
+        long liveOfferings = 0;
+        long preorderOfferings = 0;
+        long soldOutOfferings = 0;
+        long totalOfferings = allProducts.size();
+
+        for (Product p : allProducts) {
+            if (isLiveProduct(p)) {
+                liveOfferings++;
+                liveKitchenIds.add(p.getKitchen().getId());
+            }
+            if (p.getIsPreorder() != null && p.getIsPreorder()) {
+                preorderOfferings++;
+            }
+            if (p.isSoldOut()) {
+                soldOutOfferings++;
+            }
+        }
+
+        long totalOrders = allOrders.size();
+        long ordersToday = allOrders.stream().filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startOfToday)).count();
+        long ordersThisMonth = allOrders.stream().filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startOfMonth)).count();
+
+        BigDecimal totalOrderValue = allOrders.stream()
+                .filter(o -> o.getOrderStatus() != OrderStatus.DRAFT && o.getOrderStatus() != OrderStatus.CANCELLED)
+                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal todayOrderValue = allOrders.stream()
+                .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startOfToday))
+                .filter(o -> o.getOrderStatus() != OrderStatus.DRAFT && o.getOrderStatus() != OrderStatus.CANCELLED)
+                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal monthOrderValue = allOrders.stream()
+                .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startOfMonth))
+                .filter(o -> o.getOrderStatus() != OrderStatus.DRAFT && o.getOrderStatus() != OrderStatus.CANCELLED)
+                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        long paidCount = allOrders.stream().filter(o -> o.getPaymentStatus() == PaymentStatus.PAID).count();
+        BigDecimal paidValue = allOrders.stream()
+                .filter(o -> o.getPaymentStatus() == PaymentStatus.PAID)
+                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        long willPayLaterCount = allOrders.stream().filter(o -> o.getPaymentStatus() == PaymentStatus.WILL_PAY_LATER).count();
+        BigDecimal willPayLaterValue = allOrders.stream()
+                .filter(o -> o.getPaymentStatus() == PaymentStatus.WILL_PAY_LATER)
+                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        long pendingPaymentCount = allOrders.stream().filter(o -> o.getPaymentStatus() == PaymentStatus.PENDING).count();
+        BigDecimal pendingPaymentValue = allOrders.stream()
+                .filter(o -> o.getPaymentStatus() == PaymentStatus.PENDING)
+                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        long totalEnquiries = allEnquiries.size();
+        long openEnquiries = allEnquiries.stream().filter(e -> e.getStatus() == EnquiryStatus.WAITING_FOR_RESPONSE).count();
+        long resolvedEnquiries = allEnquiries.stream().filter(e -> e.getStatus() == EnquiryStatus.SELLER_RESPONDED).count();
+
+        long totalFavourites = favouriteRepository.count();
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("totalBuyers", totalBuyers);
+        out.put("totalSellers", totalSellers);
+        out.put("approvedSellers", approvedSellers);
+        out.put("pendingSellers", pendingSellers);
+        out.put("rejectedSellers", rejectedSellers);
+        out.put("suspendedSellers", suspendedSellers);
+        out.put("totalKitchens", totalKitchens);
+        out.put("liveKitchens", liveKitchenIds.size());
+        out.put("kitchensWithZeroLiveOfferings", totalKitchens - liveKitchenIds.size());
+        out.put("totalOfferings", totalOfferings);
+        out.put("liveOfferings", liveOfferings);
+        out.put("preorderOfferings", preorderOfferings);
+        out.put("soldOutOfferings", soldOutOfferings);
+        out.put("totalOrders", totalOrders);
+        out.put("ordersToday", ordersToday);
+        out.put("ordersThisMonth", ordersThisMonth);
+        out.put("totalOrderValue", totalOrderValue);
+        out.put("todayOrderValue", todayOrderValue);
+        out.put("monthOrderValue", monthOrderValue);
+        out.put("paidCount", paidCount);
+        out.put("paidValue", paidValue);
+        out.put("willPayLaterCount", willPayLaterCount);
+        out.put("willPayLaterValue", willPayLaterValue);
+        out.put("pendingPaymentCount", pendingPaymentCount);
+        out.put("pendingPaymentValue", pendingPaymentValue);
+        out.put("totalEnquiries", totalEnquiries);
+        out.put("openEnquiries", openEnquiries);
+        out.put("resolvedEnquiries", resolvedEnquiries);
+        out.put("totalFavourites", totalFavourites);
+        return out;
+    }
+
+    private boolean isLiveProduct(Product p) {
+        if (p.getAvailableToday() == null || !p.getAvailableToday()) return false;
+        if (p.isSoldOut()) return false;
+        return true;
+    }
+
+    // ==================== Buyers ====================
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> buyers() {
+        List<User> buyers = userRepository.findByRole(UserRole.BUYER);
+        return buyers.stream().map(b -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", b.getId());
+            m.put("name", b.getName());
+            m.put("mobileNumber", b.getMobileNumber());
+            m.put("society", b.getSociety());
+            m.put("building", b.getBuilding());
+            m.put("flatHouseNumber", b.getFlatHouseNumber());
+            List<Order> orders = orderRepository.findByBuyerOrderByCreatedAtDesc(b);
+            m.put("orderCount", orders.size());
+            BigDecimal total = orders.stream()
+                    .filter(o -> o.getOrderStatus() != OrderStatus.DRAFT && o.getOrderStatus() != OrderStatus.CANCELLED)
+                    .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            m.put("totalOrderValue", total);
+            m.put("favouriteKitchens", favouriteRepository.countByUser(b));
+            m.put("createdAt", b.getCreatedAt());
+            return m;
+        }).collect(Collectors.toList());
+    }
+
+    // ==================== Sellers ====================
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> sellers(SellerApprovalStatus status) {
+        List<User> sellers = status != null
+                ? userRepository.findByRoleAndSellerApprovalStatus(UserRole.SELLER, status)
+                : userRepository.findByRole(UserRole.SELLER);
+        return sellers.stream().map(s -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", s.getId());
+            m.put("name", s.getName());
+            m.put("mobileNumber", s.getMobileNumber());
+            m.put("sellerApprovalStatus", s.getSellerApprovalStatus());
+            m.put("statusReason", s.getSellerStatusReason());
+            m.put("approvedAt", s.getApprovedAt());
+            m.put("createdAt", s.getCreatedAt());
+            List<Kitchen> kitchens = kitchenRepository.findBySeller(s);
+            m.put("kitchenCount", kitchens.size());
+            if (!kitchens.isEmpty()) {
+                Kitchen k = kitchens.get(0);
+                m.put("kitchenName", k.getDisplayName());
+                m.put("society", k.getSociety());
+                m.put("building", k.getBuilding());
+                m.put("area", k.getSociety());
+                m.put("instagramLink", k.getInstagramLink());
+                List<Product> products = productRepository.findByKitchen(k);
+                long liveCount = products.stream().filter(this::isLiveProduct).count();
+                m.put("liveOfferings", liveCount);
+                m.put("totalOfferings", products.size());
+            }
+            return m;
+        }).collect(Collectors.toList());
+    }
+
+    // ==================== Kitchens ====================
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> kitchens() {
+        List<Kitchen> all = kitchenRepository.findAll();
+        return all.stream().map(k -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", k.getId());
+            m.put("name", k.getName());
+            m.put("displayName", k.getDisplayName());
+            m.put("sellerId", k.getSeller() != null ? k.getSeller().getId() : null);
+            m.put("sellerName", k.getSeller() != null ? k.getSeller().getName() : null);
+            m.put("society", k.getSociety());
+            m.put("building", k.getBuilding());
+            m.put("area", k.getSociety());
+            m.put("availableToday", k.getAvailableToday());
+            m.put("imageUrl", k.getImageUrl());
+            m.put("instagramLink", k.getInstagramLink());
+            List<Product> products = productRepository.findByKitchen(k);
+            long liveCount = products.stream().filter(this::isLiveProduct).count();
+            m.put("totalOfferings", products.size());
+            m.put("liveOfferings", liveCount);
+            m.put("hasLiveOfferings", liveCount > 0);
+            return m;
+        }).collect(Collectors.toList());
+    }
+
+    // ==================== Offerings ====================
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> offerings() {
+        List<Product> all = productRepository.findAll();
+        return all.stream().map(p -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", p.getId());
+            m.put("name", p.getName());
+            m.put("kitchenId", p.getKitchen() != null ? p.getKitchen().getId() : null);
+            m.put("kitchenName", p.getKitchen() != null ? p.getKitchen().getDisplayName() : null);
+            m.put("sellerId", p.getKitchen() != null && p.getKitchen().getSeller() != null ? p.getKitchen().getSeller().getId() : null);
+            m.put("sellerName", p.getKitchen() != null && p.getKitchen().getSeller() != null ? p.getKitchen().getSeller().getName() : null);
+            m.put("price", p.getPrice());
+            m.put("priceUnit", p.getPriceUnit());
+            m.put("availableToday", p.getAvailableToday());
+            m.put("isPreorder", p.getIsPreorder());
+            m.put("availableDate", p.getAvailableDate() != null ? p.getAvailableDate().toString() : null);
+            m.put("cutoffTime", p.getCutoffTime());
+            m.put("maxQuantity", p.getMaxQuantity());
+            m.put("remainingQuantity", p.getRemainingQuantity());
+            m.put("bookedQuantity", p.getBookedQuantity());
+            m.put("soldOut", p.isSoldOut());
+            m.put("category", p.getCategory() != null ? p.getCategory().name() : null);
+            m.put("status", classifyProductStatus(p));
+            return m;
+        }).collect(Collectors.toList());
+    }
+
+    private String classifyProductStatus(Product p) {
+        if (p.isSoldOut()) return "SOLD_OUT";
+        if (p.getIsPreorder() != null && p.getIsPreorder()) return "PRE_ORDER";
+        if (p.getAvailableToday() == null || !p.getAvailableToday()) return "CLOSED";
+        return "LIVE";
+    }
+
+    // ==================== Orders ====================
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> orders() {
+        List<Order> all = orderRepository.findAll();
+        return all.stream().map(o -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", o.getId());
+            m.put("orderNumber", o.getOrderNumber());
+            m.put("buyerId", o.getBuyer() != null ? o.getBuyer().getId() : null);
+            m.put("buyerName", o.getBuyer() != null ? o.getBuyer().getName() : null);
+            m.put("buyerMobile", o.getBuyer() != null ? o.getBuyer().getMobileNumber() : null);
+            m.put("sellerId", o.getKitchen() != null && o.getKitchen().getSeller() != null ? o.getKitchen().getSeller().getId() : null);
+            m.put("sellerName", o.getKitchen() != null && o.getKitchen().getSeller() != null ? o.getKitchen().getSeller().getName() : null);
+            m.put("kitchenId", o.getKitchen() != null ? o.getKitchen().getId() : null);
+            m.put("kitchenName", o.getKitchen() != null ? o.getKitchen().getDisplayName() : null);
+            m.put("totalAmount", o.getTotalAmount());
+            m.put("paymentStatus", o.getPaymentStatus() != null ? o.getPaymentStatus().name() : null);
+            m.put("orderStatus", o.getOrderStatus() != null ? o.getOrderStatus().name() : null);
+            m.put("customInstructions", o.getCustomInstructions());
+            m.put("createdAt", o.getCreatedAt());
+            m.put("society", o.getBuyer() != null ? o.getBuyer().getSociety() : null);
+            m.put("building", o.getBuyer() != null ? o.getBuyer().getBuilding() : null);
+            m.put("flatHouseNumber", o.getBuyer() != null ? o.getBuyer().getFlatHouseNumber() : null);
+            List<Map<String, Object>> items = o.getItems().stream().map(it -> {
+                Map<String, Object> im = new LinkedHashMap<>();
+                im.put("productId", it.getProduct() != null ? it.getProduct().getId() : null);
+                im.put("productName", it.getProduct() != null ? it.getProduct().getName() : null);
+                im.put("quantity", it.getQuantity());
+                im.put("price", it.getPrice());
+                im.put("total", it.getPrice() != null && it.getQuantity() != null ? it.getPrice().multiply(BigDecimal.valueOf(it.getQuantity())) : BigDecimal.ZERO);
+                return im;
+            }).collect(Collectors.toList());
+            m.put("items", items);
+            return m;
+        }).collect(Collectors.toList());
+    }
+
+    // ==================== Enquiries ====================
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> enquiries() {
+        List<Enquiry> all = enquiryRepository.findAll();
+        return all.stream().map(e -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", e.getId());
+            m.put("userId", e.getUser() != null ? e.getUser().getId() : null);
+            m.put("userName", e.getUser() != null ? e.getUser().getName() : null);
+            m.put("userMobile", e.getUser() != null ? e.getUser().getMobileNumber() : null);
+            m.put("kitchenId", e.getKitchen() != null ? e.getKitchen().getId() : null);
+            m.put("kitchenName", e.getKitchen() != null ? e.getKitchen().getDisplayName() : null);
+            m.put("message", e.getMessage());
+            m.put("status", e.getStatus() != null ? e.getStatus().name() : null);
+            m.put("createdAt", e.getCreatedAt());
+            return m;
+        }).collect(Collectors.toList());
+    }
+
+    // ==================== Seller approval workflow ====================
 
     @Transactional(readOnly = true)
     public List<User> listSellers(SellerApprovalStatus status) {
@@ -99,7 +411,6 @@ public class AdminService {
         return admins;
     }
 
-    /** Creates an ADMIN, or upgrades an existing BUYER/SELLER account to ADMIN. */
     @Transactional
     public User createAdmin(String name, String mobileNumber) {
         User user = userRepository.findByMobileNumber(mobileNumber).orElse(null);
@@ -114,7 +425,6 @@ public class AdminService {
         return userRepository.save(user);
     }
 
-    /** Demotes an ADMIN back to BUYER. Super Admin accounts can never be demoted. */
     @Transactional
     public User demoteAdmin(Long userId) {
         User user = userRepository.findById(userId)
@@ -129,7 +439,6 @@ public class AdminService {
         return userRepository.save(user);
     }
 
-    /** Idempotent bootstrap of the platform's built-in privileged accounts. */
     @Transactional
     public void ensureBootstrapAccounts() {
         if (userRepository.findByMobileNumber(SUPER_ADMIN_MOBILE).isEmpty()) {
@@ -140,7 +449,6 @@ public class AdminService {
         }
     }
 
-    /** Legacy sellers existed before the approval workflow: grandfather them in as APPROVED. */
     @Transactional
     public void approveLegacySellers() {
         for (User seller : userRepository.findByRole(UserRole.SELLER)) {
@@ -152,10 +460,8 @@ public class AdminService {
         }
     }
 
-    /** Platform analytics summary (delegates to AnalyticsService). */
     @Transactional(readOnly = true)
     public Map<String, Object> analyticsSummary() {
         return analyticsService.summary();
     }
 }
-
