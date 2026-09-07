@@ -338,6 +338,148 @@ cd my-first-spring-api
 
 ---
 
+## Verification Guardrails
+
+### SHARED DATABASE PROOF — MANDATORY
+
+Do not consider Buyer/Seller/Admin integration verified merely because they point to the same API.
+
+Perform a real end-to-end data mutation:
+
+1. Create/place a new Buyer order.
+2. Record its exact Order ID.
+3. Verify the SAME Order ID and details appear in:
+   - Buyer My Orders
+   - Seller Orders
+   - Admin Orders
+4. Verify inventory/booked quantity changes consistently.
+5. Verify Admin order count/value changes.
+6. Verify Seller earnings/order figures update according to existing business rules.
+
+Then create a second order using:
+Payment Status = Will Pay Later
+
+Verify:
+- SAME order appears in Buyer/Seller/Admin
+- Admin Paid value does NOT include it
+- Admin Will Pay Later value DOES include it
+
+This is the acceptance proof that Buyer, Seller and Admin are operating on the same live data source.
+
+### DATA SOURCE RULE
+
+Demo seed data is legitimate database data and may be included in Admin totals.
+
+However:
+- no hardcoded frontend numbers
+- no manually duplicated dashboard totals
+- no fake rows created only in JavaScript
+- every displayed aggregate must be derivable from actual backend records.
+
+Document which records are seeded demo records.
+
+### RESTART / PERSISTENCE CHECK
+
+Because the current demo may use in-memory H2:
+
+Verify:
+- Buyer, Seller and Admin use the same database during one running application instance.
+- Restarting the application may reset demo/custom data if H2 is in-memory.
+- Seed data must be recreated correctly on startup.
+- No duplicate seed records should accumulate during normal startup.
+- Admin calculations after restart must still be correct.
+
+Do NOT silently claim permanent database persistence if the current database is in-memory.
+
+### ADMIN SECURITY BOUNDARY
+
+Audit Admin APIs and UI.
+
+Do not expose privileged Admin mutation APIs without the existing Admin authentication/authorization mechanism.
+
+Do not put Admin credentials, secrets, passwords or sensitive configuration into frontend JavaScript.
+
+Admin UI may be directly reachable by URL, but privileged data/actions must follow the application's existing authentication/authorization design.
+
+Do not invent a complex authentication system unless genuinely required by the existing architecture.
+
+### ADMIN RECONCILIATION TEST
+
+For every Admin aggregate, reconcile dashboard values against detail records.
+
+Examples:
+
+Dashboard Total Orders == count of Admin Orders records
+
+Dashboard Live Kitchens == count of kitchens having >=1 currently live offering
+
+Dashboard Live Offerings == count of currently live offerings
+
+Dashboard Paid Value == sum of qualifying Paid orders
+
+Dashboard Will Pay Later Value == sum of qualifying Will Pay Later orders
+
+Dashboard Seller counts == seller detail/status counts
+
+Dashboard Buyer count == buyer records
+
+No aggregate may disagree with its underlying list.
+
+### PUBLIC DEPLOYMENT ACCEPTANCE
+
+After implementation and tests pass:
+
+Verify the actual deployed URLs, not only localhost:
+
+Buyer:
+https://sociomart-demo.onrender.com/
+
+Seller:
+https://sociomart-demo.onrender.com/seller.html
+
+Admin:
+https://sociomart-demo.onrender.com/admin.html
+
+For Admin specifically verify:
+- page loads after Render cold start
+- Admin login/access works
+- dashboard calculations load
+- no failed API requests
+- orders load
+- sellers load
+- buyers load
+- kitchens load
+- offerings load
+- enquiries load
+- refresh works
+- no blank dashboard
+- no hardcoded fallback numbers
+
+Confirm the deployed application corresponds to the final Git commit.
+
+If Render is sleeping, wait for wake-up and verify again.
+Do not report HTTP 200 alone as successful functional verification.
+
+---
+
+## Final Freeze
+
+Once the above guardrails are verified:
+
+- Do NOT add new features
+- Do NOT add new marketplace categories
+- Do NOT add payment gateway
+- Do NOT add OTP
+- Do NOT add social feed/chat
+- Do NOT add wallet/subscriptions
+- Do NOT add unnecessary analytics
+- Do NOT redesign UI/UX
+- Do NOT change working business logic
+
+The next phase after this freeze is deployment/public-demo verification, not more feature work.
+
+---
+
 ## Demo Screenshots
 
 All screenshots below are from the live public deployment. Click any image to view the full interactive demo.
