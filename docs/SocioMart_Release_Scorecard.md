@@ -1,7 +1,7 @@
 # SocioMart — Final Release Scorecard
 
 **Date:** 2026-09-07
-**Commit:** `c3c6496`
+**Commit:** `bf938de`
 **Branch:** `main`
 **Remote:** `https://github.com/utkarshnikhare/my-first-spring-api.git`
 **Public URL:** `https://sociomart-demo.onrender.com`

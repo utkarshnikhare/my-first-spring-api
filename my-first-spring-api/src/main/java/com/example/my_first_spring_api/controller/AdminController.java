@@ -105,6 +105,12 @@ public class AdminController {
         return ResponseEntity.ok(adminService.analyticsSummary());
     }
 
+    @GetMapping("/traffic")
+    public ResponseEntity<Map<String, Object>> traffic(
+            @RequestParam(value = "period", required = false, defaultValue = "today") String period) {
+        return ResponseEntity.ok(adminService.traffic(period));
+    }
+
     static Map<String, Object> toSellerSummary(User seller) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", seller.getId());

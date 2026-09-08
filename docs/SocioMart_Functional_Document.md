@@ -479,6 +479,61 @@ Both authenticate through the standard `/api/auth/demo-login` endpoint. Buyer, S
 - Last 3 days filter uses real order timestamps
 - Search/filter works across order number, buyer, kitchen, and seller
 
+### 11.5 Traffic Analytics
+
+The Admin dashboard includes a **Traffic Analytics** section that shows active Buyer and Seller participation over time based on real order data.
+
+#### Purpose
+
+Traffic Analytics helps the Admin understand marketplace participation by showing how many unique Buyers placed orders and how many unique Sellers received orders during selected time periods.
+
+#### Traffic Definition
+
+- **Active Buyer**: A distinct Buyer user who placed at least one order in the selected period.
+- **Active Seller**: A distinct Seller user whose kitchen received at least one order in the selected period.
+
+Traffic is based on persisted `Order` records. It does not count the same Buyer or Seller multiple times within a period, even if they performed multiple actions.
+
+#### Available Periods
+
+- **Today**: Orders placed from midnight (12:00 AM) of the current day to the current time.
+- **This Week**: Orders placed from Monday 12:00 AM to the current time of the same week.
+- **This Month**: Orders placed from the 1st of the current month at 12:00 AM to the current time.
+
+#### Graph Behaviour
+
+The Traffic Analytics graph displays two series:
+- **Buyers** (indigo line)
+- **Sellers** (green line)
+
+Time granularity changes by period:
+- **Today**: Hourly buckets (00:00 through 23:00)
+- **This Week**: Daily buckets (Mon, Tue, Wed, Thu, Fri, Sat, Sun)
+- **This Month**: Daily buckets (1st, 2nd, 3rd, ... current date)
+
+#### Interaction
+
+1. Admin selects a period (Today / This Week / This Month).
+2. The system fetches real traffic data from `/api/admin/traffic`.
+3. Summary cards update with distinct active Buyer and Seller counts.
+4. The line chart updates to show the trend across the selected period.
+
+#### Empty State
+
+If no Buyer or Seller activity exists for the selected period, the system displays: **"No buyer or seller activity found for this period."**
+
+#### Error State
+
+If the traffic analytics API fails, the system displays: **"Failed to load traffic analytics: <error message>"**
+
+#### Data Consistency
+
+Traffic graph values and summary counts come from the same backend calculation. The same distinct Buyer/Seller counting logic is used for both the summary cards and the chart data points.
+
+#### Security
+
+The Traffic Analytics API (`GET /api/admin/traffic`) is protected by Admin authorization. Buyer and Seller users receive HTTP 403 Forbidden when attempting to access it.
+
 ## 12. Shared Database
 
 Buyer, Seller and Admin use the **SAME** Spring Boot backend/runtime.
@@ -588,7 +643,7 @@ Final status: **NO RELEASE BLOCKERS.**
 
 ## 17. Git Release State
 
-Final verified release commit: `c3c6496af32227a923a26fcf08a0e8bd32c7b53c`
+Final verified release commit: `bf938de41c88c15236058d26b20a86561050757c`
 
 - HEAD == origin/main: YES
 - Working tree: clean except `.kilo/` agent tooling, which is not committed

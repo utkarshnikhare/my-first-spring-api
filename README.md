@@ -180,9 +180,7 @@ Mobile-first. Tested at 360, 390, 430, 768, 1024, and 1440 px. Desktop uses sens
 my-first-spring-api/
 ├── .github/                         GitHub configuration
 ├── data/                            Runtime H2 data (git-ignored)
-├── deploy/                          Static deploy copy
-├── docs/                            MD/PDF project documentation + screenshots
-├── docs-tools/                      Local QA tooling (git-ignored)
+├── docs/                            Project documentation (MD files)
 ├── my-first-spring-api/             Maven project root
 │   ├── Dockerfile                   Multi-stage Docker build (JDK 21 → JRE 21)
 │   ├── pom.xml                      Spring Boot 4.1.1, Java 21
@@ -357,8 +355,8 @@ cd my-first-spring-api
 | Public Admin URL loads | PASS |
 
 ### Latest Release
-- **Commit:** `c3c6496` (HEAD -> main, origin/main)
-- **UI Fix:** Duplicate Place Order CTA resolved — cart bar now hidden on Order Summary, Confirm Order, and Payment screens where sticky footer already provides the CTA
+- **Commit:** `bf938de` (HEAD -> main, origin/main)
+- **Admin Fix:** Added missing total field to admin orders list items; order detail view with complete chain
 - **Docs:** Functional + Technical documents updated (MD + PDF)
 
 ---
@@ -546,5 +544,4 @@ All screenshots below are from the live public deployment. Click any image to vi
 | 🛡️ Dashboard | [View Live](https://sociomart-demo.onrender.com/admin.html#home) | same · toggle 🌓 |
 | ⏳ Pending Approvals | [View Live](https://sociomart-demo.onrender.com/admin.html#pending) | same · toggle 🌓 |
 
-> **Screenshot archives** (local QA captures at 360/768/1440 px in light + dark) are stored in `docs-tools/uiqa-shots/` and are not committed to git. They are regenerated on each QA run and serve as the verification baseline for the status table above.
-**Home · Kitchen / Manage Kitchen · Orders · History · Earnings** (unchanged).
+> **Home · Kitchen / Manage Kitchen · Orders · History · Earnings** (unchanged).

@@ -530,4 +530,104 @@ public class AdminService {
     public Map<String, Object> analyticsSummary() {
         return analyticsService.summary();
     }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> traffic(String period) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
+        LocalDateTime startOfWeek = LocalDate.now().with(java.time.DayOfWeek.MONDAY).atStartOfDay();
+        LocalDateTime startOfMonth = YearMonth.now().atDay(1).atStartOfDay();
+
+        LocalDateTime start;
+        LocalDateTime end;
+        String granularity;
+        if ("week".equalsIgnoreCase(period)) {
+            start = startOfWeek;
+            end = startOfWeek.plusWeeks(1);
+            granularity = "day";
+        } else if ("month".equalsIgnoreCase(period)) {
+            start = startOfMonth;
+            end = startOfMonth.plusMonths(1);
+            granularity = "day";
+        } else {
+            start = startOfToday;
+            end = startOfToday.plusDays(1);
+            granularity = "hour";
+        }
+
+        long activeBuyers = orderRepository.countDistinctBuyersBetween(start, end);
+        long activeSellers = orderRepository.countDistinctSellersBetween(start, end);
+
+        List<Object[]> raw;
+        if ("hour".equals(granularity)) {
+            raw = orderRepository.findHourlyTrafficBetween(start, end);
+        } else {
+            raw = orderRepository.findDailyTrafficBetween(start, end);
+        }
+
+        List<Map<String, Object>> series = new ArrayList<>();
+        if ("hour".equals(granularity)) {
+            Map<Integer, long[]> hourMap = new LinkedHashMap<>();
+            for (Object[] row : raw) {
+                int hour = ((Number) row[0]).intValue();
+                hourMap.put(hour, new long[]{ row[1] != null ? ((Number) row[1]).longValue() : 0L, row[2] != null ? ((Number) row[2]).longValue() : 0L });
+            }
+            for (int h = 0; h < 24; h++) {
+                long[] vals = hourMap.getOrDefault(h, new long[]{0L, 0L});
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("label", String.format("%02d:00", h));
+                m.put("buyers", vals[0]);
+                m.put("sellers", vals[1]);
+                series.add(m);
+            }
+        } else {
+            Map<LocalDate, long[]> dateMap = new LinkedHashMap<>();
+            for (Object[] row : raw) {
+                Object dateObj = row[0];
+                LocalDate d;
+                if (dateObj instanceof java.sql.Date) {
+                    d = ((java.sql.Date) dateObj).toLocalDate();
+                } else if (dateObj instanceof java.time.LocalDate) {
+                    d = (LocalDate) dateObj;
+                } else {
+                    d = LocalDate.parse(String.valueOf(dateObj));
+                }
+                dateMap.put(d, new long[]{ row[1] != null ? ((Number) row[1]).longValue() : 0L, row[2] != null ? ((Number) row[2]).longValue() : 0L });
+            }
+            if ("week".equals(period)) {
+                for (int i = 0; i < 7; i++) {
+                    LocalDate d = start.toLocalDate().plusDays(i);
+                    long[] vals = dateMap.getOrDefault(d, new long[]{0L, 0L});
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("label", d.getDayOfWeek().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH));
+                    m.put("buyers", vals[0]);
+                    m.put("sellers", vals[1]);
+                    series.add(m);
+                }
+            } else {
+                LocalDate monthStart = start.toLocalDate();
+                LocalDate today = LocalDate.now();
+                int daysInPeriod = today.getDayOfMonth();
+                for (int d = 1; d <= daysInPeriod; d++) {
+                    LocalDate date = monthStart.plusDays(d - 1);
+                    long[] vals = dateMap.getOrDefault(date, new long[]{0L, 0L});
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("label", String.valueOf(date.getDayOfMonth()));
+                    m.put("buyers", vals[0]);
+                    m.put("sellers", vals[1]);
+                    series.add(m);
+                }
+            }
+        }
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("period", period != null ? period : "today");
+        out.put("start", start.toString());
+        out.put("end", end.toString());
+        out.put("granularity", granularity);
+        out.put("activeBuyers", activeBuyers);
+        out.put("activeSellers", activeSellers);
+        out.put("series", series);
+        return out;
+    }
 }

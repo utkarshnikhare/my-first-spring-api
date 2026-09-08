@@ -35,5 +35,29 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByKitchenAndCreatedAtBetweenWithItems(@Param("kitchen") Kitchen kitchen,
                                                           @Param("start") LocalDateTime start,
                                                           @Param("end") LocalDateTime end);
+
+    long countDistinctBuyerByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
+    long countDistinctSellerByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
+    @Query("SELECT COUNT(DISTINCT o.buyer.id) FROM Order o WHERE o.createdAt >= :start AND o.createdAt < :end")
+    long countDistinctBuyersBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    @Query("SELECT COUNT(DISTINCT k.seller.id) FROM Order o JOIN o.kitchen k WHERE o.createdAt >= :start AND o.createdAt < :end")
+    long countDistinctSellersBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    @Query("SELECT CAST(o.createdAt AS date), COUNT(DISTINCT o.buyer.id), COUNT(DISTINCT k.seller.id) " +
+            "FROM Order o JOIN o.kitchen k " +
+            "WHERE o.createdAt >= :start AND o.createdAt < :end " +
+            "GROUP BY CAST(o.createdAt AS date) " +
+            "ORDER BY CAST(o.createdAt AS date)")
+    List<Object[]> findDailyTrafficBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    @Query("SELECT HOUR(o.createdAt), COUNT(DISTINCT o.buyer.id), COUNT(DISTINCT k.seller.id) " +
+            "FROM Order o JOIN o.kitchen k " +
+            "WHERE o.createdAt >= :start AND o.createdAt < :end " +
+            "GROUP BY HOUR(o.createdAt) " +
+            "ORDER BY HOUR(o.createdAt)")
+    List<Object[]> findHourlyTrafficBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 }
 

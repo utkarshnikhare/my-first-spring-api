@@ -2,7 +2,7 @@
  * SocioMart Admin App v1.0 — Complete admin console
  * Screens: Dashboard, Buyers, Sellers, Kitchens, Offerings, Orders, Enquiries, Pending Approvals
  */
-var A = { me: null, role: null, loginMobile: null };
+var A = { me: null, role: null, loginMobile: null, trafficPeriod: 'today' };
 var adminRoutes = {
     '#/home': adminHomeView,
     '#/pending': adminPendingView,
@@ -179,6 +179,11 @@ async function adminAction(action, t) {
             case 'admin-back-orders': {
                 A.orderDetailId = null;
                 location.hash = '#/orders';
+                break;
+            }
+            case 'admin-traffic-period': {
+                A.trafficPeriod = t.dataset.period || 'today';
+                await adminRender();
                 break;
             }
         }
@@ -459,8 +464,116 @@ function adminPlaceholderView(title, copy, icon) {
 // adminSellersView is the real registry backed by GET /api/admin/sellers —
 // it was previously shadowed by a placeholder, dead-ending the Sellers tab
 // despite a fully working backend. The real view is defined above.
-var adminAnalyticsView = adminPlaceholderView('Platform Analytics', 'Platform usage, growth and traffic metrics', '📊');
+var adminAnalyticsView = adminTrafficView;
 var adminConsoleView = adminPlaceholderView('Platform Console', 'Super Admin: accounts, features, grants, settings', '⚙️');
+
+function adminTrafficView() {
+    return async function () {
+        var period = A.trafficPeriod || 'today';
+        var view = viewEl();
+        view.innerHTML = '<div class="view-enter"><div class="section-head admin-section-head"><div><h1>Traffic Analytics</h1><p class="muted small">Active Buyers and Sellers based on real order activity</p></div></div>' +
+            '<div class="admin-filters">' +
+            '<button class="btn btn-sm ' + (period === 'today' ? 'btn-primary' : 'btn-secondary') + '" data-action="admin-traffic-period" data-period="today">Today</button>' +
+            '<button class="btn btn-sm ' + (period === 'week' ? 'btn-primary' : 'btn-secondary') + '" data-action="admin-traffic-period" data-period="week">This Week</button>' +
+            '<button class="btn btn-sm ' + (period === 'month' ? 'btn-primary' : 'btn-secondary') + '" data-action="admin-traffic-period" data-period="month">This Month</button>' +
+            '</div>' +
+            '<div id="trafficContent"><div class="page-loading"><div class="spinner"></div></div></div>';
+        try {
+            var data = await api('/api/admin/traffic?period=' + encodeURIComponent(period));
+            renderTrafficContent(data, period);
+        } catch (err) {
+            document.getElementById('trafficContent').innerHTML = '<div class="admin-empty">Failed to load traffic analytics: ' + esc(err.message) + '</div>';
+        }
+    };
+}
+
+function renderTrafficContent(data, period) {
+    var container = document.getElementById('trafficContent');
+    if (!container) return;
+    if (!data || !data.series || !data.series.length) {
+        container.innerHTML = '<div class="admin-empty">No buyer or seller activity found for this period.</div>';
+        return;
+    }
+    var buyers = data.activeBuyers || 0;
+    var sellers = data.activeSellers || 0;
+    var h = '<div class="dash-grid card-mt">' +
+        '<div class="dash-card"><div class="dc-top"><span class="dc-icon">🛒</span><span class="dc-num">' + buyers + '</span></div><div class="dc-label">Active Buyers</div><div class="dc-sub">' + periodLabel(period) + '</div></div>' +
+        '<div class="dash-card"><div class="dc-top"><span class="dc-icon">👨‍🍳</span><span class="dc-num">' + sellers + '</span></div><div class="dc-label">Active Sellers</div><div class="dc-sub">' + periodLabel(period) + '</div></div>' +
+        '</div>';
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Traffic Trend</h3><p class="muted tiny" style="margin:0 0 12px">Distinct active Buyers and Sellers over the selected period.</p>';
+    h += trafficSvgChart(data.series, period);
+    h += '<div class="flex gap-2 wrap" style="margin-top:14px">' +
+        '<div class="flex-1 min-140"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#4F46E5;margin-right:6px;vertical-align:middle"></span> Buyers</div>' +
+        '<div class="flex-1 min-140"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#16A34A;margin-right:6px;vertical-align:middle"></span> Sellers</div>' +
+        '</div></div>';
+    container.innerHTML = h;
+}
+
+function periodLabel(period) {
+    if (period === 'today') return 'Today';
+    if (period === 'week') return 'This Week';
+    if (period === 'month') return 'This Month';
+    return period;
+}
+
+function trafficSvgChart(series, period) {
+    var width = 800;
+    var height = 280;
+    var pad = { top: 20, right: 20, bottom: 40, left: 45 };
+    var chartW = width - pad.left - pad.right;
+    var chartH = height - pad.top - pad.bottom;
+
+    var maxVal = 0;
+    series.forEach(function (pt) {
+        maxVal = Math.max(maxVal, pt.buyers || 0, pt.sellers || 0);
+    });
+    if (maxVal === 0) maxVal = 1;
+
+    var xStep = chartW / Math.max(series.length - 1, 1);
+    var pointsBuyers = series.map(function (pt, i) {
+        return [pad.left + i * xStep, pad.top + chartH - ((pt.buyers || 0) / maxVal) * chartH];
+    });
+    var pointsSellers = series.map(function (pt, i) {
+        return [pad.left + i * xStep, pad.top + chartH - ((pt.sellers || 0) / maxVal) * chartH];
+    });
+
+    function polyline(pts) {
+        return pts.map(function (p) { return p[0] + ',' + p[1]; }).join(' ');
+    }
+
+    function dots(pts, color) {
+        return pts.map(function (p, i) {
+            return '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="4" fill="' + color + '" stroke="#fff" stroke-width="2" />' +
+                '<title>' + (series[i].label || '') + ': Buyers ' + (series[i].buyers || 0) + ', Sellers ' + (series[i].sellers || 0) + '</title>';
+        }).join('');
+    }
+
+    var xLabels = series.map(function (pt, i) {
+        var x = pad.left + i * xStep;
+        var show = series.length <= 12 || i % Math.ceil(series.length / 12) === 0 || i === series.length - 1;
+        if (!show) return '';
+        return '<text x="' + x + '" y="' + (height - 8) + '" text-anchor="middle" font-size="11" fill="var(--muted)">' + esc(pt.label) + '</text>';
+    }).join('');
+
+    var yTicks = 5;
+    var yLabels = '';
+    for (var i = 0; i <= yTicks; i++) {
+        var val = Math.round((maxVal / yTicks) * i);
+        var y = pad.top + chartH - (i / yTicks) * chartH;
+        yLabels += '<text x="' + (pad.left - 8) + '" y="' + (y + 4) + '" text-anchor="end" font-size="11" fill="var(--muted)">' + val + '</text>';
+        yLabels += '<line x1="' + pad.left + '" y1="' + y + '" x2="' + (width - pad.right) + '" y2="' + y + '" stroke="var(--border)" stroke-width="1" opacity="0.5" />';
+    }
+
+    return '<svg viewBox="0 0 ' + width + ' ' + height + '" style="width:100%;height:auto;max-height:280px" preserveAspectRatio="xMidYMid meet">' +
+        '<rect x="' + pad.left + '" y="' + pad.top + '" width="' + chartW + '" height="' + chartH + '" fill="var(--surface)" rx="8" />' +
+        yLabels +
+        xLabels +
+        '<polyline fill="none" stroke="#4F46E5" stroke-width="3" points="' + polyline(pointsBuyers) + '" />' +
+        '<polyline fill="none" stroke="#16A34A" stroke-width="3" points="' + polyline(pointsSellers) + '" />' +
+        dots(pointsBuyers, '#4F46E5') +
+        dots(pointsSellers, '#16A34A') +
+        '</svg>';
+}
 
 // ==================== DELEGATED CLICKS ====================
 document.addEventListener('click', async function (ev) {

@@ -1,3 +1,6 @@
+# Agent tooling
+.kilo/
+
 # Local runtime data & build output (never share)
 data/
 bin/
@@ -20,3 +23,8 @@ projectmy-first-spring-api/
 
 # docs screenshot tooling (local only)
 docs-tools/
+docs/shots/
+
+# Generated PDFs and reports (keep source MD/docs only)
+*.pdf
+*.html
