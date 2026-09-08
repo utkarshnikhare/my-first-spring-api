@@ -85,6 +85,7 @@ public class AdminService {
         long totalOrders = allOrders.size();
         long ordersToday = allOrders.stream().filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startOfToday)).count();
         long ordersThisMonth = allOrders.stream().filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startOfMonth)).count();
+        long ordersLast3Days = allOrders.stream().filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startOfToday.minusDays(2))).count();
 
         BigDecimal totalOrderValue = allOrders.stream()
                 .filter(o -> o.getOrderStatus() != OrderStatus.DRAFT && o.getOrderStatus() != OrderStatus.CANCELLED)
@@ -144,6 +145,7 @@ public class AdminService {
         out.put("totalOrders", totalOrders);
         out.put("ordersToday", ordersToday);
         out.put("ordersThisMonth", ordersThisMonth);
+        out.put("ordersLast3Days", ordersLast3Days);
         out.put("totalOrderValue", totalOrderValue);
         out.put("todayOrderValue", todayOrderValue);
         out.put("monthOrderValue", monthOrderValue);
@@ -292,39 +294,102 @@ public class AdminService {
     // ==================== Orders ====================
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> orders() {
+    public List<Map<String, Object>> orders(String filter, String search) {
         List<Order> all = orderRepository.findAll();
-        return all.stream().map(o -> {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", o.getId());
-            m.put("orderNumber", o.getOrderNumber());
-            m.put("buyerId", o.getBuyer() != null ? o.getBuyer().getId() : null);
-            m.put("buyerName", o.getBuyer() != null ? o.getBuyer().getName() : null);
-            m.put("buyerMobile", o.getBuyer() != null ? o.getBuyer().getMobileNumber() : null);
-            m.put("sellerId", o.getKitchen() != null && o.getKitchen().getSeller() != null ? o.getKitchen().getSeller().getId() : null);
-            m.put("sellerName", o.getKitchen() != null && o.getKitchen().getSeller() != null ? o.getKitchen().getSeller().getName() : null);
-            m.put("kitchenId", o.getKitchen() != null ? o.getKitchen().getId() : null);
-            m.put("kitchenName", o.getKitchen() != null ? o.getKitchen().getDisplayName() : null);
-            m.put("totalAmount", o.getTotalAmount());
-            m.put("paymentStatus", o.getPaymentStatus() != null ? o.getPaymentStatus().name() : null);
-            m.put("orderStatus", o.getOrderStatus() != null ? o.getOrderStatus().name() : null);
-            m.put("customInstructions", o.getCustomInstructions());
-            m.put("createdAt", o.getCreatedAt());
-            m.put("society", o.getBuyer() != null ? o.getBuyer().getSociety() : null);
-            m.put("building", o.getBuyer() != null ? o.getBuyer().getBuilding() : null);
-            m.put("flatHouseNumber", o.getBuyer() != null ? o.getBuyer().getFlatHouseNumber() : null);
-            List<Map<String, Object>> items = o.getItems().stream().map(it -> {
-                Map<String, Object> im = new LinkedHashMap<>();
-                im.put("productId", it.getProduct() != null ? it.getProduct().getId() : null);
-                im.put("productName", it.getProduct() != null ? it.getProduct().getName() : null);
-                im.put("quantity", it.getQuantity());
-                im.put("price", it.getPrice());
-                im.put("total", it.getPrice() != null && it.getQuantity() != null ? it.getPrice().multiply(BigDecimal.valueOf(it.getQuantity())) : BigDecimal.ZERO);
-                return im;
-            }).collect(Collectors.toList());
-            m.put("items", items);
-            return m;
+        LocalDateTime threeDaysAgo = LocalDateTime.now().minusDays(3);
+        
+        return all.stream()
+                .filter(o -> {
+                    if ("last3days".equals(filter)) {
+                        return o.getCreatedAt() != null && o.getCreatedAt().isAfter(threeDaysAgo);
+                    }
+                    return true;
+                })
+                .filter(o -> {
+                    if (search == null || search.isBlank()) return true;
+                    String s = search.toLowerCase();
+                    String orderNum = o.getOrderNumber() != null ? o.getOrderNumber().toLowerCase() : "";
+                    String buyerName = o.getBuyer() != null && o.getBuyer().getName() != null ? o.getBuyer().getName().toLowerCase() : "";
+                    String buyerMobile = o.getBuyer() != null && o.getBuyer().getMobileNumber() != null ? o.getBuyer().getMobileNumber().toLowerCase() : "";
+                    String kitchenName = o.getKitchen() != null && o.getKitchen().getDisplayName() != null ? o.getKitchen().getDisplayName().toLowerCase() : "";
+                    String sellerName = o.getKitchen() != null && o.getKitchen().getSeller() != null && o.getKitchen().getSeller().getName() != null ? o.getKitchen().getSeller().getName().toLowerCase() : "";
+                    return orderNum.contains(s) || buyerName.contains(s) || buyerMobile.contains(s) || kitchenName.contains(s) || sellerName.contains(s);
+                })
+                .sorted((a, b) -> {
+                    if (a.getCreatedAt() == null && b.getCreatedAt() == null) return 0;
+                    if (a.getCreatedAt() == null) return 1;
+                    if (b.getCreatedAt() == null) return -1;
+                    return b.getCreatedAt().compareTo(a.getCreatedAt());
+                })
+                .map(o -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", o.getId());
+                    m.put("orderNumber", o.getOrderNumber());
+                    m.put("buyerId", o.getBuyer() != null ? o.getBuyer().getId() : null);
+                    m.put("buyerName", o.getBuyer() != null ? o.getBuyer().getName() : null);
+                    m.put("buyerMobile", o.getBuyer() != null ? o.getBuyer().getMobileNumber() : null);
+                    m.put("sellerId", o.getKitchen() != null && o.getKitchen().getSeller() != null ? o.getKitchen().getSeller().getId() : null);
+                    m.put("sellerName", o.getKitchen() != null && o.getKitchen().getSeller() != null ? o.getKitchen().getSeller().getName() : null);
+                    m.put("kitchenId", o.getKitchen() != null ? o.getKitchen().getId() : null);
+                    m.put("kitchenName", o.getKitchen() != null ? o.getKitchen().getDisplayName() : null);
+                    m.put("totalAmount", o.getTotalAmount());
+                    m.put("paymentStatus", o.getPaymentStatus() != null ? o.getPaymentStatus().name() : null);
+                    m.put("orderStatus", o.getOrderStatus() != null ? o.getOrderStatus().name() : null);
+                    m.put("customInstructions", o.getCustomInstructions());
+                    m.put("createdAt", o.getCreatedAt());
+                    m.put("society", o.getBuyer() != null ? o.getBuyer().getSociety() : null);
+                    m.put("building", o.getBuyer() != null ? o.getBuyer().getBuilding() : null);
+                    m.put("flatHouseNumber", o.getBuyer() != null ? o.getBuyer().getFlatHouseNumber() : null);
+                    List<Map<String, Object>> items = o.getItems().stream().map(it -> {
+                        Map<String, Object> im = new LinkedHashMap<>();
+                        im.put("productId", it.getProduct() != null ? it.getProduct().getId() : null);
+                        im.put("productName", it.getProduct() != null ? it.getProduct().getName() : null);
+                        im.put("quantity", it.getQuantity());
+                        im.put("price", it.getPrice());
+                        im.put("total", it.getPrice() != null && it.getQuantity() != null ? it.getPrice().multiply(BigDecimal.valueOf(it.getQuantity())) : BigDecimal.ZERO);
+                        return im;
+                    }).collect(Collectors.toList());
+                    m.put("items", items);
+                    return m;
+                }).collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> orderDetail(Long id) {
+        Order order = orderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", order.getId());
+        m.put("orderNumber", order.getOrderNumber());
+        m.put("buyerId", order.getBuyer() != null ? order.getBuyer().getId() : null);
+        m.put("buyerName", order.getBuyer() != null ? order.getBuyer().getName() : null);
+        m.put("buyerMobile", order.getBuyer() != null ? order.getBuyer().getMobileNumber() : null);
+        m.put("buyerSociety", order.getBuyer() != null ? order.getBuyer().getSociety() : null);
+        m.put("buyerBuilding", order.getBuyer() != null ? order.getBuyer().getBuilding() : null);
+        m.put("buyerFlat", order.getBuyer() != null ? order.getBuyer().getFlatHouseNumber() : null);
+        m.put("sellerId", order.getKitchen() != null && order.getKitchen().getSeller() != null ? order.getKitchen().getSeller().getId() : null);
+        m.put("sellerName", order.getKitchen() != null && order.getKitchen().getSeller() != null ? order.getKitchen().getSeller().getName() : null);
+        m.put("kitchenId", order.getKitchen() != null ? order.getKitchen().getId() : null);
+        m.put("kitchenName", order.getKitchen() != null ? order.getKitchen().getDisplayName() : null);
+        m.put("kitchenSociety", order.getKitchen() != null ? order.getKitchen().getSociety() : null);
+        m.put("kitchenBuilding", order.getKitchen() != null ? order.getKitchen().getBuilding() : null);
+        m.put("totalAmount", order.getTotalAmount());
+        m.put("paymentStatus", order.getPaymentStatus() != null ? order.getPaymentStatus().name() : null);
+        m.put("orderStatus", order.getOrderStatus() != null ? order.getOrderStatus().name() : null);
+        m.put("customInstructions", order.getCustomInstructions());
+        m.put("createdAt", order.getCreatedAt());
+        List<Map<String, Object>> items = order.getItems().stream().map(it -> {
+            Map<String, Object> im = new LinkedHashMap<>();
+            im.put("productId", it.getProduct() != null ? it.getProduct().getId() : null);
+            im.put("productName", it.getProduct() != null ? it.getProduct().getName() : null);
+            im.put("quantity", it.getQuantity());
+            im.put("price", it.getPrice());
+            im.put("lineTotal", it.getPrice() != null && it.getQuantity() != null ? it.getPrice().multiply(BigDecimal.valueOf(it.getQuantity())) : BigDecimal.ZERO);
+            im.put("productCurrentPrice", it.getProduct() != null ? it.getProduct().getPrice() : null);
+            return im;
         }).collect(Collectors.toList());
+        m.put("items", items);
+        return m;
     }
 
     // ==================== Enquiries ====================

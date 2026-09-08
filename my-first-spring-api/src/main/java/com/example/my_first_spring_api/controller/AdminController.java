@@ -54,8 +54,15 @@ public class AdminController {
     }
 
     @GetMapping("/orders")
-    public ResponseEntity<List<Map<String, Object>>> orders() {
-        return ResponseEntity.ok(adminService.orders());
+    public ResponseEntity<List<Map<String, Object>>> orders(
+            @RequestParam(value = "filter", required = false) String filter,
+            @RequestParam(value = "search", required = false) String search) {
+        return ResponseEntity.ok(adminService.orders(filter, search));
+    }
+
+    @GetMapping("/orders/{id}")
+    public ResponseEntity<Map<String, Object>> orderDetail(@PathVariable Long id) {
+        return ResponseEntity.ok(adminService.orderDetail(id));
     }
 
     @GetMapping("/enquiries")

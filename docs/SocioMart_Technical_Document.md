@@ -188,6 +188,48 @@ Verified boundaries:
 - Buyer → another buyer's order rejected
 - Seller cross-owner access rejected
 
+## 6. Admin Implementation
+
+### 6.1 Admin Demo Accounts
+
+Two seeded admin users:
+- Super Admin: mobile `9000000001`, role `SUPER_ADMIN`
+- Admin: mobile `9000000002`, role `ADMIN`
+
+Both authenticate via `/api/auth/demo-login`. Admin endpoints require `ADMIN` or `SUPER_ADMIN` role.
+
+### 6.2 Admin API Endpoints
+
+| Method & Path | What It Does |
+|---|---|
+| GET /api/admin/dashboard | Real-time dashboard stats |
+| GET /api/admin/buyers | List all buyers with order counts |
+| GET /api/admin/sellers | List all sellers with kitchen/offering counts |
+| GET /api/admin/kitchens | List all kitchens with live offerings |
+| GET /api/admin/offerings | List all offerings with status classification |
+| GET /api/admin/orders | List all orders (supports `filter=last3days` and `search=` query params) |
+| GET /api/admin/orders/{id} | Single order detail with complete buyer/kitchen/seller/items chain |
+| GET /api/admin/enquiries | List all enquiries |
+| GET /api/admin/analytics | Platform analytics |
+| POST /api/admin/sellers/{id}/approve | Approve seller |
+| POST /api/admin/sellers/{id}/reject | Reject seller |
+| POST /api/admin/sellers/{id}/suspend | Suspend seller |
+
+### 6.3 Admin Order Monitoring
+
+- Orders are sorted newest first by persisted `createdAt` timestamp
+- `filter=last3days` shows only orders from the last 3 calendar days
+- `search=` filters across order number, buyer name, buyer mobile, kitchen name, and seller name
+- Order detail exposes: buyer info, kitchen info, seller info, items with historical unit price and line total, payment status, order status, and exact timestamp
+- Admin GMV/order value uses `order.totalAmount` — never recalculated from current `Product.price`
+
+### 6.4 Frontend
+
+- `admin.js` SPA with hash routing
+- Real-time data from `/api/admin/*` endpoints
+- No hardcoded dashboard numbers
+- Responsive cards, pills for status, search/filter bar
+
 ## 7. Order Price Immutability
 
 When an order is created, the current offering price is snapshotted into the order line item at transaction time:

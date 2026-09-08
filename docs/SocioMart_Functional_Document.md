@@ -441,17 +441,31 @@ The admin console is a separate single-page view (`admin.html`) hitting `/api/ad
 
 ### 11.2 Admin Features
 
-- Dashboard with total orders, paid/will-pay-later breakdown, buyer/seller counts
-- Buyers management (list all buyers)
+- Dashboard with total orders, paid/will-pay-later breakdown, buyer/seller counts, order value (GMV)
+- Buyers management (list all buyers with order counts and values)
 - Sellers management (list all sellers, pending approvals, approve/reject/suspend)
-- Kitchens management (list all kitchens, approve/reject/suspend)
-- Offerings management (browse all product listings)
-- Orders monitoring (full order list with status and payment)
+- Kitchens management (list all kitchens with live offerings count)
+- Offerings management (browse all product listings with status)
+- Orders monitoring (full order list with status and payment, sorted newest first)
+- Order detail view (complete chain: Buyer → Kitchen → Seller → Food → Quantity → Historical Unit Price → Total → Payment Status → Order Status → Date + Time)
 - Enquiries management (customer inquiries)
 - Analytics (platform metrics)
 - Seller approval/verification workflow
+- Last 3 days order history filter
+- Search/filter orders by buyer, kitchen, seller, or order number
 
-### 11.3 Final Verification
+### 11.3 Admin Demo Accounts
+
+Two dedicated admin demo mobile numbers:
+
+| Role | Mobile |
+|---|---|
+| Super Admin | `9000000001` |
+| Admin | `9000000002` |
+
+Both authenticate through the standard `/api/auth/demo-login` endpoint. Buyer, Seller, and Admin login contexts are completely separate.
+
+### 11.4 Final Verification
 
 - Dashboard values are based on real backend data
 - No hardcoded authoritative dashboard numbers
@@ -459,6 +473,11 @@ The admin console is a separate single-page view (`admin.html`) hitting `/api/ad
 - Paid and Will Pay Later counts/values are tracked
 - Order relationships are ID-based
 - Admin can see shared order data
+- Historical order prices are immutable
+- Admin GMV uses persisted order totals
+- Orders are sorted newest first by persisted timestamp
+- Last 3 days filter uses real order timestamps
+- Search/filter works across order number, buyer, kitchen, and seller
 
 ## 12. Shared Database
 

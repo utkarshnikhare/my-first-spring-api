@@ -159,6 +159,28 @@ async function adminAction(action, t) {
                 await adminRender();
                 break;
             }
+            case 'admin-order-filter': {
+                A.orderFilter = t.dataset.filter || 'all';
+                await adminRender();
+                break;
+            }
+            case 'admin-order-search': {
+                var input = $('#adminOrderSearch');
+                if (input) A.orderSearch = input.value;
+                await adminRender();
+                break;
+            }
+            case 'admin-order-detail': {
+                var oid = t.dataset.id;
+                var detail = await api('/api/admin/orders/' + oid);
+                viewEl().innerHTML = await adminOrderDetailView(detail);
+                break;
+            }
+            case 'admin-back-orders': {
+                A.orderDetailId = null;
+                location.hash = '#/orders';
+                break;
+            }
         }
     } catch (err) { toast(err.message, 'error'); }
 }
@@ -321,9 +343,17 @@ async function adminOfferingsView() {
 }
 
 async function adminOrdersView() {
-    var list = await api('/api/admin/orders');
+    var filter = A.orderFilter || 'all';
+    var search = A.orderSearch || '';
+    var qs = '?filter=' + encodeURIComponent(filter) + '&search=' + encodeURIComponent(search);
+    var list = await api('/api/admin/orders' + qs);
     var h = '<div class="view-enter">';
     h += '<div class="section-head admin-section-head"><div><h1>Orders</h1><p class="muted small">' + (list ? list.length : 0) + ' orders</p></div></div>';
+    h += '<div class="admin-filters">';
+    h += '<input type="text" class="form-input form-input-sm" placeholder="Search orders..." value="' + esc(search) + '" id="adminOrderSearch">';
+    h += '<button class="btn btn-sm ' + (filter === 'all' ? 'btn-primary' : 'btn-secondary') + '" data-action="admin-order-filter" data-filter="all">All</button>';
+    h += '<button class="btn btn-sm ' + (filter === 'last3days' ? 'btn-primary' : 'btn-secondary') + '" data-action="admin-order-filter" data-filter="last3days">Last 3 Days</button>';
+    h += '</div>';
     if (!list || !list.length) {
         return h + '<div class="admin-empty">No orders yet.</div></div>';
     }
@@ -341,7 +371,7 @@ async function adminOrdersView() {
             : ps === 'WILL_PAY_LATER' ? '<span class="pill pill-amber">● Will Pay Later</span>'
             : ps === 'PENDING' ? '<span class="pill pill-grey">● Pending</span>'
             : (ps ? '<span class="pill pill-grey">' + esc(ps) + '</span>' : '');
-        h += '<div class="seller-row">' +
+        h += '<div class="seller-row" data-action="admin-order-detail" data-id="' + o.id + '">' +
             '<div class="sr-avatar">📦</div>' +
             '<div class="sr-body">' +
             '<div class="sr-name">#' + esc(o.orderNumber || String(o.id)) + ' · ' + esc(o.kitchenName || '') + '</div>' +
@@ -350,6 +380,46 @@ async function adminOrdersView() {
             '<div class="sr-meta">' + adminDate(o.createdAt) + (o.society ? ' · ' + esc(o.society) : '') + '</div>' +
             '</div></div>';
     });
+    h += '</div>';
+    return h;
+}
+
+async function adminOrderDetailView(id) {
+    var o = await api('/api/admin/orders/' + id);
+    var h = '<div class="view-enter">';
+    h += '<div class="section-head admin-section-head"><div><h1>Order #' + esc(o.orderNumber || String(o.id)) + '</h1><p class="muted small">' + adminDate(o.createdAt) + '</p></div></div>';
+    h += '<div class="card pad card-mb">';
+    h += '<h3>Customer</h3>';
+    h += '<p><strong>' + esc(o.buyerName || '—') + '</strong> · ' + esc(o.buyerMobile || '') + '</p>';
+    h += '<p class="muted small">' + esc(o.buyerSociety || '') + (o.buyerBuilding ? ', ' + esc(o.buyerBuilding) : '') + (o.buyerFlat ? ', Flat ' + esc(o.buyerFlat) : '') + '</p>';
+    h += '</div>';
+    h += '<div class="card pad card-mb">';
+    h += '<h3>Kitchen & Seller</h3>';
+    h += '<p><strong>Kitchen:</strong> ' + esc(o.kitchenName || '—') + ' (ID: ' + o.kitchenId + ')</p>';
+    h += '<p><strong>Seller:</strong> ' + esc(o.sellerName || '—') + ' (ID: ' + o.sellerId + ')</p>';
+    h += '<p class="muted small">' + esc(o.kitchenSociety || '') + (o.kitchenBuilding ? ', ' + esc(o.kitchenBuilding) : '') + '</p>';
+    h += '</div>';
+    h += '<div class="card pad card-mb">';
+    h += '<h3>Items</h3>';
+    (o.items || []).forEach(function (it) {
+        h += '<div class="flex items-center gap-2" style="padding:8px 0;border-bottom:1px solid #eee;">';
+        h += '<div class="flex-1"><strong>' + esc(it.productName || 'Item') + '</strong></div>';
+        h += '<div class="muted small">Qty: ' + it.quantity + '</div>';
+        h += '<div class="muted small">Unit Price: ' + money(it.price || 0) + '</div>';
+        h += '<div class="muted small">Line Total: ' + money(it.total || 0) + '</div>';
+        h += '</div>';
+    });
+    h += '<div class="total-row" style="margin-top:12px;"><span>Order Total</span><span>' + money(o.totalAmount || 0) + '</span></div>';
+    h += '</div>';
+    h += '<div class="card pad card-mb">';
+    h += '<h3>Status</h3>';
+    h += '<p><strong>Payment:</strong> ' + esc(o.paymentStatus || '—') + '</p>';
+    h += '<p><strong>Order:</strong> ' + esc(o.orderStatus || '—') + '</p>';
+    if (o.customInstructions) {
+        h += '<p class="muted small"><strong>Note:</strong> ' + esc(o.customInstructions) + '</p>';
+    }
+    h += '</div>';
+    h += '<button class="btn btn-secondary btn-block" data-action="admin-back-orders">← Back to Orders</button>';
     h += '</div>';
     return h;
 }
@@ -403,3 +473,8 @@ document.addEventListener('click', async function (ev) {
 // ==================== BOOT ====================
 window.addEventListener('hashchange', function () { if (A.role) adminRender(); });
 window.addEventListener('DOMContentLoaded', function () { initTheme(); adminGate(); });
+document.addEventListener('keyup', function (ev) {
+    if (ev.target.id === 'adminOrderSearch') {
+        adminAction('admin-order-search', ev.target);
+    }
+});

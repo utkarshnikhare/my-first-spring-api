@@ -14,9 +14,12 @@ Use the in-app OTP flow (any 4-digit code works in demo mode):
 
 | Role | Mobile |
 |---|---|
-| Buyer | `9999999999` (any 4-digit OTP) |
+| Buyer | `9876500001` (any 4-digit OTP) |
 | Seller | Use "Demo Login" button on seller page |
-| Admin | `9000000002` (any 4-digit OTP) |
+| Admin | `9000000001` (Super Admin — any 4-digit OTP) |
+| Admin | `9000000002` (Admin — any 4-digit OTP) |
+
+**Authentication isolation:** Buyer, Seller, and Admin login contexts are completely separate. Logging into one does NOT log you into another.
 
 ## Recommended Demo Sequence
 
@@ -70,10 +73,25 @@ Walk through order status transitions (PENDING → CONFIRMED → DELIVERED).
 8. Historical orders never change when catalogue prices change.
 
 ### 9. Admin Dashboard
-Login as admin. Show:
-- Dashboard totals (orders, paid/WPL breakdown, buyers, sellers)
+Login as admin (`9000000002`). Show:
+- Dashboard totals (orders, paid/WPL breakdown, buyers, sellers, order value)
 - Buyers, Sellers, Kitchens, Offerings, Orders, Enquiries views
 - Seller approval workflow
+- Orders tab with newest-first sorting
+- "Last 3 Days" filter showing real persisted order timestamps
+- Search orders by buyer, kitchen, seller, or order number
+- Order detail view showing complete chain: Buyer → Kitchen → Seller → Food → Quantity → Historical Unit Price → Total → Payment Status → Order Status → Date + Time
+- Historical order prices remain unchanged when catalogue prices change
+
+### 10. Admin Demo Account 2
+Also verify the second admin demo number (`9000000001`, Super Admin) can log in and access the same admin dashboard.
+
+### 11. Cross-Role Data Verification
+Pick one real order and verify:
+- Buyer sees: Order X, Kitchen Y, Food Z, Quantity Q, Historical Price P, Total T
+- Seller sees: Order X, Kitchen Y, Food Z, Quantity Q, Historical Price P, Total T
+- Admin sees: Order X, Kitchen Y, Food Z, Quantity Q, Historical Price P, Total T
+All three must match.
 
 ## Known Limitations
 
