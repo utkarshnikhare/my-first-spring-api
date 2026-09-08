@@ -6,21 +6,46 @@
 
 // ==================== DOM Helpers ====================
 
-function $(sel, root) { return (root || document).querySelector(sel); }
-function $all(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
-function viewEl() { return $('#view'); }
+function $(sel, root) {
+    return (root || document).querySelector(sel);
+}
+function $all(sel, root) {
+    return Array.prototype.slice.call((root || document).querySelectorAll(sel));
+}
+function viewEl() {
+    return $('#view');
+}
 
 // ==================== String Helpers ====================
 
 function esc(v) {
     return String(v == null ? '' : v)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function money(n) {
     var num = Number(n == null ? 0 : n);
     return '₹' + (Number.isInteger(num) ? String(num) : num.toFixed(2));
+}
+
+/**
+ * Graceful image fallback (guardrail M): swap a broken image for the
+ * container's emoji so no broken-image icon or console error remains.
+ * Containers may carry a data-emoji attribute; kitchens default to 🏪,
+ * everything else to a plate. Safe to call multiple times per element.
+ */
+function imgFallback(imgEl) {
+    if (!imgEl || imgEl.getAttribute('data-fb')) return;
+    imgEl.setAttribute('data-fb', '1');
+    var parent = imgEl.parentElement;
+    if (!parent) { imgEl.style.display = 'none'; return; }
+    var emoji = parent.getAttribute('data-emoji');
+    if (!emoji) emoji = /avatar|fav-chip|fli-emoji|kc-/.test(parent.className) ? '🏪' : '🍽️';
+    parent.textContent = emoji;
 }
 
 function emojiFor(name) {
@@ -38,18 +63,25 @@ function emojiFor(name) {
 
 function prettyTime(hhmm) {
     if (!hhmm) return '';
-    var parts = String(hhmm).split(':');
-    var h = parseInt(parts[0], 10), m = parts[1] || '00';
+    var s = String(hhmm).trim();
+    if (/[AP]M$/i.test(s)) {
+        return s.replace(/\s+/g, ' ').replace(/\s*([AP]M)\s*$/i, ' $1');
+    }
+    var parts = s.split(':');
+    var h = parseInt(parts[0], 10);
+    var m = parts[1] || '00';
     if (isNaN(h)) return hhmm;
     var ampm = h >= 12 ? 'PM' : 'AM';
-    h = h % 12; if (h === 0) h = 12;
+    h = h % 12;
+    if (h === 0) h = 12;
     return h + ':' + m + ' ' + ampm;
 }
 
 function prettyDate(iso) {
     if (!iso) return '';
     var d = new Date(iso + 'T00:00:00');
-    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
     var diff = Math.round((d - today) / 86400000);
     if (diff === 1) return 'Tomorrow';
     if (diff === 0) return 'Today';
@@ -60,8 +92,11 @@ function formVals(form) {
     var out = {};
     $all('input, textarea, select', form).forEach(function (el) {
         if (!el.name) return;
-        if (el.type === 'checkbox') out[el.name] = el.checked;
-        else out[el.name] = el.value.trim();
+        if (el.type === 'checkbox') {
+            out[el.name] = el.checked;
+        } else {
+            out[el.name] = el.value.trim();
+        }
     });
     return out;
 }
@@ -71,7 +106,6 @@ function emptyHtml(icon, title, message, actionHtml) {
         '<div class="empty-title">' + esc(title) + '</div>' +
         '<p>' + esc(message) + '</p>' + (actionHtml || '') + '</div>';
 }
-
 
 // ==================== API Fetcher ====================
 
@@ -85,11 +119,21 @@ async function api(path, opts) {
         init.headers['Content-Type'] = 'application/json';
         init.body = JSON.stringify(opts.body);
     }
-    var res, text, data = null;
-    try { res = await fetch(url, init); }
-    catch (err) { toast('Network error: ' + err.message, 'error'); throw err; }
+    var res;
+    var text;
+    var data = null;
+    try {
+        res = await fetch(url, init);
+    } catch (err) {
+        toast('Network error: ' + err.message, 'error');
+        throw err;
+    }
     text = await res.text();
-    try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
+    try {
+        data = text ? JSON.parse(text) : null;
+    } catch (e) {
+        data = text;
+    }
     if (!res.ok) {
         var msg = (data && data.message) || (data && data.error) || ('HTTP ' + res.status);
         if (CONFIG.DEBUG) console.warn('API error:', path, msg);
@@ -99,7 +143,9 @@ async function api(path, opts) {
 }
 
 function ApiError(message, status, data) {
-    this.message = message; this.status = status; this.data = data;
+    this.message = message;
+    this.status = status;
+    this.data = data;
 }
 ApiError.prototype = Object.create(Error.prototype);
 ApiError.prototype.constructor = ApiError;
@@ -115,22 +161,49 @@ function toast(message, type) {
     root.appendChild(el);
     setTimeout(function () {
         el.style.opacity = '0';
-        setTimeout(function () { el.remove(); }, 300);
+        setTimeout(function () {
+            el.remove();
+        }, 300);
     }, 3000);
 }
 
 // ==================== Theme ====================
 
+var THEME_META_COLORS = { light: '#FCF9F5', dark: '#1A1410' };
+
+/** Sync every theme toggle button's pressed state + the browser UI colour. */
+function applyThemeUiState() {
+    var theme = document.documentElement.getAttribute('data-theme') || 'light';
+    $all('[data-action="toggle-theme"]').forEach(function (btn) {
+        btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+        btn.title = theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
+    });
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', THEME_META_COLORS[theme] || THEME_META_COLORS.light);
+}
+
 function toggleTheme() {
     var html = document.documentElement;
     var next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     html.setAttribute('data-theme', next);
-    try { localStorage.setItem('sociomart-theme', next); } catch (e) {}
+    try {
+        localStorage.setItem('sociomart-theme', next);
+    } catch (e) {}
+    applyThemeUiState();
 }
 function initTheme() {
-    var saved;
-    try { saved = localStorage.getItem('sociomart-theme'); } catch (e) {}
-    if (saved) document.documentElement.setAttribute('data-theme', saved);
+    var saved = null;
+    try {
+        saved = localStorage.getItem('sociomart-theme');
+    } catch (e) {}
+    if (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        // Sensible default: respect the OS preference until the user chooses.
+        saved = 'dark';
+    }
+    if (saved) {
+        document.documentElement.setAttribute('data-theme', saved);
+    }
+    applyThemeUiState();
 }
 
 // ==================== Modal ====================
@@ -140,7 +213,9 @@ function openModal(html) {
     root.innerHTML = '<div class="modal-backdrop"><div class="modal">' + html + '</div></div>';
     root.hidden = false;
     root.querySelector('.modal-backdrop').addEventListener('click', function (e) {
-        if (e.target === e.currentTarget) closeModal();
+        if (e.target === e.currentTarget) {
+            closeModal();
+        }
     });
 }
 function closeModal() {
@@ -156,9 +231,20 @@ function confirmModal(opts) {
         '<div class="modal-actions">' +
         '<button class="btn btn-outline" id="modalCancel">' + esc(opts.cancelLabel || 'Cancel') + '</button>' +
         '<button class="btn btn-primary" id="modalOk">' + esc(opts.okLabel || 'Confirm') + '</button>' +
-        '</div>');
-    $('#modalCancel').onclick = function () { closeModal(); if (opts.onCancel) opts.onCancel(); };
-    $('#modalOk').onclick = function () { closeModal(); if (opts.onOk) opts.onOk(); };
+        '</div>'
+    );
+    $('#modalCancel').onclick = function () {
+        closeModal();
+        if (opts.onCancel) {
+            opts.onCancel();
+        }
+    };
+    $('#modalOk').onclick = function () {
+        closeModal();
+        if (opts.onOk) {
+            opts.onOk();
+        }
+    };
 }
 
 // ==================== Bottom sheet (Screen 4A) ====================
@@ -184,33 +270,53 @@ function closeSheet() {
  */
 
 function getCart() {
-    try { return JSON.parse(localStorage.getItem('sociomart-cart')) || null; }
-    catch (e) { return null; }
+    try {
+        return JSON.parse(localStorage.getItem('sociomart-cart')) || null;
+    } catch (e) {
+        return null;
+    }
 }
 function saveCart(cart) {
-    if (!cart || !cart.items || !cart.items.length) localStorage.removeItem('sociomart-cart');
-    else localStorage.setItem('sociomart-cart', JSON.stringify(cart));
+    if (!cart || !cart.items || !cart.items.length) {
+        localStorage.removeItem('sociomart-cart');
+    } else {
+        localStorage.setItem('sociomart-cart', JSON.stringify(cart));
+    }
     updateCartBar();
 }
 function cartItemCount(cart) {
     cart = cart || getCart();
     if (!cart || !cart.items) return 0;
-    return cart.items.reduce(function (s, i) { return s + i.qty; }, 0);
+    return cart.items.reduce(function (s, i) {
+        return s + i.qty;
+    }, 0);
 }
 function cartTotal(cart) {
     cart = cart || getCart();
     if (!cart || !cart.items) return 0;
-    return cart.items.reduce(function (s, i) { return s + i.price * i.qty; }, 0);
+    return cart.items.reduce(function (s, i) {
+        return s + i.price * i.qty;
+    }, 0);
 }
-function clearCart() { saveCart(null); }
+function clearCart() {
+    saveCart(null);
+}
 
 function updateCartBar() {
     var bar = $('#viewOrderBar');
     if (!bar) return;
     var n = cartItemCount();
-    bar.hidden = n === 0;
+    var view = $('#view');
+    var hasStickyFooter = view && view.querySelector('.sticky-footer-bar');
+    bar.hidden = (n === 0) || !!hasStickyFooter;
     $('#vobCount').textContent = n;
+    var word = $('#vobItemWord');
+    if (word) word.textContent = (n === 1 ? 'item' : 'items');
     $('#vobTotal').textContent = money(cartTotal());
+    if (view) {
+        if (n === 0 || hasStickyFooter) view.classList.remove('has-cart-bar');
+        else view.classList.add('has-cart-bar');
+    }
 }
 
 /** Add an item, enforcing the single-kitchen constraint. onDone(committed) fires after. */
@@ -227,14 +333,22 @@ function addToCart(newItem, kitchen, onDone) {
             onOk: function () {
                 clearCart();
                 commitItem(newItem, kitchen);
-                if (onDone) onDone(true);
+                if (onDone) {
+                    onDone(true);
+                }
             },
-            onCancel: function () { if (onDone) onDone(false); }
+            onCancel: function () {
+                if (onDone) {
+                    onDone(false);
+                }
+            }
         });
         return;
     }
     commitItem(newItem, kitchen);
-    if (onDone) onDone(true);
+    if (onDone) {
+        onDone(true);
+    }
 }
 
 function commitItem(newItem, kitchen) {
@@ -246,8 +360,11 @@ function commitItem(newItem, kitchen) {
             i.scheduledDate === newItem.scheduledDate &&
             i.scheduledSlot === newItem.scheduledSlot;
     });
-    if (existing) existing.qty += newItem.qty;
-    else cart.items.push(newItem);
+    if (existing) {
+        existing.qty += newItem.qty;
+    } else {
+        cart.items.push(newItem);
+    }
     saveCart(cart);
     toast('Added to your order from ' + kitchen.displayName, 'success');
 }
@@ -260,7 +377,10 @@ function commitItem(newItem, kitchen) {
  */
 
 function requireAuth(onAuthenticated) {
-    if (state.user) { onAuthenticated(); return; }
+    if (state.user) {
+        onAuthenticated();
+        return;
+    }
     state.pendingAuthAction = onAuthenticated;
     openAuthModal();
 }
@@ -270,13 +390,14 @@ function openAuthModal() {
         '<div class="modal-icon">🔐</div>' +
         '<h3>Login required</h3>' +
         '<p>Enter your mobile number to continue. You can keep browsing freely.</p>' +
-        '<form id="authForm" style="margin-top:14px; text-align:left">' +
+        '<form id="authForm" class="mt-3">' +
         '<div class="form-group">' +
         '<label class="form-label" for="authMobile">Mobile number</label>' +
         '<input class="form-input" id="authMobile" name="mobileNumber" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" required>' +
         '</div>' +
         '<button class="btn btn-primary btn-block" type="submit" id="authSubmit">Log in</button>' +
-        '</form>');
+        '</form>'
+    );
     $('#authForm').addEventListener('submit', function (e) {
         e.preventDefault();
         handleAuthLogin();
@@ -285,7 +406,10 @@ function openAuthModal() {
 
 async function handleAuthLogin() {
     var mobile = $('#authMobile').value.trim();
-    if (!/^\d{10}$/.test(mobile)) { toast('Enter a valid 10-digit mobile number', 'error'); return; }
+    if (!/^\d{10}$/.test(mobile)) {
+        toast('Enter a valid 10-digit mobile number', 'error');
+        return;
+    }
     var btn = $('#authSubmit');
     btn.disabled = true;
     btn.innerHTML = '<span class="btn-spinner"></span> Logging in...';
@@ -296,8 +420,11 @@ async function handleAuthLogin() {
         toast('Welcome, ' + (me.name || 'neighbour') + '!', 'success');
         var action = state.pendingAuthAction;
         state.pendingAuthAction = null;
-        if (action) action();
-        else if (typeof render === 'function') render();
+        if (action) {
+            action();
+        } else if (typeof render === 'function') {
+            render();
+        }
     } catch (err) {
         btn.disabled = false;
         btn.textContent = 'Log in';

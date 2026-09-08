@@ -156,7 +156,17 @@ All endpoints return JSON. Errors always arrive as `{ "error": "<CODE>", "messag
 | GET /api/admin/enquiries | admin | List all enquiries |
 | GET /api/admin/analytics | admin | Platform analytics |
 
-## 5. Security Model
+## 5. Buyer Favourite Frontend Implementation
+
+- Heart buttons use `data-action="toggle-fav-kitchen"` with `data-kid` for kitchen ID
+- `toggleFavourite(type, id, btnEl)` in `app.js` calls `POST /api/favourites/{type}/{id}/toggle`
+- `FAV_CACHE` (client-side `Set`) stores favourited kitchen IDs and is kept in sync with backend responses
+- `loadFavSet()` loads favourites from `/api/favourites` on every navigation to ensure fresh state
+- On successful add/remove, the cache is updated, the button class/text/aria attributes are toggled, and a toast is shown
+- On the Favourites screen, the list re-renders immediately after a toggle
+- Duplicate rapid clicks are safe because the backend enforces uniqueness and returns the current state
+
+## 6. Security Model
 
 - Role-based access: BUYER, SELLER, ADMIN, SUPER_ADMIN
 - Buyer endpoints: require BUYER role
@@ -178,7 +188,7 @@ Verified boundaries:
 - Buyer → another buyer's order rejected
 - Seller cross-owner access rejected
 
-## 6. Testing
+## 7. Testing
 
 ### 6.1 Unit Tests (JUnit 5)
 
@@ -197,7 +207,7 @@ Verified boundaries:
 
 A PowerShell harness drives the real running application over HTTP — the same path a browser takes — and asserts behaviours. It is delta-based, so it can be re-run on a live instance any number of times without false failures.
 
-## 7. Deployment
+## 8. Deployment
 
 Hosting provider: Render.com — free Docker web service. The app is built from the existing Dockerfile (multi-stage Maven → JRE 21) and deployed as a Render Blueprint via render.yaml. One service serves both Buyer (/) and Seller (/seller.html) with a shared in-process H2 database — no split instances, no data desync.
 
@@ -209,14 +219,14 @@ Public URLs (single Render service):
 - https://sociomart-demo.onrender.com/admin.html — Admin console
 - https://sociomart-demo.onrender.com/api/kitchens — health probe
 
-## 8. Known Limitations
+## 9. Known Limitations
 
 - H2 in-memory database: custom data disappears on restart; demo data re-seeds on every boot (accepted V1/demo limitation)
 - Free tier cold-start delay (~120s) on Render — expected demo behaviour
 - No real OTP delivery (dev mode returns fixed OTP)
 - Mockito self-attaching warning on JDK 21 (non-fatal)
 
-## 9. UI/UX Fix (Latest)
+## 10. UI/UX Fix (Latest)
 
 **Issue:** Duplicate "Place Order" CTA on Order Summary, Confirm Order, and Payment screens — the cart bar (`#viewOrderBar`) overlapped with the sticky footer bar, creating two competing buttons.
 

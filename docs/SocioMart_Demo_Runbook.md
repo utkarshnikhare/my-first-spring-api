@@ -30,8 +30,14 @@ Tap any kitchen (e.g., Aarti Kitchen). Show:
 - "Pre-order" section (Aarti Kitchen has a Monday Puran Poli pre-order)
 - Service area message
 
-### 3. Favourite Kitchens
-Tap heart on 2–3 kitchens. Show max-3 limit message on 4th attempt.
+### 3. Favourite Kitchens (Add + Remove)
+1. Open All Kitchens (`/#/kitchens`).
+2. Tap the heart on 2–3 kitchens. Verify hearts fill (❤️).
+3. Open Favourite Kitchens. Verify all favourited kitchens appear.
+4. Return to All Kitchens, tap a filled heart. Verify it unfavourites (🤍) and disappears from Favourite Kitchens.
+5. Refresh the page. Verify the removed kitchen remains unfavourited.
+6. Favourite 3 kitchens, attempt a 4th. Verify the message: "You can favourite up to 3 kitchens only."
+7. Remove one favourite, favourite a different kitchen. Verify slot reuse.
 
 ### 4. Add to Cart & Place Order
 - Add a product (e.g., Poha ×1)

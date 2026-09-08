@@ -7,6 +7,11 @@ var state = {
     kitchenTab: 'LIVE_NOW',   // Screen 3 tabs
     favTab: 'kitchens',       // Screen 8 favourites tabs
     ordersTab: 'orders',      // Screen 8 orders/enquiries tabs
+    ordersFilter: 'all',      // Screen 8 order filter: all/active/completed/cancelled
+    payMethod: 'upi',         // Screen 6 demo payment method: upi/card/cod
+    payPreference: 'PAID',    // Confirm Order payment-status selection: PAID | WILL_PAY_LATER
+    placingOrder: false,      // idempotency guard for payment confirmation
+    lastOrder: null,          // placed order for the confirmation screen
     authMobile: '',
     pendingAuthAction: null,
     pendingCheckout: null
@@ -17,7 +22,9 @@ var routes = {
     '#/food': foodHubView,
     '#/kitchens': kitchensView,
     '#/summary': orderSummaryView,
+    '#/confirm': confirmOrderView,
     '#/payment': paymentView,
+    '#/payment-success': paymentSuccessView,
     '#/favourites': favouritesView,
     '#/orders': ordersView,
     '#/profile': profileView
@@ -27,6 +34,7 @@ function resolveRoute(hash) {
     if (routes[hash]) return { fn: routes[hash], arg: hash };
     if (hash.startsWith('#/category/')) return { fn: categoryView, arg: hash };
     if (hash.startsWith('#/kitchen/')) return { fn: kitchenPageView, arg: hash };
+    if (hash.startsWith('#/order/')) return { fn: orderDetailView, arg: hash };
     if (hash.startsWith('#/search/')) return { fn: comparisonView, arg: hash };
     return { fn: homeView, arg: '#/home' };
 }
@@ -42,6 +50,9 @@ async function render() {
         view.innerHTML = html || '';
         updateNav(hash);
         updateCartBar();
+        if (typeof applyThemeUiState === 'function') applyThemeUiState();
+        if (view.querySelector('.sticky-footer-bar')) view.classList.add('has-sticky-footer');
+        else view.classList.remove('has-sticky-footer');
         window.scrollTo(0, 0);
     } catch (err) {
         view.innerHTML = '<div class="view-enter">' + emptyHtml('⚠️', 'Something went wrong', err.message) + '</div>';
@@ -79,12 +90,14 @@ document.addEventListener('click', async function (e) {
                 if (panel) panel.hidden = !panel.hidden;
                 break;
             }
+            case 'toggle-theme': toggleTheme(); break;
             case 'set-mode': state.viewMode = t.dataset.mode; await render(); break;
             case 'set-cat-mode': state.catMode = t.dataset.mode; await render(); break;
             case 'switch-cat': navigate('#/category/' + t.dataset.cat); break;
             case 'set-kitchen-tab': state.kitchenTab = t.dataset.tab; await render(); break;
             case 'set-fav-tab': state.favTab = t.dataset.tab; await render(); break;
             case 'set-orders-tab': state.ordersTab = t.dataset.tab; await render(); break;
+            case 'set-orders-filter': state.ordersFilter = t.dataset.filter; await render(); break;
             case 'open-login': openAuthModal(); break;
             case 'read-more': {
                 var full = decodeURIComponent(t.dataset.full || '');
@@ -107,13 +120,15 @@ document.addEventListener('click', async function (e) {
             case 'cart-qty': await cartQty(Number(t.dataset.idx), Number(t.dataset.dir)); break;
             case 'cart-remove': await cartRemove(Number(t.dataset.idx)); break;
             case 'go-checkout': await goCheckout(); break;
-            case 'have-paid': await submitOrder(true); break;
-            case 'pay-later': await submitOrder(false); break;
-            case 'copy-upi': {
-                try { await navigator.clipboard.writeText(t.dataset.upi); toast('UPI ID copied', 'success'); }
-                catch (e4) { toast('Copy failed — long-press to copy', 'error'); }
-                break;
-            }
+            case 'go-payment': navigate('#/payment'); break;
+            case 'place-order-paid': await placeOrderWithStatus('PAID'); break;
+            case 'place-order-later': await placeOrderWithStatus('WILL_PAY_LATER'); break;
+            case 'select-pay-method': state.payMethod = t.dataset.method; await render(); break;
+            case 'select-pay-status': // Confirm Order: Paid / Will Pay Later (UI selection only)
+                state.payPreference = t.dataset.status === 'WILL_PAY_LATER' ? 'WILL_PAY_LATER' : 'PAID';
+                await render(); break;
+            case 'place-order': await placeOrderWithStatus(state.payPreference || 'PAID'); break;
+            case 'confirm-payment': await confirmPayment(t); break;
             case 'logout': {
                 try { await api('/api/auth/logout', { method: 'POST' }); } catch (e5) {}
                 state.user = null;
@@ -123,7 +138,6 @@ document.addEventListener('click', async function (e) {
                 break;
             }
             case 'toggle-fav-kitchen': await toggleFavourite('kitchen', Number(t.dataset.kid), t); break;
-            case 'toggle-fav-product': await toggleFavourite('product', Number(t.dataset.pid), t); break;
         }
     } catch (err) {
         toast(err.message, 'error');
@@ -137,11 +151,21 @@ async function toggleFavourite(type, id, btnEl) {
     var doToggle = async function () {
         try {
             var resp = await api('/api/favourites/' + type + '/' + id + '/toggle', { method: 'POST' });
+            // Keep the client-side favourites cache in sync so every heart on the
+            // page (and the Favourites screen) reflects the new state immediately.
+            if (FAV_CACHE) {
+                if (resp.favourited) FAV_CACHE.add(String(id));
+                else FAV_CACHE.delete(String(id));
+            }
             if (btnEl) {
                 btnEl.classList.toggle('faved', resp.favourited);
                 btnEl.textContent = resp.favourited ? '❤️' : '🤍';
+                btnEl.setAttribute('aria-pressed', resp.favourited ? 'true' : 'false');
+                btnEl.setAttribute('aria-label', (resp.favourited ? 'Remove from favourites' : 'Save to favourites'));
             }
             toast(resp.favourited ? ('Saved ' + label + ' to favourites') : ('Removed from favourites'), 'success');
+            // On the Favourites screen the list itself must update immediately.
+            if (location.hash === '#/favourites' && type === 'kitchen') await render();
         } catch (err) {
             if (!(err instanceof ApiError && err.status === 401)) toast(err.message, 'error');
         }

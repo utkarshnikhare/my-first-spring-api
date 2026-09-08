@@ -171,12 +171,21 @@ Buyers can send enquiries to any kitchen via the "Enquire" button. Enquiries app
 Buyer Favourite Kitchens:
 - Maximum 3 favourite kitchens
 - Add using the heart button (🤍 → ❤️)
-- Filled heart (❤️) removes the favourite
-- Removed kitchen disappears from Favourite Kitchens
+- Filled heart (❤️) removes the favourite — clicking the filled heart unfavourites/removes it
+- Removed kitchen disappears from Favourite Kitchens immediately and after refresh/reload
+- After removal, the slot becomes reusable — buyer can favourite another kitchen
 - Fourth favourite is prevented server-side with the message: "You can favourite up to 3 kitchens only."
 - V1 does NOT include Favourite Food Items
+- State remains consistent across All Kitchens, Favourite Kitchens, and Kitchen detail
+- Duplicate favourite clicks are safe — backend enforces one favourite per buyer+kitchen
 
 The Favourites screen shows saved kitchens with quick links to their pages. A horizontal chip row on Home and Food Hub shows up to 6 favourite kitchens.
+
+Frontend favourite implementation:
+- `toggle-fav-kitchen` data-action on heart buttons
+- `FAV_CACHE` (client-side Set) keeps heart states in sync across all views
+- `loadFavSet()` loads favourites from `/api/favourites` on navigation
+- Removal updates the cache and re-renders the Favourites list immediately
 
 ### 2.20 Profile
 
@@ -516,6 +525,8 @@ Major verified categories:
 ## 16. Final Release Verification
 
 Final release verification covered:
+- Favourite Kitchen add/remove fix (backend persistence + frontend FAV_CACHE sync)
+- Favourite max-3 enforcement and slot reuse
 - UI fix (duplicate Place Order CTA — cart bar hidden on sticky-footer screens)
 - Tests (13/13 unit tests pass)
 - Compile (mvnw clean compile)
