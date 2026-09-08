@@ -256,7 +256,25 @@ Server guarantees:
 - Duplicate-order protection — same buyer+kitchen+details within window rejected HTTP 400
 - Authorization — buyer can only access own orders
 
-## 7. Payment — Final V1 Model
+## 7. Historical Order Price Immutability
+
+Once an order is placed, its transaction-time unit price, quantity, line total, and order total are immutable.
+
+- Changing the current offering/catalogue price does NOT modify any historical order.
+- Historical orders retain the exact price that existed when each order was created.
+- New orders always use the current catalogue price at the time of order creation.
+- Admin GMV/order value is calculated from persisted historical order totals, not from current offering prices.
+- Seller historical order views use the order's transaction snapshot.
+- Buyer historical order views use the order's transaction snapshot.
+
+Example:
+- Offering price = ₹20 → Buyer orders 100 units → Order total = ₹2,000
+- Seller changes offering price to ₹30
+- Historical order remains ₹2,000
+- New order at ₹30 × 100 = ₹3,000
+- Admin GMV for these two orders = ₹5,000
+
+## 8. Payment — Final V1 Model
 
 Final V1 payment model is **PAYMENT STATUS RECORDING ONLY**.
 

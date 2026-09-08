@@ -188,7 +188,27 @@ Verified boundaries:
 - Buyer → another buyer's order rejected
 - Seller cross-owner access rejected
 
-## 7. Testing
+## 7. Order Price Immutability
+
+When an order is created, the current offering price is snapshotted into the order line item at transaction time:
+
+- `OrderItem.price` stores the unit price at order creation
+- `Order.totalAmount` is calculated from the snapshotted `OrderItem.price` values
+- Changing a `Product.price` (catalogue price) does NOT cascade to existing `OrderItem` or `Order` records
+- No JPA cascade, entity listener, database trigger, or frontend recalculation modifies historical order prices
+
+Read paths that use persisted snapshots:
+- Buyer order history: `order.totalAmount` + `orderItem.price`
+- Buyer order detail: `order.totalAmount` + `orderItem.price`
+- Seller order list: `order.totalAmount`
+- Seller order drill-down: `orderItem.price` + `orderItem.quantity`
+- Seller earnings: `order.totalAmount` + `orderItem.price`
+- Admin order list: `order.totalAmount` + `orderItem.price`
+- Admin GMV/order value: `sum(order.totalAmount)` — never recalculated from current `Product.price`
+
+New orders always read the current `Product.price` at draft/order creation time.
+
+## 9. Testing
 
 ### 6.1 Unit Tests (JUnit 5)
 
@@ -207,7 +227,7 @@ Verified boundaries:
 
 A PowerShell harness drives the real running application over HTTP — the same path a browser takes — and asserts behaviours. It is delta-based, so it can be re-run on a live instance any number of times without false failures.
 
-## 8. Deployment
+## 10. Deployment
 
 Hosting provider: Render.com — free Docker web service. The app is built from the existing Dockerfile (multi-stage Maven → JRE 21) and deployed as a Render Blueprint via render.yaml. One service serves both Buyer (/) and Seller (/seller.html) with a shared in-process H2 database — no split instances, no data desync.
 
@@ -219,14 +239,14 @@ Public URLs (single Render service):
 - https://sociomart-demo.onrender.com/admin.html — Admin console
 - https://sociomart-demo.onrender.com/api/kitchens — health probe
 
-## 9. Known Limitations
+## 11. Known Limitations
 
 - H2 in-memory database: custom data disappears on restart; demo data re-seeds on every boot (accepted V1/demo limitation)
 - Free tier cold-start delay (~120s) on Render — expected demo behaviour
 - No real OTP delivery (dev mode returns fixed OTP)
 - Mockito self-attaching warning on JDK 21 (non-fatal)
 
-## 10. UI/UX Fix (Latest)
+## 12. UI/UX Fix (Latest)
 
 **Issue:** Duplicate "Place Order" CTA on Order Summary, Confirm Order, and Payment screens — the cart bar (`#viewOrderBar`) overlapped with the sticky footer bar, creating two competing buttons.
 

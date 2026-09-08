@@ -59,7 +59,17 @@ Login as seller. Show:
 ### 7. Seller Orders
 Walk through order status transitions (PENDING → CONFIRMED → DELIVERED).
 
-### 8. Admin Dashboard
+### 8. Seller Price Change → Historical Order Immutability
+1. As seller, open a product (e.g., Poha). Note its current price (e.g., ₹20).
+2. Create a buyer order for that product at ₹20.
+3. Verify the order shows ₹20.
+4. As seller, change the product price to ₹30.
+5. Reload the buyer order. Verify it STILL shows ₹20.
+6. Create a NEW buyer order at ₹30. Verify it shows ₹30.
+7. Verify Admin GMV = ₹20 + ₹30 = ₹50 for these two orders combined.
+8. Historical orders never change when catalogue prices change.
+
+### 9. Admin Dashboard
 Login as admin. Show:
 - Dashboard totals (orders, paid/WPL breakdown, buyers, sellers)
 - Buyers, Sellers, Kitchens, Offerings, Orders, Enquiries views
