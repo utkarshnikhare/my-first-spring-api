@@ -384,8 +384,9 @@ public class AdminService {
             im.put("productName", it.getProduct() != null ? it.getProduct().getName() : null);
             im.put("quantity", it.getQuantity());
             im.put("price", it.getPrice());
-            im.put("lineTotal", it.getPrice() != null && it.getQuantity() != null ? it.getPrice().multiply(BigDecimal.valueOf(it.getQuantity())) : BigDecimal.ZERO);
-            im.put("productCurrentPrice", it.getProduct() != null ? it.getProduct().getPrice() : null);
+                         im.put("lineTotal", it.getPrice() != null && it.getQuantity() != null ? it.getPrice().multiply(BigDecimal.valueOf(it.getQuantity())) : BigDecimal.ZERO);
+                         im.put("total", it.getPrice() != null && it.getQuantity() != null ? it.getPrice().multiply(BigDecimal.valueOf(it.getQuantity())) : BigDecimal.ZERO);
+                         im.put("productCurrentPrice", it.getProduct() != null ? it.getProduct().getPrice() : null);
             return im;
         }).collect(Collectors.toList());
         m.put("items", items);
