@@ -73,15 +73,18 @@ public class SellerAppService {
             throw new SellerNotAuthorizedException("Not your product");
         if (product.getRemainingQuantity() == null)
             throw new IllegalArgumentException("This item has no quantity limit");
-        // Atomic UPDATE: guards live in the SQL, so concurrent stepper clicks can
-        // never lose an increment, go below 0, or exceed the advertised maximum.
         int updated = productRepository.adjustRemainingQuantity(productId, delta);
         if (updated == 0)
             throw new IllegalArgumentException(
                     "Adjustment rejected: quantity cannot go below 0 or above the maximum available");
         Product fresh = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
-        return toProductDto(fresh);
+        if (fresh.getRemainingQuantity() != null && fresh.getRemainingQuantity() <= 0) {
+            fresh.setAvailableToday(false);
+        } else if (fresh.getRemainingQuantity() != null && fresh.getRemainingQuantity() > 0 && !fresh.getAvailableToday()) {
+            fresh.setAvailableToday(true);
+        }
+        return toProductDto(productRepository.save(fresh));
     }
 
     @Transactional
@@ -91,6 +94,7 @@ public class SellerAppService {
         if (!product.getKitchen().getSeller().getId().equals(seller.getId()))
             throw new SellerNotAuthorizedException("Not your product");
         product.setRemainingQuantity(0);
+        product.setAvailableToday(false);
         return toProductDto(productRepository.save(product));
     }
     @Transactional

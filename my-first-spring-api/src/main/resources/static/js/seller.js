@@ -141,8 +141,9 @@ async function sellerCreateView() {
     h += '<div class="form-group"><label class="form-label">Short Description</label><textarea class="form-textarea" name="description">' + esc(t.description || '') + '</textarea></div>';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Price (Rs) <span class="req">*</span></label><input class="form-input" name="price" type="number" value="' + (t.price || '') + '" placeholder="100" required></div>';
     h += '<div class="form-group"><label class="form-label">Unit <span class="req">*</span></label><select class="form-select" name="priceUnit"><option value="Per Piece">Per Piece</option><option value="Per Plate">Per Plate</option><option value="Per Box">Per Box</option></select></div></div>';
-    h += '<div class="form-group"><label class="form-label">Availability <span class="req">*</span></label><div class="radio-group"><label class="radio-option selected" data-action="set-availability" data-val="today">Today</label><label class="radio-option" data-action="set-availability" data-val="tomorrow">Tomorrow</label></div></div>';
+    h += '<div class="form-group"><label class="form-label">Availability <span class="req">*</span></label><div class="radio-group"><label class="radio-option selected" data-action="set-availability" data-val="today">Today</label><label class="radio-option" data-action="set-availability" data-val="tomorrow">Tomorrow</label><label class="radio-option" data-action="set-availability" data-val="choose">Choose Date</label></div></div>';
     h += '<input type="hidden" name="availableDate" id="availDate" value="' + sellerDate('today') + '">';
+    h += '<div class="section-gap" id="chooseDateRow" hidden><input type="date" class="sort-select w-full" data-action="set-availability-date" value="' + sellerDate('today') + '"></div>';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open <span class="req">*</span></label><input class="form-input" name="orderWindowStart" type="time" value="08:00"></div>';
     h += '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label><input class="form-input" name="orderWindowEnd" type="time" value="10:00"></div></div>';
     h += '<div class="form-group"><label class="form-label">Quantity Available <span class="req">*</span></label><input class="form-input" name="maxQuantity" type="number" placeholder="Blank for unlimited"></div>';
@@ -236,7 +237,7 @@ async function sellerOrderDetailView(productId) {
                 h += '<div class="order-detail-card ' + (c.cancelled ? 'cancelled' : '') + '">';
                 h += '<div class="odc-top"><span class="odc-order-id">#' + esc(c.orderNumber || ('SM-' + c.orderId)) + '</span><span class="odc-status-pill ' + statusClass + '">' + statusLabel + '</span></div>';
                 h += '<div class="odc-buyer-row"><span class="odc-buyer">' + esc(c.buyerName || 'Unknown') + '</span><span class="odc-qty">×' + c.quantity + ' ' + esc(c.unit || 'plate') + (c.quantity > 1 ? 's' : '') + '</span></div>';
-                if (c.buyerMobile) { h += '<div class="odc-mobile">📱 ' + esc(c.buyerMobile) + '</div>'; }
+                if (!c.paid && !c.cancelled) { h += '<button class="btn btn-primary btn-sm btn-block btn-mt-sm" data-action="mark-paid" data-oid="' + c.orderId + '">Mark as Paid</button>'; }
                 h += '<div class="odc-items"><div class="odc-item-name">' + esc(detail.productName) + '</div>';
                 if (c.pricePerUnit) { h += '<div class="odc-item-meta">' + money(c.pricePerUnit) + ' × ' + c.quantity + '</div>'; }
                 if (c.totalAmount) { h += '<div class="odc-item-total">Total: ' + money(c.totalAmount) + '</div>'; }
@@ -375,12 +376,21 @@ document.addEventListener('click', async function (e) {
                 break;
             }
             case 'toggle-favourite': { var tg = $('#favToggle'); if (tg) tg.classList.toggle('on'); break; }
+            case 'mark-paid': {
+                var oid = Number(t.dataset.oid);
+                if (!confirm('Mark this order as PAID?')) return;
+                await api('/api/seller/orders/' + oid + '/payment-status', { method: 'PATCH' });
+                toast('Order marked as paid', 'success');
+                await sellerRender();
+                break;
+            }
             case 'preview-offering': toast('Preview mode', 'info'); break;
             case 'preview-kitchen': toast('Opening kitchen preview...', 'info'); break;
             case 'add-photo': toast('Photo upload (demo)', 'info'); break;
             case 'upload-avatar': toast('Avatar upload (demo)', 'info'); break;
             case 'seller-retry': location.reload(); break;
-            case 'set-availability': $all('.radio-option').forEach(function (el) { el.classList.remove('selected'); }); t.classList.add('selected'); var av = $('#availDate'); if (av) av.value = sellerDate(t.dataset.val || 'today'); break;
+             case 'set-availability': $all('.radio-option').forEach(function (el) { el.classList.remove('selected'); }); t.classList.add('selected'); var av = $('#availDate'); if (av) av.value = sellerDate(t.dataset.val || 'today'); var cdr = $('#chooseDateRow'); if (cdr) { var val = t.dataset.val || 'today'; cdr.hidden = !(val === 'choose'); if (val === 'choose' && av) av.value = av.value; } break;
+             case 'set-availability-date': { var picker = t; var av2 = $('#availDate'); if (av2 && picker && picker.value) av2.value = picker.value; break; }
         }
     } catch (err) { toast(err.message, 'error'); }
 });

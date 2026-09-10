@@ -102,4 +102,10 @@ public class SellerController {
         User seller = requireSeller(session);
         return ResponseEntity.ok(sellerService.updateOrderStatus(orderId, request.getOrderStatus(), seller));
     }
+
+    @PatchMapping("/orders/{orderId}/payment-status")
+    public ResponseEntity<OrderDto> markOrderAsPaid(@PathVariable Long orderId, HttpSession session) {
+        User seller = requireSeller(session);
+        return ResponseEntity.ok(sellerService.markOrderAsPaid(orderId, seller));
+    }
 }

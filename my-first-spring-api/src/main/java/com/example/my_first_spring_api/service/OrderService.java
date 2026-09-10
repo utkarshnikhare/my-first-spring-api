@@ -325,6 +325,22 @@ public class OrderService {
         return toOrderDto(order);
     }
 
+    public OrderDto markOrderAsPaid(Long orderId, User seller) {
+        Order order = orderRepository.findById(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
+        if (order.getKitchen() == null || !order.getKitchen().getSeller().getId().equals(seller.getId())) {
+            throw new SellerNotAuthorizedException("Not authorized");
+        }
+        if (order.getOrderStatus() == OrderStatus.CANCELLED) {
+            throw new IllegalArgumentException("This order is already cancelled.");
+        }
+        order.setPaymentStatus(PaymentStatus.PAID);
+        if (order.getOrderStatus() == OrderStatus.ORDERED) {
+            order.setOrderStatus(OrderStatus.CONFIRMED);
+        }
+        orderRepository.save(order);
+        return toOrderDto(order);
+    }
+
     @Transactional(readOnly = true)
     public List<OrderDto> getSellerOrders(User seller) {
         List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
@@ -440,6 +456,11 @@ public class OrderService {
                 int updated = productRepository.consumeStock(e.getKey(), e.getValue());
                 if (updated == 0) {
                     throw new IllegalArgumentException("Not enough stock left for '" + product.getName() + "'. Please reduce quantity.");
+                }
+                Product fresh = productRepository.findById(e.getKey()).orElse(null);
+                if (fresh != null && fresh.getRemainingQuantity() != null && fresh.getRemainingQuantity() <= 0) {
+                    fresh.setAvailableToday(false);
+                    productRepository.save(fresh);
                 }
             } else {
                 product.setBookedQuantity((product.getBookedQuantity() == null ? 0 : product.getBookedQuantity()) + e.getValue());

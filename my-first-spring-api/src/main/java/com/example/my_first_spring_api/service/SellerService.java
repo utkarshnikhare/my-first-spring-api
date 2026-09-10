@@ -15,6 +15,7 @@ import com.example.my_first_spring_api.model.OrderStatus;
 import com.example.my_first_spring_api.model.Product;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.repository.KitchenRepository;
+import com.example.my_first_spring_api.repository.OrderItemRepository;
 import com.example.my_first_spring_api.repository.ProductRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -29,16 +30,19 @@ public class SellerService {
 
     private final KitchenRepository kitchenRepository;
     private final ProductRepository productRepository;
+    private final OrderItemRepository orderItemRepository;
     private final OrderService orderService;
     private final FeatureService featureService;
 
     @Autowired
     public SellerService(KitchenRepository kitchenRepository,
                          ProductRepository productRepository,
+                         OrderItemRepository orderItemRepository,
                          OrderService orderService,
                          FeatureService featureService) {
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
+        this.orderItemRepository = orderItemRepository;
         this.orderService = orderService;
         this.featureService = featureService;
     }
@@ -107,6 +111,27 @@ public class SellerService {
         java.time.LocalDate effectiveDate = dto.getAvailableDate() != null
                 ? dto.getAvailableDate() : product.getAvailableDate();
         assertFeatureCompliance(seller, effectivePreorder, effectiveDate, product.getName());
+
+        boolean hasOrders = !orderItemRepository.findByProductId(productId).isEmpty();
+        if (hasOrders) {
+            if (dto.getName() != null && !dto.getName().isBlank() && !dto.getName().equals(product.getName()))
+                throw new IllegalArgumentException("Cannot rename item after orders exist.");
+            if (dto.getPrice() != null && !dto.getPrice().equals(product.getPrice()))
+                throw new IllegalArgumentException("Cannot change price after orders exist.");
+            if (dto.getPriceUnit() != null && !dto.getPriceUnit().equals(product.getPriceUnit()))
+                throw new IllegalArgumentException("Cannot change unit after orders exist.");
+            if (dto.getAvailableDate() != null && !dto.getAvailableDate().equals(product.getAvailableDate()))
+                throw new IllegalArgumentException("Cannot change availability date after orders exist.");
+            if (dto.getOrderWindowStart() != null && !dto.getOrderWindowStart().equals(product.getOrderWindowStart()))
+                throw new IllegalArgumentException("Cannot change order window start after orders exist.");
+            if (dto.getOrderWindowEnd() != null && !dto.getOrderWindowEnd().equals(product.getOrderWindowEnd()))
+                throw new IllegalArgumentException("Cannot change order window end after orders exist.");
+            if (dto.getCutoffTime() != null && !dto.getCutoffTime().equals(product.getCutoffTime()))
+                throw new IllegalArgumentException("Cannot change cutoff time after orders exist.");
+            if (dto.getReadyByTime() != null && !dto.getReadyByTime().equals(product.getReadyByTime()))
+                throw new IllegalArgumentException("Cannot change ready-by time after orders exist.");
+        }
+
         if (dto.getName() != null && !dto.getName().isBlank()) product.setName(dto.getName());
         if (dto.getDescription() != null) product.setDescription(dto.getDescription());
         if (dto.getPrice() != null) product.setPrice(dto.getPrice());
@@ -122,12 +147,10 @@ public class SellerService {
         if (dto.getAvailableDate() != null) product.setAvailableDate(dto.getAvailableDate());
         if (dto.getOrderWindowStart() != null) product.setOrderWindowStart(dto.getOrderWindowStart());
         if (dto.getOrderWindowEnd() != null) product.setOrderWindowEnd(dto.getOrderWindowEnd());
-        if (dto.getCutoffTime() != null) product.setCutoffTime(dto.getCutoffTime());
+        if (dto.getCutoffTime() != null) product.setCutoffTime(validatedCutoff(dto.getCutoffTime()));
         if (dto.getReadyByTime() != null) product.setReadyByTime(dto.getReadyByTime());
         if (dto.getMaxQuantity() != null) product.setMaxQuantity(dto.getMaxQuantity());
         if (dto.getIsPreorder() != null) product.setIsPreorder(dto.getIsPreorder());
-        if (dto.getCutoffTime() != null) product.setCutoffTime(validatedCutoff(dto.getCutoffTime()));
-        if (dto.getReadyByTime() != null) product.setReadyByTime(dto.getReadyByTime());
         return toProductDto(productRepository.save(product));
     }
 
@@ -155,6 +178,10 @@ public class SellerService {
 
     public OrderDto updateOrderStatus(Long orderId, OrderStatus newStatus, User seller) {
         return orderService.updateOrderStatus(orderId, newStatus, seller);
+    }
+
+    public OrderDto markOrderAsPaid(Long orderId, User seller) {
+        return orderService.markOrderAsPaid(orderId, seller);
     }
 
     private Kitchen getOwnedKitchen(Long kitchenId, User seller) {
