@@ -2,6 +2,7 @@ package com.example.my_first_spring_api.service;
 
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
+import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -243,6 +244,7 @@ public class AdminService {
             m.put("society", k.getSociety());
             m.put("building", k.getBuilding());
             m.put("area", k.getSociety());
+            m.put("serviceAreas", k.getServiceAreas());
             m.put("availableToday", k.getAvailableToday());
             m.put("imageUrl", k.getImageUrl());
             m.put("instagramLink", k.getInstagramLink());
@@ -253,6 +255,21 @@ public class AdminService {
             m.put("hasLiveOfferings", liveCount > 0);
             return m;
         }).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public Map<String, Object> updateKitchenServiceAreas(Long kitchenId, String serviceAreas) {
+        Kitchen kitchen = kitchenRepository.findById(kitchenId)
+                .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
+        kitchen.setServiceAreas(serviceAreas);
+        kitchenRepository.save(kitchen);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", kitchen.getId());
+        out.put("name", kitchen.getName());
+        out.put("displayName", kitchen.getDisplayName());
+        out.put("serviceAreas", kitchen.getServiceAreas());
+        out.put("society", kitchen.getSociety());
+        return out;
     }
 
     // ==================== Offerings ====================

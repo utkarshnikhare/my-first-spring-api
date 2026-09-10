@@ -186,6 +186,66 @@ async function adminAction(action, t) {
                 await adminRender();
                 break;
             }
+            case 'admin-edit-service-areas': {
+                var kid = Number(t.dataset.kid);
+                var kitchen = await api('/api/admin/kitchens');
+                var k = kitchen.find(function (x) { return x.id === kid; });
+                if (!k) { toast('Kitchen not found', 'error'); break; }
+                var currentAreas = (k.serviceAreas || k.area || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+                var h = '<div class="view-enter"><div class="page-head"><h1>Service Areas</h1></div>' +
+                    '<p class="muted small">Manage delivery societies for <strong>' + esc(k.displayName || k.name) + '</strong>.</p>' +
+                    '<div class="form-group"><label class="form-label">Service Areas</label>' +
+                    '<div id="adminServiceAreaList"></div>' +
+                    '<div class="form-row-2" style="margin-top:8px"><input class="form-input" id="adminNewServiceArea" placeholder="Add society (e.g. Lohegaon)"><button class="btn btn-secondary btn-sm" type="button" data-action="admin-add-service-area">Add</button></div>' +
+                    '<input type="hidden" id="adminServiceAreasInput" value="' + esc(k.serviceAreas || k.area || '') + '">' +
+                    '</div>' +
+                    '<div class="admin-actions">' +
+                    '<button class="btn btn-primary btn-block" type="button" data-action="admin-save-service-areas" data-kid="' + kid + '">Save Changes</button>' +
+                    '<button class="btn btn-secondary btn-block" type="button" data-action="admin-cancel-edit-service-areas">Cancel</button>' +
+                    '</div></div>';
+                viewEl().innerHTML = h;
+                renderAdminServiceAreas(currentAreas);
+                break;
+            }
+            case 'admin-add-service-area': {
+                var input = $('#adminNewServiceArea');
+                var val = input && input.value ? input.value.trim() : '';
+                if (!val) return;
+                var list = $('#adminServiceAreaList');
+                var existing = list ? list.querySelectorAll('.sa-pill') : [];
+                var found = false;
+                existing.forEach(function (el) { if (el.dataset.name && el.dataset.name.toLowerCase() === val.toLowerCase()) found = true; });
+                if (found) { toast('Society already added', 'error'); return; }
+                if (!list) break;
+                var pill = document.createElement('span');
+                pill.className = 'sa-pill';
+                pill.dataset.name = val;
+                pill.innerHTML = esc(val) + ' <button type="button" data-action="admin-remove-service-area" data-name="' + esc(val) + '" aria-label="Remove">×</button>';
+                list.appendChild(pill);
+                input.value = '';
+                updateAdminServiceAreasInput();
+                break;
+            }
+            case 'admin-remove-service-area': {
+                var name = t.dataset.name;
+                var pill = t.closest('.sa-pill');
+                if (pill) pill.remove();
+                updateAdminServiceAreasInput();
+                break;
+            }
+            case 'admin-save-service-areas': {
+                var kid2 = Number(t.dataset.kid);
+                var input2 = $('#adminServiceAreasInput');
+                var areas = input2 ? input2.value : '';
+                await api('/api/admin/kitchens/' + kid2 + '/service-areas', { method: 'PATCH', body: { serviceAreas: areas } });
+                toast('Service areas saved', 'success');
+                await adminRender();
+                break;
+            }
+            case 'admin-cancel-edit-service-areas': {
+                await adminRender();
+                break;
+            }
         }
     } catch (err) { toast(err.message, 'error'); }
 }
@@ -315,12 +375,16 @@ async function adminKitchensView() {
         return h + '<div class="admin-empty">No kitchens yet.</div></div>';
     }
     list.forEach(function (k) {
+        var areas = k.serviceAreas || k.area || '';
+        var areaText = areas ? areas.split(',').map(function (a) { return a.trim(); }).filter(Boolean).join(', ') : '';
         h += '<div class="seller-row">' +
             '<div class="sr-avatar">🏪</div>' +
             '<div class="sr-body">' +
             '<div class="sr-name">' + esc(k.displayName || k.name) + ' <span class="pill pill-' + (k.hasLiveOfferings ? 'green' : 'grey') + '">' + (k.hasLiveOfferings ? 'Live' : 'No live items') + '</span></div>' +
             '<div class="sr-meta">Seller: ' + esc(k.sellerName || '—') + ' · ' + esc(k.area || '') + '</div>' +
             '<div class="sr-meta">Offerings: ' + (k.liveOfferings || 0) + ' live / ' + (k.totalOfferings || 0) + ' total</div>' +
+            (areaText ? '<div class="sr-meta">Service Areas: ' + esc(areaText) + '</div>' : '<div class="sr-meta muted small">No service areas configured</div>') +
+            '<button class="btn btn-secondary btn-sm" type="button" data-action="admin-edit-service-areas" data-kid="' + k.id + '">Manage Service Areas</button>' +
             '</div></div>';
     });
     h += '</div>';
@@ -507,6 +571,33 @@ function renderTrafficContent(data, period) {
         '<div class="flex-1 min-140"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#16A34A;margin-right:6px;vertical-align:middle"></span> Sellers</div>' +
         '</div></div>';
     container.innerHTML = h;
+}
+
+function renderAdminServiceAreas(areas) {
+    var list = $('#adminServiceAreaList');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!areas || !areas.length) return;
+    areas.forEach(function (area) {
+        var pill = document.createElement('span');
+        pill.className = 'sa-pill';
+        pill.dataset.name = area;
+        pill.innerHTML = esc(area) + ' <button type="button" data-action="admin-remove-service-area" data-name="' + esc(area) + '" aria-label="Remove">×</button>';
+        list.appendChild(pill);
+    });
+}
+
+function updateAdminServiceAreasInput() {
+    var list = $('#adminServiceAreaList');
+    var input = $('#adminServiceAreasInput');
+    if (!list || !input) return;
+    var pills = list.querySelectorAll('.sa-pill');
+    var areas = [];
+    pills.forEach(function (pill) {
+        var name = pill.dataset.name;
+        if (name) areas.push(name);
+    });
+    input.value = areas.join(',');
 }
 
 function periodLabel(period) {

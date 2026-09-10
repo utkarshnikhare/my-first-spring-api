@@ -48,6 +48,13 @@ public class AdminController {
         return ResponseEntity.ok(adminService.kitchens());
     }
 
+    @PatchMapping("/kitchens/{kitchenId}/service-areas")
+    public ResponseEntity<Map<String, Object>> updateKitchenServiceAreas(@PathVariable Long kitchenId,
+                                                                        @RequestBody Map<String, String> body) {
+        String serviceAreas = body != null ? body.get("serviceAreas") : null;
+        return ResponseEntity.ok(adminService.updateKitchenServiceAreas(kitchenId, serviceAreas));
+    }
+
     @GetMapping("/offerings")
     public ResponseEntity<List<Map<String, Object>>> offerings() {
         return ResponseEntity.ok(adminService.offerings());
