@@ -19,7 +19,7 @@ async function sellerRender() {
     var view = viewEl();
     view.innerHTML = '<div class="page-loading"><div class="spinner"></div></div>';
     closeSheet();
-    try { view.innerHTML = await route.fn(route.arg) || ''; sellerUpdateNav(hash); if (typeof applyThemeUiState === 'function') applyThemeUiState(); window.scrollTo(0, 0); }
+    try { view.innerHTML = await route.fn(route.arg) || ''; sellerUpdateNav(hash); if (typeof applyThemeUiState === 'function') applyThemeUiState(); window.scrollTo(0, 0); var saInput = $('#serviceAreasInput'); if (saInput) renderServiceAreas(saInput.value); }
     catch (err) { view.innerHTML = '<div class="view-enter">' + emptyHtml('⚠️', 'Something went wrong', err.message) + '</div>'; }
 }
 function sellerUpdateNav(hash) {
@@ -27,6 +27,40 @@ function sellerUpdateNav(hash) {
     var key = hash === '#/home' ? 'home' : hash === '#/kitchen' ? 'kitchen' : (hash === '#/orders' || hash.startsWith('#/order-detail/')) ? 'orders' : hash === '#/history' ? 'history' : hash === '#/earnings' ? 'earnings' : null;
     var el = document.querySelector('[data-nav="' + (key || '') + '"]');
     if (el) el.classList.add('active');
+}
+
+function renderServiceAreas(serviceAreas) {
+    var list = $('#serviceAreaList');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!serviceAreas) return;
+    serviceAreas.split(',').forEach(function (area) {
+        area = area.trim();
+        if (!area) return;
+        var pill = document.createElement('span');
+        pill.className = 'sa-pill';
+        pill.dataset.name = area;
+        pill.innerHTML = esc(area) + ' <button type="button" data-action="remove-service-area" data-name="' + esc(area) + '" aria-label="Remove">×</button>';
+        list.appendChild(pill);
+    });
+}
+
+function updateServiceAreasInput() {
+    var list = $('#serviceAreaList');
+    var input = $('#serviceAreasInput');
+    if (!list || !input) return;
+    var pills = list.querySelectorAll('.sa-pill');
+    var areas = [];
+    pills.forEach(function (pill) {
+        var name = pill.dataset.name;
+        if (name) areas.push(name);
+    });
+    input.value = areas.join(',');
+}
+
+function parseServiceAreas(val) {
+    if (!val) return [];
+    return val.split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0; });
 }
 function sellerNavigate(hash) { if (location.hash === hash) sellerRender(); else location.hash = hash; }
 function greeting() { var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
@@ -187,6 +221,11 @@ async function sellerKitchenView() {
     h += '<div class="kitchen-avatar-upload"><div class="kitchen-avatar" data-action="upload-avatar" role="button" tabindex="0" aria-label="Upload kitchen photo">' + (kitchen && kitchen.imageUrl ? '<img src="' + esc(kitchen.imageUrl) + '" class="avatar-img" alt="Kitchen photo" onerror="imgFallback(this)">' : '📷') + '</div></div>';
     h += '<div class="form-group"><label class="form-label">Kitchen Name</label><input class="form-input" name="displayName" value="' + esc(kitchen && kitchen.displayName ? kitchen.displayName : 'Aarti Kitchen') + '"></div>';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Society</label><input class="form-input" name="society" value="' + esc(kitchen && kitchen.society ? kitchen.society : 'Sunshine Society') + '"></div><div class="form-group"><label class="form-label">Building</label><input class="form-input" name="building" value="' + esc(kitchen && kitchen.building ? kitchen.building : 'Building B') + '"></div></div>';
+    h += '<div class="form-group"><label class="form-label">Service Areas (societies you deliver to)</label>';
+    h += '<div id="serviceAreaList"></div>';
+    h += '<div class="form-row-2" style="margin-top:8px"><input class="form-input" id="newServiceArea" placeholder="Add society (e.g. Lohegaon)"><button class="btn btn-secondary btn-sm" type="button" data-action="add-service-area">Add</button></div>';
+    h += '<input type="hidden" name="serviceAreas" id="serviceAreasInput" value="' + esc(kitchen && kitchen.serviceAreas ? kitchen.serviceAreas : '') + '">';
+    h += '</div>';
     h += '<div class="form-group"><label class="form-label">Speciality</label><input class="form-input" name="shortDescription" value="' + esc(kitchen && kitchen.shortDescription ? kitchen.shortDescription : 'Homemade Maharashtrian Food') + '"></div>';
     h += '<div class="form-group"><label class="form-label">Full Description</label><textarea class="form-textarea" name="description">' + esc(kitchen && kitchen.description ? kitchen.description : 'Fresh homemade breakfast and traditional snacks') + '</textarea></div>';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">WhatsApp</label><input class="form-input" name="whatsappLink" value="' + esc(kitchen && kitchen.whatsappLink ? kitchen.whatsappLink : '+91 9100000001') + '"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" name="instagramLink" value="' + esc(kitchen && kitchen.instagramLink ? kitchen.instagramLink : '@aartiskitchen') + '"></div></div>';
@@ -382,6 +421,32 @@ document.addEventListener('click', async function (e) {
                 await api('/api/seller/orders/' + oid + '/payment-status', { method: 'PATCH' });
                 toast('Order marked as paid', 'success');
                 await sellerRender();
+                break;
+            }
+            case 'add-service-area': {
+                var input = $('#newServiceArea');
+                var val = input && input.value ? input.value.trim() : '';
+                if (!val) return;
+                var list = $('#serviceAreaList');
+                var existing = list ? list.querySelectorAll('.sa-pill') : [];
+                var found = false;
+                existing.forEach(function (el) { if (el.dataset.name && el.dataset.name.toLowerCase() === val.toLowerCase()) found = true; });
+                if (found) { toast('Society already added', 'error'); return; }
+                if (!list) break;
+                var pill = document.createElement('span');
+                pill.className = 'sa-pill';
+                pill.dataset.name = val;
+                pill.innerHTML = esc(val) + ' <button type="button" data-action="remove-service-area" data-name="' + esc(val) + '" aria-label="Remove">×</button>';
+                list.appendChild(pill);
+                input.value = '';
+                updateServiceAreasInput();
+                break;
+            }
+            case 'remove-service-area': {
+                var name = t.dataset.name;
+                var pill = t.closest('.sa-pill');
+                if (pill) pill.remove();
+                updateServiceAreasInput();
                 break;
             }
             case 'preview-offering': toast('Preview mode', 'info'); break;

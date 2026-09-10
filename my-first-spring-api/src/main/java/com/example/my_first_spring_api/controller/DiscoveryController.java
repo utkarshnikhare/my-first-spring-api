@@ -36,8 +36,9 @@ public class DiscoveryController {
 
     /** Dynamic header counts: "8 Live · 3 Tomorrow · 5 Pre-order · 12 All". */
     @GetMapping("/counts")
-    public ResponseEntity<KitchenCounts> getCounts() {
-        return ResponseEntity.ok(discoveryService.getKitchenCounts());
+    public ResponseEntity<KitchenCounts> getCounts(HttpSession session) {
+        User buyer = buyerService.getCurrentBuyer(session);
+        return ResponseEntity.ok(discoveryService.getKitchenCounts(buyer));
     }
 
     /** Kitchen discovery cards; tab = LIVE_NOW (default) | TOMORROW | PREORDER | ALL. */
@@ -50,19 +51,21 @@ public class DiscoveryController {
 
     /** Category tiles with live item counts (backend also supports SPECIAL). */
     @GetMapping("/categories")
-    public ResponseEntity<List<CategoryTile>> getCategories() {
-        return ResponseEntity.ok(discoveryService.getCategoryTiles());
+    public ResponseEntity<List<CategoryTile>> getCategories(HttpSession session) {
+        User buyer = buyerService.getCurrentBuyer(session);
+        return ResponseEntity.ok(discoveryService.getCategoryTiles(buyer));
     }
 
     /** Items grouped by dish name; category = BREAKFAST | LUNCH | DINNER | SNACKS | SPECIAL. */
     @GetMapping("/items")
-    public ResponseEntity<Map<String, Object>> getItems(@RequestParam(required = false) String category) {
+    public ResponseEntity<Map<String, Object>> getItems(@RequestParam(required = false) String category,
+                                                        HttpSession session) {
         Category cat = parseCategory(category);
-        List<ItemGroup> groups = discoveryService.getItemGroups(cat);
+        User buyer = buyerService.getCurrentBuyer(session);
         return ResponseEntity.ok(Map.of(
                 "category", category == null ? "ALL" : category.toUpperCase(),
-                "count", discoveryService.countItemsInCategory(cat),
-                "items", groups));
+                "count", discoveryService.countItemsInCategory(cat, buyer),
+                "items", discoveryService.getItemGroups(cat, buyer)));
     }
 
     /** Kitchens having items in a category — Screen 2A "By Kitchens" grid. */
@@ -75,8 +78,9 @@ public class DiscoveryController {
 
     /** Live search over dish names (single search entry point, Screen 2). */
     @GetMapping("/search")
-    public ResponseEntity<List<ItemGroup>> search(@RequestParam("q") String query) {
-        return ResponseEntity.ok(discoveryService.searchItemGroups(query));
+    public ResponseEntity<List<ItemGroup>> search(@RequestParam("q") String query, HttpSession session) {
+        User buyer = buyerService.getCurrentBuyer(session);
+        return ResponseEntity.ok(discoveryService.searchItemGroups(query, buyer));
     }
 
     /** Screen 7 comparison offers for one dish across kitchens. */

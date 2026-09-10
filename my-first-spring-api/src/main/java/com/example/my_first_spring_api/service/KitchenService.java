@@ -7,6 +7,7 @@ import com.example.my_first_spring_api.dto.SearchResultDto;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Product;
+import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.ProductRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,10 +36,10 @@ public class KitchenService {
         this.analyticsService = analyticsService;
     }
 
-    public KitchenDetailDto getKitchenByName(String name) {
+    public KitchenDetailDto getKitchenByName(String name, User buyer) {
         Kitchen kitchen = kitchenRepository.findByName(name)
                 .orElseThrow(() -> new KitchenNotFoundException(name));
-        if (!KitchenVisibility.isPubliclyVisible(kitchen)) {
+        if (!KitchenVisibility.isPubliclyVisible(kitchen) || !isServiceAreaVisible(kitchen, buyer)) {
             throw new KitchenNotFoundException(name);
         }
         analyticsService.record(AnalyticsService.EV_MENU_VIEW, null, null,
@@ -66,10 +67,10 @@ public class KitchenService {
      * Public kitchen storefront (Screen 4): identity + offerings split strictly
      * into "Available Today" and "Pre-order" sections.
      */
-    public KitchenDetailDto getKitchenDetailById(Long id) {
+    public KitchenDetailDto getKitchenDetailById(Long id, User buyer) {
         Kitchen kitchen = kitchenRepository.findById(id)
                 .orElseThrow(() -> new KitchenNotFoundException(id));
-        if (!KitchenVisibility.isPubliclyVisible(kitchen)) {
+        if (!KitchenVisibility.isPubliclyVisible(kitchen) || !isServiceAreaVisible(kitchen, buyer)) {
             throw new KitchenNotFoundException(id);
         }
         KitchenDto kitchenDto = toKitchenDto(kitchen);
@@ -86,48 +87,66 @@ public class KitchenService {
         return dto;
     }
 
-    public ProductDto getProductById(Long id) {
+    public ProductDto getProductById(Long id, User buyer) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new com.example.my_first_spring_api.exception.ProductNotFoundException(id));
-        if (product.getKitchen() != null && !KitchenVisibility.isPubliclyVisible(product.getKitchen())) {
+        if (product.getKitchen() != null && (!KitchenVisibility.isPubliclyVisible(product.getKitchen()) || !isServiceAreaVisible(product.getKitchen(), buyer))) {
             throw new com.example.my_first_spring_api.exception.ProductNotFoundException(id);
         }
         return toProductDto(product);
     }
 
-    public List<ProductDto> getProductsByKitchenName(String kitchenName) {
+    public List<ProductDto> getProductsByKitchenName(String kitchenName, User buyer) {
         Kitchen kitchen = kitchenRepository.findByName(kitchenName)
                 .orElseThrow(() -> new KitchenNotFoundException(kitchenName));
-        if (!KitchenVisibility.isPubliclyVisible(kitchen)) {
+        if (!KitchenVisibility.isPubliclyVisible(kitchen) || !isServiceAreaVisible(kitchen, buyer)) {
             throw new KitchenNotFoundException(kitchenName);
         }
         return productRepository.findByKitchenAndAvailableTodayTrueOrderByCreatedAtDesc(kitchen).stream()
                 .map(this::toProductDto).collect(Collectors.toList());
     }
 
-    public SearchResultDto search(String query) {
+    public SearchResultDto search(String query, User buyer) {
         List<ProductDto> products = productRepository.findByNameContainingIgnoreCase(query).stream()
                 .map(this::toProductDto)
                 .filter(p -> p.getKitchenId() == null
                         || kitchenRepository.findById(p.getKitchenId())
-                            .map(KitchenVisibility::isPubliclyVisible)
+                            .map(k -> KitchenVisibility.isPubliclyVisible(k) && isServiceAreaVisible(k, buyer))
                             .orElse(false))
                 .collect(Collectors.toList());
 
         Map<Long, KitchenDto> kitchens = new LinkedHashMap<>();
         kitchenRepository.findAll().stream()
                 .filter(KitchenVisibility::isPubliclyVisible)
+                .filter(k -> isServiceAreaVisible(k, buyer))
                 .filter(k -> k.getDisplayName().toLowerCase().contains(query.toLowerCase())
                         || k.getName().toLowerCase().contains(query.toLowerCase()))
                 .forEach(k -> kitchens.put(k.getId(), toKitchenDto(k)));
         for (ProductDto product : products) {
             if (product.getKitchenId() != null && !kitchens.containsKey(product.getKitchenId())) {
                 kitchenRepository.findById(product.getKitchenId())
-                        .filter(KitchenVisibility::isPubliclyVisible)
+                        .filter(k -> KitchenVisibility.isPubliclyVisible(k) && isServiceAreaVisible(k, buyer))
                         .ifPresent(k -> kitchens.put(k.getId(), toKitchenDto(k)));
             }
         }
         return new SearchResultDto(products, new ArrayList<>(kitchens.values()));
+    }
+
+    private static boolean isServiceAreaVisible(Kitchen kitchen, User buyer) {
+        if (kitchen == null) return true;
+        String areas = kitchen.getServiceAreas();
+        if (areas == null || areas.isBlank()) {
+            String society = kitchen.getSociety();
+            if (society == null || society.isBlank()) return true;
+            if (buyer == null || buyer.getSociety() == null) return true;
+            return society.equalsIgnoreCase(buyer.getSociety());
+        }
+        if (buyer == null || buyer.getSociety() == null) return true;
+        String[] parts = areas.split(",");
+        for (String part : parts) {
+            if (part.trim().equalsIgnoreCase(buyer.getSociety())) return true;
+        }
+        return false;
     }
 
     private KitchenDto toKitchenDto(Kitchen kitchen) {
@@ -136,6 +155,7 @@ public class KitchenService {
                 kitchen.getAvailableToday(), kitchen.getSeller() != null ? kitchen.getSeller().getId() : null);
         dto.setShortDescription(kitchen.getShortDescription());
         dto.setSociety(kitchen.getSociety());
+        dto.setServiceAreas(kitchen.getServiceAreas());
         dto.setBuilding(kitchen.getBuilding());
         dto.setWhatsappLink(kitchen.getWhatsappLink());
         dto.setInstagramLink(kitchen.getInstagramLink());

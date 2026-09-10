@@ -19,4 +19,21 @@ public final class KitchenVisibility {
                 && seller.getRole() == UserRole.SELLER
                 && seller.isApprovedSeller();
     }
+
+    public static boolean isServiceAreaVisible(Kitchen kitchen, User buyer) {
+        if (kitchen == null) return true;
+        String areas = kitchen.getServiceAreas();
+        if (areas == null || areas.isBlank()) {
+            String society = kitchen.getSociety();
+            if (society == null || society.isBlank()) return true;
+            if (buyer == null || buyer.getSociety() == null) return true;
+            return society.equalsIgnoreCase(buyer.getSociety());
+        }
+        if (buyer == null || buyer.getSociety() == null) return true;
+        String[] parts = areas.split(",");
+        for (String part : parts) {
+            if (part.trim().equalsIgnoreCase(buyer.getSociety())) return true;
+        }
+        return false;
+    }
 }

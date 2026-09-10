@@ -5,13 +5,14 @@ import com.example.my_first_spring_api.dto.MarketplaceDto;
 import com.example.my_first_spring_api.dto.ProductDto;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Product;
+import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.ProductRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -30,14 +31,15 @@ public class MarketplaceService {
         this.analyticsService = analyticsService;
     }
 
-    public MarketplaceDto getMarketplaceHome() {
+    public MarketplaceDto getMarketplaceHome(User buyer) {
         analyticsService.record(AnalyticsService.EV_MARKETPLACE_VIEW, null, null, null, null);
-        List<KitchenDto> kitchens = kitchenRepository.findAll().stream()
+        List<Kitchen> visibleKitchens = kitchenRepository.findAll().stream()
                 .filter(KitchenVisibility::isPubliclyVisible)
-                .map(this::toKitchenDto).collect(Collectors.toList());
+                .filter(k -> isServiceAreaVisible(k, buyer))
+                .collect(Collectors.toList());
 
         List<ProductDto> availableToday = productRepository.findByAvailableTodayTrueOrderByCreatedAtDesc().stream()
-                .filter(p -> p.getKitchen() == null || KitchenVisibility.isPubliclyVisible(p.getKitchen()))
+                .filter(p -> p.getKitchen() == null || (KitchenVisibility.isPubliclyVisible(p.getKitchen()) && isServiceAreaVisible(p.getKitchen(), buyer)))
                 .map(this::toProductDto).collect(Collectors.toList());
 
         List<ProductDto> newProducts = availableToday;
@@ -45,23 +47,40 @@ public class MarketplaceService {
                 .sorted((p1, p2) -> Double.compare(p2.getRating(), p1.getRating()))
                 .collect(Collectors.toList());
 
-        return new MarketplaceDto(kitchens, popularProducts, newProducts, availableToday);
+        return new MarketplaceDto(
+                visibleKitchens.stream().map(this::toKitchenDto).collect(Collectors.toList()),
+                popularProducts, newProducts, availableToday);
     }
 
-    /** Global browse: every publicly visible kitchen. */
-    public List<KitchenDto> getAllActiveKitchens() {
+    public List<KitchenDto> getAllActiveKitchens(User buyer) {
         return kitchenRepository.findAll().stream()
                 .filter(KitchenVisibility::isPubliclyVisible)
+                .filter(k -> isServiceAreaVisible(k, buyer))
                 .map(this::toKitchenDto)
                 .collect(Collectors.toList());
     }
 
-    /** Global browse: every available menu item across all visible kitchens. */
-    public List<ProductDto> getAllAvailableItems() {
+    public List<ProductDto> getAllAvailableItems(User buyer) {
         return productRepository.findByAvailableTodayTrueOrderByCreatedAtDesc().stream()
-                .filter(p -> p.getKitchen() != null && KitchenVisibility.isPubliclyVisible(p.getKitchen()))
+                .filter(p -> p.getKitchen() != null && KitchenVisibility.isPubliclyVisible(p.getKitchen()) && isServiceAreaVisible(p.getKitchen(), buyer))
                 .map(this::toProductDto)
                 .collect(Collectors.toList());
+    }
+
+    private static boolean isServiceAreaVisible(Kitchen kitchen, User buyer) {
+        String areas = kitchen.getServiceAreas();
+        if (areas == null || areas.isBlank()) {
+            String society = kitchen.getSociety();
+            if (society == null || society.isBlank()) return true;
+            if (buyer == null || buyer.getSociety() == null) return true;
+            return society.equalsIgnoreCase(buyer.getSociety());
+        }
+        if (buyer == null || buyer.getSociety() == null) return true;
+        String[] parts = areas.split(",");
+        for (String part : parts) {
+            if (part.trim().equalsIgnoreCase(buyer.getSociety())) return true;
+        }
+        return false;
     }
 
     private KitchenDto toKitchenDto(Kitchen kitchen) {

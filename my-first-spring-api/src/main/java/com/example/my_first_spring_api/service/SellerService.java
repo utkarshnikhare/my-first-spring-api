@@ -55,6 +55,7 @@ public class SellerService {
         Kitchen kitchen = new Kitchen(slug, dto.getDisplayName(), dto.getDescription(), dto.getImageUrl(), seller);
         kitchen.setShortDescription(dto.getShortDescription());
         kitchen.setSociety(dto.getSociety());
+        kitchen.setServiceAreas(dto.getServiceAreas());
         kitchen.setBuilding(dto.getBuilding());
         kitchen.setWhatsappLink(dto.getWhatsappLink());
         kitchen.setInstagramLink(dto.getInstagramLink());
@@ -70,6 +71,7 @@ public class SellerService {
         if (dto.getShortDescription() != null) kitchen.setShortDescription(dto.getShortDescription());
         if (dto.getImageUrl() != null) kitchen.setImageUrl(dto.getImageUrl());
         if (dto.getSociety() != null) kitchen.setSociety(dto.getSociety());
+        if (dto.getServiceAreas() != null) kitchen.setServiceAreas(dto.getServiceAreas());
         if (dto.getBuilding() != null) kitchen.setBuilding(dto.getBuilding());
         if (dto.getWhatsappLink() != null) kitchen.setWhatsappLink(dto.getWhatsappLink());
         if (dto.getInstagramLink() != null) kitchen.setInstagramLink(dto.getInstagramLink());
@@ -237,6 +239,7 @@ public class SellerService {
                 kitchen.getAvailableToday(), kitchen.getSeller() != null ? kitchen.getSeller().getId() : null);
         dto.setShortDescription(kitchen.getShortDescription());
         dto.setSociety(kitchen.getSociety());
+        dto.setServiceAreas(kitchen.getServiceAreas());
         dto.setBuilding(kitchen.getBuilding());
         dto.setWhatsappLink(kitchen.getWhatsappLink());
         dto.setInstagramLink(kitchen.getInstagramLink());

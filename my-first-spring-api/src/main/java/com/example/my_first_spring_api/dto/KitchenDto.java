@@ -8,6 +8,7 @@ public class KitchenDto {
     private String shortDescription;
     private String imageUrl;
     private String society;
+    private String serviceAreas;
     private String building;
     private String whatsappLink;
     private String instagramLink;
@@ -46,6 +47,8 @@ public class KitchenDto {
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
     public String getSociety() { return society; }
     public void setSociety(String society) { this.society = society; }
+    public String getServiceAreas() { return serviceAreas; }
+    public void setServiceAreas(String serviceAreas) { this.serviceAreas = serviceAreas; }
     public String getBuilding() { return building; }
     public void setBuilding(String building) { this.building = building; }
     public String getWhatsappLink() { return whatsappLink; }

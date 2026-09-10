@@ -28,6 +28,9 @@ public class Kitchen {
     @Column(name = "society")
     private String society;
 
+    @Column(name = "service_areas", columnDefinition = "TEXT")
+    private String serviceAreas;
+
     @Column(name = "building")
     private String building;
 
@@ -97,6 +100,8 @@ public class Kitchen {
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
     public String getSociety() { return society; }
     public void setSociety(String society) { this.society = society; }
+    public String getServiceAreas() { return serviceAreas; }
+    public void setServiceAreas(String serviceAreas) { this.serviceAreas = serviceAreas; }
     public String getBuilding() { return building; }
     public void setBuilding(String building) { this.building = building; }
     public String getWhatsappLink() { return whatsappLink; }

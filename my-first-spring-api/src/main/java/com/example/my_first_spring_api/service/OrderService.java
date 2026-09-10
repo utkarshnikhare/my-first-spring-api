@@ -222,6 +222,11 @@ public class OrderService {
         order.setBuyer(buyer);
         if (buyerDetails != null) updateBuyerDetails(buyer, buyerDetails);
         if (customInstructions != null && !customInstructions.isBlank()) order.setCustomInstructions(customInstructions);
+        if (!KitchenVisibility.isServiceAreaVisible(order.getKitchen(), buyer)) {
+            session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
+            orderRepository.delete(order);
+            throw new IllegalArgumentException("This kitchen does not serve your selected area. Please choose another kitchen.");
+        }
         consumeStock(order);
         // Payment status handling:
         //  PAID           → payment PAID, order CONFIRMED

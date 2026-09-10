@@ -51,15 +51,16 @@ public class DiscoveryService {
         this.orderRepository = orderRepository;
     }
 
-    private List<Kitchen> visibleKitchens() {
+    private List<Kitchen> visibleKitchens(User buyer) {
         return kitchenRepository.findAll().stream()
                 .filter(KitchenVisibility::isPubliclyVisible)
+                .filter(k -> KitchenVisibility.isServiceAreaVisible(k, buyer))
                 .collect(Collectors.toList());
     }
 
-    private List<Product> visibleProducts() {
+    private List<Product> visibleProducts(User buyer) {
         return productRepository.findAll().stream()
-                .filter(p -> p.getKitchen() != null && KitchenVisibility.isPubliclyVisible(p.getKitchen()))
+                .filter(p -> p.getKitchen() != null && KitchenVisibility.isPubliclyVisible(p.getKitchen()) && KitchenVisibility.isServiceAreaVisible(p.getKitchen(), buyer))
                 .collect(Collectors.toList());
     }
 
@@ -96,9 +97,9 @@ public class DiscoveryService {
 
     // ---------- Screen 3 ----------
 
-    public KitchenCounts getKitchenCounts() {
-        List<Kitchen> kitchens = visibleKitchens();
-        Map<Long, List<Product>> byKitchen = visibleProducts().stream()
+    public KitchenCounts getKitchenCounts(User buyer) {
+        List<Kitchen> kitchens = visibleKitchens(buyer);
+        Map<Long, List<Product>> byKitchen = visibleProducts(buyer).stream()
                 .collect(Collectors.groupingBy(p -> p.getKitchen().getId()));
         long live = kitchens.stream().filter(k -> hasToday(byKitchen.getOrDefault(k.getId(), List.of()))).count();
         long tomorrow = kitchens.stream().filter(k -> hasTomorrow(byKitchen.getOrDefault(k.getId(), List.of()))).count();
@@ -107,8 +108,8 @@ public class DiscoveryService {
     }
 
     public List<KitchenCard> getKitchens(String tab, User buyer) {
-        List<Kitchen> kitchens = visibleKitchens();
-        Map<Long, List<Product>> byKitchen = visibleProducts().stream()
+        List<Kitchen> kitchens = visibleKitchens(buyer);
+        Map<Long, List<Product>> byKitchen = visibleProducts(buyer).stream()
                 .collect(Collectors.groupingBy(p -> p.getKitchen().getId()));
         Set<Long> ordered = buyerKitchenIds(buyer);
 
@@ -154,8 +155,8 @@ public class DiscoveryService {
 
     // ---------- Screen 2 / 2A ----------
 
-    public List<CategoryTile> getCategoryTiles() {
-        Map<Category, Long> counts = visibleProducts().stream()
+    public List<CategoryTile> getCategoryTiles(User buyer) {
+        Map<Category, Long> counts = visibleProducts(buyer).stream()
                 .filter(p -> p.getCategory() != null && !p.isSoldOut())
                 .collect(Collectors.groupingBy(p -> p.getCategory(), Collectors.counting()));
         List<CategoryTile> tiles = new ArrayList<>();
@@ -168,8 +169,8 @@ public class DiscoveryService {
     }
 
     /** Items grouped by dish name for the "By Items" grid, e.g. "Poha - 4 kitchens". */
-    public List<ItemGroup> getItemGroups(Category category) {
-        Map<String, List<Product>> byName = visibleProducts().stream()
+    public List<ItemGroup> getItemGroups(Category category, User buyer) {
+        Map<String, List<Product>> byName = visibleProducts(buyer).stream()
                 .filter(p -> !p.isSoldOut())
                 .filter(p -> category == null || p.getCategory() == category)
                 .collect(Collectors.groupingBy(p -> p.getName(), LinkedHashMap::new, Collectors.toList()));
@@ -191,7 +192,7 @@ public class DiscoveryService {
 
     /** Kitchens having at least one non-sold-out item in the given category (Screen 2A "By Kitchens"). */
     public List<KitchenCard> getKitchensByCategory(Category category, User buyer) {
-        Map<Long, List<Product>> byKitchen = visibleProducts().stream()
+        Map<Long, List<Product>> byKitchen = visibleProducts(buyer).stream()
                 .filter(p -> !p.isSoldOut())
                 .filter(p -> category == null || p.getCategory() == category)
                 .collect(Collectors.groupingBy(p -> p.getKitchen().getId()));
@@ -202,8 +203,8 @@ public class DiscoveryService {
                 .collect(Collectors.toList());
     }
 
-    public long countItemsInCategory(Category category) {
-        return visibleProducts().stream()
+    public long countItemsInCategory(Category category, User buyer) {
+        return visibleProducts(buyer).stream()
                 .filter(p -> !p.isSoldOut())
                 .filter(p -> category == null || p.getCategory() == category)
                 .count();
@@ -211,16 +212,16 @@ public class DiscoveryService {
 
     // ---------- Screen 7 (search-by-item comparison) ----------
 
-    public List<ItemGroup> searchItemGroups(String query) {
+    public List<ItemGroup> searchItemGroups(String query, User buyer) {
         String q = query == null ? "" : query.trim().toLowerCase();
-        return getItemGroups(null).stream()
+        return getItemGroups(null, buyer).stream()
                 .filter(g -> g.getName().toLowerCase().contains(q))
                 .collect(Collectors.toList());
     }
 
     public List<ComparisonOffer> getComparisonOffers(String itemName, User buyer) {
         String q = itemName == null ? "" : itemName.trim().toLowerCase();
-        List<Product> matches = visibleProducts().stream()
+        List<Product> matches = visibleProducts(buyer).stream()
                 .filter(p -> p.getName().toLowerCase().contains(q))
                 .filter(p -> orderableToday(p) || openPreorder(p))
                 .collect(Collectors.toList());
