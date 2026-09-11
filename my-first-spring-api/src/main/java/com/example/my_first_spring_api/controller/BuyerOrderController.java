@@ -33,11 +33,13 @@ public class BuyerOrderController {
     public ResponseEntity<OrderDto> createOrUpdateDraft(@RequestParam("kitchenId") Long kitchenId,
                                                         @Valid @RequestBody List<OrderItemRequest> items,
                                                         HttpSession session) {
+        User buyer = buyerService.requireCurrentBuyer(session);
         return ResponseEntity.ok(orderService.createOrUpdateDraftOrder(kitchenId, items, session));
     }
 
     @GetMapping("/draft")
     public ResponseEntity<OrderDto> getCurrentDraft(HttpSession session) {
+        User buyer = buyerService.requireCurrentBuyer(session);
         OrderDto draft = orderService.getCurrentDraftOrder(session);
         if (draft == null) return ResponseEntity.noContent().build();
         return ResponseEntity.ok(draft);
@@ -45,12 +47,14 @@ public class BuyerOrderController {
 
     @DeleteMapping("/draft")
     public ResponseEntity<Map<String, String>> clearDraft(HttpSession session) {
+        User buyer = buyerService.requireCurrentBuyer(session);
         orderService.clearDraftOrder(session);
         return ResponseEntity.ok(Map.of("message", "Draft order cleared"));
     }
 
     @PostMapping("/place")
     public ResponseEntity<OrderDto> placeOrder(@Valid @RequestBody PlaceOrderRequest request, HttpSession session) {
+        User buyer = buyerService.requireCurrentBuyer(session);
         return ResponseEntity.ok(orderService.placeOrder(
                 request.getPaymentStatus(), request.getBuyerDetails(),
                 request.getCustomInstructions(), session));
