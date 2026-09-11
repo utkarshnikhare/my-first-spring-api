@@ -28,3 +28,11 @@ docs/shots/
 # Generated PDFs and reports (keep source MD/docs only)
 *.pdf
 *.html
+
+# E2E test login/session artifacts
+login.json
+login_admin.json
+login_buyer_b.json
+login_mobile.json
+login_seller_b.json
+login_superadmin.json
