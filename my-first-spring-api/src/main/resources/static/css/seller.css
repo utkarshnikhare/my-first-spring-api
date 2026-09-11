@@ -954,6 +954,41 @@
     color: var(--accent);
 }
 
+/* ---------- Checkbox group ---------- */
+
+.checkbox-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.checkbox-option {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: .88rem;
+    font-weight: 600;
+    transition: border-color .15s ease, background .15s ease, transform .12s ease;
+    user-select: none;
+}
+@media (hover: hover) {
+    .checkbox-option:hover { transform: translateY(-1px); }
+}
+.checkbox-option:has(input:checked) {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+.checkbox-option input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
 /* ---------- Toggle ---------- */
 
 .toggle-row {
@@ -1391,6 +1426,7 @@
     .stepper .stepper-value { min-width: 34px; }
     .date-tab,
     .radio-option,
+    .checkbox-option,
     .sort-select { padding-top: 10px; padding-bottom: 10px; }
     .history-card input[type="checkbox"] { width: 22px; height: 22px; }
     .segmented button { padding: 10px 8px; }

@@ -55,10 +55,9 @@ public class Product {
     @Column(name = "is_preorder")
     private Boolean isPreorder = false;
 
-    /** Food category used for discovery (BREAKFAST/LUNCH/DINNER/SNACKS/SPECIAL). */
-    @Enumerated(EnumType.STRING)
+    /** Comma-separated food categories for buyer discovery (e.g. "BREAKFAST,SNACKS"). */
     @Column(name = "category")
-    private Category category;
+    private String category;
 
     /**
      * OFFERING-LEVEL order cutoff (HH:mm, e.g. "11:30"). Cutoffs NEVER belong to
@@ -146,8 +145,8 @@ public class Product {
     public void setRating(Double rating) { this.rating = rating; }
     public Boolean getIsPreorder() { return isPreorder; }
     public void setIsPreorder(Boolean isPreorder) { this.isPreorder = isPreorder; }
-    public Category getCategory() { return category; }
-    public void setCategory(Category category) { this.category = category; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
     public String getCutoffTime() { return cutoffTime; }
     public void setCutoffTime(String cutoffTime) { this.cutoffTime = cutoffTime; }
     public String getReadyByTime() { return readyByTime; }

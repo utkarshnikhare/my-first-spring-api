@@ -155,10 +155,33 @@ public class DiscoveryService {
 
     // ---------- Screen 2 / 2A ----------
 
+    private static boolean hasCategory(Product p, Category category) {
+        if (p == null || category == null) return false;
+        String cats = p.getCategory();
+        if (cats == null || cats.isBlank()) return false;
+        String target = category.name();
+        for (String part : cats.split(",")) {
+            if (part.trim().equalsIgnoreCase(target)) return true;
+        }
+        return false;
+    }
+
     public List<CategoryTile> getCategoryTiles(User buyer) {
         Map<Category, Long> counts = visibleProducts(buyer).stream()
-                .filter(p -> p.getCategory() != null && !p.isSoldOut())
-                .collect(Collectors.groupingBy(p -> p.getCategory(), Collectors.counting()));
+                .filter(p -> !p.isSoldOut())
+                .flatMap(p -> {
+                    String cats = p.getCategory();
+                    if (cats == null || cats.isBlank()) return java.util.stream.Stream.of(Category.SPECIAL);
+                    java.util.List<Category> list = new java.util.ArrayList<>();
+                    for (String part : cats.split(",")) {
+                        try {
+                            list.add(Category.valueOf(part.trim().toUpperCase()));
+                        } catch (IllegalArgumentException ignored) {}
+                    }
+                    if (list.isEmpty()) list.add(Category.SPECIAL);
+                    return list.stream();
+                })
+                .collect(Collectors.groupingBy(c -> c, Collectors.counting()));
         List<CategoryTile> tiles = new ArrayList<>();
         tiles.add(new CategoryTile("BREAKFAST", "Breakfast", "🌅", counts.getOrDefault(Category.BREAKFAST, 0L)));
         tiles.add(new CategoryTile("LUNCH", "Lunch", "🍛", counts.getOrDefault(Category.LUNCH, 0L)));
@@ -172,7 +195,7 @@ public class DiscoveryService {
     public List<ItemGroup> getItemGroups(Category category, User buyer) {
         Map<String, List<Product>> byName = visibleProducts(buyer).stream()
                 .filter(p -> !p.isSoldOut())
-                .filter(p -> category == null || p.getCategory() == category)
+                .filter(p -> category == null || hasCategory(p, category))
                 .collect(Collectors.groupingBy(p -> p.getName(), LinkedHashMap::new, Collectors.toList()));
 
         return byName.entrySet().stream()
@@ -180,8 +203,7 @@ public class DiscoveryService {
                     ItemGroup g = new ItemGroup();
                     g.setName(e.getKey());
                     g.setKitchenCount(e.getValue().stream().map(p -> p.getKitchen().getId()).distinct().count());
-                    g.setCategory(e.getValue().get(0).getCategory() != null
-                            ? e.getValue().get(0).getCategory().name() : null);
+                    g.setCategory(e.getValue().get(0).getCategory());
                     g.setImageUrl(e.getValue().get(0).getImageUrl());
                     g.setKitchenIds(e.getValue().stream().map(p -> p.getKitchen().getId()).distinct().collect(Collectors.toList()));
                     return g;
@@ -194,7 +216,7 @@ public class DiscoveryService {
     public List<KitchenCard> getKitchensByCategory(Category category, User buyer) {
         Map<Long, List<Product>> byKitchen = visibleProducts(buyer).stream()
                 .filter(p -> !p.isSoldOut())
-                .filter(p -> category == null || p.getCategory() == category)
+                .filter(p -> category == null || hasCategory(p, category))
                 .collect(Collectors.groupingBy(p -> p.getKitchen().getId()));
         Set<Long> ordered = buyerKitchenIds(buyer);
         return byKitchen.entrySet().stream()
@@ -206,7 +228,7 @@ public class DiscoveryService {
     public long countItemsInCategory(Category category, User buyer) {
         return visibleProducts(buyer).stream()
                 .filter(p -> !p.isSoldOut())
-                .filter(p -> category == null || p.getCategory() == category)
+                .filter(p -> category == null || hasCategory(p, category))
                 .count();
     }
 

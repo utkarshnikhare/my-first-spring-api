@@ -3,8 +3,10 @@ package com.example.my_first_spring_api.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 public class ProductCreateDto {
     @NotBlank(message = "Item name is required")
@@ -27,6 +29,10 @@ public class ProductCreateDto {
     private Integer maxQuantity;
     private Integer remainingQuantity;
     private Boolean isPreorder;
+
+    @NotNull(message = "Select at least one category")
+    @Size(min = 1, message = "Select at least one category")
+    private List<String> categories;
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
@@ -56,4 +62,6 @@ public class ProductCreateDto {
     public void setRemainingQuantity(Integer remainingQuantity) { this.remainingQuantity = remainingQuantity; }
     public Boolean getIsPreorder() { return isPreorder; }
     public void setIsPreorder(Boolean isPreorder) { this.isPreorder = isPreorder; }
+    public List<String> getCategories() { return categories; }
+    public void setCategories(List<String> categories) { this.categories = categories; }
 }

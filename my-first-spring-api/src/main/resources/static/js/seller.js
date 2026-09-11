@@ -181,6 +181,7 @@ async function sellerCreateView() {
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open <span class="req">*</span></label><input class="form-input" name="orderWindowStart" type="time" value="08:00"></div>';
     h += '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label><input class="form-input" name="orderWindowEnd" type="time" value="10:00"></div></div>';
     h += '<div class="form-group"><label class="form-label">Quantity Available <span class="req">*</span></label><input class="form-input" name="maxQuantity" type="number" placeholder="Blank for unlimited"></div>';
+    h += '<div class="form-group"><label class="form-label">To be listed in <span class="req">*</span></label><div class="checkbox-group"><label class="checkbox-option"><input type="checkbox" name="categories" value="BREAKFAST"> Breakfast</label><label class="checkbox-option"><input type="checkbox" name="categories" value="LUNCH"> Lunch</label><label class="checkbox-option"><input type="checkbox" name="categories" value="DINNER"> Dinner</label><label class="checkbox-option"><input type="checkbox" name="categories" value="SNACKS"> Snacks</label></div><p class="muted small">Select at least one category.</p></div>';
     h += '<div class="toggle-row"><div><div class="toggle-text">Mark as Favourite</div><div class="toggle-note">Save as template (max 3).</div></div><div class="toggle-switch" id="favToggle" data-action="toggle-favourite"></div></div>';
     h += '<button class="btn btn-primary btn-block" type="submit">Publish Offering</button></form></div>';
     return h;
@@ -310,10 +311,17 @@ document.addEventListener('submit', async function (e) {
                 kid = k.id;
                 S.myKitchen = k;
             }
+            var categories = [];
+            $all('input[name="categories"]:checked', form).forEach(function (cb) { categories.push(cb.value); });
+            if (categories.length === 0) {
+                toast('Select at least one category', 'error');
+                return;
+            }
+            vals.categories = categories;
             var saveFav = $('#favToggle') && $('#favToggle').classList.contains('on');
             if (saveFav) {
                 try {
-                    var favBody = { name: vals.name, description: vals.description || '', price: Number(vals.price), priceUnit: vals.priceUnit, maxQuantity: vals.maxQuantity ? Number(vals.maxQuantity) : null, orderWindowStart: vals.orderWindowStart, orderWindowEnd: vals.orderWindowEnd, availableDate: vals.availableDate };
+                    var favBody = { name: vals.name, description: vals.description || '', price: Number(vals.price), priceUnit: vals.priceUnit, maxQuantity: vals.maxQuantity ? Number(vals.maxQuantity) : null, orderWindowStart: vals.orderWindowStart, orderWindowEnd: vals.orderWindowEnd, availableDate: vals.availableDate, category: (categories && categories[0]) || '' };
                     await api('/api/seller-app/templates', { method: 'POST', body: favBody });
                 } catch (favErr) { toast('Could not save favourite: ' + favErr.message, 'error'); }
             }

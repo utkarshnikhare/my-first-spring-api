@@ -1,6 +1,5 @@
 package com.example.my_first_spring_api;
 
-import com.example.my_first_spring_api.model.Category;
 import com.example.my_first_spring_api.model.Enquiry;
 import com.example.my_first_spring_api.model.EnquiryStatus;
 import com.example.my_first_spring_api.model.Kitchen;
@@ -156,7 +155,7 @@ public class DemoDataSeeder {
         prePuran.setRating(4.7);
         prePuran.setIsPreorder(true);
         prePuran.setPreorderType(PreorderType.FIXED);
-        prePuran.setCategory(Category.SPECIAL);
+        prePuran.setCategory("SPECIAL");
         prePuran.setCutoffTime("12:00");
         prePuran.setReadyByTime("1:30 PM Monday");
         prePuran.setBookedQuantity(0);
@@ -383,28 +382,28 @@ public class DemoDataSeeder {
         return productRepository.save(p);
     }
 
-    private static final Map<String, Category> CATEGORIES = Map.ofEntries(
-            Map.entry("poha", Category.BREAKFAST), Map.entry("upma", Category.BREAKFAST),
-            Map.entry("idli", Category.BREAKFAST), Map.entry("masala dosa", Category.BREAKFAST),
-            Map.entry("medu vada", Category.BREAKFAST), Map.entry("aloo paratha", Category.BREAKFAST),
-            Map.entry("puri bhaji", Category.BREAKFAST), Map.entry("tea", Category.BREAKFAST),
-            Map.entry("chai", Category.BREAKFAST), Map.entry("burger", Category.SNACKS),
-            Map.entry("veg thali", Category.LUNCH), Map.entry("rajma chawal", Category.LUNCH),
-            Map.entry("dal tadka", Category.LUNCH), Map.entry("paneer butter masala", Category.LUNCH),
-            Map.entry("dal makhani", Category.LUNCH), Map.entry("chicken curry", Category.LUNCH),
-            Map.entry("chicken biryani", Category.LUNCH), Map.entry("veg biryani", Category.LUNCH),
-            Map.entry("chapati", Category.LUNCH), Map.entry("butter naan", Category.LUNCH),
-            Map.entry("hakka noodles", Category.DINNER), Map.entry("paneer tikka", Category.DINNER),
-            Map.entry("pav bhaji", Category.DINNER), Map.entry("fresh veg salad", Category.SPECIAL),
-            Map.entry("lassi", Category.SNACKS), Map.entry("samosa", Category.SNACKS),
-            Map.entry("gulab jamun", Category.SNACKS), Map.entry("kheer", Category.SNACKS));
+    private static final Map<String, String> CATEGORIES = Map.ofEntries(
+            Map.entry("poha", "BREAKFAST"), Map.entry("upma", "BREAKFAST"),
+            Map.entry("idli", "BREAKFAST"), Map.entry("masala dosa", "BREAKFAST"),
+            Map.entry("medu vada", "BREAKFAST"), Map.entry("aloo paratha", "BREAKFAST"),
+            Map.entry("puri bhaji", "BREAKFAST"), Map.entry("tea", "BREAKFAST"),
+            Map.entry("chai", "BREAKFAST"), Map.entry("burger", "SNACKS"),
+            Map.entry("veg thali", "LUNCH"), Map.entry("rajma chawal", "LUNCH"),
+            Map.entry("dal tadka", "LUNCH"), Map.entry("paneer butter masala", "LUNCH"),
+            Map.entry("dal makhani", "LUNCH"), Map.entry("chicken curry", "LUNCH"),
+            Map.entry("chicken biryani", "LUNCH"), Map.entry("veg biryani", "LUNCH"),
+            Map.entry("chapati", "LUNCH"), Map.entry("butter naan", "LUNCH"),
+            Map.entry("hakka noodles", "DINNER"), Map.entry("paneer tikka", "DINNER"),
+            Map.entry("pav bhaji", "DINNER"), Map.entry("fresh veg salad", "SPECIAL"),
+            Map.entry("lassi", "SNACKS"), Map.entry("samosa", "SNACKS"),
+            Map.entry("gulab jamun", "SNACKS"), Map.entry("kheer", "SNACKS"));
 
-    private static Category categoryFor(String name) {
+    private static String categoryFor(String name) {
         String n = name.toLowerCase();
-        for (Map.Entry<String, Category> e : CATEGORIES.entrySet()) {
+        for (Map.Entry<String, String> e : CATEGORIES.entrySet()) {
             if (n.contains(e.getKey())) return e.getValue();
         }
-        return Category.SPECIAL;
+        return "SPECIAL";
     }
 
     /** Demo per-offering cutoffs (HH:mm) — e.g. breakfasts close at 11 AM. */
@@ -437,7 +436,7 @@ public class DemoDataSeeder {
 
     /** FIXED pre-order: available tomorrow only, cutoff 12 PM today. */
     private Product fixedPreorder(Kitchen k, String name, String description, int price, String unit,
-                                  Integer maxQ, double rating, Category category) {
+                                  Integer maxQ, double rating, String category) {
         Product p = new Product(k, name, description, BigDecimal.valueOf(price), null);
         p.setPriceUnit(unit);
         p.setAvailableToday(false);
@@ -456,7 +455,7 @@ public class DemoDataSeeder {
 
     /** FLEXIBLE pre-order: buyer picks date (tomorrow..+6d) + slot; day-before cutoff. */
     private Product flexiblePreorder(Kitchen k, String name, String description, int price, String unit,
-                                     Integer maxQ, double rating, Category category) {
+                                     Integer maxQ, double rating, String category) {
         Product p = new Product(k, name, description, BigDecimal.valueOf(price), null);
         p.setPriceUnit(unit);
         p.setAvailableToday(false);

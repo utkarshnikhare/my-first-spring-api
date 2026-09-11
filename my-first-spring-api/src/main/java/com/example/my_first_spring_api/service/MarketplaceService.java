@@ -103,7 +103,7 @@ public class MarketplaceService {
         dto.setRemainingQuantity(product.getRemainingQuantity());
         dto.setIsPreorder(product.getIsPreorder());
         dto.setKitchenSlug(kitchen != null ? kitchen.getName() : null);
-        dto.setCategory(product.getCategory() != null ? product.getCategory().name() : null);
+        dto.setCategory(product.getCategory());
         dto.setCutoffTime(product.getCutoffTime());
         dto.setReadyByTime(product.getReadyByTime());
         dto.setPreorderType(product.getPreorderType() != null ? product.getPreorderType().name() : null);

@@ -295,7 +295,7 @@ public class AdminService {
             m.put("remainingQuantity", p.getRemainingQuantity());
             m.put("bookedQuantity", p.getBookedQuantity());
             m.put("soldOut", p.isSoldOut());
-            m.put("category", p.getCategory() != null ? p.getCategory().name() : null);
+            m.put("category", p.getCategory());
             m.put("status", classifyProductStatus(p));
             return m;
         }).collect(Collectors.toList());

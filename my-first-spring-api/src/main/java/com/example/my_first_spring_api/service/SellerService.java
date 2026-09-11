@@ -101,6 +101,7 @@ public class SellerService {
         product.setIsPreorder(dto.getIsPreorder() != null ? dto.getIsPreorder() : false);
         product.setCutoffTime(validatedCutoff(dto.getCutoffTime()));
         product.setReadyByTime(dto.getReadyByTime());
+        product.setCategory(joinCategories(dto.getCategories()));
         return toProductDto(productRepository.save(product));
     }
 
@@ -151,6 +152,7 @@ public class SellerService {
         if (dto.getReadyByTime() != null) product.setReadyByTime(dto.getReadyByTime());
         if (dto.getMaxQuantity() != null) product.setMaxQuantity(dto.getMaxQuantity());
         if (dto.getIsPreorder() != null) product.setIsPreorder(dto.getIsPreorder());
+        if (dto.getCategories() != null) product.setCategory(joinCategories(dto.getCategories()));
         return toProductDto(productRepository.save(product));
     }
 
@@ -199,6 +201,27 @@ public class SellerService {
         if (!v.matches("^([01]\\d|2[0-3]):[0-5]\\d$"))
             throw new IllegalArgumentException("cutoffTime must use 24-hour HH:mm format, e.g. 20:30");
         return v;
+    }
+
+    /** Joins category enum names into a comma-separated string for multi-category storage. */
+    private String joinCategories(List<String> categories) {
+        if (categories == null || categories.isEmpty()) return null;
+        return categories.stream()
+                .filter(c -> c != null && !c.isBlank())
+                .map(c -> c.trim().toUpperCase())
+                .distinct()
+                .collect(Collectors.joining(","));
+    }
+
+    /** Checks whether a product's category string contains the given category. */
+    private boolean hasCategory(Product product, String category) {
+        String cats = product.getCategory();
+        if (cats == null || category == null) return false;
+        String upper = category.toUpperCase();
+        for (String part : cats.split(",")) {
+            if (part.trim().equals(upper)) return true;
+        }
+        return false;
     }
 
     /**
@@ -260,7 +283,7 @@ public class SellerService {
         dto.setRemainingQuantity(product.getRemainingQuantity());
         dto.setIsPreorder(product.getIsPreorder());
         dto.setKitchenSlug(kitchen != null ? kitchen.getName() : null);
-        dto.setCategory(product.getCategory() != null ? product.getCategory().name() : null);
+        dto.setCategory(product.getCategory());
         dto.setCutoffTime(product.getCutoffTime());
         dto.setReadyByTime(product.getReadyByTime());
         dto.setPreorderType(product.getPreorderType() != null ? product.getPreorderType().name() : null);

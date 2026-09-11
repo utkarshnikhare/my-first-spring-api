@@ -561,7 +561,7 @@ public class SellerAppService {
         dto.setRemainingQuantity(product.getRemainingQuantity());
         dto.setIsPreorder(product.getIsPreorder());
         dto.setKitchenSlug(kitchen != null ? kitchen.getName() : null);
-        dto.setCategory(product.getCategory() != null ? product.getCategory().name() : null);
+        dto.setCategory(product.getCategory());
         dto.setCutoffTime(product.getCutoffTime());
         dto.setReadyByTime(product.getReadyByTime());
         dto.setPreorderType(product.getPreorderType() != null ? product.getPreorderType().name() : null);
@@ -601,7 +601,7 @@ public class SellerAppService {
         product.setMaxQuantity(template.getMaxQuantity());
         product.setRemainingQuantity(template.getMaxQuantity());
         product.setIsPreorder(false);
-        product.setCategory(template.getCategory());
+        product.setCategory(template.getCategory() != null ? template.getCategory().name() : null);
         product.setCutoffTime(template.getCutoffTime());
         product.setReadyByTime(template.getReadyByTime());
         product.setBookedQuantity(0);

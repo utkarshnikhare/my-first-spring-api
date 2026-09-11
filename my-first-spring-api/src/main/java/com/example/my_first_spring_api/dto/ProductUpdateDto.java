@@ -2,6 +2,7 @@ package com.example.my_first_spring_api.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * Payload for partial product updates (PUT /api/seller/products/{id}).
@@ -23,6 +24,7 @@ public class ProductUpdateDto {
     private Integer maxQuantity;
     private Integer remainingQuantity;
     private Boolean isPreorder;
+    private List<String> categories;
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
@@ -52,4 +54,6 @@ public class ProductUpdateDto {
     public void setRemainingQuantity(Integer remainingQuantity) { this.remainingQuantity = remainingQuantity; }
     public Boolean getIsPreorder() { return isPreorder; }
     public void setIsPreorder(Boolean isPreorder) { this.isPreorder = isPreorder; }
+    public List<String> getCategories() { return categories; }
+    public void setCategories(List<String> categories) { this.categories = categories; }
 }
