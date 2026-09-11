@@ -148,9 +148,14 @@ document.addEventListener('click', async function (e) {
 
 // ==================== Favourites (identity-bound, Spec 1.1) ====================
 
+var FAV_TOGGLE_IN_PROGRESS = {}; // guards rapid duplicate clicks per favourite
+
 async function toggleFavourite(type, id, btnEl) {
     var label = type === 'kitchen' ? 'kitchen' : 'dish';
+    var key = type + ':' + id;
+    if (FAV_TOGGLE_IN_PROGRESS[key]) return; // prevent duplicate concurrent requests
     var doToggle = async function () {
+        FAV_TOGGLE_IN_PROGRESS[key] = true;
         try {
             var resp = await api('/api/favourites/' + type + '/' + id + '/toggle', { method: 'POST' });
             // Keep the client-side favourites cache in sync so every heart on the
@@ -158,6 +163,18 @@ async function toggleFavourite(type, id, btnEl) {
             if (FAV_CACHE) {
                 if (resp.favourited) FAV_CACHE.add(String(id));
                 else FAV_CACHE.delete(String(id));
+            }
+            if (FAV_FULL_CACHE) {
+                if (resp.favourited) {
+                    if (!FAV_FULL_CACHE.some(function (f) { return f && f.kitchenId === id && f.type === 'KITCHEN'; })) {
+                        // Re-fetch to get full DTO for newly favourited kitchen
+                        FAV_FULL_CACHE = null;
+                    }
+                } else {
+                    FAV_FULL_CACHE = FAV_FULL_CACHE.filter(function (f) {
+                        return !(f && f.kitchenId === id);
+                    });
+                }
             }
             if (btnEl) {
                 btnEl.classList.toggle('faved', resp.favourited);
@@ -170,6 +187,8 @@ async function toggleFavourite(type, id, btnEl) {
             if (location.hash === '#/favourites' && type === 'kitchen') await render();
         } catch (err) {
             if (!(err instanceof ApiError && err.status === 401)) toast(err.message, 'error');
+        } finally {
+            delete FAV_TOGGLE_IN_PROGRESS[key];
         }
     };
     // Deferred login: favourites require identity — open login gate when needed.

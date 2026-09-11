@@ -8,6 +8,7 @@ import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.repository.FavouriteRepository;
 import com.example.my_first_spring_api.repository.KitchenRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,7 +52,12 @@ public class FavouriteService {
         Favourite f = new Favourite();
         f.setUser(buyer);
         f.setKitchen(kitchen);
-        favouriteRepository.save(f);
+        try {
+            favouriteRepository.save(f);
+        } catch (DataIntegrityViolationException ex) {
+            favouriteRepository.flush();
+            return true;
+        }
         return true;
     }
 

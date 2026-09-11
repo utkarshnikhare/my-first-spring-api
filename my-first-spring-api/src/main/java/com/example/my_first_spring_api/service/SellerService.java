@@ -108,7 +108,7 @@ public class SellerService {
         product.setRemainingQuantity(dto.getMaxQuantity());
         product.setIsPreorder(dto.getIsPreorder() != null ? dto.getIsPreorder() : false);
         product.setCutoffTime(validatedCutoff(dto.getCutoffTime()));
-        product.setReadyByTime(dto.getReadyByTime());
+        product.setReadyByTime(dto.getReadyByTime() != null && dto.getReadyByTime().trim().isEmpty() ? null : dto.getReadyByTime());
         product.setCategory(joinCategories(dto.getCategories()));
         return toProductDto(productRepository.save(product));
     }
@@ -157,7 +157,7 @@ public class SellerService {
         if (dto.getOrderWindowStart() != null) product.setOrderWindowStart(dto.getOrderWindowStart());
         if (dto.getOrderWindowEnd() != null) product.setOrderWindowEnd(dto.getOrderWindowEnd());
         if (dto.getCutoffTime() != null) product.setCutoffTime(validatedCutoff(dto.getCutoffTime()));
-        if (dto.getReadyByTime() != null) product.setReadyByTime(dto.getReadyByTime());
+        if (dto.getReadyByTime() != null && !dto.getReadyByTime().trim().isEmpty()) product.setReadyByTime(dto.getReadyByTime());
         if (dto.getMaxQuantity() != null) product.setMaxQuantity(dto.getMaxQuantity());
         if (dto.getIsPreorder() != null) product.setIsPreorder(dto.getIsPreorder());
         if (dto.getCategories() != null) product.setCategory(joinCategories(dto.getCategories()));

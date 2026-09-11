@@ -8,6 +8,7 @@
 // ==================== Favourites UI helpers ====================
 
 var FAV_CACHE = null; // Set of favourited kitchen ids; null = not loaded yet
+var FAV_FULL_CACHE = null; // Full FavouriteDto list from last /api/favourites call; null = not loaded/failed
 
 function favSet() {
     return FAV_CACHE && FAV_CACHE.size ? FAV_CACHE : new Set();
@@ -15,9 +16,11 @@ function favSet() {
 
 async function loadFavSet() {
     FAV_CACHE = new Set();
+    FAV_FULL_CACHE = null;
     if (!state.user) return FAV_CACHE;
     try {
         var favs = await api('/api/favourites');
+        FAV_FULL_CACHE = (favs || []);
         (favs || []).forEach(function (f) {
             if (f && f.kitchenId) FAV_CACHE.add(String(f.kitchenId));
         });
@@ -172,20 +175,12 @@ async function homeView() {
     return h;
 }
 
-// Demo favourites pre-populate the Favourites experience (Screen 8 spec)
-var DEMO_FAVOURITES = [
-    { kitchenId: 1, name: 'Aarti Kitchen', type: 'KITCHEN' },
-    { kitchenId: 3, name: 'Dakshin Kitchen', type: 'KITCHEN' },
-    { kitchenId: 7, name: 'Deccan Kitchen', type: 'KITCHEN' }
-];
-
 async function favRowInner() {
+    if (!state.user) return '';
     try {
-        var favs = state.user ? await api('/api/favourites') : null;
-        // /api/favourites returns a flat array of FavouriteDto (backend), NOT a {kitchens} envelope.
-        var kitchens = (favs && favs.length) ? favs : DEMO_FAVOURITES;
-        if (!kitchens.length) return emptyHtml('❤️', 'No favourites yet', 'Tap the heart on any kitchen to save it here.');
-        return '<div class="fav-row">' + kitchens.slice(0, 6).map(function (k) {
+        var favs = await api('/api/favourites');
+        if (!favs || !favs.length) return '<div class="muted small py-2">No favourites yet — tap ❤ on any kitchen to save.</div>';
+        return '<div class="fav-row">' + favs.slice(0, 6).map(function (k) {
             return '<a class="fav-chip" href="' + (k.kitchenId ? '#/kitchen/' + k.kitchenId : '#/kitchens') + '">' +
                 '<span class="fc-emoji">' + (usableImageUrl(k.imageUrl) ? '<img src="' + esc(k.imageUrl) + '" alt="' + esc(k.name) + '" onerror="imgFallback(this)">' : '🏪') + '</span>' +
                 '<div class="fc-name">' + esc(k.name) + '</div></a>';
@@ -276,6 +271,7 @@ var DISCOVERY_TABS = [
 ];
 
 async function homemadeView() {
+    await loadFavSet();
     var h = '<div class="view-enter">';
     h += backBarHtml('Homemade Products');
     try {
@@ -294,7 +290,7 @@ async function homemadeView() {
                     '<div><div class="kitchen-name">' + esc(s.displayName) + '</div>' +
                     '<div class="kitchen-desc">' + esc(s.shortDescription || s.description || '') + '</div>' +
                     statusPill + '</div>' +
-                    '<button class="heart-btn" data-action="toggle-fav-kitchen" data-kid="' + s.id + '" aria-label="Favourite">' + (FAV_CACHE && FAV_CACHE.has(String(s.id)) ? '❤️' : '🤍') + '</button>' +
+                    heartBtnHtml(s.id, s.displayName) +
                     '</div>' +
                     '<div class="kitchen-card-body">' +
                     '<a class="btn btn-primary btn-block" href="#/homemade-store/' + esc(s.slug || s.name) + '">View Store</a>' +
@@ -455,6 +451,7 @@ async function homemadeStoreView(hash) {
 async function kitchenPageView(hash) {
     var id = hash.split('/')[2];
     var h = '<div class="view-enter">';
+    await loadFavSet();
     try {
         var detail = await api('/api/kitchens/id/' + id);
         var k = detail.kitchen;
@@ -469,7 +466,9 @@ async function kitchenPageView(hash) {
         h += '<div class="kitchen-hero">' +
             '<div class="kh-actions">' +
             '<button class="icon-btn ghost" type="button" data-action="go-back" aria-label="Back">←</button>' +
-            '<button class="icon-btn ghost" type="button" data-action="share-kitchen" aria-label="Share">🔗</button></div>' +
+            '<button class="icon-btn ghost" type="button" data-action="share-kitchen" aria-label="Share">🔗</button>' +
+            heartBtnHtml(k.id, k.displayName) +
+            '</div>' +
             '<div class="kh-identity">' +
             khAvatar +
             '<div><div class="kh-name">' + esc(k.displayName) + '</div>' +
@@ -1118,21 +1117,24 @@ async function comparisonView(hash) {
 // ==================== Screen 8: Favourites ====================
 
 async function favouritesView() {
-    // Favourites are kitchen-only (no favourite food-item UI).
-    await loadFavSet();
     var h = '<div class="view-enter"><div class="page-head"><h1>❤️ Favourite Kitchens</h1>' +
         '<p class="muted small">Save up to 3 community kitchens for quick access.</p></div>';
 
-    var favs = null;
-    if (state.user) {
-        try { favs = await api('/api/favourites'); } catch (e) { favs = null; }
+    if (!state.user) {
+        h += emptyHtml('🔐', 'Login to view your favourites', 'Your saved kitchens appear here once you log in.',
+            '<button class="btn btn-primary card-mt" type="button" data-action="open-login">Log in</button>');
+        h += '</div>';
+        return h;
     }
-    var list = favs && favs.length ? favs : DEMO_FAVOURITES;
-    if (!list || !list.length) {
-        var demoNote = !state.user ? '<p class="tiny muted mt-1">Showing demo favourites — log in to see yours.</p>' : '';
-        h += emptyHtml('❤️', 'No favourite kitchens yet', 'Tap the heart on any kitchen to save it here.') + demoNote;
+
+    if (FAV_FULL_CACHE === null) await loadFavSet();
+    var favs = FAV_FULL_CACHE;
+    if (favs === null) {
+        h += emptyHtml('⚠️', 'Could not load favourites', 'Something went wrong. Please try again.');
+    } else if (!favs.length) {
+        h += emptyHtml('❤️', 'No favourite kitchens yet', 'Tap the heart on any kitchen to save it here.');
     } else {
-        h += list.map(function (f) {
+        h += favs.map(function (f) {
             var kid = f.kitchenId || null;
             var faved = kid && favSet().has(String(kid));
             var href = kid ? '#/kitchen/' + kid : '#/kitchens';
@@ -1249,7 +1251,7 @@ async function ordersView() {
                         '<div><div class="si-name">🏪 ' + esc(en.kitchenName) + '</div>' +
                         '<p class="si-sub mt-1">' + esc(en.message) + '</p>' +
                         '<p class="tiny muted mt-1">' + new Date(en.createdAt).toLocaleString() + '</p></div>' +
-                        (en.status === 'SELLER_RESPONDED'
+                        (en.status === 'CONTACTED'
                             ? '<span class="pill pill-green">🟢 Seller responded</span>'
                             : '<span class="pill pill-amber">🟠 Waiting for response</span>') +
                         '</div></div>';

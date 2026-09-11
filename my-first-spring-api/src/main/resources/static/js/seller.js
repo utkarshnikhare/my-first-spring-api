@@ -103,7 +103,7 @@ async function sellerAddView() {
 // SCREEN 1: SELLER DASHBOARD (HOME)
 async function sellerHomeView() {
     var h = '<div class="view-enter">';
-    h += '<div class="seller-header"><div class="sdh-text"><p class="sdh-greeting">' + greeting() + ', Aarti</p><h1 class="sdh-title">Your Dashboard</h1></div><span class="notif-bell"><button class="icon-btn" type="button" data-action="noop" aria-label="Notifications">🔔<span class="bell-badge">3</span></button><button class="icon-btn" type="button" data-action="toggle-theme" aria-label="Toggle theme">🌓</button></span></div>';
+    h += '<div class="seller-header"><div class="sdh-text"><p class="sdh-greeting">' + greeting() + ', ' + esc(S.user && S.user.name ? S.user.name : 'Seller') + '</p><h1 class="sdh-title">Your Dashboard</h1></div><span class="notif-bell"><button class="icon-btn" type="button" data-action="noop" aria-label="Notifications">🔔<span class="bell-badge">3</span></button><button class="icon-btn" type="button" data-action="toggle-theme" aria-label="Toggle theme">🌓</button></span></div>';
     try {
         var dash = await api('/api/seller-app/dashboard');
         S.kitchen = { id: dash.kitchenId, name: dash.kitchenName };
@@ -181,6 +181,8 @@ async function sellerCreateView() {
     h += '<div class="section-gap" id="chooseDateRow" hidden><input type="date" class="sort-select w-full" data-action="set-availability-date" value="' + sellerDate('today') + '"></div>';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open <span class="req">*</span></label><input class="form-input" name="orderWindowStart" type="time" value="08:00"></div>';
     h += '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label><input class="form-input" name="orderWindowEnd" type="time" value="10:00"></div></div>';
+    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Cutoff <span class="req">*</span></label><input class="form-input" name="cutoffTime" type="time" value="10:00"></div>';
+    h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTime" type="text" placeholder="e.g. 1:00 PM today"></div></div>';
     h += '<div class="form-group"><label class="form-label">Quantity Available <span class="req">*</span></label><input class="form-input" name="maxQuantity" type="number" placeholder="Blank for unlimited"></div>';
     h += '<div class="form-group"><label class="form-label">To be listed in <span class="req">*</span></label><div class="checkbox-group"><label class="checkbox-option"><input type="checkbox" name="categories" value="BREAKFAST"> Breakfast</label><label class="checkbox-option"><input type="checkbox" name="categories" value="LUNCH"> Lunch</label><label class="checkbox-option"><input type="checkbox" name="categories" value="DINNER"> Dinner</label><label class="checkbox-option"><input type="checkbox" name="categories" value="SNACKS"> Snacks</label></div><p class="muted small">Select at least one category.</p></div>';
     h += '<div class="toggle-row"><div><div class="toggle-text">Mark as Favourite</div><div class="toggle-note">Save as template (max 3).</div></div><div class="toggle-switch" id="favToggle" data-action="toggle-favourite"></div></div>';
@@ -352,12 +354,14 @@ document.addEventListener('submit', async function (e) {
             var saveFav = $('#favToggle') && $('#favToggle').classList.contains('on');
             if (saveFav) {
                 try {
-                    var favBody = { name: vals.name, description: vals.description || '', price: Number(vals.price), priceUnit: vals.priceUnit, maxQuantity: vals.maxQuantity ? Number(vals.maxQuantity) : null, orderWindowStart: vals.orderWindowStart, orderWindowEnd: vals.orderWindowEnd, availableDate: vals.availableDate, category: (categories && categories[0]) || '' };
+                    var favBody = { name: vals.name, description: vals.description || '', price: Number(vals.price), priceUnit: vals.priceUnit, maxQuantity: vals.maxQuantity ? Number(vals.maxQuantity) : null, orderWindowStart: vals.orderWindowStart, orderWindowEnd: vals.orderWindowEnd, cutoffTime: vals.cutoffTime, readyByTime: vals.readyByTime, availableDate: vals.availableDate, category: (categories && categories[0]) || '' };
                     await api('/api/seller-app/templates', { method: 'POST', body: favBody });
                 } catch (favErr) { toast('Could not save favourite: ' + favErr.message, 'error'); }
             }
             await api('/api/seller/products?kitchenId=' + kid, { method: 'POST', body: vals });
-            toast('Offering published!', 'success'); sellerNavigate('#/home');
+            toast('Offering published!', 'success');
+            S.draftOffering = null;
+            sellerNavigate('#/home');
         } else if (form.id === 'kitchenForm') {
             var kid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
             if (!kid) {

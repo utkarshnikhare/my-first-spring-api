@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
  * Toggling a favourite is an identity-bound action, so it is session-gated.
  */
 @Entity
-@Table(name = "favourites")
+@Table(name = "favourites", uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "kitchen_id"}))
 public class Favourite {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
