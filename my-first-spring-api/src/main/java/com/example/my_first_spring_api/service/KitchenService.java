@@ -161,6 +161,7 @@ public class KitchenService {
         dto.setInstagramLink(kitchen.getInstagramLink());
         dto.setUpiId(kitchen.getUpiId());
         dto.setOrderDeadline(kitchen.getOrderDeadline());
+        dto.setSellerType(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : null);
         return dto;
     }
 

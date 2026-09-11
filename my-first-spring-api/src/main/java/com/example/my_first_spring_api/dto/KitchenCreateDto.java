@@ -19,6 +19,7 @@ public class KitchenCreateDto {
     private String instagramLink;
     private String upiId;
     private Boolean availableToday;
+    private String sellerType;
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
@@ -44,4 +45,6 @@ public class KitchenCreateDto {
     public void setUpiId(String upiId) { this.upiId = upiId; }
     public Boolean getAvailableToday() { return availableToday; }
     public void setAvailableToday(Boolean availableToday) { this.availableToday = availableToday; }
+    public String getSellerType() { return sellerType; }
+    public void setSellerType(String sellerType) { this.sellerType = sellerType; }
 }

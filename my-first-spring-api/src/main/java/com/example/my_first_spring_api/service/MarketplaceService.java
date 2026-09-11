@@ -84,9 +84,11 @@ public class MarketplaceService {
     }
 
     private KitchenDto toKitchenDto(Kitchen kitchen) {
-        return new KitchenDto(kitchen.getId(), kitchen.getName(), kitchen.getDisplayName(),
+        KitchenDto dto = new KitchenDto(kitchen.getId(), kitchen.getName(), kitchen.getDisplayName(),
                 kitchen.getDescription(), kitchen.getImageUrl(), kitchen.getRating(),
                 kitchen.getAvailableToday(), kitchen.getSeller() != null ? kitchen.getSeller().getId() : null);
+        dto.setSellerType(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : null);
+        return dto;
     }
 
     private ProductDto toProductDto(Product product) {

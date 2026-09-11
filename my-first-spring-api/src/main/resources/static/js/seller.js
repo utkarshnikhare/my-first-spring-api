@@ -6,7 +6,8 @@ var sellerRoutes = {
     '#/home': sellerHomeView, '#/add': sellerAddView, '#/create': sellerCreateView,
     '#/quick-post': sellerQuickPostView, '#/history': sellerHistoryView,
     '#/kitchen': sellerKitchenView, '#/orders': sellerOrdersView,
-    '#/order-detail': sellerOrderDetailView, '#/earnings': sellerEarningsView
+    '#/order-detail': sellerOrderDetailView, '#/earnings': sellerEarningsView,
+    '#/enquiries': sellerEnquiriesView
 };
 function sellerResolveRoute(hash) {
     if (sellerRoutes[hash]) return { fn: sellerRoutes[hash], arg: hash };
@@ -24,7 +25,7 @@ async function sellerRender() {
 }
 function sellerUpdateNav(hash) {
     $all('.nav-item').forEach(function (el) { el.classList.remove('active'); });
-    var key = hash === '#/home' ? 'home' : hash === '#/kitchen' ? 'kitchen' : (hash === '#/orders' || hash.startsWith('#/order-detail/')) ? 'orders' : hash === '#/history' ? 'history' : hash === '#/earnings' ? 'earnings' : null;
+    var key = hash === '#/home' ? 'home' : hash === '#/kitchen' ? 'kitchen' : (hash === '#/orders' || hash.startsWith('#/order-detail/')) ? 'orders' : hash === '#/enquiries' ? 'enquiries' : hash === '#/history' ? 'history' : hash === '#/earnings' ? 'earnings' : null;
     var el = document.querySelector('[data-nav="' + (key || '') + '"]');
     if (el) el.classList.add('active');
 }
@@ -231,6 +232,7 @@ async function sellerKitchenView() {
     h += '<div class="form-group"><label class="form-label">Full Description</label><textarea class="form-textarea" name="description">' + esc(kitchen && kitchen.description ? kitchen.description : 'Fresh homemade breakfast and traditional snacks') + '</textarea></div>';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">WhatsApp</label><input class="form-input" name="whatsappLink" value="' + esc(kitchen && kitchen.whatsappLink ? kitchen.whatsappLink : '+91 9100000001') + '"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" name="instagramLink" value="' + esc(kitchen && kitchen.instagramLink ? kitchen.instagramLink : '@aartiskitchen') + '"></div></div>';
     h += '<div class="form-group"><label class="form-label">UPI ID</label><input class="form-input" name="upiId" value="' + esc(kitchen && kitchen.upiId ? kitchen.upiId : 'aarti@okhdfc') + '"></div>';
+    h += '<div class="form-group"><label class="form-label">Store Type</label><div class="radio-group"><label class="radio-option' + (kitchen && kitchen.sellerType === 'HOMEMADE_PRODUCTS' ? '' : ' selected') + '" data-action="set-seller-type" data-val="KITCHEN">🍽️ Kitchen / Food Seller</label><label class="radio-option' + (kitchen && kitchen.sellerType === 'HOMEMADE_PRODUCTS' ? ' selected' : '') + '" data-action="set-seller-type" data-val="HOMEMADE_PRODUCTS">🍰 Homemade Products</label></div><input type="hidden" name="sellerType" id="sellerTypeInput" value="' + esc(kitchen && kitchen.sellerType ? kitchen.sellerType : 'KITCHEN') + '"></div>';
     h += '<div class="info-box">Your menu loads automatically from live offerings.</div>';
     h += '<button class="btn btn-primary btn-block" type="submit">SAVE CHANGES</button></form></div>';
     return h;
@@ -247,6 +249,35 @@ async function sellerEarningsView() {
         else { e.items.forEach(function (item) { h += '<div class="earning-item"><span class="ei-icon">🍽️</span><span class="ei-body"><span class="ei-name">' + esc(item.productName) + '</span><span class="ei-orders">' + item.totalOrders + ' orders</span></span><span class="ei-revenue"><span class="ei-confirmed">' + money(item.confirmedRevenue) + '</span><br><span class="ei-pending">' + money(item.pendingRevenue) + '</span></span></div>'; }); }
         h += '<a class="btn btn-secondary btn-block" href="#/history">VIEW FULL HISTORY</a>';
     } catch (err) { h += emptyHtml('⚠️', 'Could not load earnings', err.message); }
+    h += '</div>';
+    return h;
+}
+
+// ==================== Screen: Seller Enquiries ====================
+
+async function sellerEnquiriesView() {
+    var h = '<div class="view-enter"><div class="page-head"><h1>Enquiries</h1></div>';
+    try {
+        var enquiries = await api('/api/enquiries/seller/my');
+        if (!enquiries || !enquiries.length) {
+            h += emptyHtml('✉️', 'No enquiries yet', 'When buyers send enquiries, they will appear here.');
+        } else {
+            enquiries.forEach(function (enq) {
+                var statusClass = enq.status === 'NEW' ? 'pill-amber' : enq.status === 'CONTACTED' ? 'pill-green' : 'pill';
+                var ackBtn = enq.acknowledgedAt ? '' : '<button class="btn btn-primary btn-sm" data-action="ack-enquiry" data-id="' + enq.id + '">Acknowledge</button>';
+                var closeBtn = enq.status !== 'CLOSED' ? '<button class="btn btn-secondary btn-sm" data-action="close-enquiry" data-id="' + enq.id + '">Close</button>' : '';
+                h += '<div class="card pad card-mb">' +
+                    '<div class="top-row mb-2"><div class="flex-1"><div class="font-700">' + esc(enq.kitchenName) + '</div>' +
+                    '<div class="muted small">' + esc(enq.message) + '</div>' +
+                    (enq.preferredDate ? '<div class="muted tiny">Preferred: ' + esc(enq.preferredDate) + '</div>' : '') +
+                    (enq.quantity ? '<div class="muted tiny">Quantity: ' + esc(enq.quantity) + '</div>' : '') +
+                    '</div>' +
+                    '<span class="pill ' + statusClass + '">' + enq.status + '</span></div>' +
+                    '<div class="tiny muted">' + prettyDate(enq.createdAt) + (enq.acknowledgedAt ? ' · Acknowledged' : ' · Unacknowledged') + '</div>' +
+                    '<div class="mt-2">' + ackBtn + ' ' + closeBtn + '</div></div>';
+            });
+        }
+    } catch (err) { h += emptyHtml('⚠️', 'Could not load enquiries', err.message); }
     h += '</div>';
     return h;
 }
@@ -462,6 +493,29 @@ document.addEventListener('click', async function (e) {
             case 'add-photo': toast('Photo upload (demo)', 'info'); break;
             case 'upload-avatar': toast('Avatar upload (demo)', 'info'); break;
             case 'seller-retry': location.reload(); break;
+            case 'ack-enquiry': {
+                var eid = Number(t.dataset.id);
+                await api('/api/enquiries/' + eid + '/acknowledge', { method: 'POST' });
+                toast('Enquiry acknowledged', 'success');
+                await sellerRender();
+                break;
+            }
+            case 'close-enquiry': {
+                var eid2 = Number(t.dataset.id);
+                if (!confirm('Close this enquiry?')) return;
+                await api('/api/enquiries/' + eid2 + '/status', { method: 'PATCH', body: { status: 'CLOSED' } });
+                toast('Enquiry closed', 'success');
+                await sellerRender();
+                break;
+            }
+            case 'set-seller-type': {
+                $all('.radio-option').forEach(function (el) { el.classList.remove('selected'); });
+                t.classList.add('selected');
+                var val = t.dataset.val || 'KITCHEN';
+                var input = $('#sellerTypeInput');
+                if (input) input.value = val;
+                break;
+            }
              case 'set-availability': $all('.radio-option').forEach(function (el) { el.classList.remove('selected'); }); t.classList.add('selected'); var av = $('#availDate'); if (av) av.value = sellerDate(t.dataset.val || 'today'); var cdr = $('#chooseDateRow'); if (cdr) { var val = t.dataset.val || 'today'; cdr.hidden = !(val === 'choose'); if (val === 'choose' && av) av.value = av.value; } break;
              case 'set-availability-date': { var picker = t; var av2 = $('#availDate'); if (av2 && picker && picker.value) av2.value = picker.value; break; }
         }

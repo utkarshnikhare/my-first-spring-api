@@ -18,6 +18,8 @@ public class OrderDto {
     private List<OrderItemDto> items;
     private BuyerSummary buyer;
     private String customInstructions;
+    private LocalDateTime acknowledgedAt;
+    private Long acknowledgedBySellerId;
 
     public static class KitchenSummary {
         private Long id;
@@ -79,4 +81,8 @@ public class OrderDto {
     public void setBuyer(BuyerSummary buyer) { this.buyer = buyer; }
     public String getCustomInstructions() { return customInstructions; }
     public void setCustomInstructions(String customInstructions) { this.customInstructions = customInstructions; }
+    public LocalDateTime getAcknowledgedAt() { return acknowledgedAt; }
+    public void setAcknowledgedAt(LocalDateTime acknowledgedAt) { this.acknowledgedAt = acknowledgedAt; }
+    public Long getAcknowledgedBySellerId() { return acknowledgedBySellerId; }
+    public void setAcknowledgedBySellerId(Long acknowledgedBySellerId) { this.acknowledgedBySellerId = acknowledgedBySellerId; }
 }

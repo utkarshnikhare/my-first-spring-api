@@ -101,6 +101,7 @@ public class DemoDataSeeder {
         User sunita = seller("Sunita", "9100000013", "G-702", SellerApprovalStatus.APPROVED, "Riverside", "Tower X");
         User deepak = seller("Deepak", "9100000014", "H-801", SellerApprovalStatus.APPROVED, "Riverside", "Tower Y");
         User kavita = seller("Kavita", "9100000015", "H-802", SellerApprovalStatus.APPROVED, "Riverside", "Tower Z");
+        User meenaCakes = seller("Meena", "9100000016", "I-101", SellerApprovalStatus.APPROVED, "Lohegaon", "Sai Arcade");
 
         // ---- 15 Active demo kitchens ----
         Kitchen kAarti = kitchen("aarti-kitchen", "Aarti Kitchen", "Homemade Maharashtrian Food",
@@ -133,6 +134,10 @@ public class DemoDataSeeder {
                 "Fresh breakfast tiffin — poha, upma, idli, dosa and chai.", "tiffin@okhdfc", 4.6, "10:30 AM", deepak, null, null);
         Kitchen kMulti = kitchen("bharat-multi-cuisine", "Bharat Multi-Cuisine Kitchen", "Multi-Cuisine Indian Food",
                 "A diverse menu spanning North Indian, South Indian, Chinese and Continental.", "multi@okhdfc", 4.5, "10:00 PM", kavita, null, null);
+        Kitchen kMeenaCakes = kitchen("meena-cakes", "Meena's Cakes", "Homemade Cakes & Snacks",
+                "Custom cakes, cookies, and snacks made to order. Message for custom designs.", "meena@okhdfc", 4.8, "No deadline", meenaCakes, "https://example.com/meena-cakes.jpg", "@meenacakes");
+        kMeenaCakes.setSellerType(com.example.my_first_spring_api.model.SellerType.HOMEMADE_PRODUCTS);
+        kitchenRepository.save(kMeenaCakes);
         // ---- Aarti Kitchen (Maharashtrian) ----
         product(kAarti, "Poha", "Fluffy flattened-rice breakfast tempered with peanuts, curry leaves and turmeric", 40, "plate", 50, 30, 4.6);
         // Unlimited-quantity offering: 50 booked, no cap — shows "50 booked · No limit" (Spec 4.4).
@@ -160,6 +165,13 @@ public class DemoDataSeeder {
         prePuran.setReadyByTime("1:30 PM Monday");
         prePuran.setBookedQuantity(0);
         productRepository.save(prePuran);
+
+        // ---- Meena's Cakes (Homemade) ----
+        product(kMeenaCakes, "Chocolate Cake", "Rich chocolate cake with creamy frosting. Available in 250g/500g/1kg.", 250, "250g", 20, 10, 4.9);
+        product(kMeenaCakes, "Mixed Fruit Cake", "Fresh fruit cake with seasonal fruits and whipped cream.", 280, "250g", 15, 8, 4.7);
+        product(kMeenaCakes, "Special Mango Cake", "Mango-flavoured cake with mango pieces and mango pulp frosting.", 550, "500g", 10, 5, 4.8);
+        product(kMeenaCakes, "Gulab Jamun", "Soft milk-solid balls soaked in rose-flavoured sugar syrup.", 120, "piece", 30, 15, 4.6);
+        product(kMeenaCakes, "Laddoo", "Traditional besan laddoo made with ghee and dry fruits.", 100, "piece", 40, 20, 4.5);
 
         // ---- Punjabi Rasoi ----
         product(kPunjabi, "Punjabi Chole", "Spicy chickpea curry with onions, tomatoes and fresh coriander", 120, "plate", 40, 25, 4.7);
@@ -495,7 +507,7 @@ public class DemoDataSeeder {
             enquiry.setUser(buyer);
             enquiry.setKitchen(kitchen);
             enquiry.setMessage(messages[i % messages.length]);
-            enquiry.setStatus(i % 3 == 0 ? EnquiryStatus.SELLER_RESPONDED : EnquiryStatus.WAITING_FOR_RESPONSE);
+            enquiry.setStatus(i % 3 == 0 ? EnquiryStatus.CONTACTED : EnquiryStatus.NEW);
             enquiry.setCreatedAt(LocalDateTime.now().minusDays(1).minusHours(i * 2));
             enquiryRepository.save(enquiry);
         }

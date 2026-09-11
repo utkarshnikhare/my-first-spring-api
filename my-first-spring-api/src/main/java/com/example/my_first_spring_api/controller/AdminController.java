@@ -44,8 +44,8 @@ public class AdminController {
     }
 
     @GetMapping("/kitchens")
-    public ResponseEntity<List<Map<String, Object>>> kitchens() {
-        return ResponseEntity.ok(adminService.kitchens());
+    public ResponseEntity<List<Map<String, Object>>> kitchens(@RequestParam(required = false) String sellerType) {
+        return ResponseEntity.ok(adminService.kitchens(sellerType));
     }
 
     @PatchMapping("/kitchens/{kitchenId}/service-areas")

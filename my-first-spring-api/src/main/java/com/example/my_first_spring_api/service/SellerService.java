@@ -61,6 +61,10 @@ public class SellerService {
         kitchen.setInstagramLink(dto.getInstagramLink());
         kitchen.setUpiId(dto.getUpiId());
         kitchen.setAvailableToday(dto.getAvailableToday() != null ? dto.getAvailableToday() : true);
+        if (dto.getSellerType() != null && !dto.getSellerType().isBlank()) {
+            try { kitchen.setSellerType(com.example.my_first_spring_api.model.SellerType.valueOf(dto.getSellerType().toUpperCase())); }
+            catch (IllegalArgumentException ignored) {}
+        }
         return toKitchenDto(kitchenRepository.save(kitchen));
     }
 
@@ -77,6 +81,10 @@ public class SellerService {
         if (dto.getInstagramLink() != null) kitchen.setInstagramLink(dto.getInstagramLink());
         if (dto.getUpiId() != null) kitchen.setUpiId(dto.getUpiId());
         if (dto.getAvailableToday() != null) kitchen.setAvailableToday(dto.getAvailableToday());
+        if (dto.getSellerType() != null && !dto.getSellerType().isBlank()) {
+            try { kitchen.setSellerType(com.example.my_first_spring_api.model.SellerType.valueOf(dto.getSellerType().toUpperCase())); }
+            catch (IllegalArgumentException ignored) {}
+        }
         return toKitchenDto(kitchenRepository.save(kitchen));
     }
 
@@ -186,6 +194,10 @@ public class SellerService {
         return orderService.markOrderAsPaid(orderId, seller);
     }
 
+    public OrderDto acknowledgeOrder(Long orderId, User seller) {
+        return orderService.acknowledgeOrder(orderId, seller);
+    }
+
     private Kitchen getOwnedKitchen(Long kitchenId, User seller) {
         Kitchen kitchen = kitchenRepository.findById(kitchenId)
                 .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
@@ -266,6 +278,7 @@ public class SellerService {
         dto.setInstagramLink(kitchen.getInstagramLink());
         dto.setUpiId(kitchen.getUpiId());
         dto.setOrderDeadline(kitchen.getOrderDeadline());
+        dto.setSellerType(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : null);
         return dto;
     }
 

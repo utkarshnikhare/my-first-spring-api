@@ -18,6 +18,7 @@ public class KitchenDto {
     private Boolean availableToday;
     private String orderDeadline;
     private Long sellerId;
+    private String sellerType;
 
     public KitchenDto() {}
 
@@ -67,4 +68,6 @@ public class KitchenDto {
     public void setOrderDeadline(String orderDeadline) { this.orderDeadline = orderDeadline; }
     public Long getSellerId() { return sellerId; }
     public void setSellerId(Long sellerId) { this.sellerId = sellerId; }
+    public String getSellerType() { return sellerType; }
+    public void setSellerType(String sellerType) { this.sellerType = sellerType; }
 }

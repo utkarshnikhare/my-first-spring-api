@@ -233,7 +233,8 @@ public class OrderService {
             throw new IllegalArgumentException("This kitchen does not serve your selected area. Please choose another kitchen.");
         }
         consumeStock(order);
-        if (paymentStatus == PaymentStatus.PAID) {
+        boolean isHomemade = order.getKitchen() != null && order.getKitchen().getSellerType() == SellerType.HOMEMADE_PRODUCTS;
+        if (paymentStatus == PaymentStatus.PAID && !isHomemade) {
             order.setPaymentStatus(PaymentStatus.PAID);
             order.setOrderStatus(OrderStatus.CONFIRMED);
         } else {
@@ -351,6 +352,26 @@ public class OrderService {
         return toOrderDto(order);
     }
 
+    public OrderDto acknowledgeOrder(Long orderId, User seller) {
+        Order order = orderRepository.findById(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
+        if (order.getKitchen() == null || !order.getKitchen().getSeller().getId().equals(seller.getId())) {
+            throw new SellerNotAuthorizedException("Not authorized");
+        }
+        if (order.getOrderStatus() == OrderStatus.CANCELLED) {
+            throw new IllegalArgumentException("This order is already cancelled.");
+        }
+        if (order.getAcknowledgedAt() != null) {
+            throw new IllegalArgumentException("This order has already been acknowledged.");
+        }
+        order.setAcknowledgedAt(java.time.LocalDateTime.now());
+        order.setAcknowledgedBy(seller);
+        if (order.getOrderStatus() == OrderStatus.ORDERED) {
+            order.setOrderStatus(OrderStatus.CONFIRMED);
+        }
+        orderRepository.save(order);
+        return toOrderDto(order);
+    }
+
     @Transactional(readOnly = true)
     public List<OrderDto> getSellerOrders(User seller) {
         List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
@@ -415,6 +436,8 @@ public class OrderService {
         dto.setCreatedAt(order.getCreatedAt());
         dto.setUpdatedAt(order.getUpdatedAt());
         dto.setCustomInstructions(order.getCustomInstructions());
+        dto.setAcknowledgedAt(order.getAcknowledgedAt());
+        dto.setAcknowledgedBySellerId(order.getAcknowledgedBy() != null ? order.getAcknowledgedBy().getId() : null);
         Kitchen kitchen = order.getKitchen();
         if (kitchen != null) {
             dto.setKitchen(new OrderDto.KitchenSummary(

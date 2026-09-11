@@ -1,6 +1,7 @@
 package com.example.my_first_spring_api.service;
 
 import com.example.my_first_spring_api.model.Kitchen;
+import com.example.my_first_spring_api.model.SellerType;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.model.UserRole;
 
@@ -19,6 +20,10 @@ public final class KitchenVisibility {
                 && seller.getRole() == UserRole.SELLER
                 && seller.isApprovedSeller()
                 && Boolean.TRUE.equals(kitchen.getAvailableToday());
+    }
+
+    public static boolean isHomemadeStore(Kitchen kitchen) {
+        return kitchen != null && kitchen.getSellerType() == SellerType.HOMEMADE_PRODUCTS;
     }
 
     public static boolean isServiceAreaVisible(Kitchen kitchen, User buyer) {

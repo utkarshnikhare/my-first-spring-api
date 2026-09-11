@@ -8,8 +8,13 @@ public class EnquiryDto {
     private String kitchenName;
     private String kitchenImageUrl;
     private String message;
-    /** WAITING_FOR_RESPONSE | SELLER_RESPONDED */
+    /** NEW | CONTACTED | CLOSED */
     private String status;
+    private String preferredDate;
+    private String quantity;
+    private String referenceImageUrl;
+    private LocalDateTime acknowledgedAt;
+    private Long acknowledgedBySellerId;
     private LocalDateTime createdAt;
 
     public EnquiryDto() {}
@@ -26,6 +31,16 @@ public class EnquiryDto {
     public void setMessage(String message) { this.message = message; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public String getPreferredDate() { return preferredDate; }
+    public void setPreferredDate(String preferredDate) { this.preferredDate = preferredDate; }
+    public String getQuantity() { return quantity; }
+    public void setQuantity(String quantity) { this.quantity = quantity; }
+    public String getReferenceImageUrl() { return referenceImageUrl; }
+    public void setReferenceImageUrl(String referenceImageUrl) { this.referenceImageUrl = referenceImageUrl; }
+    public LocalDateTime getAcknowledgedAt() { return acknowledgedAt; }
+    public void setAcknowledgedAt(LocalDateTime acknowledgedAt) { this.acknowledgedAt = acknowledgedAt; }
+    public Long getAcknowledgedBySellerId() { return acknowledgedBySellerId; }
+    public void setAcknowledgedBySellerId(Long acknowledgedBySellerId) { this.acknowledgedBySellerId = acknowledgedBySellerId; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

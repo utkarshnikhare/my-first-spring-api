@@ -95,6 +95,12 @@ public class DiscoveryController {
                 "offers", offers));
     }
 
+    @GetMapping("/homemade")
+    public ResponseEntity<List<KitchenCard>> getHomemadeStores(HttpSession session) {
+        User buyer = buyerService.getCurrentBuyer(session);
+        return ResponseEntity.ok(discoveryService.getHomemadeStores(buyer));
+    }
+
     private Category parseCategory(String category) {
         if (category == null || category.isBlank()) return null;
         try {

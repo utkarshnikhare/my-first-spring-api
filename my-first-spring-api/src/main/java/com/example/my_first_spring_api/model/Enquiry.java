@@ -24,7 +24,23 @@ public class Enquiry {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private EnquiryStatus status = EnquiryStatus.WAITING_FOR_RESPONSE;
+    private EnquiryStatus status = EnquiryStatus.NEW;
+
+    @Column(name = "preferred_date")
+    private String preferredDate;
+
+    @Column(name = "quantity")
+    private String quantity;
+
+    @Column(name = "reference_image_url")
+    private String referenceImageUrl;
+
+    @Column(name = "acknowledged_at")
+    private LocalDateTime acknowledgedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "acknowledged_by")
+    private User acknowledgedBy;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -50,6 +66,16 @@ public class Enquiry {
     public void setMessage(String message) { this.message = message; }
     public EnquiryStatus getStatus() { return status; }
     public void setStatus(EnquiryStatus status) { this.status = status; }
+    public String getPreferredDate() { return preferredDate; }
+    public void setPreferredDate(String preferredDate) { this.preferredDate = preferredDate; }
+    public String getQuantity() { return quantity; }
+    public void setQuantity(String quantity) { this.quantity = quantity; }
+    public String getReferenceImageUrl() { return referenceImageUrl; }
+    public void setReferenceImageUrl(String referenceImageUrl) { this.referenceImageUrl = referenceImageUrl; }
+    public LocalDateTime getAcknowledgedAt() { return acknowledgedAt; }
+    public void setAcknowledgedAt(LocalDateTime acknowledgedAt) { this.acknowledgedAt = acknowledgedAt; }
+    public User getAcknowledgedBy() { return acknowledgedBy; }
+    public void setAcknowledgedBy(User acknowledgedBy) { this.acknowledgedBy = acknowledgedBy; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

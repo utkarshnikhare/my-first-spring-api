@@ -5,6 +5,7 @@ import com.example.my_first_spring_api.dto.DiscoveryDtos.ComparisonOffer;
 import com.example.my_first_spring_api.dto.DiscoveryDtos.ItemGroup;
 import com.example.my_first_spring_api.dto.DiscoveryDtos.KitchenCard;
 import com.example.my_first_spring_api.dto.DiscoveryDtos.KitchenCounts;
+import com.example.my_first_spring_api.dto.KitchenDetailDto;
 import com.example.my_first_spring_api.model.Category;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.OrderStatus;
@@ -42,13 +43,15 @@ public class DiscoveryService {
     private final KitchenRepository kitchenRepository;
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
+    private final KitchenService kitchenService;
 
     @Autowired
     public DiscoveryService(KitchenRepository kitchenRepository, ProductRepository productRepository,
-                            OrderRepository orderRepository) {
+                            OrderRepository orderRepository, KitchenService kitchenService) {
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
         this.orderRepository = orderRepository;
+        this.kitchenService = kitchenService;
     }
 
     private List<Kitchen> visibleKitchens(User buyer) {
@@ -270,5 +273,45 @@ public class DiscoveryService {
                 })
                 .sorted(Comparator.comparing(o -> o.getKitchenDisplayName() == null ? "" : o.getKitchenDisplayName()))
                 .collect(Collectors.toList());
+    }
+
+    // ---------- Homemade Products ----------
+
+    @Transactional(readOnly = true)
+    public List<KitchenCard> getHomemadeStores(User buyer) {
+        return kitchenRepository.findAll().stream()
+                .filter(k -> k.getSellerType() == com.example.my_first_spring_api.model.SellerType.HOMEMADE_PRODUCTS)
+                .filter(KitchenVisibility::isPubliclyVisible)
+                .filter(k -> KitchenVisibility.isServiceAreaVisible(k, buyer))
+                .map(k -> {
+                    List<Product> items = productRepository.findByKitchenAndAvailableTodayTrueOrderByCreatedAtDesc(k);
+                    return toHomemadeCard(k, items);
+                })
+                .sorted(Comparator.comparing(c -> c.getDisplayName()))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public KitchenDetailDto getHomemadeStoreDetail(String slug, User buyer) {
+        Kitchen kitchen = kitchenRepository.findByName(slug).orElse(null);
+        if (kitchen == null || kitchen.getSellerType() != com.example.my_first_spring_api.model.SellerType.HOMEMADE_PRODUCTS) return null;
+        if (!KitchenVisibility.isPubliclyVisible(kitchen)) return null;
+        if (!KitchenVisibility.isServiceAreaVisible(kitchen, buyer)) return null;
+        return kitchenService.getKitchenDetailById(kitchen.getId(), buyer);
+    }
+
+    private KitchenCard toHomemadeCard(Kitchen k, List<Product> items) {
+        KitchenCard card = new KitchenCard();
+        card.setId(k.getId());
+        card.setSlug(k.getName());
+        card.setDisplayName(k.getDisplayName());
+        card.setImageUrl(k.getImageUrl());
+        card.setShortDescription(k.getShortDescription() != null ? k.getShortDescription() : k.getDescription());
+        card.setStatus("AVAILABLE");
+        card.setOrderableItemCount((int) items.stream().filter(p -> !p.isSoldOut()).count());
+        card.setItemNames(items.stream().filter(p -> !p.isSoldOut()).map(Product::getName).collect(Collectors.toList()));
+        card.setPreviouslyOrdered(false);
+        card.setRating(k.getRating());
+        return card;
     }
 }

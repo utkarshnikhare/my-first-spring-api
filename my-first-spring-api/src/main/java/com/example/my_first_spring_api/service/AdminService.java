@@ -124,8 +124,8 @@ public class AdminService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         long totalEnquiries = allEnquiries.size();
-        long openEnquiries = allEnquiries.stream().filter(e -> e.getStatus() == EnquiryStatus.WAITING_FOR_RESPONSE).count();
-        long resolvedEnquiries = allEnquiries.stream().filter(e -> e.getStatus() == EnquiryStatus.SELLER_RESPONDED).count();
+        long openEnquiries = allEnquiries.stream().filter(e -> e.getStatus() == EnquiryStatus.NEW).count();
+        long resolvedEnquiries = allEnquiries.stream().filter(e -> e.getStatus() == EnquiryStatus.CONTACTED || e.getStatus() == EnquiryStatus.CLOSED).count();
 
         long totalFavourites = favouriteRepository.count();
 
@@ -233,28 +233,35 @@ public class AdminService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> kitchens() {
+        return kitchens(null);
+    }
+
+    public List<Map<String, Object>> kitchens(String sellerTypeFilter) {
         List<Kitchen> all = kitchenRepository.findAll();
-        return all.stream().map(k -> {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", k.getId());
-            m.put("name", k.getName());
-            m.put("displayName", k.getDisplayName());
-            m.put("sellerId", k.getSeller() != null ? k.getSeller().getId() : null);
-            m.put("sellerName", k.getSeller() != null ? k.getSeller().getName() : null);
-            m.put("society", k.getSociety());
-            m.put("building", k.getBuilding());
-            m.put("area", k.getSociety());
-            m.put("serviceAreas", k.getServiceAreas());
-            m.put("availableToday", k.getAvailableToday());
-            m.put("imageUrl", k.getImageUrl());
-            m.put("instagramLink", k.getInstagramLink());
-            List<Product> products = productRepository.findByKitchen(k);
-            long liveCount = products.stream().filter(this::isLiveProduct).count();
-            m.put("totalOfferings", products.size());
-            m.put("liveOfferings", liveCount);
-            m.put("hasLiveOfferings", liveCount > 0);
-            return m;
-        }).collect(Collectors.toList());
+        return all.stream()
+                .filter(k -> sellerTypeFilter == null || sellerTypeFilter.isBlank() || sellerTypeFilter.equalsIgnoreCase(k.getSellerType() != null ? k.getSellerType().name() : ""))
+                .map(k -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", k.getId());
+                m.put("name", k.getName());
+                m.put("displayName", k.getDisplayName());
+                m.put("sellerId", k.getSeller() != null ? k.getSeller().getId() : null);
+                m.put("sellerName", k.getSeller() != null ? k.getSeller().getName() : null);
+                m.put("sellerType", k.getSellerType() != null ? k.getSellerType().name() : null);
+                m.put("society", k.getSociety());
+                m.put("building", k.getBuilding());
+                m.put("area", k.getSociety());
+                m.put("serviceAreas", k.getServiceAreas());
+                m.put("availableToday", k.getAvailableToday());
+                m.put("imageUrl", k.getImageUrl());
+                m.put("instagramLink", k.getInstagramLink());
+                List<Product> products = productRepository.findByKitchen(k);
+                long liveCount = products.stream().filter(this::isLiveProduct).count();
+                m.put("totalOfferings", products.size());
+                m.put("liveOfferings", liveCount);
+                m.put("hasLiveOfferings", liveCount > 0);
+                return m;
+            }).collect(Collectors.toList());
     }
 
     @Transactional

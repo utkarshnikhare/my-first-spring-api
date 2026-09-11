@@ -21,6 +21,7 @@ var routes = {
     '#/home': homeView,
     '#/food': foodHubView,
     '#/kitchens': kitchensView,
+    '#/homemade': homemadeView,
     '#/summary': orderSummaryView,
     '#/confirm': confirmOrderView,
     '#/payment': paymentView,
@@ -34,6 +35,7 @@ function resolveRoute(hash) {
     if (routes[hash]) return { fn: routes[hash], arg: hash };
     if (hash.startsWith('#/category/')) return { fn: categoryView, arg: hash };
     if (hash.startsWith('#/kitchen/')) return { fn: kitchenPageView, arg: hash };
+    if (hash.startsWith('#/homemade-store/')) return { fn: homemadeStoreView, arg: hash };
     if (hash.startsWith('#/order/')) return { fn: orderDetailView, arg: hash };
     if (hash.startsWith('#/search/')) return { fn: comparisonView, arg: hash };
     return { fn: homeView, arg: '#/home' };

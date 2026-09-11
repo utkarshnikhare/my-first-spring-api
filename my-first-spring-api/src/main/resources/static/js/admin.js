@@ -2,7 +2,7 @@
  * SocioMart Admin App v1.0 — Complete admin console
  * Screens: Dashboard, Buyers, Sellers, Kitchens, Offerings, Orders, Enquiries, Pending Approvals
  */
-var A = { me: null, role: null, loginMobile: null, trafficPeriod: 'today' };
+var A = { me: null, role: null, loginMobile: null, trafficPeriod: 'today', kitchenFilter: '' };
 var adminRoutes = {
     '#/home': adminHomeView,
     '#/pending': adminPendingView,
@@ -183,6 +183,11 @@ async function adminAction(action, t) {
             }
             case 'admin-traffic-period': {
                 A.trafficPeriod = t.dataset.period || 'today';
+                await adminRender();
+                break;
+            }
+            case 'admin-set-kitchen-filter': {
+                A.kitchenFilter = t.dataset.filter || '';
                 await adminRender();
                 break;
             }
@@ -368,11 +373,15 @@ async function adminSellersView() {
 }
 
 async function adminKitchensView() {
-    var list = await api('/api/admin/kitchens');
+    var filter = A.kitchenFilter || '';
+    var url = '/api/admin/kitchens' + (filter ? '?sellerType=' + encodeURIComponent(filter) : '');
+    var list = await api(url);
+    var title = filter === 'HOMEMADE_PRODUCTS' ? 'Homemade Stores' : filter === 'KITCHEN' ? 'Kitchens' : 'All Kitchens';
     var h = '<div class="view-enter">';
-    h += '<div class="section-head admin-section-head"><div><h1>Kitchens</h1><p class="muted small">' + (list ? list.length : 0) + ' kitchens</p></div></div>';
+    h += '<div class="section-head admin-section-head"><div><h1>' + esc(title) + '</h1><p class="muted small">' + (list ? list.length : 0) + ' stores</p></div></div>';
+    h += '<div class="capsule-row"><button class="capsule' + (filter === 'HOMEMADE_PRODUCTS' ? ' active' : '') + '" data-action="admin-set-kitchen-filter" data-filter="HOMEMADE_PRODUCTS">Homemade Products</button><button class="capsule' + (filter === 'KITCHEN' ? ' active' : '') + '" data-action="admin-set-kitchen-filter" data-filter="KITCHEN">Kitchens</button><button class="capsule' + (!filter ? ' active' : '') + '" data-action="admin-set-kitchen-filter" data-filter="">All</button></div>';
     if (!list || !list.length) {
-        return h + '<div class="admin-empty">No kitchens yet.</div></div>';
+        return h + '<div class="admin-empty">No stores found.</div></div>';
     }
     list.forEach(function (k) {
         var areas = k.serviceAreas || k.area || '';

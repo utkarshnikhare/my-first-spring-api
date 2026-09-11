@@ -52,6 +52,10 @@ public class Kitchen {
     @Column(name = "available_today")
     private Boolean availableToday = true;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "seller_type", nullable = false, length = 30)
+    private SellerType sellerType = SellerType.KITCHEN;
+
     @Column(name = "order_deadline")
     private String orderDeadline;
 
@@ -116,6 +120,8 @@ public class Kitchen {
     public void setRating(Double rating) { this.rating = rating; }
     public Boolean getAvailableToday() { return availableToday; }
     public void setAvailableToday(Boolean availableToday) { this.availableToday = availableToday; }
+    public SellerType getSellerType() { return sellerType; }
+    public void setSellerType(SellerType sellerType) { this.sellerType = sellerType; }
     public String getOrderDeadline() { return orderDeadline; }
     public void setOrderDeadline(String orderDeadline) { this.orderDeadline = orderDeadline; }
     public User getSeller() { return seller; }

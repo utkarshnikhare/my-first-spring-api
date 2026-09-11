@@ -108,4 +108,10 @@ public class SellerController {
         User seller = requireSeller(session);
         return ResponseEntity.ok(sellerService.markOrderAsPaid(orderId, seller));
     }
+
+    @PostMapping("/orders/{orderId}/acknowledge")
+    public ResponseEntity<OrderDto> acknowledgeOrder(@PathVariable Long orderId, HttpSession session) {
+        User seller = requireSeller(session);
+        return ResponseEntity.ok(sellerService.acknowledgeOrder(orderId, seller));
+    }
 }

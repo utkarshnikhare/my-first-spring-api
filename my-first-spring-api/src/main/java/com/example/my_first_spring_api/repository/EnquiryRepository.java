@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface EnquiryRepository extends JpaRepository<Enquiry, Long> {
     List<Enquiry> findByUserIdOrderByCreatedAtDesc(Long userId);
+    List<Enquiry> findByKitchenSellerIdOrderByCreatedAtDesc(Long sellerId);
 }

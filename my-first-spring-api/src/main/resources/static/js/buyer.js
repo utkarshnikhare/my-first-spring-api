@@ -153,6 +153,9 @@ async function homeView() {
         '<a class="tile" href="#/food">' +
         '<span class="tile-icon">🍽️</span><span class="tile-name">Food &amp; Kitchens</span>' +
         '<span class="pill pill-green">● AVAILABLE NOW</span></a>' +
+        '<a class="tile" href="#/homemade">' +
+        '<span class="tile-icon">🍰</span><span class="tile-name">Homemade Products</span>' +
+        '<span class="pill pill-amber">● CAKES • SNACKS &amp; MORE</span></a>' +
         '</div>';
 
     // Favourites row
@@ -272,6 +275,40 @@ var DISCOVERY_TABS = [
     { id: 'ALL', label: 'All' }
 ];
 
+async function homemadeView() {
+    var h = '<div class="view-enter">';
+    h += backBarHtml('Homemade Products');
+    try {
+        var stores = await api('/api/discovery/homemade');
+        h += '<div class="shop-header"><h1>🍰 Homemade Products</h1>' +
+            '<p class="shop-sub">Homemade and made-to-order products from sellers in your community.</p></div>';
+        if (!stores || !stores.length) {
+            h += emptyHtml('🍰', 'No stores found', 'Check back soon for homemade products near you.', '<a class="btn btn-primary" href="#/home">Back to Home</a>');
+        } else {
+            h += '<div class="kitchen-grid">';
+            stores.forEach(function (s) {
+                var statusPill = s.availableToday ? '<span class="pill pill-green">● Accepting Orders</span>' : '<span class="pill pill-amber">● Made on Request</span>';
+                h += '<div class="kitchen-card">' +
+                    '<div class="kitchen-card-header">' +
+                    '<img class="kitchen-avatar" src="' + esc(s.imageUrl || '') + '" alt="" onerror="this.style.display=\'none\'">' +
+                    '<div><div class="kitchen-name">' + esc(s.displayName) + '</div>' +
+                    '<div class="kitchen-desc">' + esc(s.shortDescription || s.description || '') + '</div>' +
+                    statusPill + '</div>' +
+                    '<button class="heart-btn" data-action="toggle-fav-kitchen" data-kid="' + s.id + '" aria-label="Favourite">' + (FAV_CACHE && FAV_CACHE.has(String(s.id)) ? '❤️' : '🤍') + '</button>' +
+                    '</div>' +
+                    '<div class="kitchen-card-body">' +
+                    '<a class="btn btn-primary btn-block" href="#/homemade-store/' + esc(s.slug || s.name) + '">View Store</a>' +
+                    '</div></div>';
+            });
+            h += '</div>';
+        }
+    } catch (err) {
+        h += emptyHtml('⚠️', 'Something went wrong', err.message);
+    }
+    h += '</div>';
+    return h;
+}
+
 async function kitchensView() {
     var tab = state.kitchenTab || 'LIVE_NOW';
     var h = '<div class="view-enter">';
@@ -355,6 +392,59 @@ async function categoryView(hash) {
         }
     } catch (e) {
         h += emptyHtml('⚠️', 'Could not load', e.message);
+    }
+    h += '</div>';
+    return h;
+}
+
+// ==================== Screen 4: Homemade storefront ====================
+
+async function homemadeStoreView(hash) {
+    var id = hash.split('/')[2];
+    var h = '<div class="view-enter">';
+    try {
+        var detail = await api('/api/kitchens/id/' + id);
+        var k = detail.kitchen;
+        if (!k || k.sellerType !== 'HOMEMADE_PRODUCTS') {
+            h += emptyHtml('🏪', 'Store not found', 'This store may not be available in your area.', '<a class="btn btn-primary" href="#/homemade">Back to Homemade</a>');
+            return h;
+        }
+        h += '<div class="kitchen-hero">' +
+            '<img class="kitchen-hero-img" src="' + esc(k.imageUrl || '') + '" alt="" onerror="this.style.display=\'none\'">' +
+            '<div class="kitchen-hero-overlay">' +
+            '<div class="kitchen-hero-text">' +
+            '<h1>' + esc(k.displayName) + '</h1>' +
+            '<p class="shop-sub">' + esc(k.shortDescription || k.description || 'Homemade Products') + '</p>' +
+            '<span class="pill pill-green">● Homemade Store</span>' +
+            '</div></div></div>';
+        h += '<div class="section-gap">';
+        if (k.serviceAreas) {
+            var areas = k.serviceAreas.split(',').map(function (a) { return a.trim(); }).filter(Boolean);
+            h += '<div class="mb-2"><span class="muted small">Serves: ' + esc(areas.join(', ')) + '</span></div>';
+        }
+        var today = (detail.products || []).filter(function (p) { return !p.isPreorder && p.availableToday; });
+        var preorder = (detail.preorderProducts && detail.preorderProducts.length) ? detail.preorderProducts : [];
+        if (today.length) {
+            h += '<h3 class="mb-2">Available Now</h3><div class="products-grid">';
+            today.forEach(function (p) {
+                h += offeringCardHtml(p, k, false);
+            });
+            h += '</div>';
+        }
+        if (preorder.length) {
+            h += '<h3 class="mb-2 mt-3">Pre-order</h3><div class="products-grid">';
+            preorder.forEach(function (p) {
+                h += offeringCardHtml(p, k, true);
+            });
+            h += '</div>';
+        }
+        if (!today.length && !preorder.length) {
+            h += emptyHtml('📦', 'No products listed', 'This store has not listed any products yet.', '<a class="btn btn-primary" href="#/homemade">Back to Homemade</a>');
+        }
+        h += '</div>';
+        h += '<div class="section-gap"><button class="btn btn-secondary btn-block" data-action="open-enquiry" data-kid="' + k.id + '" data-kname="' + esc(k.displayName) + '">📩 Send Enquiry</button></div>';
+    } catch (err) {
+        h += emptyHtml('⚠️', 'Something went wrong', err.message);
     }
     h += '</div>';
     return h;
@@ -587,11 +677,33 @@ function sheetAdd() {
 
 function openEnquirySheet(kitchenId, kitchenName) {
     openSheet('<h3 class="sheet-title">✉️ Enquire with ' + esc(kitchenName) + '</h3>' +
-        '<p class="sheet-sub">Ask about ingredients, timings or custom requests.</p>' +
+        '<p class="sheet-sub">Ask about custom requests, different quantities, flavours, or products not listed.</p>' +
         '<form data-form="enquiry" data-kid="' + kitchenId + '" class="card-mt">' +
-        '<div class="form-group"><textarea class="form-textarea" name="message" rows="3" ' +
-        'placeholder="e.g. Do you make gluten-free parathas?" required></textarea></div>' +
-        '<button class="btn btn-primary btn-block" type="submit">Send Enquiry</button></form>');
+        '<div class="form-group"><label class="form-label">Requirement / Message <span class="req">*</span></label><textarea class="form-textarea" name="message" rows="3" placeholder="e.g. Can you make a 2 kg custom chocolate cake?" required></textarea></div>' +
+        '<div class="form-row-2"><div class="form-group"><label class="form-label">Preferred Date</label><input class="form-input" name="preferredDate" type="date"></div>' +
+        '<div class="form-group"><label class="form-label">Quantity</label><input class="form-input" name="quantity" type="text" placeholder="e.g. 2 kg, 1 dozen"></div></div>' +
+        '<div class="form-group"><label class="form-label">Reference Image URL</label><input class="form-input" name="referenceImageUrl" type="url" placeholder="https://..."></div>' +
+        '<button class="btn btn-primary btn-block" type="submit">Submit Enquiry</button></form>');
+}
+
+async function submitEnquiry(form) {
+    var kitchenId = Number(form.dataset.kid);
+    var vals = formVals(form);
+    var body = {
+        kitchenId: kitchenId,
+        message: vals.message || '',
+        preferredDate: vals.preferredDate || null,
+        quantity: vals.quantity || null,
+        referenceImageUrl: vals.referenceImageUrl || null
+    };
+    if (!body.message || !body.message.trim()) {
+        toast('Please enter your requirement/message', 'error');
+        return;
+    }
+    var res = await api('/api/enquiries', { method: 'POST', body: body });
+    toast('Enquiry sent!', 'success');
+    closeSheet();
+    await render();
 }
 
 // ==================== Screen 5: Order summary & unified checkout ====================

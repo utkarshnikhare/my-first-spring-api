@@ -41,6 +41,13 @@ public class Order {
     @Column(name = "rating")
     private Integer rating;
 
+    @Column(name = "acknowledged_at")
+    private LocalDateTime acknowledgedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "acknowledged_by")
+    private User acknowledgedBy;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItem> items = new ArrayList<>();
 
@@ -108,6 +115,10 @@ public class Order {
     public void setCustomInstructions(String customInstructions) { this.customInstructions = customInstructions; }
     public Integer getRating() { return rating; }
     public void setRating(Integer rating) { this.rating = rating; }
+    public LocalDateTime getAcknowledgedAt() { return acknowledgedAt; }
+    public void setAcknowledgedAt(LocalDateTime acknowledgedAt) { this.acknowledgedAt = acknowledgedAt; }
+    public User getAcknowledgedBy() { return acknowledgedBy; }
+    public void setAcknowledgedBy(User acknowledgedBy) { this.acknowledgedBy = acknowledgedBy; }
     public List<OrderItem> getItems() { return items; }
     public void setItems(List<OrderItem> items) { this.items = items; }
     public LocalDateTime getCreatedAt() { return createdAt; }
