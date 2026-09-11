@@ -32,6 +32,7 @@ public class AnalyticsService {
     public static final String EV_SELLER_REGISTERED = "SELLER_REGISTERED";
     public static final String EV_SELLER_APPROVED = "SELLER_APPROVED";
     public static final String EV_ORDER_PLACED = "ORDER_PLACED";
+    public static final String EV_ENQUIRY_SUBMITTED = "ENQUIRY_SUBMITTED";
     public static final String EV_MENU_VIEW = "MENU_VIEW";
     public static final String EV_MARKETPLACE_VIEW = "MARKETPLACE_VIEW";
 

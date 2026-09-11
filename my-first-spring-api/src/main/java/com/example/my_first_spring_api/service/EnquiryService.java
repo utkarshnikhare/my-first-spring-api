@@ -8,10 +8,12 @@ import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.repository.EnquiryRepository;
 import com.example.my_first_spring_api.repository.KitchenRepository;
+import com.example.my_first_spring_api.repository.PlatformSettingRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -21,11 +23,21 @@ public class EnquiryService {
 
     private final EnquiryRepository enquiryRepository;
     private final KitchenRepository kitchenRepository;
+    private final NotificationService notificationService;
+    private final LedgerService ledgerService;
+    private final AnalyticsService analyticsService;
+    private final PlatformSettingRepository platformSettingRepository;
 
     @Autowired
-    public EnquiryService(EnquiryRepository enquiryRepository, KitchenRepository kitchenRepository) {
+    public EnquiryService(EnquiryRepository enquiryRepository, KitchenRepository kitchenRepository,
+                          NotificationService notificationService, LedgerService ledgerService,
+                          AnalyticsService analyticsService, PlatformSettingRepository platformSettingRepository) {
         this.enquiryRepository = enquiryRepository;
         this.kitchenRepository = kitchenRepository;
+        this.notificationService = notificationService;
+        this.ledgerService = ledgerService;
+        this.analyticsService = analyticsService;
+        this.platformSettingRepository = platformSettingRepository;
     }
 
     public EnquiryDto submit(User buyer, Long kitchenId, String message, String preferredDate, String quantity, String referenceImageUrl) {
@@ -43,6 +55,17 @@ public class EnquiryService {
         enquiry.setQuantity(quantity);
         enquiry.setReferenceImageUrl(referenceImageUrl);
         enquiry = enquiryRepository.save(enquiry);
+
+        if (kitchen.getSeller() != null) {
+            notificationService.sendNewEnquiryNotification(kitchen.getSeller(), buyer.getName());
+        }
+        analyticsService.record(AnalyticsService.EV_ENQUIRY_SUBMITTED, buyer.getId(),
+                buyer.getMobileNumber(), kitchen.getId(), "enquiry:" + enquiry.getId());
+        BigDecimal leadFee = resolveLeadFee();
+        ledgerService.recordEnquiryLeadFee(
+                kitchen.getSeller() != null ? kitchen.getSeller().getId() : null,
+                buyer.getId(), enquiry.getId(), leadFee);
+
         return toDto(enquiry);
     }
 
@@ -88,6 +111,18 @@ public class EnquiryService {
         }
         enquiry = enquiryRepository.save(enquiry);
         return toDto(enquiry);
+    }
+
+    private BigDecimal resolveLeadFee() {
+        return platformSettingRepository.findBySettingKey("enquiry_lead_fee")
+                .map(setting -> {
+                    try {
+                        return new BigDecimal(setting.getSettingValue());
+                    } catch (Exception e) {
+                        return BigDecimal.ZERO;
+                    }
+                })
+                .orElse(BigDecimal.ZERO);
     }
 
     private EnquiryDto toDto(Enquiry e) {

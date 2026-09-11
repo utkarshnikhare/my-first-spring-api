@@ -59,5 +59,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             "GROUP BY HOUR(o.createdAt) " +
             "ORDER BY HOUR(o.createdAt)")
     List<Object[]> findHourlyTrafficBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    @Query("SELECT o FROM Order o WHERE o.acknowledgedAt IS NULL AND o.orderStatus <> :status AND o.createdAt < :before")
+    List<Order> findUnacknowledgedOrdersExcludingStatus(@Param("status") OrderStatus status, @Param("before") LocalDateTime before);
 }
 

@@ -267,6 +267,7 @@ public class DemoDataSeeder {
         product(kMulti, "Veg Fried Rice", "Rice stir-fried with mixed vegetables and sauces", 110, "plate", 25, 15, 4.4);
         product(kMulti, "Gulab Jamun", "Warm milk-solid dumplings in rose-cardamom syrup", 50, "plate", 30, 20, 4.6);
 
+        platformSettingRepository.save(new PlatformSetting("enquiry_lead_fee", "0"));
         platformSettingRepository.save(new PlatformSetting(DEMO_SEED_FLAG, "true"));
     }
 

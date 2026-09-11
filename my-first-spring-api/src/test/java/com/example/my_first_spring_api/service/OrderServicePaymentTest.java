@@ -23,6 +23,7 @@ class OrderServicePaymentTest {
     @Mock ProductRepository productRepository;
     @Mock UserRepository userRepository;
     @Mock AnalyticsService analyticsService;
+    @Mock NotificationService notificationService;
 
     @InjectMocks OrderService orderService;
 

@@ -25,6 +25,7 @@ public class OrderService {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final AnalyticsService analyticsService;
+    private final NotificationService notificationService;
 
     public static final String DRAFT_ORDER_SESSION_KEY = "DRAFT_ORDER_ID";
     private static final String BUYER_SESSION_KEY = "BUYER_USER";
@@ -32,12 +33,13 @@ public class OrderService {
     @Autowired
     public OrderService(OrderRepository orderRepository, KitchenRepository kitchenRepository,
                         ProductRepository productRepository, UserRepository userRepository,
-                        AnalyticsService analyticsService) {
+                        AnalyticsService analyticsService, NotificationService notificationService) {
         this.orderRepository = orderRepository;
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
         this.analyticsService = analyticsService;
+        this.notificationService = notificationService;
     }
 
     public OrderDto createOrUpdateDraftOrder(Long kitchenId, List<OrderItemRequest> items, HttpSession session) {
@@ -247,6 +249,12 @@ public class OrderService {
         analyticsService.record(AnalyticsService.EV_ORDER_PLACED, buyer.getId(),
                 buyer.getMobileNumber(), order.getKitchen() != null ? order.getKitchen().getId() : null,
                 order.getOrderNumber());
+        String productSummary = order.getItems() == null ? "items" : order.getItems().stream()
+                .map(item -> item.getProduct() != null ? item.getProduct().getName() : "item")
+                .collect(Collectors.joining(", "));
+        if (order.getKitchen() != null && order.getKitchen().getSeller() != null) {
+            notificationService.sendNewOrderNotification(order.getKitchen().getSeller(), order.getOrderNumber(), productSummary);
+        }
         return toOrderDto(order);
     }
 
