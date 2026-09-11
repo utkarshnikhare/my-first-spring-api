@@ -49,8 +49,7 @@ public class SecurityConfig {
                                 "/kitchens",
                                 "/css/**",
                                 "/js/**",
-                                "/favicon.ico",
-                                "/manifest.webmanifest"
+                                "/favicon.ico"
                         ).permitAll()
                         .anyRequest().authenticated())
                                 .exceptionHandling(ex -> ex
