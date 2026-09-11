@@ -67,9 +67,14 @@ public class OrderService {
                 draft.setOrderNumber(generateOrderNumber());
                 isNewDraft = true;
             } else if (!draft.getKitchen().getId().equals(kitchenId)) {
-                throw new InvalidKitchenSelectionException(
-                        "You already have items from " + draft.getKitchen().getDisplayName() +
-                                ". You can only order from one kitchen at a time.");
+                // Kitchen switched — clear stale draft and start fresh.
+                // The frontend confirmation modal already ensures this is intentional.
+                orderRepository.delete(draft);
+                session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
+                draft = new Order(buyer, kitchen);
+                draft.setOrderStatus(OrderStatus.DRAFT);
+                draft.setOrderNumber(generateOrderNumber());
+                isNewDraft = true;
             }
         }
         draft.getItems().clear();
@@ -228,13 +233,13 @@ public class OrderService {
             throw new IllegalArgumentException("This kitchen does not serve your selected area. Please choose another kitchen.");
         }
         consumeStock(order);
-        // Payment status handling:
-        //  PAID           → payment PAID, order CONFIRMED
-        //  WILL_PAY_LATER → payment WILL_PAY_LATER, order stays ORDERED
-        //  PENDING        → legacy fallback, treat as WILL_PAY_LATER
-        boolean claimedPaid = paymentStatus == PaymentStatus.PAID;
-        order.setPaymentStatus(claimedPaid ? PaymentStatus.PAID : PaymentStatus.WILL_PAY_LATER);
-        order.setOrderStatus(claimedPaid ? OrderStatus.CONFIRMED : OrderStatus.ORDERED);
+        if (paymentStatus == PaymentStatus.PAID) {
+            order.setPaymentStatus(PaymentStatus.PAID);
+            order.setOrderStatus(OrderStatus.CONFIRMED);
+        } else {
+            order.setPaymentStatus(paymentStatus != null ? paymentStatus : PaymentStatus.WILL_PAY_LATER);
+            order.setOrderStatus(OrderStatus.ORDERED);
+        }
         order.recalculateTotal();
         orderRepository.save(order);
         session.removeAttribute(DRAFT_ORDER_SESSION_KEY);

@@ -17,7 +17,8 @@ public final class KitchenVisibility {
         User seller = kitchen.getSeller();
         return seller != null
                 && seller.getRole() == UserRole.SELLER
-                && seller.isApprovedSeller();
+                && seller.isApprovedSeller()
+                && Boolean.TRUE.equals(kitchen.getAvailableToday());
     }
 
     public static boolean isServiceAreaVisible(Kitchen kitchen, User buyer) {

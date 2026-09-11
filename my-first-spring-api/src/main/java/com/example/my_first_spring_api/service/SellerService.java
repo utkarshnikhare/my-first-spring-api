@@ -128,8 +128,6 @@ public class SellerService {
                 throw new IllegalArgumentException("Cannot change order window start after orders exist.");
             if (dto.getOrderWindowEnd() != null && !dto.getOrderWindowEnd().equals(product.getOrderWindowEnd()))
                 throw new IllegalArgumentException("Cannot change order window end after orders exist.");
-            if (dto.getCutoffTime() != null && !dto.getCutoffTime().equals(product.getCutoffTime()))
-                throw new IllegalArgumentException("Cannot change cutoff time after orders exist.");
             if (dto.getReadyByTime() != null && !dto.getReadyByTime().equals(product.getReadyByTime()))
                 throw new IllegalArgumentException("Cannot change ready-by time after orders exist.");
         }

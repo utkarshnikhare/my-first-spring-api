@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.dto.OrderDto;
 import com.example.my_first_spring_api.dto.OrderItemRequest;
 import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.model.*;
@@ -123,5 +124,58 @@ class OrderServiceValidationTest {
             req.setQuantity(1);
             orderService.createOrUpdateDraftOrder(1L, List.of(req), httpSession);
         });
+    }
+
+    @Test
+    void switchingKitchenClearsStaleDraftAndCreatesNewOne() {
+        User seller = approvedSeller();
+        Kitchen kitchen1 = approvedKitchen();
+        kitchen1.setId(1L);
+        Kitchen kitchen2 = new Kitchen("k2", "Kitchen 2", "d", null, seller);
+        kitchen2.setId(2L);
+        when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen1));
+        when(kitchenRepository.findById(2L)).thenReturn(Optional.of(kitchen2));
+
+        Product product1 = new Product(kitchen1, "Poha", "desc", BigDecimal.valueOf(40), null);
+        product1.setId(1L);
+        product1.setAvailableToday(true);
+        product1.setRemainingQuantity(10);
+        product1.setMaxQuantity(10);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product1));
+
+        Product product2 = new Product(kitchen2, "Dosa", "desc", BigDecimal.valueOf(50), null);
+        product2.setId(2L);
+        product2.setAvailableToday(true);
+        product2.setRemainingQuantity(10);
+        product2.setMaxQuantity(10);
+        when(productRepository.findById(2L)).thenReturn(Optional.of(product2));
+
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
+            Order o = inv.getArgument(0);
+            o.setId(100L);
+            return o;
+        });
+
+        OrderItemRequest req1 = new OrderItemRequest();
+        req1.setProductId(1L);
+        req1.setQuantity(1);
+        OrderDto draft1 = orderService.createOrUpdateDraftOrder(1L, List.of(req1), httpSession);
+        assertThat(draft1.getKitchen().getId()).isEqualTo(1L);
+        assertThat(draft1.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(40));
+
+        when(httpSession.getAttribute(OrderService.DRAFT_ORDER_SESSION_KEY)).thenReturn(100L);
+        when(orderRepository.findById(100L)).thenReturn(Optional.of(new Order() {{
+            setId(100L);
+            setKitchen(kitchen1);
+            setBuyer(new User("Buyer", "9876543210", "A-101", UserRole.BUYER));
+        }}));
+
+        OrderItemRequest req2 = new OrderItemRequest();
+        req2.setProductId(2L);
+        req2.setQuantity(1);
+        OrderDto draft2 = orderService.createOrUpdateDraftOrder(2L, List.of(req2), httpSession);
+        assertThat(draft2.getKitchen().getId()).isEqualTo(2L);
+        assertThat(draft2.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(50));
+        verify(orderRepository).delete(any(Order.class));
     }
 }
