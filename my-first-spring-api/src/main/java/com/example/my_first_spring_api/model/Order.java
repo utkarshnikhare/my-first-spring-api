@@ -54,6 +54,15 @@ public class Order {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    /**
+     * Authoritative timestamp set by the server when an order is FINALIZED (placed),
+     * not when the draft was first created. This is the canonical "orderTime" —
+     * the moment the buyer confirmed and the order entered the system.
+     * Set explicitly in OrderService.placeOrder; never populated during draft creation.
+     */
+    @Column(name = "order_time")
+    private LocalDateTime orderTime;
+
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
@@ -123,6 +132,8 @@ public class Order {
     public void setItems(List<OrderItem> items) { this.items = items; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public LocalDateTime getOrderTime() { return orderTime; }
+    public void setOrderTime(LocalDateTime orderTime) { this.orderTime = orderTime; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }

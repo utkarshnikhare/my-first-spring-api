@@ -455,7 +455,7 @@ async function adminOrdersView() {
             '<div class="sr-name">#' + esc(o.orderNumber || String(o.id)) + ' · ' + esc(o.kitchenName || '') + '</div>' +
             '<div class="sr-meta">Buyer: ' + esc(o.buyerName || '—') + ' · ' + esc(o.buyerMobile || '') + '</div>' +
             '<div class="sr-meta os-badges">' + osPill + ' ' + psPill + ' <strong>' + money(o.totalAmount || 0) + '</strong></div>' +
-            '<div class="sr-meta">' + adminDate(o.createdAt) + (o.society ? ' · ' + esc(o.society) : '') + '</div>' +
+            '<div class="sr-meta">' + adminDate(o.orderTime || o.createdAt) + (o.society ? ' · ' + esc(o.society) : '') + '</div>' +
             '</div></div>';
     });
     h += '</div>';
@@ -465,7 +465,7 @@ async function adminOrdersView() {
 async function adminOrderDetailView(id) {
     var o = await api('/api/admin/orders/' + id);
     var h = '<div class="view-enter">';
-    h += '<div class="section-head admin-section-head"><div><h1>Order #' + esc(o.orderNumber || String(o.id)) + '</h1><p class="muted small">' + adminDate(o.createdAt) + '</p></div></div>';
+    h += '<div class="section-head admin-section-head"><div><h1>Order #' + esc(o.orderNumber || String(o.id)) + '</h1><p class="muted small">' + adminDate(o.orderTime || o.createdAt) + '</p></div></div>';
     h += '<div class="card pad card-mb">';
     h += '<h3>Customer</h3>';
     h += '<p><strong>' + esc(o.buyerName || '—') + '</strong> · ' + esc(o.buyerMobile || '') + '</p>';

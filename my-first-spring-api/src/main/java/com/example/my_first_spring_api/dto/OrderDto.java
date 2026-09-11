@@ -13,6 +13,7 @@ public class OrderDto {
     private PaymentStatus paymentStatus;
     private OrderStatus orderStatus;
     private LocalDateTime createdAt;
+    private LocalDateTime orderTime;
     private LocalDateTime updatedAt;
     private KitchenSummary kitchen;
     private List<OrderItemDto> items;
@@ -71,6 +72,8 @@ public class OrderDto {
     public void setOrderStatus(OrderStatus orderStatus) { this.orderStatus = orderStatus; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public LocalDateTime getOrderTime() { return orderTime; }
+    public void setOrderTime(LocalDateTime orderTime) { this.orderTime = orderTime; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
     public KitchenSummary getKitchen() { return kitchen; }

@@ -349,6 +349,7 @@ public class DemoDataSeeder {
                 ? LocalDateTime.now().minusMinutes(5L + (long)(Math.random() * 230))
                 : LocalDateTime.now().minusDays(1).minusMinutes((long)(Math.random() * 360));
         o.setCreatedAt(ts);
+        o.setOrderTime(ts);
         o.setUpdatedAt(ts);
         return orderRepository.save(o);
     }

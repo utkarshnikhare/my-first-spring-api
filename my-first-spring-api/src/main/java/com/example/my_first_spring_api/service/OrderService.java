@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -244,6 +245,12 @@ public class OrderService {
             order.setOrderStatus(OrderStatus.ORDERED);
         }
         order.recalculateTotal();
+        // Server-side authoritative order timestamp: set exactly once when the draft
+        // transitions to a finalized order state. This represents the real order creation
+        // time — NOT the draft creation time (createdAt). Never overwritten on updates.
+        if (order.getOrderTime() == null) {
+            order.setOrderTime(LocalDateTime.now());
+        }
         orderRepository.save(order);
         session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
         analyticsService.record(AnalyticsService.EV_ORDER_PLACED, buyer.getId(),
@@ -442,6 +449,7 @@ public class OrderService {
         dto.setPaymentStatus(order.getPaymentStatus());
         dto.setOrderStatus(order.getOrderStatus());
         dto.setCreatedAt(order.getCreatedAt());
+        dto.setOrderTime(order.getOrderTime());
         dto.setUpdatedAt(order.getUpdatedAt());
         dto.setCustomInstructions(order.getCustomInstructions());
         dto.setAcknowledgedAt(order.getAcknowledgedAt());

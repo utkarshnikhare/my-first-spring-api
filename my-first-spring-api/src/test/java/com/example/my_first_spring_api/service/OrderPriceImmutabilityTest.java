@@ -111,6 +111,8 @@ class OrderPriceImmutabilityTest {
         assertThat(placed.getItems().get(0).getPrice()).isEqualByComparingTo(BigDecimal.valueOf(20));
         assertThat(placed.getOrderStatus()).isEqualTo(OrderStatus.CONFIRMED);
         assertThat(savedDraft.getOrderStatus()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(savedDraft.getOrderTime()).isNotNull();
+        assertThat(placed.getOrderTime()).isNotNull();
 
         product.setPrice(BigDecimal.valueOf(30));
         product.setRemainingQuantity(100);

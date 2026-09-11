@@ -1220,7 +1220,7 @@ async function ordersView() {
                         var itemLines = (o.items || []).map(function (it) {
                             return '<div class="odc-buyer-row"><span class="odc-food">' + esc(it.productName) + '</span><span class="odc-qty">×' + it.quantity + ' · ' + money(it.price * it.quantity) + '</span></div>';
                         }).join('');
-                        var orderDate = new Date(o.createdAt);
+                        var orderDate = new Date(o.orderTime || o.createdAt);
                         var grid = '<div class="odc-grid">' +
                             '<div><div class="odc-label">Kitchen</div><div class="odc-value">' + esc(o.kitchen ? o.kitchen.displayName : '—') + '</div></div>' +
                             '<div><div class="odc-label">Order Date</div><div class="odc-value">' + orderDate.toLocaleDateString() + ' · ' + orderDate.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) + '</div></div>' +
@@ -1288,7 +1288,7 @@ async function orderDetailView(hash) {
         '<div><div class="si-name text-sm">#' + esc(o.orderNumber) + '</div>' +
         '<p class="si-sub">🏪 ' + esc(o.kitchen ? o.kitchen.displayName : '') + '</p></div>' +
         (ORDER_BADGES[o.orderStatus] || '') + '</div>' +
-        '<p class="tiny muted mt-1">Placed ' + new Date(o.createdAt).toLocaleString() + '</p></div>';
+        '<p class="tiny muted mt-1">Placed ' + new Date(o.orderTime || o.createdAt).toLocaleString() + '</p></div>';
 
     h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Items</h3>';
     (o.items || []).forEach(function (it) {

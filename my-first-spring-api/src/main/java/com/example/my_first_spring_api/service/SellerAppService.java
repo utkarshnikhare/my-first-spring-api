@@ -461,6 +461,7 @@ public class SellerAppService {
                 row.setCancelled(cancelled);
                 row.setOrderStatus(order.getOrderStatus() != null ? order.getOrderStatus().name() : null);
                 row.setRemark(order.getCustomInstructions());
+                row.setPlacedAt(order.getOrderTime() != null ? order.getOrderTime() : order.getCreatedAt());
                 rows.add(row);
             }
         }

@@ -361,6 +361,7 @@ public class AdminService {
                     m.put("orderStatus", o.getOrderStatus() != null ? o.getOrderStatus().name() : null);
                     m.put("customInstructions", o.getCustomInstructions());
                     m.put("createdAt", o.getCreatedAt());
+                    m.put("orderTime", o.getOrderTime());
                     m.put("society", o.getBuyer() != null ? o.getBuyer().getSociety() : null);
                     m.put("building", o.getBuyer() != null ? o.getBuyer().getBuilding() : null);
                     m.put("flatHouseNumber", o.getBuyer() != null ? o.getBuyer().getFlatHouseNumber() : null);
@@ -402,6 +403,7 @@ public class AdminService {
         m.put("orderStatus", order.getOrderStatus() != null ? order.getOrderStatus().name() : null);
         m.put("customInstructions", order.getCustomInstructions());
         m.put("createdAt", order.getCreatedAt());
+        m.put("orderTime", order.getOrderTime());
         List<Map<String, Object>> items = order.getItems().stream().map(it -> {
             Map<String, Object> im = new LinkedHashMap<>();
             im.put("productId", it.getProduct() != null ? it.getProduct().getId() : null);

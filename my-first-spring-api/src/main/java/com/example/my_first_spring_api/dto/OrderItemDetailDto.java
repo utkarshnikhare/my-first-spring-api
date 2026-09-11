@@ -1,6 +1,7 @@
 package com.example.my_first_spring_api.dto;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -34,6 +35,7 @@ public class OrderItemDetailDto {
         private boolean cancelled;
         private String orderStatus;
         private String remark;
+        private LocalDateTime placedAt;
 
         public Long getOrderId() { return orderId; }
         public void setOrderId(Long orderId) { this.orderId = orderId; }
@@ -65,6 +67,8 @@ public class OrderItemDetailDto {
         public void setOrderStatus(String orderStatus) { this.orderStatus = orderStatus; }
         public String getRemark() { return remark; }
         public void setRemark(String remark) { this.remark = remark; }
+        public LocalDateTime getPlacedAt() { return placedAt; }
+        public void setPlacedAt(LocalDateTime placedAt) { this.placedAt = placedAt; }
     }
 
     public Long getProductId() { return productId; }
