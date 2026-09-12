@@ -5,6 +5,8 @@ import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.model.UserRole;
 import com.example.my_first_spring_api.service.BuyerService;
 import com.example.my_first_spring_api.service.OrderService;
+import com.example.my_first_spring_api.SecurityConfig;
+import org.springframework.core.env.Environment;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -28,11 +30,18 @@ public class AuthController {
 
     private final BuyerService buyerService;
     private final SecurityContextRepository securityContextRepository;
+    private final Environment environment;
 
     @Autowired
-    public AuthController(BuyerService buyerService, SecurityContextRepository securityContextRepository) {
+    public AuthController(BuyerService buyerService, SecurityContextRepository securityContextRepository, Environment environment) {
         this.buyerService = buyerService;
         this.securityContextRepository = securityContextRepository;
+        this.environment = environment;
+    }
+
+    @GetMapping("/config")
+    public Map<String, Boolean> config() {
+        return Map.of("demoLoginEnabled", SecurityConfig.isDemoEnvironment(environment));
     }
 
     /**
@@ -48,6 +57,7 @@ public class AuthController {
         String flatHouseNumber = body.get("flatHouseNumber");
 
         User buyer = buyerService.demoLoginAndAuthenticate(mobileNumber, name, flatHouseNumber, request.getSession(true));
+        request.changeSessionId();
 
         Authentication authentication = new UsernamePasswordAuthenticationToken(
                 buyer.getId(), null,

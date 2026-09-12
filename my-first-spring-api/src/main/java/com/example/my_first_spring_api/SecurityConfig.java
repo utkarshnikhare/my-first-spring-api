@@ -2,6 +2,9 @@ package com.example.my_first_spring_api;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -20,12 +23,19 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http,
-                                            UserSessionAuthorizationFilter userSessionAuthorizationFilter) throws Exception {
+                                            UserSessionAuthorizationFilter userSessionAuthorizationFilter,
+                                            Environment environment) throws Exception {
+        boolean demo = isDemoEnvironment(environment);
         return http
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> {
+                    if (demo) csrf.disable();
+                    else csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse());
+                })
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .addFilterBefore(userSessionAuthorizationFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/auth/demo-login", "/api/seller-app/demo-login", "/h2-console/**")
+                            .access((authentication, context) -> new AuthorizationDecision(demo))
                         .requestMatchers("/api/superadmin/**").hasRole("SUPER_ADMIN")
                         .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
                         .requestMatchers(
@@ -60,12 +70,16 @@ public class SecurityConfig {
                                     "{\"error\":\"AUTHENTICATION_REQUIRED\",\"message\":\"Authentication required. Please log in.\"}");
                         }))
                 .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.ALWAYS)
+                        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                         .sessionFixation(sessionFixation -> sessionFixation.migrateSession()))
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())
                 .logout(logout -> logout.disable())
                 .build();
+    }
+
+    public static boolean isDemoEnvironment(Environment environment) {
+        return environment.matchesProfiles("!prod & (demo | dev | default)");
     }
 
     @Bean

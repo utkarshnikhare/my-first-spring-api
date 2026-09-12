@@ -6,14 +6,21 @@ import com.example.my_first_spring_api.model.OrderStatus;
 import com.example.my_first_spring_api.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Order o WHERE o.id = :id")
+    Optional<Order> findByIdForUpdate(@Param("id") Long id);
     List<Order> findByBuyerOrderByCreatedAtDesc(User buyer);
     List<Order> findByKitchenOrderByCreatedAtDesc(Kitchen kitchen);
     List<Order> findByKitchenAndOrderStatusNotInOrderByCreatedAtDesc(Kitchen kitchen, List<OrderStatus> statuses);
@@ -60,7 +67,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             "ORDER BY HOUR(o.createdAt)")
     List<Object[]> findHourlyTrafficBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
-    @Query("SELECT o FROM Order o WHERE o.acknowledgedAt IS NULL AND o.orderStatus <> :status AND o.createdAt < :before")
-    List<Order> findUnacknowledgedOrdersExcludingStatus(@Param("status") OrderStatus status, @Param("before") LocalDateTime before);
+    @Query("SELECT o.id FROM Order o WHERE o.acknowledgedAt IS NULL AND o.remindedAt IS NULL " +
+            "AND o.orderStatus IN :statuses AND COALESCE(o.orderTime, o.createdAt) < :before ORDER BY o.id")
+    List<Long> findReminderCandidates(@Param("statuses") List<OrderStatus> statuses,
+                                      @Param("before") LocalDateTime before, Pageable pageable);
 }
 

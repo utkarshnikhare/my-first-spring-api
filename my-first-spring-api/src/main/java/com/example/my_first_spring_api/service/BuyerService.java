@@ -36,6 +36,9 @@ public class BuyerService {
     @Transactional
     public User demoLoginAndAuthenticate(String mobileNumber, String name, String flatHouseNumber,
                                           HttpSession session) {
+        if (mobileNumber == null || !mobileNumber.matches("[0-9]{10}")) {
+            throw new IllegalArgumentException("Enter a valid 10-digit mobile number.");
+        }
         Optional<User> existing = userRepository.findByMobileNumber(mobileNumber);
         User buyer;
         if (existing.isPresent()) {
@@ -55,6 +58,9 @@ public class BuyerService {
             );
         }
         buyer = userRepository.save(buyer);
+        if (!java.util.Objects.equals(session.getAttribute(BUYER_SESSION_KEY), buyer.getId())) {
+            session.removeAttribute(OrderService.DRAFT_ORDER_SESSION_KEY);
+        }
         session.setAttribute(BUYER_SESSION_KEY, buyer.getId());
         boolean isNew = existing.isEmpty();
         analyticsService.record(
@@ -133,6 +139,9 @@ public class BuyerService {
     @Transactional
     public User becomeSeller(HttpSession session) {
         User user = requireCurrentBuyer(session);
+        if (user.getRole() != UserRole.BUYER && user.getRole() != UserRole.SELLER) {
+            throw new IllegalArgumentException("Only a buyer account can become a seller.");
+        }
         if (user.getRole() != UserRole.SELLER) {
             user.setRole(UserRole.SELLER);
             // New sellers always start in the moderation queue: an Admin must

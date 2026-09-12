@@ -38,6 +38,9 @@ public class Enquiry {
     @Column(name = "acknowledged_at")
     private LocalDateTime acknowledgedAt;
 
+    @Column(name = "reminded_at")
+    private LocalDateTime remindedAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "acknowledged_by")
     private User acknowledgedBy;
@@ -73,6 +76,8 @@ public class Enquiry {
     public String getReferenceImageUrl() { return referenceImageUrl; }
     public void setReferenceImageUrl(String referenceImageUrl) { this.referenceImageUrl = referenceImageUrl; }
     public LocalDateTime getAcknowledgedAt() { return acknowledgedAt; }
+    public LocalDateTime getRemindedAt() { return remindedAt; }
+    public void setRemindedAt(LocalDateTime remindedAt) { this.remindedAt = remindedAt; }
     public void setAcknowledgedAt(LocalDateTime acknowledgedAt) { this.acknowledgedAt = acknowledgedAt; }
     public User getAcknowledgedBy() { return acknowledgedBy; }
     public void setAcknowledgedBy(User acknowledgedBy) { this.acknowledgedBy = acknowledgedBy; }
