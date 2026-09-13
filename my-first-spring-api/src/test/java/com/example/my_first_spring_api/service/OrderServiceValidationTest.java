@@ -2,6 +2,7 @@ package com.example.my_first_spring_api.service;
 
 import com.example.my_first_spring_api.dto.OrderDto;
 import com.example.my_first_spring_api.dto.OrderItemRequest;
+import com.example.my_first_spring_api.exception.BuyerProfileIncompleteException;
 import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
@@ -178,5 +179,61 @@ class OrderServiceValidationTest {
         assertThat(draft2.getKitchen().getId()).isEqualTo(2L);
         assertThat(draft2.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(50));
         verify(orderRepository).delete(any(Order.class));
+    }
+
+    @Test
+    void incompleteProfileBlocksOrderPlacement() {
+        User seller = approvedSeller();
+        Kitchen kitchen = approvedKitchen();
+        kitchen.setId(1L);
+        kitchen.setSociety("Sunshine Society");
+        when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
+
+        Product product = new Product(kitchen, "Poha", "desc", BigDecimal.valueOf(40), null);
+        product.setId(1L);
+        product.setAvailableToday(true);
+        product.setRemainingQuantity(10);
+        product.setMaxQuantity(10);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+
+        // Buyer with missing society
+        User incompleteBuyer = new User("Buyer", "9876543210", "A-101", UserRole.BUYER);
+        incompleteBuyer.setId(20L);
+        // society, building, flatHouseNumber all null
+        when(userRepository.findById(20L)).thenReturn(Optional.of(incompleteBuyer));
+
+        // Mock save to assign ID to draft
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
+            Order o = inv.getArgument(0);
+            if (o.getId() == null) o.setId(100L);
+            return o;
+        });
+
+        OrderItemRequest req = new OrderItemRequest();
+        req.setProductId(1L);
+        req.setQuantity(1);
+
+        OrderDto draft = orderService.createOrUpdateDraftOrder(1L, List.of(req), httpSession);
+        assertThat(draft.getId()).isEqualTo(100L);
+
+        when(httpSession.getAttribute(OrderService.DRAFT_ORDER_SESSION_KEY)).thenReturn(100L);
+        // resolveBuyer() reads BUYER_USER from session, then looks up the user
+        when(httpSession.getAttribute("BUYER_USER")).thenReturn(incompleteBuyer.getId());
+        when(userRepository.findById(incompleteBuyer.getId())).thenReturn(Optional.of(incompleteBuyer));
+        Order mockOrder = new Order();
+        mockOrder.setId(100L);
+        mockOrder.setKitchen(kitchen);
+        mockOrder.setBuyer(incompleteBuyer);
+        mockOrder.setOrderStatus(OrderStatus.DRAFT);
+        OrderItem item = new OrderItem();
+        item.setProduct(product);
+        item.setQuantity(1);
+        item.setPrice(product.getPrice());
+        mockOrder.setItems(List.of(item));
+        when(orderRepository.findById(100L)).thenReturn(Optional.of(mockOrder));
+
+        assertThrows(BuyerProfileIncompleteException.class, () -> {
+            orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, null, null, httpSession);
+        });
     }
 }

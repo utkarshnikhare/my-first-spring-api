@@ -118,18 +118,26 @@ document.addEventListener('click', async function (e) {
             case 'set-sheet-date': sheet.date = t.dataset.date; highlightSheetSelection(); break;
             case 'set-sheet-slot': sheet.slot = t.dataset.slot; highlightSheetSelection(); break;
             case 'sheet-add': sheetAdd(); break;
-            case 'open-enquiry': openEnquirySheet(t.dataset.kid, t.dataset.kname); break;
+            case 'open-enquiry':
+                try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ENQUIRY_CLICK', kitchenId: t.dataset.kid } }); } catch (e) {}
+                openEnquirySheet(t.dataset.kid, t.dataset.kname); break;
             case 'cart-qty': await cartQty(Number(t.dataset.idx), Number(t.dataset.dir)); break;
             case 'cart-remove': await cartRemove(Number(t.dataset.idx)); break;
             case 'go-checkout': await goCheckout(); break;
             case 'go-payment': navigate('#/payment'); break;
-            case 'place-order-paid': await placeOrderWithStatus('PAID'); break;
-            case 'place-order-later': await placeOrderWithStatus('WILL_PAY_LATER'); break;
+            case 'place-order-paid':
+                try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
+                await placeOrderWithStatus('PAID'); break;
+            case 'place-order-later':
+                try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
+                await placeOrderWithStatus('WILL_PAY_LATER'); break;
             case 'select-pay-method': state.payMethod = t.dataset.method; await render(); break;
             case 'select-pay-status': // Confirm Order: Paid / Will Pay Later (UI selection only)
                 state.payPreference = t.dataset.status === 'WILL_PAY_LATER' ? 'WILL_PAY_LATER' : 'PAID';
                 await render(); break;
-            case 'place-order': await placeOrderWithStatus(state.payPreference || 'PAID'); break;
+            case 'place-order':
+                try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
+                await placeOrderWithStatus(state.payPreference || 'PAID'); break;
             case 'confirm-payment': await confirmPayment(t); break;
             case 'logout': {
                 try { await api('/api/auth/logout', { method: 'POST' }); } catch (e5) {}
