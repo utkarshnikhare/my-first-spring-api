@@ -3,6 +3,7 @@ package com.example.my_first_spring_api.service;
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
+import com.example.my_first_spring_api.exception.OrderNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -380,9 +381,14 @@ public class AdminService {
     }
 
     @Transactional(readOnly = true)
+    public boolean orderExists(Long id) {
+        return orderRepository.existsById(id);
+    }
+
+    @Transactional(readOnly = true)
     public Map<String, Object> orderDetail(Long id) {
         Order order = orderRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Order not found"));
+                .orElseThrow(() -> new OrderNotFoundException(id));
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", order.getId());
         m.put("orderNumber", order.getOrderNumber());
