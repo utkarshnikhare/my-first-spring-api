@@ -66,6 +66,9 @@ class OrderServiceNotificationTest {
 
         User buyer = new User("Buyer", "9876500001", "A-101", UserRole.BUYER);
         buyer.setId(20L);
+        buyer.setSociety("Sunshine Society");
+        buyer.setBuilding("Building A");
+        buyer.setFlatHouseNumber("A-101");
         when(userRepository.findById(20L)).thenReturn(Optional.of(buyer));
 
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {

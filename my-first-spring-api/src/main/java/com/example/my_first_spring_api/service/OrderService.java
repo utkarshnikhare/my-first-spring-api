@@ -230,6 +230,14 @@ public class OrderService {
         order.setBuyer(buyer);
         if (buyerDetails != null) updateBuyerDetails(buyer, buyerDetails);
         if (customInstructions != null && !customInstructions.isBlank()) order.setCustomInstructions(customInstructions);
+        // First-order verification: ensure buyer profile is complete before placing an order.
+        // Required fields: society, building, flat/house number. Mobile is set at login.
+        if (buyer.getSociety() == null || buyer.getSociety().isBlank()
+                || buyer.getBuilding() == null || buyer.getBuilding().isBlank()
+                || buyer.getFlatHouseNumber() == null || buyer.getFlatHouseNumber().isBlank()) {
+            throw new BuyerProfileIncompleteException(
+                    "Please complete your profile (society, building, wing, flat/house number) before placing an order.");
+        }
         if (!KitchenVisibility.isServiceAreaVisible(order.getKitchen(), buyer)) {
             session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
             orderRepository.delete(order);

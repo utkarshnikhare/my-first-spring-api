@@ -32,9 +32,13 @@ public class AnalyticsService {
     public static final String EV_SELLER_REGISTERED = "SELLER_REGISTERED";
     public static final String EV_SELLER_APPROVED = "SELLER_APPROVED";
     public static final String EV_ORDER_PLACED = "ORDER_PLACED";
+    public static final String EV_ORDER_NOW_CLICK = "ORDER_NOW_CLICK";
     public static final String EV_ENQUIRY_SUBMITTED = "ENQUIRY_SUBMITTED";
+    public static final String EV_ENQUIRY_CLICK = "ENQUIRY_CLICK";
     public static final String EV_MENU_VIEW = "MENU_VIEW";
     public static final String EV_MARKETPLACE_VIEW = "MARKETPLACE_VIEW";
+    public static final String EV_HOMEMADE_STOREFRONT_VIEW = "HOMEMADE_STOREFRONT_VIEW";
+    public static final String EV_PRODUCT_VIEW = "PRODUCT_VIEW";
 
     private final AnalyticsEventRepository analyticsEventRepository;
     private final UserRepository userRepository;
