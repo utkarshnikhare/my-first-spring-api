@@ -26,6 +26,32 @@ public class NotificationService {
                 buyerName + " has sent a custom request.\nOpen SocioMart to view the enquiry.");
     }
 
+    /**
+     * Notifies a seller that an offering has sold out because remaining quantity reached zero.
+     * Idempotent: at most one sold-out event per (product, transition) — callers must guard against
+     * repeated triggers (e.g. refresh) by invoking this only when the product newly hits zero.
+     */
+    public void sendSoldOutNotification(User seller, String productName) {
+        createEvent(seller, "Offering sold out",
+                "\"" + productName + "\" just sold out. Update its quantity to keep taking orders.");
+    }
+
+    /**
+     * Notifies a seller that a buyer cancelled an order.
+     */
+    public void sendOrderCancellationNotification(User seller, String orderNumber) {
+        createEvent(seller, "Order cancelled",
+                "Order " + orderNumber + " was cancelled by the buyer. Inventory has been restored.");
+    }
+
+    /**
+     * Notifies a buyer that the seller has confirmed/recorded their payment.
+     */
+    public void sendPaymentReceivedNotification(User buyer, String orderNumber) {
+        createEvent(buyer, "Payment recorded",
+                "Your payment for order " + orderNumber + " has been recorded by the seller.");
+    }
+
     public void sendReminder(User seller, String title, String body) {
         createEvent(seller, title, body);
     }

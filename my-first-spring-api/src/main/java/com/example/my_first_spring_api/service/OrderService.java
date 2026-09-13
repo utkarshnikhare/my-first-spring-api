@@ -236,6 +236,8 @@ public class OrderService {
             throw new IllegalArgumentException("This kitchen does not serve your selected area. Please choose another kitchen.");
         }
         consumeStock(order);
+        // Notify seller if any tracked offering newly sold out as a result of this order.
+        notifyNewlySoldOut(order);
         boolean isHomemade = order.getKitchen() != null && order.getKitchen().getSellerType() == SellerType.HOMEMADE_PRODUCTS;
         if (paymentStatus == PaymentStatus.PAID && !isHomemade) {
             order.setPaymentStatus(PaymentStatus.PAID);
@@ -359,11 +361,16 @@ public class OrderService {
         if (order.getOrderStatus() == OrderStatus.CANCELLED) {
             throw new IllegalArgumentException("This order is already cancelled.");
         }
+        boolean paymentWasNotPaid = order.getPaymentStatus() != PaymentStatus.PAID;
         order.setPaymentStatus(PaymentStatus.PAID);
         if (order.getOrderStatus() == OrderStatus.ORDERED) {
             order.setOrderStatus(OrderStatus.CONFIRMED);
         }
         orderRepository.save(order);
+        // Notify the buyer that their payment has been recorded — only on actual state change.
+        if (paymentWasNotPaid && order.getBuyer() != null) {
+            notificationService.sendPaymentReceivedNotification(order.getBuyer(), order.getOrderNumber());
+        }
         return toOrderDto(order);
     }
 
@@ -420,6 +427,10 @@ public class OrderService {
         }
         if (newStatus == OrderStatus.CANCELLED) {
             restoreStock(order);
+            // Notify the seller that this order was cancelled (after successful restore).
+            if (order.getKitchen() != null && order.getKitchen().getSeller() != null) {
+                notificationService.sendOrderCancellationNotification(order.getKitchen().getSeller(), order.getOrderNumber());
+            }
         }
         order.setOrderStatus(newStatus);
         orderRepository.save(order);
@@ -537,6 +548,23 @@ public class OrderService {
             int booked = (product.getBookedQuantity() == null ? 0 : product.getBookedQuantity()) - e.getValue();
             product.setBookedQuantity(Math.max(0, booked));
             productRepository.save(product);
+        }
+    }
+
+    /**
+     * Sends sold-out notifications to the seller for any product whose tracked remainingQuantity
+     * newly dropped to zero as a result of the given order. Only fires on the transition into
+     * sold-out state — not on every order placement — preventing notification spam on refresh.
+     */
+    private void notifyNewlySoldOut(Order order) {
+        if (order.getKitchen() == null || order.getKitchen().getSeller() == null) return;
+        if (order.getItems() == null) return;
+        for (OrderItem item : order.getItems()) {
+            if (item.getProduct() == null) continue;
+            Product fresh = productRepository.findById(item.getProduct().getId()).orElse(null);
+            if (fresh != null && fresh.getRemainingQuantity() != null && fresh.getRemainingQuantity() <= 0) {
+                notificationService.sendSoldOutNotification(order.getKitchen().getSeller(), fresh.getName());
+            }
         }
     }
 
