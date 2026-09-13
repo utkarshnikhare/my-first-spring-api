@@ -275,21 +275,24 @@ public class DemoDataSeeder {
 
     public void seedBuyersIfEmpty() {
         if (platformSettingRepository.findBySettingKey(DEMO_BUYERS_FLAG).isPresent()) return;
-        seedBuyer("Aarav Mehta", "9876500001", "A-402", "Green Valley Residency", "A Wing");
-        seedBuyer("Priya Sharma", "9876500002", "B-105", "Green Valley Residency", "B Wing");
-        seedBuyer("Rahul Joshi", "9876500003", "C-303", "Lakeview Heights", "Tower 2");
-        seedBuyer("Neha Patil", "9876500004", "D-201", "Sunrise Enclave", "Building C");
-        seedBuyer("Rohan Desai", "9876500005", "A-101", "Palm Residency", "Tower 1");
-        seedBuyer("Sneha Kulkarni", "9876500006", "B-505", "Shree Ganesh Society", "A Wing");
-        seedBuyer("Ananya Shah", "9876500007", "C-404", "Harmony Towers", "Tower 3");
-        seedBuyer("Karan Verma", "9876500008", "A-301", "Maple Heights", "Block A");
-        seedBuyer("Meera Iyer", "9876500009", "D-102", "Sai Darshan Apartments", "Building B");
-        seedBuyer("Vikram Rao", "9876500010", "B-202", "Royal Orchid Residency", "Tower 2");
-        seedBuyer("Ishaan Gupta", "9876500011", "A-501", "Green Valley Residency", "C Wing");
-        seedBuyer("Diya Nair", "9876500012", "C-101", "Lakeview Heights", "Tower 1");
-        seedBuyer("Amit Tiwari", "9876500013", "D-303", "Sunrise Enclave", "Building A");
-        seedBuyer("Pooja Reddy", "9876500014", "B-401", "Palm Residency", "Tower 3");
-        seedBuyer("Nikhil Jain", "9876500015", "A-202", "Harmony Towers", "Tower 1");
+        // Buyer societies MUST match seller/kitchen societies (seeMarketplaceService.isServiceAreaVisible)
+        // so that authenticated buyers can discover and order from kitchens in their area.
+        // Kitchen societies: Sunshine Society, Green Valley, Lake View, Hill Side, Riverside, Lohegaon
+        seedBuyer("Aarav Mehta", "9876500001", "A-402", "Sunshine Society", "A Wing");
+        seedBuyer("Priya Sharma", "9876500002", "B-105", "Sunshine Society", "B Wing");
+        seedBuyer("Rahul Joshi", "9876500003", "C-303", "Sunshine Society", "Tower 2");
+        seedBuyer("Neha Patil", "9876500004", "D-201", "Green Valley", "Building C");
+        seedBuyer("Rohan Desai", "9876500005", "A-101", "Green Valley", "Tower 1");
+        seedBuyer("Sneha Kulkarni", "9876500006", "B-505", "Green Valley", "A Wing");
+        seedBuyer("Ananya Shah", "9876500007", "C-404", "Lake View", "Tower 3");
+        seedBuyer("Karan Verma", "9876500008", "A-301", "Lake View", "Block A");
+        seedBuyer("Meera Iyer", "9876500009", "D-102", "Lake View", "Building B");
+        seedBuyer("Vikram Rao", "9876500010", "B-202", "Hill Side", "Tower 2");
+        seedBuyer("Ishaan Gupta", "9876500011", "A-501", "Hill Side", "C Wing");
+        seedBuyer("Diya Nair", "9876500012", "C-101", "Hill Side", "Tower 1");
+        seedBuyer("Amit Tiwari", "9876500013", "D-303", "Riverside", "Building A");
+        seedBuyer("Pooja Reddy", "9876500014", "B-401", "Riverside", "Tower 3");
+        seedBuyer("Nikhil Jain", "9876500015", "A-202", "Lohegaon", "Tower 1");
         platformSettingRepository.save(new PlatformSetting(DEMO_BUYERS_FLAG, "true"));
     }
 
