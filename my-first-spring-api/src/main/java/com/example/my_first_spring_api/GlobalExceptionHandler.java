@@ -2,6 +2,7 @@ package com.example.my_first_spring_api;
 
 import com.example.my_first_spring_api.dto.ApiErrorDto;
 import com.example.my_first_spring_api.exception.BuyerNotAuthenticatedException;
+import com.example.my_first_spring_api.exception.BuyerProfileIncompleteException;
 import com.example.my_first_spring_api.exception.InvalidKitchenSelectionException;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.exception.OrderNotFoundException;
@@ -63,6 +64,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BuyerNotAuthenticatedException.class)
     public ResponseEntity<ApiErrorDto> handleUnauthenticated(BuyerNotAuthenticatedException ex) {
         return new ResponseEntity<>(new ApiErrorDto("UNAUTHORIZED", ex.getMessage(), 401), HttpStatus.UNAUTHORIZED);
+    }
+
+    @ExceptionHandler(BuyerProfileIncompleteException.class)
+    public ResponseEntity<ApiErrorDto> handleProfileIncomplete(BuyerProfileIncompleteException ex) {
+        return new ResponseEntity<>(new ApiErrorDto("PROFILE_INCOMPLETE", ex.getMessage(), 422), HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
     @ExceptionHandler(SellerNotAuthorizedException.class)
