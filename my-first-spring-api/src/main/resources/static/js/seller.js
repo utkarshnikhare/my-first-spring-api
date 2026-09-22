@@ -65,7 +65,29 @@ function parseServiceAreas(val) {
 }
 function sellerNavigate(hash) { if (location.hash === hash) sellerRender(); else location.hash = hash; }
 function greeting() { var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
-function offeringStatusBadge(p) { return p.soldOut ? '<span class="oc-badge soldout">SOLD OUT</span>' : '<span class="oc-badge live">LIVE</span>'; }
+function offeringStatusBadge(p) {
+    if (p.soldOut) return '<span class="oc-badge soldout">SOLD OUT</span>';
+    if (p.isPreorder) return '<span class="oc-badge live">PRE-ORDER • LIVE</span>';
+    return '<span class="oc-badge live">LIVE</span>';
+}
+/** "Orders close" value for a dashboard offering card: pretty time, plus the
+ *  offering day/date for future (pre-order) offerings so the seller knows
+ *  which date the cutoff belongs to. Uses the existing prettyTime/prettyDate. */
+function sellerOrdersCloseLabel(p) {
+    if (!p.cutoffTime) return '--';
+    var time = prettyTime(p.cutoffTime);
+    var day = p.availableDate ? prettyDate(p.availableDate) : '';
+    if (day && day !== 'Today' && day !== 'Invalid Date') return day + ', ' + time;
+    return time;
+}
+/** "Delivery" value for a dashboard offering card: the persisted ready-by text.
+ *  Pure 24-hour times are prettified; free-text values that already carry their
+ *  own day context (e.g. "1:30 PM Monday", "1:00 PM today") are shown as-is. */
+function sellerDeliveryLabel(p) {
+    var v = (p.readyByTime || '').trim();
+    if (!v) return '--';
+    return /^([01]?\d|2[0-3]):[0-5]\d$/.test(v) ? prettyTime(v) : v;
+}
 function statusDot(paid, cancelled) { return cancelled ? '<span class="status-dot red"></span>' : paid ? '<span class="status-dot green"></span>' : '<span class="status-dot orange"></span>'; }
 function localDateStr(d) { var y = d.getFullYear(), m = ('0' + (d.getMonth() + 1)).slice(-2), day = ('0' + d.getDate()).slice(-2); return y + '-' + m + '-' + day; }
 function sellerDate(dateKey) {
@@ -120,8 +142,8 @@ async function sellerHomeView() {
                 h += '<div class="oc-body">';
                 h += '<div class="oc-header"><span class="oc-name">' + esc(p.name) + '</span>' + offeringStatusBadge(p) + '</div>';
                 var booked = p.bookedQuantity || 0, remaining = p.remainingQuantity, maxQty = p.maxQuantity;
-                h += '<div class="oc-stats"><strong>' + booked + '</strong> booked · ' + (remaining != null ? remaining + ' available' : 'No limit') + '</div>';
-                h += '<div class="oc-time-row"><span>Cutoff: <span class="time-label">' + esc(p.cutoffTime || '--') + '</span></span><span>Delivery: <span class="time-label">' + esc(p.readyByTime || '--') + '</span></span></div>';
+                h += '<div class="oc-stats"><strong>' + booked + ' booked</strong> • ' + (remaining != null ? '<strong>' + remaining + ' available</strong>' : 'No limit') + '</div>';
+                h += '<div class="oc-time-row"><span>Orders close: <span class="time-label">' + esc(sellerOrdersCloseLabel(p)) + '</span></span><span>Delivery: <span class="time-label">' + esc(sellerDeliveryLabel(p)) + '</span></span></div>';
                 if (maxQty != null && remaining != null && remaining >= 0 && !p.soldOut) { h += '<div class="stepper"><button type="button" data-action="inv-dec" data-pid="' + p.id + '" aria-label="Decrease">-</button><span class="stepper-value" id="inv-' + p.id + '">' + remaining + '</span><button type="button" data-action="inv-inc" data-pid="' + p.id + '" aria-label="Increase">+</button></div>'; }
                 if (!p.soldOut) { h += '<button class="btn-soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Mark Sold Out</button>'; }
                 h += '<a class="btn btn-secondary btn-sm btn-block btn-mt-sm" href="#/order-detail/' + p.id + '">View Orders</a>';
@@ -179,11 +201,11 @@ async function sellerCreateView() {
     h += '<div class="form-group"><label class="form-label">Availability <span class="req">*</span></label><div class="radio-group"><label class="radio-option selected" data-action="set-availability" data-val="today">Today</label><label class="radio-option" data-action="set-availability" data-val="tomorrow">Tomorrow</label><label class="radio-option" data-action="set-availability" data-val="choose">Choose Date</label></div></div>';
     h += '<input type="hidden" name="availableDate" id="availDate" value="' + sellerDate('today') + '">';
     h += '<div class="section-gap" id="chooseDateRow" hidden><input type="date" class="sort-select w-full" data-action="set-availability-date" value="' + sellerDate('today') + '"></div>';
-    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open <span class="req">*</span></label><input class="form-input" name="orderWindowStart" type="time" value="08:00"></div>';
-    h += '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label><input class="form-input" name="orderWindowEnd" type="time" value="10:00"></div></div>';
+    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open</label><input class="form-input" name="orderWindowStart" type="time"><p class="muted small">Leave blank to start accepting orders immediately.</p></div>';
+    h += '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label><input class="form-input" name="orderWindowEnd" type="time" value="10:00" required><p class="muted small">Last date/time customers can place an order.</p></div></div>';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Cutoff <span class="req">*</span></label><input class="form-input" name="cutoffTime" type="time" value="10:00"></div>';
-    h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTime" type="text" placeholder="e.g. 1:00 PM today"></div></div>';
-    h += '<div class="form-group"><label class="form-label">Quantity Available <span class="req">*</span></label><input class="form-input" name="maxQuantity" type="number" placeholder="Blank for unlimited"></div>';
+    h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTime" type="text" placeholder="e.g. 1:00 PM today" required><p class="muted small">Date/time by which the order will be ready/delivered.</p></div></div>';
+    h += '<div class="form-group"><label class="form-label">Quantity Available</label><input class="form-input" name="maxQuantity" type="number" min="0" placeholder="Blank for unlimited"><p class="muted small">Leave blank for unlimited quantity.</p></div>';
     h += '<div class="form-group"><label class="form-label">To be listed in <span class="req">*</span></label><div class="checkbox-group"><label class="checkbox-option"><input type="checkbox" name="categories" value="BREAKFAST"> Breakfast</label><label class="checkbox-option"><input type="checkbox" name="categories" value="LUNCH"> Lunch</label><label class="checkbox-option"><input type="checkbox" name="categories" value="DINNER"> Dinner</label><label class="checkbox-option"><input type="checkbox" name="categories" value="SNACKS"> Snacks</label></div><p class="muted small">Select at least one category.</p></div>';
     h += '<div class="toggle-row"><div><div class="toggle-text">Mark as Favourite</div><div class="toggle-note">Save as template (max 3).</div></div><div class="toggle-switch" id="favToggle" data-action="toggle-favourite"></div></div>';
     h += '<button class="btn btn-primary btn-block" type="submit">Publish Offering</button></form></div>';
@@ -330,6 +352,20 @@ async function sellerOrderDetailView(productId) {
     return h;
 }
 
+/**
+ * Parses an optional HH:mm time input value for the Create Offering form.
+ * Returns null for blank input (optional field) and throws for malformed
+ * values so inconsistent timing data never reaches the backend.
+ */
+function parseOptionalHhmm(value, label) {
+    var v = (value || '').trim();
+    if (!v) return null;
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) {
+        throw new Error(label + ' must be a valid time in 24-hour HH:mm format.');
+    }
+    return v;
+}
+
 // Form submission
 document.addEventListener('submit', async function (e) {
     var form = e.target.closest('form');
@@ -338,6 +374,85 @@ document.addEventListener('submit', async function (e) {
     try {
         if (form.id === 'createOfferingForm') {
             var vals = formVals(form);
+            // Optional timing fields: blank means "not provided" -- never send
+            // an invalid empty timestamp to the backend.
+            vals.orderWindowStart = parseOptionalHhmm(vals.orderWindowStart, 'Orders Open');
+            vals.orderWindowEnd = parseOptionalHhmm(vals.orderWindowEnd, 'Orders Close');
+            vals.cutoffTime = parseOptionalHhmm(vals.cutoffTime, 'Cutoff');
+            var readyBy = (vals.readyByTime || '').trim();
+            if (!readyBy) { toast('Delivery / Ready By is required', 'error'); return; }
+            vals.readyByTime = readyBy;
+            if (vals.maxQuantity !== '' && vals.maxQuantity !== null && vals.maxQuantity !== undefined) {
+                var mq = Number(vals.maxQuantity);
+                if (isNaN(mq) || !Number.isInteger(mq) || mq < 0) {
+                    toast('Quantity Available must be a whole number of 0 or more', 'error');
+                    return;
+                }
+                vals.maxQuantity = mq;
+            } else {
+                vals.maxQuantity = null; // blank = unlimited
+            }
+            // Validation — impossible timing combinations are blocked client-side
+            // (the backend enforces the same rules independently).
+            var open = vals.orderWindowStart, close = vals.orderWindowEnd, cut = vals.cutoffTime;
+            var relDay = prettyDate(vals.availableDate);
+            if (open && close && open >= close) {
+                toast('Orders Open must be earlier than Orders Close', 'error');
+                return;
+            }
+            if (close && cut && close > cut) {
+                toast('Orders Close must not be after the Cutoff time', 'error');
+                return;
+            }
+            if (relDay === 'Tomorrow' || relDay === 'Today') {
+                var ampm = /^(\d{1,2}):(\d{2})\s*([AP])M?$/i.exec(readyBy.replace(/\s+/g, ' '));
+                var hour = null, minute = null, pm = false;
+                if (ampm) {
+                    hour = parseInt(ampm[1], 10); minute = parseInt(ampm[2], 10);
+                    pm = ampm[3].toUpperCase() === 'P';
+                    if (hour < 1 || hour > 12 || minute > 59) { toast('Delivery / Ready By must be a valid time, e.g. 1:00 PM today', 'error'); return; }
+                    hour = hour % 12 + (pm ? 12 : 0);
+                } else {
+                    var mil = /^(\d{1,2}):(\d{2})$/.exec(readyBy);
+                    if (mil) { hour = parseInt(mil[1], 10); minute = parseInt(mil[2], 10); }
+                    if (hour === null || hour > 23 || minute > 59) { toast('Delivery / Ready By must be a valid time, e.g. 1:00 PM today', 'error'); return; }
+                }
+                var offerDate = new Date(vals.availableDate + 'T00:00:00');
+                var closeMinutes = close ? (parseInt(close.split(':')[0], 10) * 60 + parseInt(close.split(':')[1], 10)) : null;
+                var readyMinutes = hour * 60 + minute;
+                // Rule C: delivery day must not be earlier than the offering day.
+                var dl = readyBy.toLowerCase();
+                var deliveryOffset = null;
+                if (/\btoday\b/.test(dl)) deliveryOffset = 0;
+                else if (/\b(tomorrow|tmr)\b/.test(dl)) deliveryOffset = 1;
+                else {
+                    var wd = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                    for (var wi = 0; wi < 7; wi++) {
+                        if (dl.indexOf(wd[wi]) >= 0) {
+                            var wdDate = new Date(); wdDate.setHours(0, 0, 0, 0);
+                            var wdelta = (wi - wdDate.getDay() + 7) % 7; if (wdelta === 0) wdelta = 7;
+                            wdDate.setDate(wdDate.getDate() + wdelta);
+                            if (wdDate < offerDate) { toast('Delivery date cannot be earlier than the offering date', 'error'); return; }
+                            deliveryOffset = -1;
+                            break;
+                        }
+                    }
+                }
+                if (deliveryOffset === 0 || deliveryOffset === 1) {
+                    var deliveryDay = new Date(); deliveryDay.setHours(0, 0, 0, 0);
+                    deliveryDay.setDate(deliveryDay.getDate() + deliveryOffset);
+                    if (deliveryDay < offerDate) { toast('Delivery date cannot be earlier than the offering date', 'error'); return; }
+                }
+                // Rule A: Orders Close must be earlier than Delivery / Ready By.
+                if (closeMinutes !== null && readyMinutes < closeMinutes) {
+                    toast('Orders Close must be earlier than the Delivery / Ready By time', 'error');
+                    return;
+                }
+            }
+            if (close && !cut) {
+                // Keep backend cutoff consistent with the chosen order window.
+                vals.cutoffTime = close;
+            }
             var kid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
             if (!kid) {
                 var k = await api('/api/seller/kitchen');
@@ -354,7 +469,7 @@ document.addEventListener('submit', async function (e) {
             var saveFav = $('#favToggle') && $('#favToggle').classList.contains('on');
             if (saveFav) {
                 try {
-                    var favBody = { name: vals.name, description: vals.description || '', price: Number(vals.price), priceUnit: vals.priceUnit, maxQuantity: vals.maxQuantity ? Number(vals.maxQuantity) : null, orderWindowStart: vals.orderWindowStart, orderWindowEnd: vals.orderWindowEnd, cutoffTime: vals.cutoffTime, readyByTime: vals.readyByTime, availableDate: vals.availableDate, category: (categories && categories[0]) || '' };
+                    var favBody = { name: vals.name, description: vals.description || '', price: Number(vals.price), priceUnit: vals.priceUnit, maxQuantity: vals.maxQuantity, orderWindowStart: vals.orderWindowStart, orderWindowEnd: vals.orderWindowEnd, cutoffTime: vals.cutoffTime, readyByTime: vals.readyByTime, availableDate: vals.availableDate, category: (categories && categories[0]) || '' };
                     await api('/api/seller-app/templates', { method: 'POST', body: favBody });
                 } catch (favErr) { toast('Could not save favourite: ' + favErr.message, 'error'); }
             }

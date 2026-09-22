@@ -1,6 +1,6 @@
 # ---------- Build stage: compile with Maven on JDK 21 ----------
 FROM maven:3.9.6-eclipse-temurin-21 AS build
-ARG BUILD_TIMESTAMP=2026-09-15T05:00:00Z
+ARG BUILD_TIMESTAMP=2026-09-22T07:30:00Z
 LABEL build.timestamp=${BUILD_TIMESTAMP}
 WORKDIR /build
 ENV MAVEN_OPTS="-Xmx512m -XX:MaxMetaspaceSize=128m"

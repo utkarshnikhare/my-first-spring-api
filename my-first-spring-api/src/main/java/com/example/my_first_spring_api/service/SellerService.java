@@ -98,17 +98,33 @@ public class SellerService {
         Kitchen kitchen = getOwnedKitchen(kitchenId, seller);
         assertFeatureCompliance(seller,
                 Boolean.TRUE.equals(dto.getIsPreorder()), dto.getAvailableDate(), dto.getName());
+        // Normalize optional timing fields: blank strings mean "not provided"
+        // (e.g. blank Orders Open = accepting orders immediately), never an
+        // invalid empty timestamp.
+        String orderWindowStart = normalizedHhmm(dto.getOrderWindowStart(), "orderWindowStart");
+        String orderWindowEnd = normalizedHhmm(dto.getOrderWindowEnd(), "orderWindowEnd");
+        String cutoffTime = validatedCutoff(normalizeBlank(dto.getCutoffTime()));
+        String readyByTime = normalizeBlank(dto.getReadyByTime());
+        Integer maxQuantity = dto.getMaxQuantity();
+        if (maxQuantity != null && maxQuantity < 0) {
+            throw new IllegalArgumentException("Quantity Available cannot be negative.");
+        }
+        // Server-side enforcement of the Create Offering timing rules so
+        // impossible combinations are never persisted, even if the client
+        // validation is bypassed.
+        validateCreateTiming(dto.getAvailableDate(), orderWindowStart, orderWindowEnd,
+                cutoffTime, readyByTime);
         Product product = new Product(kitchen, dto.getName(), dto.getDescription(), dto.getPrice(), dto.getImageUrl());
         product.setPriceUnit(dto.getPriceUnit());
         product.setAvailableToday(dto.getAvailableToday() != null ? dto.getAvailableToday() : true);
         product.setAvailableDate(dto.getAvailableDate());
-        product.setOrderWindowStart(dto.getOrderWindowStart());
-        product.setOrderWindowEnd(dto.getOrderWindowEnd());
-        product.setMaxQuantity(dto.getMaxQuantity());
-        product.setRemainingQuantity(dto.getMaxQuantity());
+        product.setOrderWindowStart(orderWindowStart);
+        product.setOrderWindowEnd(orderWindowEnd);
+        product.setMaxQuantity(maxQuantity);
+        product.setRemainingQuantity(maxQuantity);
         product.setIsPreorder(dto.getIsPreorder() != null ? dto.getIsPreorder() : false);
-        product.setCutoffTime(validatedCutoff(dto.getCutoffTime()));
-        product.setReadyByTime(dto.getReadyByTime() != null && dto.getReadyByTime().trim().isEmpty() ? null : dto.getReadyByTime());
+        product.setCutoffTime(cutoffTime);
+        product.setReadyByTime(readyByTime);
         product.setCategory(joinCategories(dto.getCategories()));
         return toProductDto(productRepository.save(product));
     }
@@ -213,6 +229,93 @@ public class SellerService {
         if (!v.matches("^([01]\\d|2[0-3]):[0-5]\\d$"))
             throw new IllegalArgumentException("cutoffTime must use 24-hour HH:mm format, e.g. 20:30");
         return v;
+    }
+
+    /** Trims a value; returns null when the field was left blank. */
+    private String normalizeBlank(String value) {
+        if (value == null) return null;
+        String v = value.trim();
+        return v.isEmpty() ? null : v;
+    }
+
+    /** Optional HH:mm field: null when blank, 400 when malformed. */
+    private String normalizedHhmm(String value, String fieldName) {
+        String v = normalizeBlank(value);
+        if (v == null) return null;
+        if (!v.matches("^([01]\\d|2[0-3]):[0-5]\\d$"))
+            throw new IllegalArgumentException(fieldName + " must use 24-hour HH:mm format, e.g. 08:30");
+        return v;
+    }
+
+    private int hhmmToMinutes(String hhmm) {
+        return Integer.parseInt(hhmm.substring(0, 2)) * 60 + Integer.parseInt(hhmm.substring(3, 5));
+    }
+
+    /**
+     * Business timing rules for a newly created offering:
+     *  - Orders Open (optional) must be earlier than Orders Close;
+     *  - Orders Close must not be after the cutoff or the Delivery / Ready By time;
+     *  - the Delivery / Ready By day (parsed from the existing free-text format,
+     *    e.g. "1:00 PM today" / "2:00 PM tomorrow" / "4:00 PM Friday") must not
+     *    be earlier than the offering's availability date.
+     */
+    private void validateCreateTiming(java.time.LocalDate availableDate, String orderWindowStart,
+                                      String orderWindowEnd, String cutoffTime, String readyByTime) {
+        if (orderWindowStart != null && orderWindowEnd != null
+                && hhmmToMinutes(orderWindowStart) >= hhmmToMinutes(orderWindowEnd)) {
+            throw new IllegalArgumentException("Orders Open must be earlier than Orders Close.");
+        }
+        if (orderWindowEnd != null && cutoffTime != null
+                && hhmmToMinutes(orderWindowEnd) > hhmmToMinutes(cutoffTime)) {
+            throw new IllegalArgumentException("Orders Close must not be after the Cutoff time.");
+        }
+        if (readyByTime == null) return; // nothing further to validate without a delivery time
+        // Parse the delivery day/time from the existing readyByTime text format.
+        java.time.LocalDate deliveryDate = null;
+        java.time.LocalTime deliveryTime = null;
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("^(\\d{1,2}):(\\d{2})\\s*(AM|PM)?\\s*(today|tomorrow|tmr)?\\s*$",
+                        java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(readyByTime);
+        if (m.matches()) {
+            int hour = Integer.parseInt(m.group(1));
+            int minute = Integer.parseInt(m.group(2));
+            String ampm = m.group(3);
+            if (ampm != null) {
+                if (hour < 1 || hour > 12) {
+                    throw new IllegalArgumentException("readyByTime must be a valid time, e.g. 1:00 PM today");
+                }
+                hour = hour % 12 + (ampm.equalsIgnoreCase("PM") ? 12 : 0);
+            } else if (hour > 23) {
+                throw new IllegalArgumentException("readyByTime must be a valid time, e.g. 1:00 PM today");
+            }
+            deliveryTime = java.time.LocalTime.of(hour, minute);
+            String dayWord = m.group(4);
+            if (dayWord == null || dayWord.equalsIgnoreCase("today")) {
+                deliveryDate = java.time.LocalDate.now();
+            } else {
+                deliveryDate = java.time.LocalDate.now().plusDays(1); // tomorrow / tmr
+            }
+        } else {
+            java.util.regex.Matcher wd = java.util.regex.Pattern
+                    .compile("(monday|tuesday|wednesday|thursday|friday|saturday|sunday)",
+                            java.util.regex.Pattern.CASE_INSENSITIVE)
+                    .matcher(readyByTime);
+            if (wd.find()) {
+                java.time.DayOfWeek target = java.time.DayOfWeek.valueOf(wd.group(1).toUpperCase());
+                java.time.LocalDate d = java.time.LocalDate.now();
+                int delta = (target.getValue() - d.getDayOfWeek().getValue() + 7) % 7;
+                if (delta == 0) delta = 7;
+                deliveryDate = d.plusDays(delta);
+            }
+        }
+        if (availableDate != null && deliveryDate != null && deliveryDate.isBefore(availableDate)) {
+            throw new IllegalArgumentException("Delivery / Ready By date cannot be earlier than the offering date.");
+        }
+        if (orderWindowEnd != null && deliveryTime != null
+                && hhmmToMinutes(orderWindowEnd) > deliveryTime.getHour() * 60 + deliveryTime.getMinute()) {
+            throw new IllegalArgumentException("Orders Close must be earlier than the Delivery / Ready By time.");
+        }
     }
 
     /** Joins category enum names into a comma-separated string for multi-category storage. */
