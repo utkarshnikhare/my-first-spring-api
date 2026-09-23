@@ -70,16 +70,18 @@ public class SellerService {
 
     public KitchenDto updateKitchen(Long kitchenId, KitchenUpdateDto dto, User seller) {
         Kitchen kitchen = getOwnedKitchen(kitchenId, seller);
+        if (dto.getSociety() != null) throw new IllegalArgumentException("Primary Society is a protected field and cannot be changed");
+        if (dto.getBuilding() != null) throw new IllegalArgumentException("Primary Building is a protected field and cannot be changed");
+        if (dto.getName() != null) throw new IllegalArgumentException("Kitchen URL name is a protected field and cannot be changed");
         if (dto.getDisplayName() != null && !dto.getDisplayName().isBlank()) kitchen.setDisplayName(dto.getDisplayName());
         if (dto.getDescription() != null) kitchen.setDescription(dto.getDescription());
         if (dto.getShortDescription() != null) kitchen.setShortDescription(dto.getShortDescription());
         if (dto.getImageUrl() != null) kitchen.setImageUrl(dto.getImageUrl());
-        if (dto.getSociety() != null) kitchen.setSociety(dto.getSociety());
         if (dto.getServiceAreas() != null) kitchen.setServiceAreas(dto.getServiceAreas());
-        if (dto.getBuilding() != null) kitchen.setBuilding(dto.getBuilding());
         if (dto.getWhatsappLink() != null) kitchen.setWhatsappLink(dto.getWhatsappLink());
         if (dto.getInstagramLink() != null) kitchen.setInstagramLink(dto.getInstagramLink());
         if (dto.getUpiId() != null) kitchen.setUpiId(dto.getUpiId());
+        if (dto.getGalleryImages() != null) kitchen.setGalleryImages(dto.getGalleryImages());
         if (dto.getAvailableToday() != null) kitchen.setAvailableToday(dto.getAvailableToday());
         if (dto.getSellerType() != null && !dto.getSellerType().isBlank()) {
             try { kitchen.setSellerType(com.example.my_first_spring_api.model.SellerType.valueOf(dto.getSellerType().toUpperCase())); }
@@ -392,6 +394,7 @@ public class SellerService {
         dto.setWhatsappLink(kitchen.getWhatsappLink());
         dto.setInstagramLink(kitchen.getInstagramLink());
         dto.setUpiId(kitchen.getUpiId());
+        dto.setGalleryImages(kitchen.getGalleryImages());
         dto.setOrderDeadline(kitchen.getOrderDeadline());
         dto.setSellerType(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : null);
         dto.setPaused(KitchenVisibility.isPaused(kitchen));
