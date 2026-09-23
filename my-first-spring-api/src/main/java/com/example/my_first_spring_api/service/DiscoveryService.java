@@ -64,19 +64,20 @@ public class DiscoveryService {
     private List<Product> visibleProducts(User buyer) {
         return productRepository.findAll().stream()
                 .filter(p -> p.getKitchen() != null && KitchenVisibility.isPubliclyVisible(p.getKitchen()) && KitchenVisibility.isServiceAreaVisible(p.getKitchen(), buyer))
+                .filter(p -> !p.isOrdersPaused())
                 .collect(Collectors.toList());
     }
 
     private static boolean orderableToday(Product p) {
-        return Boolean.TRUE.equals(p.getAvailableToday()) && !Boolean.TRUE.equals(p.getIsPreorder()) && !p.isSoldOut();
+        return Boolean.TRUE.equals(p.getAvailableToday()) && !Boolean.TRUE.equals(p.getIsPreorder()) && !p.isSoldOut() && !p.isOrdersPaused();
     }
 
     private static boolean availableTomorrow(Product p) {
-        return LocalDate.now().plusDays(1).equals(p.getAvailableDate());
+        return LocalDate.now().plusDays(1).equals(p.getAvailableDate()) && !p.isSoldOut() && !p.isOrdersPaused();
     }
 
     private static boolean openPreorder(Product p) {
-        return Boolean.TRUE.equals(p.getIsPreorder()) && !p.isSoldOut();
+        return Boolean.TRUE.equals(p.getIsPreorder()) && !p.isSoldOut() && !p.isOrdersPaused();
     }
 
     private boolean hasToday(List<Product> items) { return items.stream().anyMatch(DiscoveryService::orderableToday); }
@@ -172,6 +173,7 @@ public class DiscoveryService {
     public List<CategoryTile> getCategoryTiles(User buyer) {
         Map<Category, Long> counts = visibleProducts(buyer).stream()
                 .filter(p -> !p.isSoldOut())
+                .filter(p -> !p.isOrdersPaused())
                 .flatMap(p -> {
                     String cats = p.getCategory();
                     if (cats == null || cats.isBlank()) return java.util.stream.Stream.of(Category.SPECIAL);
@@ -198,6 +200,7 @@ public class DiscoveryService {
     public List<ItemGroup> getItemGroups(Category category, User buyer) {
         Map<String, List<Product>> byName = visibleProducts(buyer).stream()
                 .filter(p -> !p.isSoldOut())
+                .filter(p -> !p.isOrdersPaused())
                 .filter(p -> category == null || hasCategory(p, category))
                 .collect(Collectors.groupingBy(p -> p.getName(), LinkedHashMap::new, Collectors.toList()));
 
@@ -219,6 +222,7 @@ public class DiscoveryService {
     public List<KitchenCard> getKitchensByCategory(Category category, User buyer) {
         Map<Long, List<Product>> byKitchen = visibleProducts(buyer).stream()
                 .filter(p -> !p.isSoldOut())
+                .filter(p -> !p.isOrdersPaused())
                 .filter(p -> category == null || hasCategory(p, category))
                 .collect(Collectors.groupingBy(p -> p.getKitchen().getId()));
         Set<Long> ordered = buyerKitchenIds(buyer);
@@ -231,6 +235,7 @@ public class DiscoveryService {
     public long countItemsInCategory(Category category, User buyer) {
         return visibleProducts(buyer).stream()
                 .filter(p -> !p.isSoldOut())
+                .filter(p -> !p.isOrdersPaused())
                 .filter(p -> category == null || hasCategory(p, category))
                 .count();
     }
@@ -248,6 +253,7 @@ public class DiscoveryService {
         String q = itemName == null ? "" : itemName.trim().toLowerCase();
         List<Product> matches = visibleProducts(buyer).stream()
                 .filter(p -> p.getName().toLowerCase().contains(q))
+                .filter(p -> !p.isOrdersPaused())
                 .filter(p -> orderableToday(p) || openPreorder(p))
                 .collect(Collectors.toList());
 
@@ -284,7 +290,9 @@ public class DiscoveryService {
                 .filter(KitchenVisibility::isPubliclyVisible)
                 .filter(k -> KitchenVisibility.isServiceAreaVisible(k, buyer))
                 .map(k -> {
-                    List<Product> items = productRepository.findByKitchenAndAvailableTodayTrueOrderByCreatedAtDesc(k);
+                    List<Product> items = productRepository.findByKitchenAndAvailableTodayTrueOrderByCreatedAtDesc(k).stream()
+                            .filter(p -> !p.isOrdersPaused())
+                            .collect(Collectors.toList());
                     return toHomemadeCard(k, items);
                 })
                 .sorted(Comparator.comparing(c -> c.getDisplayName()))
@@ -308,8 +316,8 @@ public class DiscoveryService {
         card.setImageUrl(k.getImageUrl());
         card.setShortDescription(k.getShortDescription() != null ? k.getShortDescription() : k.getDescription());
         card.setStatus("AVAILABLE");
-        card.setOrderableItemCount((int) items.stream().filter(p -> !p.isSoldOut()).count());
-        card.setItemNames(items.stream().filter(p -> !p.isSoldOut()).map(Product::getName).collect(Collectors.toList()));
+        card.setOrderableItemCount((int) items.stream().filter(p -> !p.isSoldOut()).filter(p -> !p.isOrdersPaused()).count());
+        card.setItemNames(items.stream().filter(p -> !p.isSoldOut()).filter(p -> !p.isOrdersPaused()).map(Product::getName).collect(Collectors.toList()));
         card.setPreviouslyOrdered(false);
         card.setRating(k.getRating());
         return card;

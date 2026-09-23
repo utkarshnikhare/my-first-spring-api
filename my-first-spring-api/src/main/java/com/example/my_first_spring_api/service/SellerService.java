@@ -88,6 +88,18 @@ public class SellerService {
         return toKitchenDto(kitchenRepository.save(kitchen));
     }
 
+    public KitchenDto pauseKitchen(Long kitchenId, User seller) {
+        Kitchen kitchen = getOwnedKitchen(kitchenId, seller);
+        kitchen.setAvailableToday(false);
+        return toKitchenDto(kitchenRepository.save(kitchen));
+    }
+
+    public KitchenDto resumeKitchen(Long kitchenId, User seller) {
+        Kitchen kitchen = getOwnedKitchen(kitchenId, seller);
+        kitchen.setAvailableToday(true);
+        return toKitchenDto(kitchenRepository.save(kitchen));
+    }
+
     @Transactional(readOnly = true)
     public KitchenDto getMyKitchen(User seller) {
         List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
@@ -382,6 +394,7 @@ public class SellerService {
         dto.setUpiId(kitchen.getUpiId());
         dto.setOrderDeadline(kitchen.getOrderDeadline());
         dto.setSellerType(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : null);
+        dto.setPaused(KitchenVisibility.isPaused(kitchen));
         return dto;
     }
 
@@ -407,6 +420,7 @@ public class SellerService {
         dto.setTimeSlots(product.getTimeSlots());
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
+        dto.setOrdersPaused(product.isOrdersPaused());
         return dto;
     }
 }

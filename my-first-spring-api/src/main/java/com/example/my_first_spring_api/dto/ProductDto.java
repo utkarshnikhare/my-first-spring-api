@@ -15,6 +15,7 @@ public class ProductDto {
     private String imageUrl;
     private Boolean availableToday;
     private LocalDate availableDate;
+    private Boolean ordersPaused;
     private String orderWindowStart;
     private String orderWindowEnd;
     private Integer maxQuantity;
@@ -68,6 +69,9 @@ public class ProductDto {
     public void setAvailableToday(Boolean availableToday) { this.availableToday = availableToday; }
     public LocalDate getAvailableDate() { return availableDate; }
     public void setAvailableDate(LocalDate availableDate) { this.availableDate = availableDate; }
+    public Boolean getOrdersPaused() { return ordersPaused; }
+    public void setOrdersPaused(Boolean ordersPaused) { this.ordersPaused = ordersPaused; }
+    public boolean isOrdersPaused() { return Boolean.TRUE.equals(ordersPaused); }
     public String getOrderWindowStart() { return orderWindowStart; }
     public void setOrderWindowStart(String orderWindowStart) { this.orderWindowStart = orderWindowStart; }
     public String getOrderWindowEnd() { return orderWindowEnd; }

@@ -62,6 +62,16 @@ public class SellerController {
         return ResponseEntity.ok(sellerService.updateKitchen(kitchenId, dto, seller));
     }
 
+    @PostMapping("/kitchen/{kitchenId}/pause")
+    public ResponseEntity<KitchenDto> pauseKitchen(@PathVariable Long kitchenId, HttpSession session) {
+        return ResponseEntity.ok(sellerService.pauseKitchen(kitchenId, requireSeller(session)));
+    }
+
+    @PostMapping("/kitchen/{kitchenId}/resume")
+    public ResponseEntity<KitchenDto> resumeKitchen(@PathVariable Long kitchenId, HttpSession session) {
+        return ResponseEntity.ok(sellerService.resumeKitchen(kitchenId, requireSeller(session)));
+    }
+
     @GetMapping("/products")
     public ResponseEntity<List<ProductDto>> getMyProducts(HttpSession session) {
         User seller = requireSeller(session);

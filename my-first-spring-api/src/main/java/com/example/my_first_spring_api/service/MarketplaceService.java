@@ -39,6 +39,7 @@ public class MarketplaceService {
                 .collect(Collectors.toList());
 
         List<ProductDto> availableToday = productRepository.findByAvailableTodayTrueOrderByCreatedAtDesc().stream()
+                .filter(p -> !p.isOrdersPaused())
                 .filter(p -> p.getKitchen() == null || (KitchenVisibility.isPubliclyVisible(p.getKitchen()) && isServiceAreaVisible(p.getKitchen(), buyer)))
                 .map(this::toProductDto).collect(Collectors.toList());
 
@@ -62,6 +63,7 @@ public class MarketplaceService {
 
     public List<ProductDto> getAllAvailableItems(User buyer) {
         return productRepository.findByAvailableTodayTrueOrderByCreatedAtDesc().stream()
+                .filter(p -> !p.isOrdersPaused())
                 .filter(p -> p.getKitchen() != null && KitchenVisibility.isPubliclyVisible(p.getKitchen()) && isServiceAreaVisible(p.getKitchen(), buyer))
                 .map(this::toProductDto)
                 .collect(Collectors.toList());
@@ -88,6 +90,7 @@ public class MarketplaceService {
                 kitchen.getDescription(), kitchen.getImageUrl(), kitchen.getRating(),
                 kitchen.getAvailableToday(), kitchen.getSeller() != null ? kitchen.getSeller().getId() : null);
         dto.setSellerType(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : null);
+        dto.setPaused(KitchenVisibility.isPaused(kitchen));
         return dto;
     }
 
@@ -113,6 +116,7 @@ public class MarketplaceService {
         dto.setTimeSlots(product.getTimeSlots());
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
+        dto.setOrdersPaused(product.isOrdersPaused());
         return dto;
     }
 }

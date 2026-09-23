@@ -97,6 +97,26 @@ public class SellerAppService {
         product.setAvailableToday(false);
         return toProductDto(productRepository.save(product));
     }
+
+    @Transactional
+    public ProductDto pauseOrders(Long productId, User seller) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ProductNotFoundException(productId));
+        if (!product.getKitchen().getSeller().getId().equals(seller.getId()))
+            throw new SellerNotAuthorizedException("Not your product");
+        product.setOrdersPaused(true);
+        return toProductDto(productRepository.save(product));
+    }
+
+    @Transactional
+    public ProductDto resumeOrders(Long productId, User seller) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ProductNotFoundException(productId));
+        if (!product.getKitchen().getSeller().getId().equals(seller.getId()))
+            throw new SellerNotAuthorizedException("Not your product");
+        product.setOrdersPaused(false);
+        return toProductDto(productRepository.save(product));
+    }
     @Transactional
     public SellerTemplateDto addTemplate(User seller, SellerTemplateDto dto) {
         SellerTemplate template = new SellerTemplate();
@@ -570,6 +590,7 @@ public class SellerAppService {
         dto.setTimeSlots(product.getTimeSlots());
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
+        dto.setOrdersPaused(product.isOrdersPaused());
         return dto;
     }
 

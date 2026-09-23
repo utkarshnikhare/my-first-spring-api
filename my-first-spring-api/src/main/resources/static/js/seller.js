@@ -67,6 +67,7 @@ function sellerNavigate(hash) { if (location.hash === hash) sellerRender(); else
 function greeting() { var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
 function offeringStatusBadge(p) {
     if (p.soldOut) return '<span class="oc-badge soldout">SOLD OUT</span>';
+    if (p.ordersPaused) return '<span class="oc-badge paused">PAUSED</span>';
     if (p.isPreorder) return '<span class="oc-badge live">PRE-ORDER • LIVE</span>';
     return '<span class="oc-badge live">LIVE</span>';
 }
@@ -144,8 +145,10 @@ async function sellerHomeView() {
                 var booked = p.bookedQuantity || 0, remaining = p.remainingQuantity, maxQty = p.maxQuantity;
                 h += '<div class="oc-stats"><strong>' + booked + ' booked</strong> • ' + (remaining != null ? '<strong>' + remaining + ' available</strong>' : 'No limit') + '</div>';
                 h += '<div class="oc-time-row"><span>Orders close: <span class="time-label">' + esc(sellerOrdersCloseLabel(p)) + '</span></span><span>Delivery: <span class="time-label">' + esc(sellerDeliveryLabel(p)) + '</span></span></div>';
-                if (maxQty != null && remaining != null && remaining >= 0 && !p.soldOut) { h += '<div class="stepper"><button type="button" data-action="inv-dec" data-pid="' + p.id + '" aria-label="Decrease">-</button><span class="stepper-value" id="inv-' + p.id + '">' + remaining + '</span><button type="button" data-action="inv-inc" data-pid="' + p.id + '" aria-label="Increase">+</button></div>'; }
-                if (!p.soldOut) { h += '<button class="btn-soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Mark Sold Out</button>'; }
+                if (maxQty != null && remaining != null && remaining >= 0 && !p.soldOut && !p.ordersPaused) { h += '<div class="stepper"><button type="button" data-action="inv-dec" data-pid="' + p.id + '" aria-label="Decrease">-</button><span class="stepper-value" id="inv-' + p.id + '">' + remaining + '</span><button type="button" data-action="inv-inc" data-pid="' + p.id + '" aria-label="Increase">+</button></div>'; }
+                if (!p.soldOut && !p.ordersPaused) { h += '<button class="btn-soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Mark Sold Out</button>'; }
+                if (!p.soldOut && !p.ordersPaused) { h += '<button class="btn btn-secondary btn-sm btn-block btn-mt-sm" type="button" data-action="pause-orders" data-pid="' + p.id + '">Pause Orders</button>'; }
+                if (p.ordersPaused && !p.soldOut) { h += '<button class="btn btn-secondary btn-sm btn-block btn-mt-sm" type="button" data-action="resume-orders" data-pid="' + p.id + '">Resume Orders</button>'; }
                 h += '<a class="btn btn-secondary btn-sm btn-block btn-mt-sm" href="#/order-detail/' + p.id + '">View Orders</a>';
                 h += '</div></div>';
             });
@@ -238,11 +241,15 @@ async function sellerOrdersView() {
 
 // SCREEN 6: MANAGE KITCHEN
 async function sellerKitchenView() {
-    var h = '<div class="view-enter"><div class="page-head"><h1>Manage Kitchen</h1></div>';
-    h += '<div class="kitchen-status-badge">Kitchen Published</div>';
-    h += '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="preview-kitchen">Preview Kitchen Page</button>';
     var kitchen = null;
     try { kitchen = await api('/api/seller/kitchen'); S.myKitchen = kitchen; S.kitchen = kitchen; } catch (e) { }
+    var paused = !!(kitchen && kitchen.paused);
+    var h = '<div class="view-enter"><div class="page-head"><h1>Manage Kitchen</h1></div>';
+    h += '<div class="kitchen-status-badge' + (paused ? ' paused' : '') + '">' + (paused ? 'Kitchen PAUSED' : 'Kitchen Published') + '</div>';
+    h += paused
+        ? '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="resume-kitchen">Resume Kitchen</button>'
+        : '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="pause-kitchen">Pause Kitchen</button>';
+    h += '<button class="btn btn-secondary btn-sm btn-block btn-mt-sm" type="button" data-action="preview-kitchen">Preview Kitchen Page</button>';
     h += '<form class="seller-form" id="kitchenForm">';
     h += '<div class="kitchen-avatar-upload"><div class="kitchen-avatar" data-action="upload-avatar" role="button" tabindex="0" aria-label="Upload kitchen photo">' + (kitchen && kitchen.imageUrl ? '<img src="' + esc(kitchen.imageUrl) + '" class="avatar-img" alt="Kitchen photo" onerror="imgFallback(this)">' : '📷') + '</div></div>';
     h += '<div class="form-group"><label class="form-label">Kitchen Name</label><input class="form-input" name="displayName" value="' + esc(kitchen && kitchen.displayName ? kitchen.displayName : 'Aarti Kitchen') + '"></div>';
@@ -539,6 +546,42 @@ document.addEventListener('click', async function (e) {
                         sellerRender();
                     }
                 });
+                break;
+            }
+            case 'pause-orders': {
+                var pausePid = Number(t.dataset.pid);
+                await api('/api/seller-app/products/' + pausePid + '/pause', { method: 'POST' });
+                toast('Orders paused', 'success');
+                await sellerRender();
+                break;
+            }
+            case 'resume-orders': {
+                var resumePid = Number(t.dataset.pid);
+                await api('/api/seller-app/products/' + resumePid + '/resume', { method: 'POST' });
+                toast('Orders resumed', 'success');
+                await sellerRender();
+                break;
+            }
+            case 'pause-kitchen': {
+                if (!S.myKitchen) { toast('Kitchen is not available', 'error'); break; }
+                confirmModal({
+                    icon: '⏸️',
+                    title: 'Pause your kitchen?',
+                    message: 'Customers will no longer be able to discover your kitchen or place new orders. Existing confirmed orders will not be affected.',
+                    okLabel: 'Yes, Pause Kitchen',
+                    onOk: async function () {
+                        await api('/api/seller/kitchen/' + S.myKitchen.id + '/pause', { method: 'POST' });
+                        toast('Kitchen paused', 'success');
+                        await sellerRender();
+                    }
+                });
+                break;
+            }
+            case 'resume-kitchen': {
+                if (!S.myKitchen) { toast('Kitchen is not available', 'error'); break; }
+                await api('/api/seller/kitchen/' + S.myKitchen.id + '/resume', { method: 'POST' });
+                toast('Kitchen resumed', 'success');
+                await sellerRender();
                 break;
             }
             case 'set-view-mode': S.viewMode = t.dataset.mode; await sellerRender(); break;

@@ -39,6 +39,9 @@ public class KitchenService {
     public KitchenDetailDto getKitchenByName(String name, User buyer) {
         Kitchen kitchen = kitchenRepository.findByName(name)
                 .orElseThrow(() -> new KitchenNotFoundException(name));
+        if (KitchenVisibility.isPaused(kitchen)) {
+            return closedDetail(kitchen);
+        }
         if (!KitchenVisibility.isPubliclyVisible(kitchen) || !isServiceAreaVisible(kitchen, buyer)) {
             throw new KitchenNotFoundException(name);
         }
@@ -70,6 +73,9 @@ public class KitchenService {
     public KitchenDetailDto getKitchenDetailById(Long id, User buyer) {
         Kitchen kitchen = kitchenRepository.findById(id)
                 .orElseThrow(() -> new KitchenNotFoundException(id));
+        if (KitchenVisibility.isPaused(kitchen)) {
+            return closedDetail(kitchen);
+        }
         if (!KitchenVisibility.isPubliclyVisible(kitchen) || !isServiceAreaVisible(kitchen, buyer)) {
             throw new KitchenNotFoundException(id);
         }
@@ -109,6 +115,7 @@ public class KitchenService {
     public SearchResultDto search(String query, User buyer) {
         List<ProductDto> products = productRepository.findByNameContainingIgnoreCase(query).stream()
                 .map(this::toProductDto)
+                .filter(p -> !p.isOrdersPaused())
                 .filter(p -> p.getKitchenId() == null
                         || kitchenRepository.findById(p.getKitchenId())
                             .map(k -> KitchenVisibility.isPubliclyVisible(k) && isServiceAreaVisible(k, buyer))
@@ -162,7 +169,14 @@ public class KitchenService {
         dto.setUpiId(kitchen.getUpiId());
         dto.setOrderDeadline(kitchen.getOrderDeadline());
         dto.setSellerType(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : null);
+        dto.setPaused(KitchenVisibility.isPaused(kitchen));
         return dto;
+    }
+
+    private KitchenDetailDto closedDetail(Kitchen kitchen) {
+        KitchenDetailDto detail = new KitchenDetailDto(toKitchenDto(kitchen), List.of());
+        detail.setPreorderProducts(List.of());
+        return detail;
     }
 
     private ProductDto toProductDto(Product product) {
@@ -187,6 +201,7 @@ public class KitchenService {
         dto.setTimeSlots(product.getTimeSlots());
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
+        dto.setOrdersPaused(product.isOrdersPaused());
         return dto;
     }
 }

@@ -197,6 +197,7 @@
 }
 .oc-badge.live { background: var(--green-soft); color: var(--green); }
 .oc-badge.soldout { background: var(--danger-soft); color: var(--danger); }
+.oc-badge.paused { background: var(--amber-soft); color: var(--amber); }
 .oc-badge.closed { background: var(--border); color: var(--muted); }
 .oc-stats {
     font-size: .84rem;
@@ -1215,6 +1216,7 @@
     font-weight: 700;
     margin-bottom: 16px;
 }
+.kitchen-status-badge.paused { background: var(--amber-soft); color: var(--amber); }
 .kitchen-avatar-upload {
     display: flex;
     justify-content: center;

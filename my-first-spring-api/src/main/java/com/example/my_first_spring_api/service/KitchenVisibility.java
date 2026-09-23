@@ -15,11 +15,21 @@ public final class KitchenVisibility {
     private KitchenVisibility() {}
 
     public static boolean isPubliclyVisible(Kitchen kitchen) {
+        if (kitchen == null) return false;
         User seller = kitchen.getSeller();
         return seller != null
                 && seller.getRole() == UserRole.SELLER
                 && seller.isApprovedSeller()
                 && Boolean.TRUE.equals(kitchen.getAvailableToday());
+    }
+
+    public static boolean isPaused(Kitchen kitchen) {
+        if (kitchen == null) return false;
+        User seller = kitchen.getSeller();
+        return seller != null
+                && seller.getRole() == UserRole.SELLER
+                && seller.isApprovedSeller()
+                && Boolean.FALSE.equals(kitchen.getAvailableToday());
     }
 
     public static boolean isHomemadeStore(Kitchen kitchen) {

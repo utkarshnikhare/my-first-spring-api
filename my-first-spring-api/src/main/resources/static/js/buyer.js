@@ -405,6 +405,10 @@ async function homemadeStoreView(hash) {
             h += emptyHtml('🏪', 'Store not found', 'This store may not be available in your area.', '<a class="btn btn-primary" href="#/homemade">Back to Homemade</a>');
             return h;
         }
+        if (k.paused) {
+            h += emptyHtml('⏸️', 'This kitchen is currently closed.', 'Please check again later.');
+            return h;
+        }
         h += '<div class="kitchen-hero">' +
             '<img class="kitchen-hero-img" src="' + esc(k.imageUrl || '') + '" alt="" onerror="this.style.display=\'none\'">' +
             '<div class="kitchen-hero-overlay">' +
@@ -455,6 +459,10 @@ async function kitchenPageView(hash) {
     try {
         var detail = await api('/api/kitchens/id/' + id);
         var k = detail.kitchen;
+        if (k && k.paused) {
+            h += emptyHtml('⏸️', 'This kitchen is currently closed.', 'Please check again later.');
+            return h;
+        }
         var today = (detail.products || []).filter(function (p) { return !p.isPreorder; });
         var preorder = (detail.preorderProducts && detail.preorderProducts.length)
             ? detail.preorderProducts
@@ -535,6 +543,7 @@ async function kitchenPageView(hash) {
 
 function offeringCardHtml(p, kitchen, isPreorderSection) {
     var soldOut = p.soldOut || (p.remainingQuantity != null && p.remainingQuantity <= 0);
+    var paused = !!p.ordersPaused;
     var max = p.maxQuantity || ((p.bookedQuantity || 0) + (p.remainingQuantity || 0)) || 50;
     var booked = p.bookedQuantity || 0;
     var pct = max > 0 ? Math.min(100, Math.round(booked / max * 100)) : 0;
@@ -550,7 +559,7 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
         var t2 = p.readyByTime ? (' · Ready ' + p.readyByTime) : '';
         timingHtml = '<p class="oc-timing">⏰ ' + esc(t1 + t2) + '</p>';
     }
-    return '<div class="offering-card' + (soldOut ? ' sold-out' : '') + (isPre ? ' is-preorder' : '') + '">' +
+    return '<div class="offering-card' + (soldOut ? ' sold-out' : '') + (paused ? ' paused' : '') + (isPre ? ' is-preorder' : '') + '">' +
         dishImg('oc-photo', emojiFor(p.name), usableImageUrl(p.imageUrl) ? p.imageUrl : '', p.name) +
         '<div class="oc-body">' +
         '<div class="oc-name-row"><span class="oc-name">' + esc(p.name) + '</span>' +
@@ -564,6 +573,9 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
         (soldOut
             ? '<div class="oc-footer"><span class="pill pill-red">🔴 Sold out</span>' +
               '<button class="btn btn-outline btn-sm" disabled>Sold out</button></div>'
+            : paused
+            ? '<div class="oc-footer"><span class="pill pill-amber">⏸️ Orders paused</span>' +
+              '<button class="btn btn-outline btn-sm" disabled>Orders paused</button></div>'
             : '<div class="oc-footer"><span class="pill ' + (isPre ? 'pill-blue">🔵 Pre-order' : 'pill-green">🟢 Today') + '</span>' +
               '<button class="btn btn-primary btn-sm" type="button" data-action="open-order-sheet" data-product="' + encodeURIComponent(JSON.stringify(p)) + '" data-kitchen="' + kitchenJson + '">' +
               (isPre ? 'PRE-ORDER' : 'ORDER') + '</button></div>') +
@@ -577,6 +589,11 @@ var sheet = { product: null, kitchen: null, qty: 1, date: null, slot: null };
 function openOrderSheet(productJson, kitchenJson) {
     var p = JSON.parse(decodeURIComponent(productJson));
     var k = JSON.parse(decodeURIComponent(kitchenJson));
+    if (p.ordersPaused) {
+        closeSheet();
+        toast('Orders are paused for this offering', 'error');
+        return;
+    }
     sheet = { product: p, kitchen: k, qty: 1, date: null, slot: null };
 
     var flex = p.isPreorder && p.preorderType === 'FLEXIBLE';

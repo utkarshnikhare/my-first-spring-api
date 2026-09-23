@@ -90,6 +90,16 @@ public class SellerAppController {
         return ResponseEntity.ok(sellerAppService.markSoldOut(productId, requireSeller(session)));
     }
 
+    @PostMapping("/products/{productId}/pause")
+    public ResponseEntity<ProductDto> pauseOrders(@PathVariable Long productId, HttpSession session) {
+        return ResponseEntity.ok(sellerAppService.pauseOrders(productId, requireSeller(session)));
+    }
+
+    @PostMapping("/products/{productId}/resume")
+    public ResponseEntity<ProductDto> resumeOrders(@PathVariable Long productId, HttpSession session) {
+        return ResponseEntity.ok(sellerAppService.resumeOrders(productId, requireSeller(session)));
+    }
+
     @GetMapping("/templates")
     public ResponseEntity<List<SellerTemplateDto>> getTemplates(HttpSession session) {
         return ResponseEntity.ok(sellerAppService.getTemplates(requireSeller(session)));

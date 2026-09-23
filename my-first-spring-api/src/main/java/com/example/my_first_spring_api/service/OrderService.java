@@ -85,9 +85,15 @@ public class OrderService {
             for (OrderItemRequest itemReq : items) {
                 Product product = productRepository.findById(itemReq.getProductId())
                         .orElseThrow(() -> new ProductNotFoundException(itemReq.getProductId()));
+                if (product.getKitchen() == null || !product.getKitchen().getId().equals(kitchen.getId())) {
+                    throw new IllegalArgumentException("The selected offering does not belong to this kitchen.");
+                }
                 int qty = itemReq.getQuantity() == null ? 0 : itemReq.getQuantity();
                 if (qty <= 0) {
                     throw new IllegalArgumentException("Quantity must be at least 1.");
+                }
+                if (Boolean.TRUE.equals(product.getOrdersPaused())) {
+                    throw new IllegalArgumentException("Orders are paused for '" + product.getName() + "'.");
                 }
                 if (Boolean.FALSE.equals(product.getAvailableToday()) && !Boolean.TRUE.equals(product.getIsPreorder())) {
                     throw new IllegalArgumentException("'" + product.getName() + "' is not available today.");
@@ -243,6 +249,7 @@ public class OrderService {
             orderRepository.delete(order);
             throw new IllegalArgumentException("This kitchen does not serve your selected area. Please choose another kitchen.");
         }
+        validateOrderItemsForPlacement(order);
         consumeStock(order);
         // Notify seller if any tracked offering newly sold out as a result of this order.
         notifyNewlySoldOut(order);
@@ -503,6 +510,54 @@ public class OrderService {
 
     private String generateOrderNumber() {
         return "SM" + (System.nanoTime() % 10000000000L);
+    }
+
+    private void validateOrderItemsForPlacement(Order order) {
+        for (OrderItem item : order.getItems()) {
+            if (item.getProduct() == null || item.getProduct().getId() == null) {
+                throw new IllegalArgumentException("One of the selected offerings is no longer available.");
+            }
+            Product product = productRepository.findById(item.getProduct().getId())
+                    .orElseThrow(() -> new ProductNotFoundException(item.getProduct().getId()));
+            if (product.getKitchen() == null || !product.getKitchen().getId().equals(order.getKitchen().getId())) {
+                throw new IllegalArgumentException("One of the selected offerings no longer belongs to this kitchen.");
+            }
+            if (Boolean.TRUE.equals(product.getOrdersPaused())) {
+                throw new IllegalArgumentException("Orders are paused for '" + product.getName() + "'.");
+            }
+            boolean preorder = Boolean.TRUE.equals(product.getIsPreorder());
+            if (!preorder && Boolean.FALSE.equals(product.getAvailableToday())) {
+                throw new IllegalArgumentException("'" + product.getName() + "' is no longer available today.");
+            }
+            int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+            if (product.getRemainingQuantity() != null && product.getRemainingQuantity() <= 0) {
+                throw new IllegalArgumentException("'" + product.getName() + "' is sold out.");
+            }
+            if (product.getRemainingQuantity() != null && quantity > product.getRemainingQuantity()) {
+                throw new IllegalArgumentException("Only " + product.getRemainingQuantity() + " left of '" + product.getName() + "'.");
+            }
+            if (product.getMaxQuantity() != null && quantity > product.getMaxQuantity()) {
+                throw new IllegalArgumentException("At most " + product.getMaxQuantity() + " units of '" + product.getName() + "' per order.");
+            }
+            if (!preorder) {
+                enforceCutoff(product, LocalDate.now(), "today");
+            } else {
+                LocalDate scheduled = item.getScheduledDate();
+                LocalDate earliest = product.getAvailableDate() != null ? product.getAvailableDate() : LocalDate.now().plusDays(1);
+                LocalDate latest = product.getAvailableUntilDate() != null ? product.getAvailableUntilDate() : earliest;
+                if (scheduled == null || scheduled.isBefore(earliest) || scheduled.isAfter(latest)) {
+                    throw new IllegalArgumentException("'" + product.getName() + "' can be scheduled between "
+                            + earliest + " and " + latest + ".");
+                }
+                enforceCutoff(product, scheduled.minusDays(1), "for " + scheduled + " availability");
+                if (product.getPreorderType() == PreorderType.FLEXIBLE) {
+                    List<String> slots = parseSlots(product.getTimeSlots());
+                    if (!slots.isEmpty() && (item.getScheduledSlot() == null || !slots.contains(item.getScheduledSlot()))) {
+                        throw new IllegalArgumentException("Choose a valid time slot for '" + product.getName() + "'.");
+                    }
+                }
+            }
+        }
     }
 
     private void consumeStock(Order order) {

@@ -37,6 +37,9 @@ public class Product {
     @Column(name = "available_date")
     private LocalDate availableDate;
 
+    @Column(name = "orders_paused")
+    private Boolean ordersPaused = false;
+
     @Column(name = "order_window_start")
     private String orderWindowStart;
 
@@ -131,6 +134,9 @@ public class Product {
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
     public Boolean getAvailableToday() { return availableToday; }
     public void setAvailableToday(Boolean availableToday) { this.availableToday = availableToday; }
+    public Boolean getOrdersPaused() { return ordersPaused; }
+    public void setOrdersPaused(Boolean ordersPaused) { this.ordersPaused = ordersPaused; }
+    public boolean isOrdersPaused() { return Boolean.TRUE.equals(ordersPaused); }
     public LocalDate getAvailableDate() { return availableDate; }
     public void setAvailableDate(LocalDate availableDate) { this.availableDate = availableDate; }
     public String getOrderWindowStart() { return orderWindowStart; }

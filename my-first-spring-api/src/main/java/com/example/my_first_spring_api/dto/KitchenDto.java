@@ -16,6 +16,7 @@ public class KitchenDto {
     private String upiId;
     private Double rating;
     private Boolean availableToday;
+    private Boolean paused;
     private String orderDeadline;
     private Long sellerId;
     private String sellerType;
@@ -64,6 +65,8 @@ public class KitchenDto {
     public void setRating(Double rating) { this.rating = rating; }
     public Boolean getAvailableToday() { return availableToday; }
     public void setAvailableToday(Boolean availableToday) { this.availableToday = availableToday; }
+    public Boolean getPaused() { return paused; }
+    public void setPaused(Boolean paused) { this.paused = paused; }
     public String getOrderDeadline() { return orderDeadline; }
     public void setOrderDeadline(String orderDeadline) { this.orderDeadline = orderDeadline; }
     public Long getSellerId() { return sellerId; }
