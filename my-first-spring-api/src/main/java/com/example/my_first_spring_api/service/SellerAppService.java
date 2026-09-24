@@ -527,7 +527,7 @@ public class SellerAppService {
         row.setTotalAmount(lineTotal);
         if (order.getBuyer() != null) {
             row.setBuyerName(order.getBuyer().getName());
-            row.setBuyerMobile(order.getBuyer().getMobileNumber());
+
             row.setBuyerFlat(order.getBuyer().getFlatHouseNumber());
             row.setBuilding(order.getBuyer().getBuilding());
             row.setSociety(order.getBuyer().getSociety());

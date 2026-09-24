@@ -82,7 +82,7 @@ class SellerNotificationTest {
         order.setOrderNumber("SM-PAID-001");
         order.setOrderStatus(OrderStatus.ORDERED);
         order.setPaymentStatus(PaymentStatus.PENDING);
-        when(orderRepository.findById(51L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate(51L)).thenReturn(Optional.of(order));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         orderService.markOrderAsPaid(51L, s);
@@ -102,7 +102,7 @@ class SellerNotificationTest {
         order.setOrderNumber("SM-PAID-002");
         order.setOrderStatus(OrderStatus.CONFIRMED);
         order.setPaymentStatus(PaymentStatus.PAID);
-        when(orderRepository.findById(52L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForUpdate(52L)).thenReturn(Optional.of(order));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         orderService.markOrderAsPaid(52L, s);

@@ -1,6 +1,7 @@
 package com.example.my_first_spring_api.service;
 
 import com.example.my_first_spring_api.dto.OrderDto;
+import com.example.my_first_spring_api.dto.SellerOrderSummaryRowDto;
 import com.example.my_first_spring_api.dto.OrderItemRequest;
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
@@ -132,7 +133,7 @@ class OrderPriceImmutabilityTest {
         product.setPrice(BigDecimal.valueOf(40));
         when(kitchenRepository.findBySeller(seller)).thenReturn(List.of(kitchen));
         when(orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen)).thenReturn(List.of(savedDraft));
-        List<OrderDto> sellerOrders = orderService.getSellerOrders(seller);
+        List<SellerOrderSummaryRowDto> sellerOrders = orderService.getSellerOrders(seller);
         assertThat(sellerOrders).hasSize(1);
         assertThat(sellerOrders.get(0).getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(2000));
     }

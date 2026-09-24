@@ -4,6 +4,7 @@ import com.example.my_first_spring_api.dto.KitchenCreateDto;
 import com.example.my_first_spring_api.dto.KitchenDto;
 import com.example.my_first_spring_api.dto.KitchenUpdateDto;
 import com.example.my_first_spring_api.dto.OrderDto;
+import com.example.my_first_spring_api.dto.SellerOrderSummaryRowDto;
 import com.example.my_first_spring_api.dto.ProductCreateDto;
 import com.example.my_first_spring_api.dto.ProductDto;
 import com.example.my_first_spring_api.dto.ProductUpdateDto;
@@ -217,7 +218,7 @@ public class SellerService {
     }
 
     @Transactional(readOnly = true)
-    public List<OrderDto> getMyOrders(User seller) {
+    public List<SellerOrderSummaryRowDto> getMyOrders(User seller) {
         return orderService.getSellerOrders(seller);
     }
 

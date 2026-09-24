@@ -9,7 +9,7 @@ var state = {
     ordersTab: 'orders',      // Screen 8 orders/enquiries tabs
     ordersFilter: 'all',      // Screen 8 order filter: all/active/completed/cancelled
     payMethod: 'upi',         // Screen 6 demo payment method: upi/card/cod
-    payPreference: 'PAID',    // Confirm Order payment-status selection: PAID | WILL_PAY_LATER
+    payPreference: 'PAID',    // Confirm Order payment-status selection: PAID | PENDING
     placingOrder: false,      // idempotency guard for payment confirmation
     lastOrder: null,          // placed order for the confirmation screen
     authMobile: '',
@@ -130,10 +130,11 @@ document.addEventListener('click', async function (e) {
                 await placeOrderWithStatus('PAID'); break;
             case 'place-order-later':
                 try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
-                await placeOrderWithStatus('WILL_PAY_LATER'); break;
+                await placeOrderWithStatus('PENDING'); break;
             case 'select-pay-method': state.payMethod = t.dataset.method; await render(); break;
             case 'select-pay-status': // Confirm Order: Paid / Will Pay Later (UI selection only)
-                state.payPreference = t.dataset.status === 'WILL_PAY_LATER' ? 'WILL_PAY_LATER' : 'PAID';
+                state.payPreference = t.dataset.status === 'PENDING' || t.dataset.status === 'WILL_PAY_LATER'
+                    ? 'PENDING' : 'PAID';
                 await render(); break;
             case 'place-order':
                 try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}

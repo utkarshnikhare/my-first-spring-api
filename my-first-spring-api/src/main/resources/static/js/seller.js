@@ -392,6 +392,7 @@ async function sellerOrderDetailByOrderView(orderId) {
             h += '<div class="odc-buyer-row"><span class="odc-buyer">' + esc(order.buyer.name || 'Unknown') + '</span>';
             h += '<span class="odc-qty">' + money(order.totalAmount) + '</span></div>';
             if (addrParts.length > 0) { h += '<div class="odc-address">📍 ' + esc(addrParts.join(', ')) + '</div>'; }
+            if (order.buyer.mobileNumber) { h += '<div class="odc-address">📱 ' + esc(order.buyer.mobileNumber) + '</div>'; }
         }
         if (order.orderTime) { h += '<div class="tiny muted mt-1">Ordered: ' + prettyDateTime(order.orderTime) + '</div>'; }
         if (order.customInstructions) { h += '<div class="odc-remark">"' + esc(order.customInstructions) + '"</div>'; }
@@ -403,9 +404,13 @@ async function sellerOrderDetailByOrderView(orderId) {
             });
             h += '</div>';
         }
+        var paymentStatus = order.paymentStatus || 'PENDING';
         h += '<div class="dtc-badges mt-2">';
-        h += '<span class="dtc-badge ' + (order.paymentStatus === 'PAID' ? 'green' : 'orange') + '">' + (order.paymentStatus || 'PENDING') + '</span>';
+        h += '<span class="dtc-badge ' + (paymentStatus === 'PAID' ? 'green' : 'orange') + '">Payment: ' + esc(paymentStatus) + '</span>';
         h += '<span class="dtc-badge ' + (order.orderStatus === 'CANCELLED' ? 'red' : 'green') + '">' + (order.orderStatus || 'ORDERED') + '</span></div>';
+        if ((paymentStatus === 'PENDING' || paymentStatus === 'WILL_PAY_LATER') && order.orderStatus !== 'CANCELLED') {
+            h += '<button class="btn btn-primary btn-block mt-2" type="button" data-action="mark-paid" data-oid="' + esc(order.id) + '">Mark as Paid</button>';
+        }
         h += '</div>';
     } catch (e) { h += emptyHtml('⚠️', 'Could not load details', e.message); }
     h += '</div>';
@@ -676,9 +681,16 @@ document.addEventListener('click', async function (e) {
             case 'mark-paid': {
                 var oid = Number(t.dataset.oid);
                 if (!confirm('Mark this order as PAID?')) return;
-                await api('/api/seller/orders/' + oid + '/payment-status', { method: 'PATCH' });
-                toast('Order marked as paid', 'success');
-                await sellerRender();
+                if (t.disabled) return;
+                t.disabled = true;
+                try {
+                    await api('/api/seller/orders/' + oid + '/payment-status', { method: 'PATCH' });
+                    toast('Order marked as paid', 'success');
+                    await sellerRender();
+                } catch (err) {
+                    t.disabled = false;
+                    toast(err.message || 'Could not update payment status', 'error');
+                }
                 break;
             }
             case 'add-service-area': {

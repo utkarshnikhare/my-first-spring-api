@@ -828,9 +828,10 @@ async function placeOrderWithStatus(paymentStatus) {
     state.placingOrder = true;
     try {
         await withAuthGate(async function () {
+            var submittedPaymentStatus = paymentStatus === 'WILL_PAY_LATER' ? 'PENDING' : paymentStatus;
             var placed = await api('/api/buyer/orders/place', {
                 method: 'POST',
-                body: { paymentStatus: paymentStatus, customInstructions: note }
+                body: { paymentStatus: submittedPaymentStatus, customInstructions: note }
             });
             clearCart();
             state.pendingCheckout = null;
@@ -920,10 +921,10 @@ async function confirmOrderView() {
         '<span class="ps-icon" aria-hidden="true">✅</span>' +
         '<span class="ps-body"><span class="ps-name">Paid</span>' +
         '<span class="ps-sub">Confirm this order as paid now. Demo selection only.</span></span></div>' +
-        '<div class="pay-status' + (pref === 'WILL_PAY_LATER' ? ' selected' : '') + '" role="radio" aria-checked="' + (pref === 'WILL_PAY_LATER' ? 'true' : 'false') + '" data-action="select-pay-status" data-status="WILL_PAY_LATER">' +
+        '<div class="pay-status' + (pref === 'PENDING' || pref === 'WILL_PAY_LATER' ? ' selected' : '') + '" role="radio" aria-checked="' + (pref === 'PENDING' || pref === 'WILL_PAY_LATER' ? 'true' : 'false') + '" data-action="select-pay-status" data-status="PENDING">' +
         '<span class="ps-radio" aria-hidden="true"></span>' +
         '<span class="ps-icon" aria-hidden="true">⏳</span>' +
-        '<span class="ps-body"><span class="ps-name">Will Pay Later</span>' +
+        '<span class="ps-body"><span class="ps-name">I'll Pay Later</span>' +
         '<span class="ps-sub">Pay when the order is delivered or picked up.</span></span></div>' +
         '<p class="pay-status-note mt-1">🔒 This is only a payment-status selection for your order record — no payment is processed here.</p></div>';
 
@@ -1035,7 +1036,7 @@ async function confirmPayment(btnEl) {
         await withAuthGate(async function () {
             var placed = await api('/api/buyer/orders/place', {
                 method: 'POST',
-                body: { paymentStatus: cod ? 'WILL_PAY_LATER' : 'PAID', customInstructions: note }
+                body: { paymentStatus: cod ? 'PENDING' : 'PAID', customInstructions: note }
             });
             clearCart();
             state.pendingCheckout = null;

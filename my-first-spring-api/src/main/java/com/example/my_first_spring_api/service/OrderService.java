@@ -254,11 +254,13 @@ public class OrderService {
         // Notify seller if any tracked offering newly sold out as a result of this order.
         notifyNewlySoldOut(order);
         boolean isHomemade = order.getKitchen() != null && order.getKitchen().getSellerType() == SellerType.HOMEMADE_PRODUCTS;
-        if (paymentStatus == PaymentStatus.PAID && !isHomemade) {
+        PaymentStatus effectivePaymentStatus = paymentStatus == null || paymentStatus == PaymentStatus.WILL_PAY_LATER
+                ? PaymentStatus.PENDING : paymentStatus;
+        if (effectivePaymentStatus == PaymentStatus.PAID && !isHomemade) {
             order.setPaymentStatus(PaymentStatus.PAID);
             order.setOrderStatus(OrderStatus.CONFIRMED);
         } else {
-            order.setPaymentStatus(paymentStatus != null ? paymentStatus : PaymentStatus.WILL_PAY_LATER);
+            order.setPaymentStatus(effectivePaymentStatus);
             order.setOrderStatus(OrderStatus.ORDERED);
         }
         order.recalculateTotal();
@@ -369,23 +371,19 @@ public class OrderService {
     }
 
     public OrderDto markOrderAsPaid(Long orderId, User seller) {
-        Order order = orderRepository.findById(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
-        if (order.getKitchen() == null || !order.getKitchen().getSeller().getId().equals(seller.getId())) {
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        if (order.getKitchen() == null || order.getKitchen().getSeller() == null
+                || !order.getKitchen().getSeller().getId().equals(seller.getId())) {
             throw new SellerNotAuthorizedException("Not authorized");
         }
         if (order.getOrderStatus() == OrderStatus.CANCELLED) {
             throw new IllegalArgumentException("This order is already cancelled.");
         }
-        boolean paymentWasNotPaid = order.getPaymentStatus() != PaymentStatus.PAID;
+        if (order.getPaymentStatus() == PaymentStatus.PAID) return toOrderDto(order);
         order.setPaymentStatus(PaymentStatus.PAID);
-        if (order.getOrderStatus() == OrderStatus.ORDERED) {
-            order.setOrderStatus(OrderStatus.CONFIRMED);
-        }
         orderRepository.save(order);
-        // Notify the buyer that their payment has been recorded — only on actual state change.
-        if (paymentWasNotPaid && order.getBuyer() != null) {
-            notificationService.sendPaymentReceivedNotification(order.getBuyer(), order.getOrderNumber());
-        }
+        if (order.getBuyer() != null) notificationService.sendPaymentReceivedNotification(order.getBuyer(), order.getOrderNumber());
         return toOrderDto(order);
     }
 
@@ -410,14 +408,12 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public List<OrderDto> getSellerOrders(User seller) {
+    public List<SellerOrderSummaryRowDto> getSellerOrders(User seller) {
         List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
         if (kitchens.isEmpty()) return List.of();
-        return kitchens.stream()
-                .flatMap(k -> orderRepository.findByKitchenOrderByCreatedAtDesc(k).stream())
+        return kitchens.stream().flatMap(k -> orderRepository.findByKitchenOrderByCreatedAtDesc(k).stream())
                 .filter(o -> o.getOrderStatus() != OrderStatus.DRAFT)
-                .map(this::toOrderDto)
-                .collect(Collectors.toList());
+                .map(this::toSellerOrderSummaryRowDto).collect(Collectors.toList());
     }
 
     public OrderDto updateOrderStatus(Long orderId, OrderStatus newStatus, User seller) {
@@ -475,6 +471,22 @@ public class OrderService {
             throw new SellerNotAuthorizedException("Not authorized");
         }
         return toOrderDto(order);
+    }
+
+    private SellerOrderSummaryRowDto toSellerOrderSummaryRowDto(Order order) {
+        OrderDto full = toOrderDto(order);
+        SellerOrderSummaryRowDto dto = new SellerOrderSummaryRowDto();
+        dto.setId(full.getId()); dto.setOrderNumber(full.getOrderNumber()); dto.setTotalAmount(full.getTotalAmount());
+        dto.setPaymentStatus(full.getPaymentStatus()); dto.setOrderStatus(full.getOrderStatus()); dto.setCreatedAt(full.getCreatedAt());
+        dto.setOrderTime(full.getOrderTime()); dto.setUpdatedAt(full.getUpdatedAt()); dto.setKitchen(full.getKitchen());
+        dto.setItems(full.getItems()); dto.setCustomInstructions(full.getCustomInstructions()); dto.setAcknowledgedAt(full.getAcknowledgedAt());
+        dto.setAcknowledgedBySellerId(full.getAcknowledgedBySellerId());
+        if (full.getBuyer() != null) {
+            SellerOrderSummaryRowDto.BuyerSummary b = new SellerOrderSummaryRowDto.BuyerSummary();
+            b.setName(full.getBuyer().getName()); b.setFlatHouseNumber(full.getBuyer().getFlatHouseNumber());
+            b.setSociety(full.getBuyer().getSociety()); b.setBuilding(full.getBuyer().getBuilding()); dto.setBuyer(b);
+        }
+        return dto;
     }
 
     OrderDto toOrderDto(Order order) {

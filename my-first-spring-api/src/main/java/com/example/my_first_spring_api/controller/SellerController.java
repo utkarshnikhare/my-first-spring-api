@@ -4,6 +4,7 @@ import com.example.my_first_spring_api.dto.KitchenCreateDto;
 import com.example.my_first_spring_api.dto.KitchenDto;
 import com.example.my_first_spring_api.dto.KitchenUpdateDto;
 import com.example.my_first_spring_api.dto.OrderDto;
+import com.example.my_first_spring_api.dto.SellerOrderSummaryRowDto;
 import com.example.my_first_spring_api.dto.ProductCreateDto;
 import com.example.my_first_spring_api.dto.ProductDto;
 import com.example.my_first_spring_api.dto.ProductUpdateDto;
@@ -100,7 +101,7 @@ public class SellerController {
     }
 
     @GetMapping("/orders")
-    public ResponseEntity<List<OrderDto>> getMyOrders(HttpSession session) {
+    public ResponseEntity<List<SellerOrderSummaryRowDto>> getMyOrders(HttpSession session) {
         User seller = requireSeller(session);
         return ResponseEntity.ok(sellerService.getMyOrders(seller));
     }
