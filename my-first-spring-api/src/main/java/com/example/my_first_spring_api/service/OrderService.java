@@ -313,7 +313,7 @@ public class OrderService {
 
     @Transactional(readOnly = true)
     public OrderDto getOrderDetails(Long orderId, User buyer) {
-        Order order = orderRepository.findById(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
+        Order order = orderRepository.findByIdWithItems(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
         if (order.getBuyer() == null || !order.getBuyer().getId().equals(buyer.getId())) throw new OrderNotFoundException(orderId);
         return toOrderDto(order);
     }
@@ -397,6 +397,40 @@ public class OrderService {
         return toOrderDto(order);
     }
 
+    public OrderDto cancelOrder(Long orderId, User buyer) {
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        if (order.getBuyer() == null || !order.getBuyer().getId().equals(buyer.getId())) {
+            throw new OrderNotFoundException(orderId);
+        }
+        if (order.getOrderStatus() == OrderStatus.CANCELLED) {
+            return toOrderDto(order); // idempotent retry; inventory is never restored twice
+        }
+        if (order.getOrderStatus() == OrderStatus.DRAFT
+                || order.getOrderStatus() == OrderStatus.DELIVERED
+                || order.getOrderStatus() == OrderStatus.COMPLETED) {
+            throw new IllegalArgumentException("This order cannot be cancelled at its current stage.");
+        }
+        order = cancelOrderLocked(order);
+        return toOrderDto(order);
+    }
+
+    private Order cancelOrderLocked(Order order) {
+        Long orderId = order.getId();
+        restoreStock(order);
+        // Bulk inventory updates clear the persistence context; reload the order
+        // and its items before accessing lazy relationships or building the DTO.
+        order = orderRepository.findByIdWithItems(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        if (order.getKitchen() != null && order.getKitchen().getSeller() != null) {
+            notificationService.sendOrderCancellationNotification(
+                    order.getKitchen().getSeller(), order.getOrderNumber());
+        }
+        order.setOrderStatus(OrderStatus.CANCELLED);
+        orderRepository.save(order);
+        return order;
+    }
+
     public OrderDto markOrderAsPaid(Long orderId, User seller) {
         Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
@@ -466,11 +500,8 @@ public class OrderService {
             throw new IllegalArgumentException("Order is already " + newStatus + ".");
         }
         if (newStatus == OrderStatus.CANCELLED) {
-            restoreStock(order);
-            // Notify the seller that this order was cancelled (after successful restore).
-            if (order.getKitchen() != null && order.getKitchen().getSeller() != null) {
-                notificationService.sendOrderCancellationNotification(order.getKitchen().getSeller(), order.getOrderNumber());
-            }
+            order = cancelOrderLocked(order);
+            return toOrderDto(order);
         }
         order.setOrderStatus(newStatus);
         orderRepository.save(order);
@@ -680,6 +711,7 @@ public class OrderService {
                     throw new IllegalArgumentException("Could not restore inventory for '"
                             + product.getName() + "'. Please try again.");
                 }
+                productRepository.reopenAfterRestore(e.getKey());
             } else {
                 productRepository.decrementBookedQuantity(e.getKey(), quantity);
             }

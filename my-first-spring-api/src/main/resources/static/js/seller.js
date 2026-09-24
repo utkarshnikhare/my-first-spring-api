@@ -180,15 +180,20 @@ async function sellerHomeView() {
 
 // SCREEN 5: HISTORY
 async function sellerHistoryView() {
-    var h = '<div class="view-enter"><div class="page-head"><h1>History</h1><p class="muted small">Repost items from the last 2 days.</p></div>';
-    S.historySelected = [];
+    var h = '<div class="view-enter"><div class="page-head"><h1>History</h1><p class="muted small">Previous offerings from your kitchen.</p></div>';
     try {
         var items = await api('/api/seller-app/history');
-        if (items.length === 0) { h += emptyHtml('🕘', 'No recent items', 'Items from the last 2 days appear here.'); }
-        else {
-            h += '<div class="history-date-header">YESTERDAY AND TODAY</div>';
-            items.forEach(function (p) { h += '<label class="history-card"><input type="checkbox" data-action="toggle-history" data-pid="' + p.id + '"><span class="hc-body"><span class="hc-name">' + esc(p.name) + '</span><span class="hc-meta">' + esc(p.cutoffTime || '') + '</span></span><span class="hc-price">' + money(p.price) + '</span></label>'; });
-            h += '<button class="sticky-footer-btn" type="button" data-action="batch-republish">Publish Selected</button>';
+        S.historyItems = items || [];
+        if (!items.length) {
+            h += emptyHtml('🕘', 'No previous items', 'Expired offerings for your kitchen will appear here.');
+        } else {
+            items.forEach(function (p) {
+                var offeringDate = p.availableDate ? prettyDate(p.availableDate) : 'Previous offering';
+                h += '<div class="history-card"><span class="hc-body"><span class="hc-name">' + esc(p.name) + '</span>' +
+                    '<span class="hc-meta">' + esc(offeringDate) + ' · ' + esc(p.category || 'Uncategorised') + '</span></span>' +
+                    '<span class="hc-price">' + money(p.price) + '</span>' +
+                    '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="republish-history" data-pid="' + esc(p.id) + '">Republish</button></div>';
+            });
         }
     } catch (e) { h += emptyHtml('⚠️', 'Could not load history', e.message); }
     h += '</div>';
@@ -210,22 +215,26 @@ async function sellerCreateView() {
     // A new form always starts in Today mode; never inherit a previous choice.
     S.offeringFor = 'today';
     var t = S.draftOffering || {};
+    var selectedUnit = t.priceUnit || 'Per Piece';
+    var categoryValues = String(t.category || '').split(',').map(function (c) { return c.trim().toUpperCase(); }).filter(Boolean);
     var h = '<div class="view-enter">';
-    h += '<div class="page-head"><h1>Create Offering</h1><p class="muted small">Fill in the details for your new dish.</p></div>';
+    h += '<div class="page-head"><h1>Create Offering</h1><p class="muted small">' +
+        (S.republishSourceId ? 'Review the previous offering details, then set fresh timing and quantity.' : 'Fill in the details for your new dish.') + '</p></div>';
     h += '<form class="seller-form" id="createOfferingForm">';
     h += '<div class="form-group"><label class="form-label">Photos <span class="req">*</span></label><div class="photo-upload-row"><div class="photo-tile" data-action="add-photo">+</div></div></div>';
     h += '<div class="form-group"><label class="form-label">Item Name <span class="req">*</span></label><input class="form-input" name="name" value="' + esc(t.name || '') + '" placeholder="e.g. POHA" required></div>';
     h += '<div class="form-group"><label class="form-label">Short Description</label><textarea class="form-textarea" name="description">' + esc(t.description || '') + '</textarea></div>';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Price (Rs) <span class="req">*</span></label><input class="form-input" name="price" type="number" value="' + (t.price || '') + '" placeholder="100" required></div>';
-    h += '<div class="form-group"><label class="form-label">Unit <span class="req">*</span></label><select class="form-select" name="priceUnit"><option value="Per Piece">Per Piece</option><option value="Per Plate">Per Plate</option><option value="Per Box">Per Box</option></select></div></div>';
+    h += '<div class="form-group"><label class="form-label">Unit <span class="req">*</span></label><select class="form-select" name="priceUnit"><option value="Per Piece"' + (selectedUnit === 'Per Piece' ? ' selected' : '') + '>Per Piece</option><option value="Per Plate"' + (selectedUnit === 'Per Plate' ? ' selected' : '') + '>Per Plate</option><option value="Per Box"' + (selectedUnit === 'Per Box' ? ' selected' : '') + '>Per Box</option></select></div></div>';
+    h += '<input type="hidden" name="imageUrl" value="' + esc(t.imageUrl || '') + '">';
     h += '<div class="form-group"><label class="form-label">Offering For <span class="req">*</span></label><div class="radio-group"><label class="radio-option selected" data-action="set-availability" data-val="today">Today</label><label class="radio-option" data-action="set-availability" data-val="tomorrow">Tomorrow</label><label class="radio-option" data-action="set-availability" data-val="choose">Choose Date</label></div></div>';
     h += '<input type="hidden" name="availableDate" id="availDate" value="' + sellerDate('today') + '">';
     h += '<div class="form-group" id="chooseDateRow" hidden><label class="form-label">Offering Date <span class="req">*</span></label><input type="date" class="form-input" name="chosenOfferingDate" min="' + sellerDate('today') + '" data-action="set-availability-date" value="' + sellerDate('today') + '"></div>';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open — Optional</label><input class="form-input" name="orderWindowStart" type="time"><p class="muted small">Leave blank to start accepting orders immediately.</p></div>';
     h += '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label><input class="form-input" name="orderWindowEnd" type="time" required><p class="muted small">Last date/time customers can place an order.</p></div></div>';
     h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTime" type="datetime-local" required><p class="muted small">Date/time by which the order will be ready/delivered.</p></div>';
-    h += '<div class="form-group"><label class="form-label">Quantity Available — Optional</label><input class="form-input" name="maxQuantity" type="number" min="1" step="1" placeholder="Blank for unlimited"><p class="muted small">Leave blank for unlimited quantity.</p></div>';
-    h += '<div class="form-group"><label class="form-label">To be listed in <span class="req">*</span></label><div class="checkbox-group"><label class="checkbox-option"><input type="checkbox" name="categories" value="BREAKFAST"> Breakfast</label><label class="checkbox-option"><input type="checkbox" name="categories" value="LUNCH"> Lunch</label><label class="checkbox-option"><input type="checkbox" name="categories" value="DINNER"> Dinner</label><label class="checkbox-option"><input type="checkbox" name="categories" value="SNACKS"> Snacks</label></div><p class="muted small">Select at least one category.</p></div>';
+    h += '<div class="form-group"><label class="form-label">Quantity Available — Optional</label><input class="form-input" name="maxQuantity" type="number" min="1" step="1" value="' + (t.maxQuantity != null ? esc(String(t.maxQuantity)) : '') + '" placeholder="Blank for unlimited"><p class="muted small">Leave blank for unlimited quantity.</p></div>';
+    h += '<div class="form-group"><label class="form-label">To be listed in <span class="req">*</span></label><div class="checkbox-group"><label class="checkbox-option"><input type="checkbox" name="categories" value="BREAKFAST"' + (categoryValues.indexOf('BREAKFAST') >= 0 ? ' checked' : '') + '> Breakfast</label><label class="checkbox-option"><input type="checkbox" name="categories" value="LUNCH"' + (categoryValues.indexOf('LUNCH') >= 0 ? ' checked' : '') + '> Lunch</label><label class="checkbox-option"><input type="checkbox" name="categories" value="DINNER"' + (categoryValues.indexOf('DINNER') >= 0 ? ' checked' : '') + '> Dinner</label><label class="checkbox-option"><input type="checkbox" name="categories" value="SNACKS"' + (categoryValues.indexOf('SNACKS') >= 0 ? ' checked' : '') + '> Snacks</label></div><p class="muted small">Select at least one category.</p></div>';
     h += '<div class="toggle-row"><div><div class="toggle-text">Mark as Favourite</div><div class="toggle-note">Save as template (max 3).</div></div><div class="toggle-switch" id="favToggle" data-action="toggle-favourite"></div></div>';
     h += '<button class="btn btn-primary btn-block" type="submit">Publish Offering</button></form></div>';
     return h;
@@ -417,7 +426,10 @@ async function sellerOrderDetailByOrderView(orderId) {
         var paymentStatus = order.paymentStatus || 'PENDING';
         h += '<div class="dtc-badges mt-2">';
         h += '<span class="dtc-badge ' + (paymentStatus === 'PAID' ? 'green' : 'orange') + '">Payment: ' + esc(paymentStatus) + '</span>';
-        h += '<span class="dtc-badge ' + (order.orderStatus === 'CANCELLED' ? 'red' : 'green') + '">' + (order.orderStatus || 'ORDERED') + '</span></div>';
+        h += '<span class="dtc-badge ' + (order.orderStatus === 'CANCELLED' ? 'red' : 'green') + '">Order status: ' + esc(order.orderStatus || 'ORDERED') + '</span></div>';
+        if (order.orderStatus && ['ORDERED', 'CONFIRMED', 'READY'].indexOf(order.orderStatus) >= 0) {
+            h += '<button class="btn btn-secondary btn-block mt-2" type="button" data-action="cancel-order" data-order-id="' + esc(order.id) + '">Cancel Order</button>';
+        }
         if ((paymentStatus === 'PENDING' || paymentStatus === 'WILL_PAY_LATER') && order.orderStatus !== 'CANCELLED') {
             h += '<button class="btn btn-primary btn-block mt-2" type="button" data-action="mark-paid" data-oid="' + esc(order.id) + '">Mark as Paid</button>';
         }
@@ -520,6 +532,8 @@ document.addEventListener('submit', async function (e) {
             await api('/api/seller/products?kitchenId=' + kid, { method: 'POST', body: vals });
             toast('Offering published!', 'success');
             S.draftOffering = null;
+            S.republishSourceId = null;
+            S.offeringFor = 'today';
             sellerNavigate('#/home');
         } else if (form.id === 'kitchenForm') {
             var kid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
@@ -644,6 +658,32 @@ document.addEventListener('click', async function (e) {
                     html += '<button class="btn btn-primary btn-block" data-action="go-create">Review and Publish</button></div>';
                     box.innerHTML = html;
                 }
+                break;
+            }
+            case 'cancel-order': {
+                if (!confirm('Cancel this order?')) return;
+                if (t.disabled) return;
+                t.disabled = true;
+                try {
+                    await api('/api/seller/orders/' + encodeURIComponent(t.dataset.orderId) + '/status', { method: 'PATCH', body: { orderStatus: 'CANCELLED' } });
+                    toast('Order cancelled', 'success');
+                    await sellerRender();
+                } catch (err) {
+                    t.disabled = false;
+                    toast(err.message || 'Could not cancel order', 'error');
+                }
+                break;
+            }
+            case 'republish-history': {
+                if (t.disabled) return;
+                var historyId = Number(t.dataset.pid);
+                var historyItem = (S.historyItems || []).find(function (item) { return item.id === historyId; });
+                if (!historyItem) { toast('This history item is no longer available', 'error'); return; }
+                t.disabled = true;
+                S.draftOffering = historyItem;
+                S.republishSourceId = historyItem.id;
+                S.offeringFor = 'today';
+                sellerNavigate('#/create');
                 break;
             }
             case 'batch-republish': {

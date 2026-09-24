@@ -294,9 +294,10 @@ public class SellerAppService {
     @Transactional(readOnly = true)
     public List<ProductDto> getRecentOfferings(User seller) {
         Kitchen kitchen = getOwnedKitchen(seller);
-        LocalDateTime twoDaysAgo = LocalDateTime.now().minusDays(2);
+        // History is defined by the authoritative offering date, not creation age.
+        // Active today and future offerings remain on the seller dashboard.
         return productRepository
-                .findByKitchenAndCreatedAtAfterOrderByCreatedAtDesc(kitchen, twoDaysAgo).stream()
+                .findByKitchenAndAvailableDateBeforeOrderByAvailableDateDescCreatedAtDesc(kitchen, LocalDate.now()).stream()
                 .map(this::toProductDto)
                 .collect(Collectors.toList());
     }
@@ -679,6 +680,7 @@ public class SellerAppService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
+        dto.setCreatedAt(product.getCreatedAt());
         return dto;
     }
 
@@ -759,18 +761,21 @@ public class SellerAppService {
         clone.setPriceUnit(original.getPriceUnit());
         clone.setAvailableDate(offeringDate);
         clone.setAvailableToday(offeringDate.equals(LocalDate.now()) && !preorder);
-        clone.setOrderWindowStart(original.getOrderWindowStart());
+        clone.setOrderWindowStart(null);
         clone.setOrderWindowEnd(close);
-        clone.setMaxQuantity(original.getMaxQuantity());
-        clone.setRemainingQuantity(original.getMaxQuantity());
+        Integer independentMax = original.getMaxQuantity() != null && original.getMaxQuantity() > 0
+                ? original.getMaxQuantity() : null;
+        clone.setMaxQuantity(independentMax);
+        clone.setRemainingQuantity(independentMax);
         clone.setIsPreorder(preorder);
         clone.setCategory(original.getCategory());
         clone.setCutoffTime(close);
-        clone.setReadyByTime(flexible ? original.getReadyByTime() : readyBy);
+        clone.setReadyByTime(readyBy);
         clone.setPreorderType(original.getPreorderType());
         clone.setAvailableUntilDate(original.getAvailableUntilDate());
         clone.setTimeSlots(original.getTimeSlots());
         clone.setBookedQuantity(0);
+        clone.setOrdersPaused(false);
         return clone;
     }
 }

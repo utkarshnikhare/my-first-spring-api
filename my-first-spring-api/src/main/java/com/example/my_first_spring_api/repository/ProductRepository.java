@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -19,6 +20,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     List<Product> findByNameContainingIgnoreCase(String name);
     List<Product> findByKitchenId(Long kitchenId);
     List<Product> findByKitchenAndCreatedAtAfterOrderByCreatedAtDesc(Kitchen kitchen, LocalDateTime after);
+    List<Product> findByKitchenAndAvailableDateBeforeOrderByAvailableDateDescCreatedAtDesc(Kitchen kitchen, LocalDate date);
 
     /**
      * Atomic inventory adjustment for the live stepper. Guards are enforced inside the
@@ -33,11 +35,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             "AND (p.maxQuantity IS NULL OR p.remainingQuantity + :delta <= p.maxQuantity)")
     int adjustRemainingQuantity(@Param("productId") Long productId, @Param("delta") int delta);
 
-    /**
-     * Atomic stock restoration for a cancelled order. The database update is
-     * capped by the offering's maximum and cannot run twice for the same order
-     * because the order row is locked before cancellation is applied.
-     */
+    /** Atomic stock restoration for a cancelled order; capped by the offering maximum. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Product p SET p.remainingQuantity = CASE "
             + "WHEN p.maxQuantity IS NULL THEN p.remainingQuantity + :qty "
@@ -52,8 +50,17 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             + "WHERE p.id = :productId AND p.remainingQuantity IS NOT NULL")
     int restoreStock(@Param("productId") Long productId, @Param("qty") int qty);
 
-    /** Atomic decrement for unlimited offerings when a cancelled order is released. */
+    /** Reopen only an eligible same-day, unpaused, non-preorder offering after restoration. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Product p SET p.availableToday = true, p.updatedAt = CURRENT_TIMESTAMP "
+            + "WHERE p.id = :productId AND p.remainingQuantity > 0 "
+            + "AND COALESCE(p.ordersPaused, false) = false "
+            + "AND COALESCE(p.isPreorder, false) = false "
+            + "AND (p.availableDate IS NULL OR p.availableDate <= CURRENT_DATE)")
+    int reopenAfterRestore(@Param("productId") Long productId);
+
+    /** Atomic decrement for unlimited offerings when a cancelled order is released. */
+    @Modifying(flushAutomatically = true)
     @Query("UPDATE Product p SET p.bookedQuantity = CASE WHEN COALESCE(p.bookedQuantity, 0) - :qty < 0 THEN 0 " +
             "ELSE COALESCE(p.bookedQuantity, 0) - :qty END, p.updatedAt = CURRENT_TIMESTAMP " +
             "WHERE p.id = :productId AND p.remainingQuantity IS NULL")

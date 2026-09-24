@@ -98,6 +98,20 @@ document.addEventListener('click', async function (e) {
             case 'set-fav-tab': state.favTab = t.dataset.tab; await render(); break;
             case 'set-orders-tab': state.ordersTab = t.dataset.tab; await render(); break;
             case 'set-orders-filter': state.ordersFilter = t.dataset.filter; await render(); break;
+            case 'cancel-order': {
+                if (!confirm('Cancel this order?')) return;
+                if (t.disabled) return;
+                t.disabled = true;
+                try {
+                    await api('/api/buyer/orders/' + encodeURIComponent(t.dataset.orderId) + '/cancel', { method: 'POST' });
+                    toast('Order cancelled', 'success');
+                    await render();
+                } catch (err) {
+                    t.disabled = false;
+                    toast(err.message || 'Could not cancel order', 'error');
+                }
+                break;
+            }
             case 'open-login': openAuthModal(); break;
             case 'read-more': {
                 var full = decodeURIComponent(t.dataset.full || '');

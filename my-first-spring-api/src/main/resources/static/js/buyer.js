@@ -1217,18 +1217,11 @@ async function ordersView() {
                     h += list.map(function (o) {
                         var cancelled = o.orderStatus === 'CANCELLED';
                         var payStatus = o.paymentStatus || '';
+                        var orderBadge = ORDER_BADGES[o.orderStatus] || '<span class="pill pill-grey">' + esc(o.orderStatus || 'ORDERED') + '</span>';
+                        var paymentBadge = payStatus === 'PAID'
+                            ? '<span class="pill pill-green">Payment: PAID</span>'
+                            : '<span class="pill pill-amber">Payment: ' + esc(payStatus || 'PENDING') + '</span>';
                         var badgeClass = cancelled ? 'cancelled' : (payStatus === 'PAID' ? 'paid' : 'pending');
-                        // Surface the real payment status clearly: Paid vs Will Pay Later vs Pending.
-                        var badgeText;
-                        if (cancelled) {
-                            badgeText = 'Cancelled';
-                        } else if (payStatus === 'PAID') {
-                            badgeText = 'Paid';
-                        } else if (payStatus === 'WILL_PAY_LATER') {
-                            badgeText = 'Will Pay Later';
-                        } else {
-                            badgeText = payStatus || 'Pending';
-                        }
                         var itemLines = (o.items || []).map(function (it) {
                             return '<div class="odc-buyer-row"><span class="odc-food">' + esc(it.productName) + '</span><span class="odc-qty">×' + it.quantity + ' · ' + money(it.price * it.quantity) + '</span></div>';
                         }).join('');
@@ -1241,7 +1234,7 @@ async function ordersView() {
                             '</div>';
                         var remark = o.customInstructions ? '<div class="odc-remark">📝 ' + esc(o.customInstructions) + '</div>' : '';
                         return '<a class="odc-order-card block no-underline ' + (cancelled ? 'cancelled' : '') + '" href="#/order/' + o.id + '">' +
-                            '<div class="odc-top-row"><span class="odc-order-id">#' + esc(o.orderNumber) + '</span><span class="odc-badge ' + badgeClass + '">' + badgeText + '</span></div>' +
+                            '<div class="odc-top-row"><span class="odc-order-id">#' + esc(o.orderNumber) + '</span><span class="odc-badge ' + badgeClass + '">' + orderBadge + ' ' + paymentBadge + '</span></div>' +
                             itemLines +
                             grid +
                             remark +
@@ -1290,6 +1283,7 @@ async function orderDetailView(hash) {
                 '<a class="btn btn-primary card-mt" href="#/orders">Back to My Orders</a>') + '</div>';
     }
     var paid = o.paymentStatus === 'PAID';
+    var cancelled = o.orderStatus === 'CANCELLED';
     var h = '<div class="view-enter">';
     h += '<div class="top-row">' +
         '<button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button>' +
@@ -1323,6 +1317,10 @@ async function orderDetailView(hash) {
             '<p class="si-sub mt-1">' + esc(o.customInstructions) + '</p></div>' : '') +
         '</div>';
 
+    var canCancel = !cancelled && ['ORDERED', 'CONFIRMED', 'READY'].indexOf(o.orderStatus) >= 0;
+    if (canCancel) {
+        h += '<button class="btn btn-secondary btn-block mt-2" type="button" data-action="cancel-order" data-order-id="' + esc(o.id) + '">Cancel Order</button>';
+    }
     h += '<div class="flex gap-3">' +
         '<a class="btn btn-secondary flex-1" href="#/orders">← My Orders</a>' +
         (o.kitchen && o.kitchen.id ? '<a class="btn btn-secondary flex-1" href="#/kitchen/' + o.kitchen.id + '">Visit Kitchen</a>' : '') +

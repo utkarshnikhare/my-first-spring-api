@@ -85,6 +85,13 @@ public class BuyerOrderController {
         return ResponseEntity.ok(orderService.reorder(orderId, session, buyer));
     }
 
+    @PostMapping("/{orderId}/cancel")
+    public ResponseEntity<OrderDto> cancelOrder(@PathVariable Long orderId, HttpSession session) {
+        User buyer = buyerService.requireCurrentBuyer(session);
+        return ResponseEntity.ok(orderService.cancelOrder(orderId, buyer));
+    }
+
+
     @PatchMapping("/{orderId}/payment-status")
     public ResponseEntity<OrderDto> updatePaymentStatus(@PathVariable Long orderId,
                                                         @Valid @RequestBody UpdatePaymentStatusRequest request,

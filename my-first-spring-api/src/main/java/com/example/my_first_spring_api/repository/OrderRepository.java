@@ -21,6 +21,11 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT o FROM Order o WHERE o.id = :id")
     Optional<Order> findByIdForUpdate(@Param("id") Long id);
+    /** Full buyer/seller order read with items and offering snapshots initialized. */
+    @Query("SELECT DISTINCT o FROM Order o LEFT JOIN FETCH o.items i LEFT JOIN FETCH i.product WHERE o.id = :id")
+    Optional<Order> findByIdWithItems(@Param("id") Long id);
+
+
     List<Order> findByBuyerOrderByCreatedAtDesc(User buyer);
     List<Order> findByKitchenOrderByCreatedAtDesc(Kitchen kitchen);
     List<Order> findByKitchenAndOrderStatusNotInOrderByCreatedAtDesc(Kitchen kitchen, List<OrderStatus> statuses);

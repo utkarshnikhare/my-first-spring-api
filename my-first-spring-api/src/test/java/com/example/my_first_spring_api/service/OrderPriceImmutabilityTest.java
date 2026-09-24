@@ -106,6 +106,7 @@ class OrderPriceImmutabilityTest {
         savedDraft.setItems(List.of(new OrderItem(product, 100, BigDecimal.valueOf(20))));
         savedDraft.recalculateTotal();
         when(orderRepository.findById(100L)).thenReturn(Optional.of(savedDraft));
+        when(orderRepository.findByIdWithItems(100L)).thenReturn(Optional.of(savedDraft));
         when(orderRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(savedDraft));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 

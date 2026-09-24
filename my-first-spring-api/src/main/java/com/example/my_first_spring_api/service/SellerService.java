@@ -390,6 +390,7 @@ public class SellerService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
+        dto.setCreatedAt(product.getCreatedAt());
         return dto;
     }
 }

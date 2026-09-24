@@ -31,6 +31,7 @@ public class ProductDto {
     private String timeSlots;
     private Integer bookedQuantity;
     private Boolean soldOut;
+    private java.time.LocalDateTime createdAt;
 
     public ProductDto() {}
 
@@ -100,4 +101,6 @@ public class ProductDto {
     public void setBookedQuantity(Integer bookedQuantity) { this.bookedQuantity = bookedQuantity; }
     public Boolean getSoldOut() { return soldOut; }
     public void setSoldOut(Boolean soldOut) { this.soldOut = soldOut; }
+    public java.time.LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(java.time.LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

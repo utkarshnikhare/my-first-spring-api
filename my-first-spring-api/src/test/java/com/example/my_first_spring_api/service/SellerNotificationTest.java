@@ -64,6 +64,7 @@ class SellerNotificationTest {
         order.setOrderNumber("SM-CANCEL-001");
         order.setOrderStatus(OrderStatus.ORDERED);
         when(orderRepository.findByIdForUpdate(50L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdWithItems(50L)).thenReturn(Optional.of(order));
 
         orderService.updateOrderStatus(50L, OrderStatus.CANCELLED, s);
 
