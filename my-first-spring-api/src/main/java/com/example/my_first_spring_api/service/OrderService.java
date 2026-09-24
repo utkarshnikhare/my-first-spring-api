@@ -216,10 +216,14 @@ public class OrderService {
         if (draftId == null) {
             throw new IllegalArgumentException("Your order session has expired. Please add items again.");
         }
-        Order order = orderRepository.findById(draftId).orElse(null);
+        Order order = orderRepository.findByIdForUpdate(draftId).orElse(null);
         if (order == null) {
             session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
             throw new IllegalArgumentException("Your order session has expired. Please add items again.");
+        }
+        if (order.getOrderStatus() != OrderStatus.DRAFT) {
+            session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
+            throw new IllegalArgumentException("This order has already been placed.");
         }
         User buyer = resolveBuyer(session);
         if (buyer == null) throw new BuyerNotAuthenticatedException("Authentication required to place an order.");
@@ -411,7 +415,8 @@ public class OrderService {
     }
 
     public OrderDto acknowledgeOrder(Long orderId, User seller) {
-        Order order = orderRepository.findById(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
         if (order.getKitchen() == null || !order.getKitchen().getSeller().getId().equals(seller.getId())) {
             throw new SellerNotAuthorizedException("Not authorized");
         }
@@ -440,7 +445,8 @@ public class OrderService {
     }
 
     public OrderDto updateOrderStatus(Long orderId, OrderStatus newStatus, User seller) {
-        Order order = orderRepository.findById(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
         if (order.getKitchen() == null || !order.getKitchen().getSeller().getId().equals(seller.getId())) {
             throw new SellerNotAuthorizedException("Not authorized");
         }
@@ -654,22 +660,29 @@ public class OrderService {
     private void restoreStock(Order order) {
         Map<Long, Integer> totals = new HashMap<>();
         for (OrderItem item : order.getItems()) {
+            if (item == null || item.getProduct() == null || item.getProduct().getId() == null) continue;
             Long productId = item.getProduct().getId();
             int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+            if (quantity <= 0) continue;
             Integer existing = totals.get(productId);
             totals.put(productId, (existing == null ? 0 : existing) + quantity);
         }
         for (Map.Entry<Long, Integer> e : totals.entrySet()) {
+            int quantity = e.getValue();
+            if (quantity <= 0) continue;
+            // The cancellation path holds the order row lock, and these database
+            // updates are atomic/capped, so concurrent cancellations cannot lose stock.
             Product product = productRepository.findById(e.getKey()).orElse(null);
-            if (product == null || product.getRemainingQuantity() == null) continue;
-            Integer max = product.getMaxQuantity();
-            int restored = product.getRemainingQuantity() + e.getValue();
-            product.setRemainingQuantity(max != null ? Math.min(max, restored) : restored);
-            // Reversed action of consumeStock: freeing a cancelled order must also
-            // release the booked units so the demand bar returns to its true level.
-            int booked = (product.getBookedQuantity() == null ? 0 : product.getBookedQuantity()) - e.getValue();
-            product.setBookedQuantity(Math.max(0, booked));
-            productRepository.save(product);
+            if (product == null) continue;
+            if (product.getRemainingQuantity() != null) {
+                int restored = productRepository.restoreStock(e.getKey(), quantity);
+                if (restored == 0) {
+                    throw new IllegalArgumentException("Could not restore inventory for '"
+                            + product.getName() + "'. Please try again.");
+                }
+            } else {
+                productRepository.decrementBookedQuantity(e.getKey(), quantity);
+            }
         }
     }
 

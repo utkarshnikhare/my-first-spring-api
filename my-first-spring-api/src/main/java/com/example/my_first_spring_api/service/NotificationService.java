@@ -1,10 +1,15 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.dto.NotificationEventDto;
+import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.model.NotificationEvent;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.repository.NotificationEventRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 public class NotificationService {
@@ -50,6 +55,31 @@ public class NotificationService {
     public void sendPaymentReceivedNotification(User buyer, String orderNumber) {
         createEvent(buyer, "Payment recorded",
                 "Your payment for order " + orderNumber + " has been recorded by the seller.");
+    }
+
+    @Transactional(readOnly = true)
+    public List<NotificationEventDto> getUnread(User user) {
+        return notificationEventRepository.findByUserIdAndDeliveredFalseOrderByCreatedAtDesc(user.getId()).stream()
+                .map(this::toDto).toList();
+    }
+
+    @Transactional
+    public NotificationEventDto markRead(Long eventId, User user) {
+        NotificationEvent event = notificationEventRepository.findByIdForUpdate(eventId);
+        if (event == null) {
+            throw new IllegalArgumentException("Notification not found.");
+        }
+        if (event.getUserId() == null || !event.getUserId().equals(user.getId())) {
+            throw new SellerNotAuthorizedException("Not authorized for this notification");
+        }
+        if (Boolean.TRUE.equals(event.getDelivered())) return toDto(event);
+        event.setDelivered(true);
+        return toDto(notificationEventRepository.save(event));
+    }
+
+    private NotificationEventDto toDto(NotificationEvent event) {
+        return new NotificationEventDto(event.getId(), event.getTitle(), event.getBody(),
+                event.getCreatedAt(), event.getDelivered());
     }
 
     public void sendReminder(User seller, String title, String body) {

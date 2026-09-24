@@ -21,7 +21,7 @@ async function sellerRender() {
     var view = viewEl();
     view.innerHTML = '<div class="page-loading"><div class="spinner"></div></div>';
     closeSheet();
-    try { view.innerHTML = await route.fn(route.arg) || ''; sellerUpdateNav(hash); if (typeof applyThemeUiState === 'function') applyThemeUiState(); window.scrollTo(0, 0); var saInput = $('#serviceAreasInput'); if (saInput) renderServiceAreas(saInput.value); }
+    try { view.innerHTML = await route.fn(route.arg) || ''; sellerUpdateNav(hash); await loadUnreadNotifications(); if (typeof applyThemeUiState === 'function') applyThemeUiState(); window.scrollTo(0, 0); var saInput = $('#serviceAreasInput'); if (saInput) renderServiceAreas(saInput.value); }
     catch (err) { view.innerHTML = '<div class="view-enter">' + emptyHtml('⚠️', 'Something went wrong', err.message) + '</div>'; }
 }
 function sellerUpdateNav(hash) {
@@ -141,7 +141,7 @@ async function sellerAddView() {
 // SCREEN 1: SELLER DASHBOARD (HOME)
 async function sellerHomeView() {
     var h = '<div class="view-enter">';
-    h += '<div class="seller-header"><div class="sdh-text"><p class="sdh-greeting">' + greeting() + ', ' + esc(S.user && S.user.name ? S.user.name : 'Seller') + '</p><h1 class="sdh-title">Your Dashboard</h1></div><span class="notif-bell"><button class="icon-btn" type="button" data-action="noop" aria-label="Notifications">🔔<span class="bell-badge">3</span></button><button class="icon-btn" type="button" data-action="toggle-theme" aria-label="Toggle theme">🌓</button></span></div>';
+    h += '<div class="seller-header"><div class="sdh-text"><p class="sdh-greeting">' + greeting() + ', ' + esc(S.user && S.user.name ? S.user.name : 'Seller') + '</p><h1 class="sdh-title">Your Dashboard</h1></div><span class="notif-bell">' + notificationBadgeHtml() + '<button class="icon-btn" type="button" data-action="toggle-theme" aria-label="Toggle theme">🌓</button>' + notificationPanelHtml('sellerNotifPanel') + '</span></div>';
     try {
         var dash = await api('/api/seller-app/dashboard');
         S.kitchen = { id: dash.kitchenId, name: dash.kitchenName };
@@ -543,6 +543,8 @@ document.addEventListener('click', async function (e) {
         switch (a) {
             case 'go-back': history.back(); break;
             case 'noop': break;
+            case 'toggle-notifs': await toggleNotifications(t.dataset.panelId || 'sellerNotifPanel'); break;
+            case 'read-notification': await readNotification(t.dataset.notificationId); break;
             case 'toggle-theme': toggleTheme(); break;
             case 'go-add': sellerNavigate('#/add'); break;
             case 'go-create': sellerNavigate('#/create'); break;

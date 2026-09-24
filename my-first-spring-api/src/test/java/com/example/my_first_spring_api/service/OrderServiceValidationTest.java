@@ -243,7 +243,7 @@ class OrderServiceValidationTest {
         Order foreignDraft = new Order(otherBuyer, kitchen);
         foreignDraft.setId(46L);
         when(httpSession.getAttribute(OrderService.DRAFT_ORDER_SESSION_KEY)).thenReturn(46L);
-        when(orderRepository.findById(46L)).thenReturn(Optional.of(foreignDraft));
+        when(orderRepository.findByIdForUpdate(46L)).thenReturn(Optional.of(foreignDraft));
 
         assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, null, null, httpSession))
                 .isInstanceOf(OrderNotFoundException.class);
@@ -299,7 +299,7 @@ class OrderServiceValidationTest {
         item.setQuantity(1);
         item.setPrice(product.getPrice());
         mockOrder.setItems(List.of(item));
-        when(orderRepository.findById(100L)).thenReturn(Optional.of(mockOrder));
+        when(orderRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(mockOrder));
 
         assertThrows(BuyerProfileIncompleteException.class, () -> {
             orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, null, null, httpSession);

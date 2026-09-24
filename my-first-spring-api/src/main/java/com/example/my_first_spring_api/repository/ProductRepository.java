@@ -34,6 +34,32 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     int adjustRemainingQuantity(@Param("productId") Long productId, @Param("delta") int delta);
 
     /**
+     * Atomic stock restoration for a cancelled order. The database update is
+     * capped by the offering's maximum and cannot run twice for the same order
+     * because the order row is locked before cancellation is applied.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Product p SET p.remainingQuantity = CASE "
+            + "WHEN p.maxQuantity IS NULL THEN p.remainingQuantity + :qty "
+            + "ELSE LEAST(p.maxQuantity, p.remainingQuantity + :qty) END, "
+            + "p.bookedQuantity = CASE WHEN COALESCE(p.bookedQuantity, 0) - :qty < 0 THEN 0 "
+            + "ELSE COALESCE(p.bookedQuantity, 0) - :qty END, "
+            + "p.availableToday = CASE WHEN COALESCE(p.ordersPaused, false) = false "
+            + "AND COALESCE(p.isPreorder, false) = false "
+            + "AND (p.availableDate IS NULL OR p.availableDate <= CURRENT_DATE) "
+            + "AND p.remainingQuantity + :qty > 0 THEN TRUE ELSE p.availableToday END, "
+            + "p.updatedAt = CURRENT_TIMESTAMP "
+            + "WHERE p.id = :productId AND p.remainingQuantity IS NOT NULL")
+    int restoreStock(@Param("productId") Long productId, @Param("qty") int qty);
+
+    /** Atomic decrement for unlimited offerings when a cancelled order is released. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE Product p SET p.bookedQuantity = CASE WHEN COALESCE(p.bookedQuantity, 0) - :qty < 0 THEN 0 " +
+            "ELSE COALESCE(p.bookedQuantity, 0) - :qty END, p.updatedAt = CURRENT_TIMESTAMP " +
+            "WHERE p.id = :productId AND p.remainingQuantity IS NULL")
+    int decrementBookedQuantity(@Param("productId") Long productId, @Param("qty") int qty);
+
+    /**
      * Atomic stock consumption at order placement. Decrements remaining and
      * increments booked in ONE UPDATE so concurrent checkouts cannot oversell.
      * Returns 0 when there is not enough stock left.

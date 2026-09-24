@@ -63,22 +63,16 @@ function topBarHtml(opts) {
     opts = opts || {};
     return '<div class="top-row">' +
         '<span class="loc-pill">📍 ' + esc(opts.location || LOCATION) + '</span>' +
-        '<span class="bell-wrap">' +
-        '<button class="icon-btn" type="button" data-action="toggle-notifs" aria-label="Notifications">🔔' +
-        '<span class="bell-badge">3</span></button>' +
+        '<span class="bell-wrap">' + notificationBadgeHtml() +
         '<button class="icon-btn" type="button" data-action="toggle-theme" aria-label="Toggle theme">🌓</button>' +
-        '<div class="notif-panel" id="notifPanel" hidden>' +
-        '<div class="notif-item unread">🟢 Your kitchen Aarti Kitchen confirmed today\'s menu</div>' +
-        '<div class="notif-item unread">🍽️ Poha is live from 4 kitchens near you</div>' +
-        '<div class="notif-item">📦 Order #SM1024 marked Ready for pickup</div>' +
-        '</div></span></div>';
+        notificationPanelHtml() + '</span></div>';
 }
 
 function backBarHtml(title) {
     return '<div class="top-row">' +
         '<button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button>' +
         '<h2 class="flex-1 font-700">' + esc(title) + '</h2>' +
-        '<span class="bell-wrap"><button class="icon-btn" type="button" data-action="noop" aria-label="Notifications">🔔<span class="bell-badge">3</span></button></span>' +
+        '<span class="bell-wrap">' + notificationBadgeHtml() + '</span>' +
         '</div>';
 }
 
@@ -924,7 +918,7 @@ async function confirmOrderView() {
         '<div class="pay-status' + (pref === 'PENDING' || pref === 'WILL_PAY_LATER' ? ' selected' : '') + '" role="radio" aria-checked="' + (pref === 'PENDING' || pref === 'WILL_PAY_LATER' ? 'true' : 'false') + '" data-action="select-pay-status" data-status="PENDING">' +
         '<span class="ps-radio" aria-hidden="true"></span>' +
         '<span class="ps-icon" aria-hidden="true">⏳</span>' +
-        '<span class="ps-body"><span class="ps-name">I'll Pay Later</span>' +
+        '<span class="ps-body"><span class="ps-name">I\'ll Pay Later</span>' +
         '<span class="ps-sub">Pay when the order is delivered or picked up.</span></span></div>' +
         '<p class="pay-status-note mt-1">🔒 This is only a payment-status selection for your order record — no payment is processed here.</p></div>';
 

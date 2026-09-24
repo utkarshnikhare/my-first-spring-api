@@ -167,6 +167,66 @@ function toast(message, type) {
     }, 3000);
 }
 
+// ==================== Notifications ====================
+
+var NOTIFICATION_CACHE = null;
+
+function notificationBadgeHtml() {
+    return '<button class="icon-btn" type="button" data-action="toggle-notifs" aria-label="Notifications">🔔' +
+        '<span class="bell-badge" data-notification-badge hidden>0</span></button>';
+}
+
+function notificationPanelHtml(id) {
+    return '<div class="notif-panel" id="' + esc(id || 'notifPanel') + '" hidden></div>';
+}
+
+function notificationItemHtml(n) {
+    return '<div class="notif-item unread" data-action="read-notification" data-notification-id="' + esc(n.id) + '">' +
+        '<div class="font-700">' + esc(n.title || 'Notification') + '</div>' +
+        '<div>' + esc(n.body || '') + '</div></div>';
+}
+
+function updateNotificationUi(items) {
+    NOTIFICATION_CACHE = Array.isArray(items) ? items : [];
+    var badges = $all('[data-notification-badge]');
+    badges.forEach(function (badge) {
+        badge.textContent = String(NOTIFICATION_CACHE.length);
+        badge.hidden = NOTIFICATION_CACHE.length === 0;
+    });
+    $all('.notif-panel').forEach(function (panel) {
+        panel.innerHTML = NOTIFICATION_CACHE.length
+            ? NOTIFICATION_CACHE.map(notificationItemHtml).join('')
+            : '<div class="muted small">No unread notifications.</div>';
+    });
+}
+
+async function loadUnreadNotifications() {
+    if (!document.querySelector('[data-notification-badge], .notif-panel')) return;
+    try {
+        updateNotificationUi(await api('/api/notifications'));
+    } catch (err) {
+        if (err instanceof ApiError && err.status === 401) updateNotificationUi([]);
+        else updateNotificationUi([]);
+    }
+}
+
+async function toggleNotifications(panelId) {
+    var panel = panelId ? document.getElementById(panelId) : $('#notifPanel');
+    if (!panel) return;
+    if (panel.hidden) await loadUnreadNotifications();
+    panel.hidden = !panel.hidden;
+}
+
+async function readNotification(id) {
+    if (!id) return;
+    try {
+        await api('/api/notifications/' + encodeURIComponent(id) + '/read', { method: 'PATCH' });
+        await loadUnreadNotifications();
+    } catch (err) {
+        if (!(err instanceof ApiError && err.status === 401)) toast(err.message, 'error');
+    }
+}
+
 // ==================== Theme ====================
 
 var THEME_META_COLORS = { light: '#FCF9F5', dark: '#1A1410' };

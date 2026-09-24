@@ -2,6 +2,7 @@ package com.example.my_first_spring_api.service;
 
 import com.example.my_first_spring_api.dto.EnquiryDto;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
+import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.model.Enquiry;
 import com.example.my_first_spring_api.model.EnquiryStatus;
 import com.example.my_first_spring_api.model.Kitchen;
@@ -88,10 +89,10 @@ public class EnquiryService {
     }
 
     public EnquiryDto acknowledge(Long enquiryId, User seller) {
-        Enquiry enquiry = enquiryRepository.findById(enquiryId)
+        Enquiry enquiry = enquiryRepository.findByIdForUpdate(enquiryId)
                 .orElseThrow(() -> new IllegalArgumentException("Enquiry not found"));
         if (!enquiry.getKitchen().getSeller().getId().equals(seller.getId())) {
-            throw new IllegalArgumentException("Not authorized for this enquiry");
+            throw new SellerNotAuthorizedException("Not authorized for this enquiry");
         }
         enquiry.setAcknowledgedAt(LocalDateTime.now());
         enquiry.setAcknowledgedBy(seller);
@@ -103,10 +104,10 @@ public class EnquiryService {
     }
 
     public EnquiryDto updateStatus(Long enquiryId, EnquiryStatus newStatus, User seller) {
-        Enquiry enquiry = enquiryRepository.findById(enquiryId)
+        Enquiry enquiry = enquiryRepository.findByIdForUpdate(enquiryId)
                 .orElseThrow(() -> new IllegalArgumentException("Enquiry not found"));
         if (!enquiry.getKitchen().getSeller().getId().equals(seller.getId())) {
-            throw new IllegalArgumentException("Not authorized for this enquiry");
+            throw new SellerNotAuthorizedException("Not authorized for this enquiry");
         }
         enquiry.setStatus(newStatus);
         if (newStatus == EnquiryStatus.CONTACTED && enquiry.getAcknowledgedAt() == null) {

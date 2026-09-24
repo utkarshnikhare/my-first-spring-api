@@ -51,6 +51,7 @@ async function render() {
         var html = await route.fn(route.arg);
         view.innerHTML = html || '';
         updateNav(hash);
+        await loadUnreadNotifications();
         updateCartBar();
         if (typeof applyThemeUiState === 'function') applyThemeUiState();
         if (view.querySelector('.sticky-footer-bar')) view.classList.add('has-sticky-footer');
@@ -87,11 +88,8 @@ document.addEventListener('click', async function (e) {
         switch (a) {
             case 'go-back': history.back(); break;
             case 'noop': break;
-            case 'toggle-notifs': {
-                var panel = $('#notifPanel');
-                if (panel) panel.hidden = !panel.hidden;
-                break;
-            }
+            case 'toggle-notifs': await toggleNotifications(t.dataset.panelId); break;
+            case 'read-notification': await readNotification(t.dataset.notificationId); break;
             case 'toggle-theme': toggleTheme(); break;
             case 'set-mode': state.viewMode = t.dataset.mode; await render(); break;
             case 'set-cat-mode': state.catMode = t.dataset.mode; await render(); break;

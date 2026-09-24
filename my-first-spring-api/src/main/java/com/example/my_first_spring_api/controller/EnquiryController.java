@@ -69,8 +69,10 @@ public class EnquiryController {
 
     private User requireSeller(HttpSession session) {
         User user = buyerService.getCurrentBuyer(session);
-        if (user == null || user.getRole() != com.example.my_first_spring_api.model.UserRole.SELLER) {
-            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "Seller access required");
+        if (user == null) throw new com.example.my_first_spring_api.exception.BuyerNotAuthenticatedException(
+                "Authentication required. Please log in.");
+        if (user.getRole() != com.example.my_first_spring_api.model.UserRole.SELLER) {
+            throw new com.example.my_first_spring_api.exception.SellerNotAuthorizedException("Seller access required");
         }
         return user;
     }
