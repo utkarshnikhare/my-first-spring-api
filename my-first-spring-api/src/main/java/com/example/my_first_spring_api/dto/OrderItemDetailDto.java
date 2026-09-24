@@ -17,6 +17,11 @@ public class OrderItemDetailDto {
     private int paidCount;
     private int pendingCount;
     private int cancelledCount;
+    private int filteredTotalPlates;
+    private int filteredPaidCount;
+    private int filteredPendingCount;
+    private int filteredCancelledCount;
+    private BigDecimal filteredTotalRevenue;
     private List<CustomerOrderRow> customers;
 
     public static class CustomerOrderRow {
@@ -87,6 +92,16 @@ public class OrderItemDetailDto {
     public void setPendingCount(int pendingCount) { this.pendingCount = pendingCount; }
     public int getCancelledCount() { return cancelledCount; }
     public void setCancelledCount(int cancelledCount) { this.cancelledCount = cancelledCount; }
+    public int getFilteredTotalPlates() { return filteredTotalPlates; }
+    public void setFilteredTotalPlates(int filteredTotalPlates) { this.filteredTotalPlates = filteredTotalPlates; }
+    public int getFilteredPaidCount() { return filteredPaidCount; }
+    public void setFilteredPaidCount(int filteredPaidCount) { this.filteredPaidCount = filteredPaidCount; }
+    public int getFilteredPendingCount() { return filteredPendingCount; }
+    public void setFilteredPendingCount(int filteredPendingCount) { this.filteredPendingCount = filteredPendingCount; }
+    public int getFilteredCancelledCount() { return filteredCancelledCount; }
+    public void setFilteredCancelledCount(int filteredCancelledCount) { this.filteredCancelledCount = filteredCancelledCount; }
+    public BigDecimal getFilteredTotalRevenue() { return filteredTotalRevenue; }
+    public void setFilteredTotalRevenue(BigDecimal filteredTotalRevenue) { this.filteredTotalRevenue = filteredTotalRevenue; }
     public List<CustomerOrderRow> getCustomers() { return customers; }
     public void setCustomers(List<CustomerOrderRow> customers) { this.customers = customers; }
 }

@@ -1,7 +1,7 @@
 /**
  * SocioMart Seller App v1.0 - 5-tab SPA
  */
-var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [] };
+var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], offeringFilterSociety: '', offeringFilterStatus: '' };
 var sellerRoutes = {
     '#/home': sellerHomeView, '#/add': sellerAddView, '#/create': sellerCreateView,
     '#/quick-post': sellerQuickPostView, '#/history': sellerHistoryView,
@@ -11,6 +11,7 @@ var sellerRoutes = {
 };
 function sellerResolveRoute(hash) {
     if (sellerRoutes[hash]) return { fn: sellerRoutes[hash], arg: hash };
+    if (hash.startsWith('#/order-detail/order/')) return { fn: sellerOrderDetailByOrderView, arg: hash.split('/')[3] };
     if (hash.startsWith('#/order-detail/')) return { fn: sellerOrderDetailView, arg: hash.split('/')[2] };
     return { fn: sellerHomeView, arg: '#/home' };
 }
@@ -95,6 +96,11 @@ function sellerDate(dateKey) {
     if (dateKey === 'tomorrow') return localDateStr(new Date(Date.now() + 864e5));
     if (dateKey && dateKey !== 'today' && dateKey !== 'pick') return dateKey;
     return localDateStr(new Date());
+}
+function prettyDateTime(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    return prettyDate(d.toISOString().split('T')[0]) + ' ' + prettyTime(d.toTimeString().slice(0,5));
 }
 function foodEmoji(name) {
     var n = (name || '').toLowerCase();
@@ -313,47 +319,94 @@ async function sellerEnquiriesView() {
     return h;
 }
 
-// SCREEN 7B: ORDER DRILL-DOWN
+// SCREEN 7B: OFFERING ORDERS (summary-first with filters)
 async function sellerOrderDetailView(productId) {
-    S.selectedSort = S.selectedSort || 'all';
-    var h = '<div class="view-enter">';
-    h += '<div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button><h2 class="flex-1">Order Details</h2></div>';
-    h += '<div class="date-tabs"><button class="date-tab' + (S.selectedDate === 'today' ? ' active' : '') + '" data-action="set-date" data-date="today">Today</button><button class="date-tab' + (S.selectedDate === 'tomorrow' ? ' active' : '') + '" data-action="set-date" data-date="tomorrow">Tomorrow</button><button class="date-tab' + (S.selectedDate !== 'today' && S.selectedDate !== 'tomorrow' ? ' active' : '') + '" data-action="set-date" data-date="pick">Pick date</button></div>';
-    if (S.selectedDate === 'pick') { h += '<div class="section-gap"><input type="date" class="sort-select w-full" data-action="set-date-calendar" value="' + sellerDate(S.selectedDate) + '"></div>'; }
+    S.offeringFilterSociety = S.offeringFilterSociety || '';
+    S.offeringFilterStatus = S.offeringFilterStatus || '';
+    var h = '<div class="view-enter"><div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button><h2 class="flex-1" id="offeringName"></h2></div>';
     try {
-        var detail = await api('/api/seller-app/orders/product/' + productId + '?date=' + sellerDate(S.selectedDate));
-        h += '<div class="drilldown-header"><h3>' + esc(detail.productName) + '</h3>';
-        h += '<div class="dd-stats">Revenue: <strong>' + money(detail.totalRevenue) + '</strong> · Plates: <strong>' + detail.totalPlates + '</strong></div>';
-        h += '<div class="dtc-badges"><span class="dtc-badge green">Paid: ' + detail.paidCount + '</span> <span class="dtc-badge orange">Pending: ' + detail.pendingCount + '</span> <span class="dtc-badge red">Cancelled: ' + detail.cancelledCount + '</span></div></div>';
-        h += '<select class="sort-select" data-action="set-detail-sort"><option value="all"' + (S.selectedSort === 'all' ? ' selected' : '') + '>All Customers</option><option value="paid"' + (S.selectedSort === 'paid' ? ' selected' : '') + '>Paid Only</option><option value="pending"' + (S.selectedSort === 'pending' ? ' selected' : '') + '>Pending Only</option><option value="cancelled"' + (S.selectedSort === 'cancelled' ? ' selected' : '') + '>Cancelled Only</option></select>';
-        var customers = (detail.customers || []).slice();
-        if (S.selectedSort === 'paid') customers = customers.filter(function (c) { return c.paid; });
-        else if (S.selectedSort === 'pending') customers = customers.filter(function (c) { return !c.paid && !c.cancelled; });
-        else if (S.selectedSort === 'cancelled') customers = customers.filter(function (c) { return c.cancelled; });
-        if (customers.length === 0) { h += emptyHtml('📋', 'No customer orders', 'No orders match this filter.'); }
-        else {
-            h += '<div class="customer-count">' + customers.length + ' customer' + (customers.length !== 1 ? 's' : '') + '</div>';
-            customers.forEach(function (c) {
-                var statusClass = c.cancelled ? 'cancelled' : (c.paid ? 'paid' : 'pending');
-                var statusLabel = c.cancelled ? 'Cancelled' : (c.paid ? 'Paid' : 'Pending');
-                h += '<div class="order-detail-card ' + (c.cancelled ? 'cancelled' : '') + '">';
-                h += '<div class="odc-top"><span class="odc-order-id">#' + esc(c.orderNumber || ('SM-' + c.orderId)) + '</span><span class="odc-status-pill ' + statusClass + '">' + statusLabel + '</span></div>';
-                h += '<div class="odc-buyer-row"><span class="odc-buyer">' + esc(c.buyerName || 'Unknown') + '</span><span class="odc-qty">×' + c.quantity + ' ' + esc(c.unit || 'plate') + (c.quantity > 1 ? 's' : '') + '</span></div>';
-                if (!c.paid && !c.cancelled) { h += '<button class="btn btn-primary btn-sm btn-block btn-mt-sm" data-action="mark-paid" data-oid="' + c.orderId + '">Mark as Paid</button>'; }
-                h += '<div class="odc-items"><div class="odc-item-name">' + esc(detail.productName) + '</div>';
-                if (c.pricePerUnit) { h += '<div class="odc-item-meta">' + money(c.pricePerUnit) + ' × ' + c.quantity + '</div>'; }
-                if (c.totalAmount) { h += '<div class="odc-item-total">Total: ' + money(c.totalAmount) + '</div>'; }
-                h += '</div>';
-                var addrParts = [];
-                if (c.society) addrParts.push(c.society);
-                if (c.building) addrParts.push(c.building);
-                if (c.buyerFlat) addrParts.push(c.buyerFlat);
-                if (addrParts.length > 0) { h += '<div class="odc-address">📍 ' + esc(addrParts.join(', ')) + '</div>'; }
-                if (c.orderStatus) { h += '<div class="odc-address"><strong>Order Status:</strong> ' + esc(c.orderStatus) + '</div>'; }
-                if (c.remark) { h += '<div class="odc-remark">"' + esc(c.remark) + '"</div>'; }
-                h += '</div>';
-            });
+        var detail = await api('/api/seller-app/orders/product/' + productId + '?date=' + sellerDate(S.selectedDate) + (S.offeringFilterSociety ? '&society=' + encodeURIComponent(S.offeringFilterSociety) : '') + (S.offeringFilterStatus ? '&status=' + encodeURIComponent(S.offeringFilterStatus) : ''));
+        var pname = detail.productName || 'Offering';
+        var el = document.getElementById('offeringName');
+        if (el) el.textContent = pname;
+        h += '<div class="drilldown-header"><h3>' + esc(pname) + '</h3>';
+        h += '<div class="dd-stats">' + (detail.totalPlates || 0) + ' plates · ' + money(detail.totalRevenue || 0) + '</div>';
+        h += '<div class="dtc-badges"><span class="dtc-badge green">' + (detail.paidCount || 0) + ' Paid</span><span class="dtc-badge orange">' + (detail.pendingCount || 0) + ' Pending</span><span class="dtc-badge red">' + (detail.cancelledCount || 0) + ' Cancelled</span></div></div>';
+        h += '<div class="form-row-2" style="margin-top:10px">';
+        var societies = [];
+        var statusOpts = ['All Status', 'Paid', 'Pending', 'Cancelled'];
+        (detail.customers || []).forEach(function (c) { if (c.society && societies.indexOf(c.society) === -1) societies.push(c.society); });
+        h += '<select class="sort-select" data-action="set-offering-society"><option value="">All Societies</option>';
+        societies.forEach(function (s) { h += '<option value="' + esc(s) + '"' + (S.offeringFilterSociety === s ? ' selected' : '') + '>' + esc(s) + '</option>'; });
+        h += '</select>';
+        h += '<select class="sort-select" data-action="set-offering-status"><option value="">All Status</option>';
+        statusOpts.forEach(function (s) { var val = s === 'All Status' ? '' : s.toLowerCase(); h += '<option value="' + val + '"' + (S.offeringFilterStatus === val ? ' selected' : '') + '>' + esc(s) + '</option>'; });
+        h += '</select></div>';
+        if (S.offeringFilterSociety || S.offeringFilterStatus) {
+            h += '<div class="tiny muted mt-1">Showing filtered results</div>';
         }
+        h += '<div id="offeringCustomers"></div>';
+        h += '</div>';
+        renderOfferingCustomers(detail);
+    } catch (e) { h += emptyHtml('⚠️', 'Could not load details', e.message); h += '</div>'; }
+    return h;
+}
+
+function renderOfferingCustomers(detail) {
+    var container = document.getElementById('offeringCustomers');
+    if (!container) return;
+    container.innerHTML = '';
+    var customers = detail.customers || [];
+    if (customers.length === 0) { container.innerHTML = emptyHtml('📋', 'No customer orders', 'No orders match the selected filters.'); return; }
+    customers.forEach(function (c) {
+        var statusClass = c.cancelled ? 'cancelled' : (c.paid ? 'paid' : 'pending');
+        var statusLabel = c.cancelled ? 'CANCELLED' : (c.paid ? 'PAID' : 'PENDING');
+        var addrParts = [];
+        if (c.society) addrParts.push(c.society);
+        if (c.building) addrParts.push(c.building);
+        if (c.buyerFlat) addrParts.push(c.buyerFlat);
+        var remarkHtml = c.remark ? '<span class="remark-icon" data-action="show-remark" data-remark="' + esc(c.remark) + '" title="Has remark">💬</span>' : '';
+        var html = '<div class="customer-row compact" data-action="open-order" data-order="' + c.orderId + '">';
+        html += '<div class="cr-top"><span class="cr-qty">' + c.quantity + ' ' + esc(c.unit || 'plate') + (c.quantity !== 1 ? 's' : '') + '</span><span class="status-dot ' + statusClass + '"></span><span class="cr-status ' + statusClass + '">' + statusLabel + '</span></div>';
+        html += '<div class="cr-loc">' + esc(addrParts.join(' • ')) + '</div>';
+        html += remarkHtml;
+        html += '</div>';
+        container.innerHTML += html;
+    });
+}
+
+// SCREEN 7C: INDIVIDUAL ORDER DETAIL
+async function sellerOrderDetailByOrderView(orderId) {
+    var h = '<div class="view-enter"><div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button><h2 class="flex-1">Order Details</h2></div>';
+    try {
+        var order = await api('/api/seller/orders/' + orderId);
+        h += '<div class="card pad card-mb">';
+        h += '<div class="top-row"><div class="font-700">#' + esc(order.orderNumber) + '</div>';
+        var statusClass = order.orderStatus === 'CANCELLED' ? 'cancelled' : (order.paymentStatus === 'PAID' ? 'paid' : 'pending');
+        h += '<span class="status-dot ' + statusClass + '"></span></div>';
+        if (order.buyer) {
+            var addrParts = [];
+            if (order.buyer.society) addrParts.push(order.buyer.society);
+            if (order.buyer.building) addrParts.push(order.buyer.building);
+            if (order.buyer.flatHouseNumber) addrParts.push(order.buyer.flatHouseNumber);
+            h += '<div class="odc-buyer-row"><span class="odc-buyer">' + esc(order.buyer.name || 'Unknown') + '</span>';
+            h += '<span class="odc-qty">' + money(order.totalAmount) + '</span></div>';
+            if (addrParts.length > 0) { h += '<div class="odc-address">📍 ' + esc(addrParts.join(', ')) + '</div>'; }
+        }
+        if (order.orderTime) { h += '<div class="tiny muted mt-1">Ordered: ' + prettyDateTime(order.orderTime) + '</div>'; }
+        if (order.customInstructions) { h += '<div class="odc-remark">"' + esc(order.customInstructions) + '"</div>'; }
+        if (order.items && order.items.length > 0) {
+            h += '<div class="mt-2">';
+            order.items.forEach(function (item) {
+                var itemTotal = item.price != null && item.quantity != null ? item.price * item.quantity : 0;
+                h += '<div class="odc-item"><span class="ei-name">' + esc(item.name) + '</span><span class="ei-orders">' + item.quantity + 'x ' + money(item.price) + ' = ' + money(itemTotal) + '</span></div>';
+            });
+            h += '</div>';
+        }
+        h += '<div class="dtc-badges mt-2">';
+        h += '<span class="dtc-badge ' + (order.paymentStatus === 'PAID' ? 'green' : 'orange') + '">' + (order.paymentStatus || 'PENDING') + '</span>';
+        h += '<span class="dtc-badge ' + (order.orderStatus === 'CANCELLED' ? 'red' : 'green') + '">' + (order.orderStatus || 'ORDERED') + '</span></div>';
+        h += '</div>';
     } catch (e) { h += emptyHtml('⚠️', 'Could not load details', e.message); }
     h += '</div>';
     return h;
@@ -589,6 +642,10 @@ document.addEventListener('click', async function (e) {
             case 'set-date-calendar': S.selectedDate = t.value; await sellerRender(); break;
             case 'set-sort': S.sortFilter = t.value; break;
             case 'set-detail-sort': S.selectedSort = t.value; await sellerRender(); break;
+            case 'set-offering-society': S.offeringFilterSociety = t.value; await sellerRender(); break;
+            case 'set-offering-status': S.offeringFilterStatus = t.value; await sellerRender(); break;
+            case 'open-order': sellerNavigate('#/order-detail/order/' + t.dataset.order); break;
+            case 'show-remark': alert(t.dataset.remark); break;
             case 'parse-message': {
                 var msg = $('#qpMessage').value;
                 if (!msg.trim()) { toast('Please paste a message first', 'error'); return; }

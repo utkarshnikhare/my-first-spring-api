@@ -467,7 +467,17 @@ public class OrderService {
         return null;
     }
 
-    private OrderDto toOrderDto(Order order) {
+    @Transactional(readOnly = true)
+    public OrderDto getOrderDtoForSeller(Long orderId, User seller) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        if (order.getKitchen() == null || !order.getKitchen().getSeller().getId().equals(seller.getId())) {
+            throw new SellerNotAuthorizedException("Not authorized");
+        }
+        return toOrderDto(order);
+    }
+
+    OrderDto toOrderDto(Order order) {
         OrderDto dto = new OrderDto();
         dto.setId(order.getId());
         dto.setOrderNumber(order.getOrderNumber());
@@ -486,13 +496,15 @@ public class OrderService {
                     kitchen.getId(), kitchen.getName(), kitchen.getDisplayName(),
                     kitchen.getImageUrl(), kitchen.getRating()));
         }
-        if (order.getBuyer() != null) {
-            OrderDto.BuyerSummary buyerSummary = new OrderDto.BuyerSummary();
-            buyerSummary.setName(order.getBuyer().getName());
-            buyerSummary.setMobileNumber(order.getBuyer().getMobileNumber());
-            buyerSummary.setFlatHouseNumber(order.getBuyer().getFlatHouseNumber());
-            dto.setBuyer(buyerSummary);
-        }
+            if (order.getBuyer() != null) {
+                OrderDto.BuyerSummary buyerSummary = new OrderDto.BuyerSummary();
+                buyerSummary.setName(order.getBuyer().getName());
+                buyerSummary.setMobileNumber(order.getBuyer().getMobileNumber());
+                buyerSummary.setFlatHouseNumber(order.getBuyer().getFlatHouseNumber());
+                buyerSummary.setSociety(order.getBuyer().getSociety());
+                buyerSummary.setBuilding(order.getBuyer().getBuilding());
+                dto.setBuyer(buyerSummary);
+            }
         if (order.getItems() != null) {
             dto.setItems(order.getItems().stream()
                     .map(item -> {

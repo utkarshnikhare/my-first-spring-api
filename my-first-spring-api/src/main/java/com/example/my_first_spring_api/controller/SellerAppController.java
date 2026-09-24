@@ -164,10 +164,12 @@ public class SellerAppController {
 
     @GetMapping("/orders/product/{productId}")
     public ResponseEntity<OrderItemDetailDto> getOrderItemDetail(@PathVariable Long productId,
-                                                                  @RequestParam(required = false) String date,
-                                                                  HttpSession session) {
+                                                                   @RequestParam(required = false) String date,
+                                                                   @RequestParam(required = false) String society,
+                                                                   @RequestParam(required = false) String status,
+                                                                   HttpSession session) {
         LocalDate d = parseDate(date);
-        return ResponseEntity.ok(sellerAppService.getOrderItemDetail(requireSeller(session), productId, d));
+        return ResponseEntity.ok(sellerAppService.getOrderItemDetail(requireSeller(session), productId, d, society, status));
     }
 
     @GetMapping("/earnings")

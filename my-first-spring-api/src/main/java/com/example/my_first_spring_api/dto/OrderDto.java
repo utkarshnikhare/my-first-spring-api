@@ -51,6 +51,8 @@ public class OrderDto {
         private String name;
         private String mobileNumber;
         private String flatHouseNumber;
+        private String society;
+        private String building;
 
         public String getName() { return name; }
         public void setName(String name) { this.name = name; }
@@ -58,6 +60,10 @@ public class OrderDto {
         public void setMobileNumber(String mobileNumber) { this.mobileNumber = mobileNumber; }
         public String getFlatHouseNumber() { return flatHouseNumber; }
         public void setFlatHouseNumber(String flatHouseNumber) { this.flatHouseNumber = flatHouseNumber; }
+        public String getSociety() { return society; }
+        public void setSociety(String society) { this.society = society; }
+        public String getBuilding() { return building; }
+        public void setBuilding(String building) { this.building = building; }
     }
 
     public Long getId() { return id; }

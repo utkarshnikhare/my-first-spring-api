@@ -90,6 +90,11 @@ public class SellerService {
         return toKitchenDto(kitchenRepository.save(kitchen));
     }
 
+    @Transactional(readOnly = true)
+    public OrderDto getOrderDetailForSeller(Long orderId, User seller) {
+        return orderService.getOrderDtoForSeller(orderId, seller);
+    }
+
     public KitchenDto pauseKitchen(Long kitchenId, User seller) {
         Kitchen kitchen = getOwnedKitchen(kitchenId, seller);
         kitchen.setAvailableToday(false);

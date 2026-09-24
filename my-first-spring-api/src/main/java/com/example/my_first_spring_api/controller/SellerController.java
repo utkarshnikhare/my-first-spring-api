@@ -105,6 +105,12 @@ public class SellerController {
         return ResponseEntity.ok(sellerService.getMyOrders(seller));
     }
 
+    @GetMapping("/orders/{orderId}")
+    public ResponseEntity<OrderDto> getOrderDetail(@PathVariable Long orderId, HttpSession session) {
+        User seller = requireSeller(session);
+        return ResponseEntity.ok(sellerService.getOrderDetailForSeller(orderId, seller));
+    }
+
     @PatchMapping("/orders/{orderId}/status")
     public ResponseEntity<OrderDto> updateOrderStatus(@PathVariable Long orderId,
                                                       @Valid @RequestBody UpdateOrderStatusRequest request,

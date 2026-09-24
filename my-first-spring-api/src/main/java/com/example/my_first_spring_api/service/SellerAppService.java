@@ -411,7 +411,8 @@ public class SellerAppService {
     // ==================== ORDER DRILL-DOWN (SCREEN 7B) ====================
 
     @Transactional(readOnly = true)
-    public OrderItemDetailDto getOrderItemDetail(User seller, Long productId, LocalDate date) {
+    public OrderItemDetailDto getOrderItemDetail(User seller, Long productId, LocalDate date,
+                                                    String society, String status) {
         Kitchen kitchen = getOwnedKitchen(seller);
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
@@ -429,7 +430,9 @@ public class SellerAppService {
         dto.setProductImageUrl(product.getImageUrl());
 
         int totalPlates = 0, paidCount = 0, pendingCount = 0, cancelledCount = 0;
+        int filteredTotalPlates = 0, filteredPaidCount = 0, filteredPendingCount = 0, filteredCancelledCount = 0;
         BigDecimal totalRevenue = BigDecimal.ZERO;
+        BigDecimal filteredTotalRevenue = BigDecimal.ZERO;
         List<OrderItemDetailDto.CustomerOrderRow> rows = new ArrayList<>();
 
         for (Order order : orders) {
@@ -454,35 +457,20 @@ public class SellerAppService {
                 } else {
                     if (paid) paidCount++;
                     else if (order.getPaymentStatus() == PaymentStatus.PENDING) pendingCount++;
-                    // cancelled portions are never counted as fulfilled plates/revenue
                     totalPlates += qtyForProduct;
                     totalRevenue = totalRevenue.add(itemRevenue);
                 }
-                OrderItemDetailDto.CustomerOrderRow row = new OrderItemDetailDto.CustomerOrderRow();
-                row.setOrderId(order.getId());
-                row.setOrderNumber(order.getOrderNumber());
-                row.setQuantity(qtyForProduct);
-                row.setUnit(product.getPriceUnit());
-                row.setPricePerUnit(matchedItem != null ? matchedItem.getPrice() : null);
-                BigDecimal lineTotal = matchedItem != null && matchedItem.getPrice() != null
-                        ? matchedItem.getPrice().multiply(BigDecimal.valueOf(qtyForProduct))
-                        : itemRevenue;
-                row.setTotalAmount(lineTotal);
-                if (order.getBuyer() != null) {
-                    row.setBuyerName(order.getBuyer().getName());
-                    row.setBuyerMobile(order.getBuyer().getMobileNumber());
-                    row.setBuyerFlat(order.getBuyer().getFlatHouseNumber());
-                    row.setBuilding(order.getBuyer().getBuilding());
-                    row.setSociety(order.getBuyer().getSociety());
-                } else {
-                    row.setBuyerName("Unknown");
+                if (matchesFilters(order, society, status)) {
+                    if (cancelled) {
+                        filteredCancelledCount++;
+                    } else {
+                        if (paid) filteredPaidCount++;
+                        else if (order.getPaymentStatus() == PaymentStatus.PENDING) filteredPendingCount++;
+                        filteredTotalPlates += qtyForProduct;
+                        filteredTotalRevenue = filteredTotalRevenue.add(itemRevenue);
+                    }
+                    rows.add(buildCustomerRow(order, productId, matchedItem));
                 }
-                row.setPaid(paid);
-                row.setCancelled(cancelled);
-                row.setOrderStatus(order.getOrderStatus() != null ? order.getOrderStatus().name() : null);
-                row.setRemark(order.getCustomInstructions());
-                row.setPlacedAt(order.getOrderTime() != null ? order.getOrderTime() : order.getCreatedAt());
-                rows.add(row);
             }
         }
 
@@ -492,8 +480,68 @@ public class SellerAppService {
         dto.setPendingCount(pendingCount);
         dto.setCancelledCount(cancelledCount);
         dto.setCustomers(rows);
+        dto.setFilteredTotalPlates(filteredTotalPlates);
+        dto.setFilteredPaidCount(filteredPaidCount);
+        dto.setFilteredPendingCount(filteredPendingCount);
+        dto.setFilteredCancelledCount(filteredCancelledCount);
+        dto.setFilteredTotalRevenue(filteredTotalRevenue);
         return dto;
     }
+
+    private boolean matchesFilters(Order order, String society, String status) {
+        if (society != null && !society.isBlank()) {
+            String buyerSociety = order.getBuyer() != null ? order.getBuyer().getSociety() : null;
+            if (buyerSociety == null || !buyerSociety.toLowerCase().contains(society.toLowerCase())) {
+                return false;
+            }
+        }
+        if (status != null && !status.isBlank()) {
+            String s = status.toLowerCase();
+            boolean cancelled = order.getOrderStatus() == OrderStatus.CANCELLED;
+            boolean paid = order.getPaymentStatus() == PaymentStatus.PAID;
+            boolean pending = order.getPaymentStatus() == PaymentStatus.PENDING;
+            if (s.equals("cancelled")) return cancelled;
+            if (s.equals("paid")) return paid && !cancelled;
+            if (s.equals("pending")) return pending && !cancelled;
+        }
+        return true;
+    }
+
+    private OrderItemDetailDto.CustomerOrderRow buildCustomerRow(Order order, Long productId, OrderItem matchedItem) {
+        OrderItemDetailDto.CustomerOrderRow row = new OrderItemDetailDto.CustomerOrderRow();
+        row.setOrderId(order.getId());
+        row.setOrderNumber(order.getOrderNumber());
+        int qtyForProduct = 0;
+        for (OrderItem item : order.getItems()) {
+            if (item.getProduct().getId().equals(productId)) {
+                qtyForProduct += (item.getQuantity() != null ? item.getQuantity() : 0);
+            }
+        }
+        row.setQuantity(qtyForProduct);
+        Product product = matchedItem != null ? matchedItem.getProduct() : null;
+        row.setUnit(product != null && product.getPriceUnit() != null ? product.getPriceUnit() : "plate");
+        row.setPricePerUnit(matchedItem != null ? matchedItem.getPrice() : null);
+        BigDecimal lineTotal = matchedItem != null && matchedItem.getPrice() != null
+                ? matchedItem.getPrice().multiply(BigDecimal.valueOf(qtyForProduct))
+                : BigDecimal.ZERO;
+        row.setTotalAmount(lineTotal);
+        if (order.getBuyer() != null) {
+            row.setBuyerName(order.getBuyer().getName());
+            row.setBuyerMobile(order.getBuyer().getMobileNumber());
+            row.setBuyerFlat(order.getBuyer().getFlatHouseNumber());
+            row.setBuilding(order.getBuyer().getBuilding());
+            row.setSociety(order.getBuyer().getSociety());
+        } else {
+            row.setBuyerName("Unknown");
+        }
+        row.setPaid(order.getPaymentStatus() == PaymentStatus.PAID);
+        row.setCancelled(order.getOrderStatus() == OrderStatus.CANCELLED);
+        row.setOrderStatus(order.getOrderStatus() != null ? order.getOrderStatus().name() : null);
+        row.setRemark(order.getCustomInstructions());
+        row.setPlacedAt(order.getOrderTime() != null ? order.getOrderTime() : order.getCreatedAt());
+        return row;
+    }
+
     // ==================== EARNINGS (SCREEN 8) ====================
 
     @Transactional(readOnly = true)
