@@ -32,9 +32,15 @@ class FavouriteServiceLimitTest {
         buyer.setId(1L);
     }
 
+    private User seller() {
+        User seller = new User("Kitchen Seller", "9100000010", "S-1", UserRole.SELLER);
+        seller.setId(99L);
+        return seller;
+    }
+
     @Test
     void addThreeKitchenFavouritesSucceeds() {
-        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, buyer);
+        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller());
         kitchen.setId(1L);
         when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
         when(favouriteRepository.findByUserIdAndKitchenId(1L, 1L)).thenReturn(Optional.empty());
@@ -48,7 +54,7 @@ class FavouriteServiceLimitTest {
 
     @Test
     void addFourthKitchenFavouriteRejected() {
-        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, buyer);
+        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller());
         kitchen.setId(1L);
         when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
         when(favouriteRepository.findByUserIdAndKitchenId(1L, 1L)).thenReturn(Optional.empty());
@@ -59,7 +65,7 @@ class FavouriteServiceLimitTest {
 
     @Test
     void removeKitchenFavouriteThenAddNewSucceeds() {
-        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, buyer);
+        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller());
         kitchen.setId(1L);
         Favourite existing = new Favourite();
         existing.setId(10L);
@@ -76,7 +82,7 @@ class FavouriteServiceLimitTest {
 
     @Test
     void getFavouriteKitchensReturnsOnlyKitchens() {
-        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, buyer);
+        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller());
         kitchen.setId(1L);
         Favourite f = new Favourite();
         f.setId(1L);

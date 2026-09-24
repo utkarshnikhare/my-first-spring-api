@@ -3,6 +3,7 @@ package com.example.my_first_spring_api.service;
 import com.example.my_first_spring_api.dto.OrderDto;
 import com.example.my_first_spring_api.dto.OrderItemRequest;
 import com.example.my_first_spring_api.exception.BuyerProfileIncompleteException;
+import com.example.my_first_spring_api.exception.OrderNotFoundException;
 import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -37,7 +39,11 @@ class OrderServiceValidationTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        when(httpSession.getAttribute(any(String.class))).thenReturn(null);
+        User buyer = new User("Buyer", "9876543210", "A-101", UserRole.BUYER);
+        buyer.setId(20L);
+        when(httpSession.getAttribute(any(String.class))).thenAnswer(invocation ->
+                "BUYER_USER".equals(invocation.getArgument(0)) ? 20L : null);
+        when(userRepository.findById(20L)).thenReturn(Optional.of(buyer));
     }
 
     private User approvedSeller() {
@@ -169,7 +175,9 @@ class OrderServiceValidationTest {
         when(orderRepository.findById(100L)).thenReturn(Optional.of(new Order() {{
             setId(100L);
             setKitchen(kitchen1);
-            setBuyer(new User("Buyer", "9876543210", "A-101", UserRole.BUYER));
+            User staleBuyer = new User("Buyer", "9876543210", "A-101", UserRole.BUYER);
+            staleBuyer.setId(20L);
+            setBuyer(staleBuyer);
         }}));
 
         OrderItemRequest req2 = new OrderItemRequest();
@@ -179,6 +187,67 @@ class OrderServiceValidationTest {
         assertThat(draft2.getKitchen().getId()).isEqualTo(2L);
         assertThat(draft2.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(50));
         verify(orderRepository).delete(any(Order.class));
+    }
+
+    @Test
+    void buyerCannotReorderAnotherBuyersOrder() {
+        User buyer = new User("Buyer", "9876500001", "A-101", UserRole.BUYER);
+        buyer.setId(20L);
+        User otherBuyer = new User("Other Buyer", "9876500002", "A-102", UserRole.BUYER);
+        otherBuyer.setId(21L);
+        User seller = new User("Seller", "9100000010", "S-1", UserRole.SELLER);
+        seller.setId(10L);
+        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller);
+        kitchen.setId(1L);
+        Order foreignOrder = new Order(otherBuyer, kitchen);
+        foreignOrder.setId(44L);
+        when(orderRepository.findById(44L)).thenReturn(Optional.of(foreignOrder));
+
+        assertThatThrownBy(() -> orderService.reorder(44L, httpSession, buyer))
+                .isInstanceOf(OrderNotFoundException.class);
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void buyerCannotReadOrClearAnotherBuyersDraft() {
+        User currentBuyer = new User("Buyer", "9876500001", "A-101", UserRole.BUYER);
+        currentBuyer.setId(20L);
+        User otherBuyer = new User("Other Buyer", "9876500002", "A-102", UserRole.BUYER);
+        otherBuyer.setId(21L);
+        User seller = new User("Seller", "9100000010", "S-1", UserRole.SELLER);
+        seller.setId(10L);
+        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller);
+        kitchen.setId(1L);
+        Order foreignDraft = new Order(otherBuyer, kitchen);
+        foreignDraft.setId(45L);
+        when(httpSession.getAttribute(OrderService.DRAFT_ORDER_SESSION_KEY)).thenReturn(45L);
+        when(orderRepository.findById(45L)).thenReturn(Optional.of(foreignDraft));
+
+        assertThatThrownBy(() -> orderService.getCurrentDraftOrder(httpSession))
+                .isInstanceOf(OrderNotFoundException.class);
+        assertThatThrownBy(() -> orderService.clearDraftOrder(httpSession))
+                .isInstanceOf(OrderNotFoundException.class);
+        verify(orderRepository, never()).deleteById(45L);
+    }
+
+    @Test
+    void buyerCannotPlaceAnotherBuyersDraft() {
+        User currentBuyer = new User("Buyer", "9876500001", "A-101", UserRole.BUYER);
+        currentBuyer.setId(20L);
+        User otherBuyer = new User("Other Buyer", "9876500002", "A-102", UserRole.BUYER);
+        otherBuyer.setId(21L);
+        User seller = new User("Seller", "9100000010", "S-1", UserRole.SELLER);
+        seller.setId(10L);
+        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller);
+        kitchen.setId(1L);
+        Order foreignDraft = new Order(otherBuyer, kitchen);
+        foreignDraft.setId(46L);
+        when(httpSession.getAttribute(OrderService.DRAFT_ORDER_SESSION_KEY)).thenReturn(46L);
+        when(orderRepository.findById(46L)).thenReturn(Optional.of(foreignDraft));
+
+        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, null, null, httpSession))
+                .isInstanceOf(OrderNotFoundException.class);
+        verify(orderRepository, never()).delete(any());
     }
 
     @Test

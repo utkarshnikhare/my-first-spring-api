@@ -7,128 +7,82 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-
-import java.util.List;
 import java.util.Optional;
-
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 class OrderServicePaymentTest {
-
     @Mock OrderRepository orderRepository;
     @Mock KitchenRepository kitchenRepository;
     @Mock ProductRepository productRepository;
     @Mock UserRepository userRepository;
     @Mock AnalyticsService analyticsService;
     @Mock NotificationService notificationService;
-
     @InjectMocks OrderService orderService;
+    private User buyer;
+    private Order order;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-    }
-
-    @Test
-    void updatePaymentPaidTransitionsOrderedToConfirmed() {
-        User buyer = new User("Test Buyer", "9999999999", "A-101", UserRole.BUYER);
+        buyer = new User("Buyer", "9999999999", "A-101", UserRole.BUYER);
         buyer.setId(1L);
-        Kitchen kitchen = new Kitchen("test-kitchen", "Test Kitchen", "desc", null, null);
-        kitchen.setId(1L);
-        Order order = new Order(buyer, kitchen);
-        order.setId(100L);
+        User seller = new User("Seller", "9100000009", "S-1", UserRole.SELLER);
+        seller.setId(2L);
+        Kitchen kitchen = new Kitchen("k", "Kitchen", "", null, seller);
+        kitchen.setId(3L);
+        order = new Order(buyer, kitchen);
+        order.setId(4L);
         order.setOrderStatus(OrderStatus.ORDERED);
         order.setPaymentStatus(PaymentStatus.PENDING);
-
-        when(orderRepository.findById(100L)).thenReturn(Optional.of(order));
-        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        var result = orderService.updatePaymentStatus(100L, PaymentStatus.PAID, buyer);
-
-        assertThat(result.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
-        assertThat(result.getOrderStatus()).isEqualTo(OrderStatus.CONFIRMED);
+        when(orderRepository.findById(4L)).thenReturn(Optional.of(order));
     }
 
     @Test
-    void updatePaymentAlreadyConfirmedDoesNotChangeStatus() {
-        User buyer = new User("Test Buyer", "9999999999", "A-101", UserRole.BUYER);
-        buyer.setId(1L);
-        Kitchen kitchen = new Kitchen("test-kitchen", "Test Kitchen", "desc", null, null);
-        kitchen.setId(1L);
-        Order order = new Order(buyer, kitchen);
-        order.setId(101L);
-        order.setOrderStatus(OrderStatus.CONFIRMED);
+    void buyerCannotMarkOwnOrderPaid() {
+        assertThatThrownBy(() -> orderService.updatePaymentStatus(4L, PaymentStatus.PAID, buyer))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("seller");
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void buyerCannotRevertPaidOrderToPending() {
         order.setPaymentStatus(PaymentStatus.PAID);
-
-        when(orderRepository.findById(101L)).thenReturn(Optional.of(order));
-        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        var result = orderService.updatePaymentStatus(101L, PaymentStatus.PAID, buyer);
-
-        assertThat(result.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
-        assertThat(result.getOrderStatus()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThatThrownBy(() -> orderService.updatePaymentStatus(4L, PaymentStatus.PENDING, buyer))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(orderRepository, never()).save(any());
     }
 
     @Test
-    void updatePaymentDoesNotTransitionCancelledOrder() {
-        User buyer = new User("Test Buyer", "9999999999", "A-101", UserRole.BUYER);
-        buyer.setId(1L);
-        Kitchen kitchen = new Kitchen("test-kitchen", "Test Kitchen", "desc", null, null);
-        kitchen.setId(1L);
-        Order order = new Order(buyer, kitchen);
-        order.setId(102L);
-        order.setOrderStatus(OrderStatus.CANCELLED);
-        order.setPaymentStatus(PaymentStatus.PENDING);
-
-        when(orderRepository.findById(102L)).thenReturn(Optional.of(order));
-        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        var result = orderService.updatePaymentStatus(102L, PaymentStatus.PAID, buyer);
-
-        assertThat(result.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
-        assertThat(result.getOrderStatus()).isEqualTo(OrderStatus.CANCELLED);
-    }
-
-    @Test
-    void updatePaymentPendingDoesNotConfirmOrder() {
-        User buyer = new User("Test Buyer", "9999999999", "A-101", UserRole.BUYER);
-        buyer.setId(1L);
-        Kitchen kitchen = new Kitchen("test-kitchen", "Test Kitchen", "desc", null, null);
-        kitchen.setId(1L);
-        Order order = new Order(buyer, kitchen);
-        order.setId(103L);
-        order.setOrderStatus(OrderStatus.ORDERED);
-        order.setPaymentStatus(PaymentStatus.PAID);
-
-        when(orderRepository.findById(103L)).thenReturn(Optional.of(order));
-        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        var result = orderService.updatePaymentStatus(103L, PaymentStatus.PENDING, buyer);
-
+    void buyerCanSetDeferredPaymentWithoutChangingOrderStatus() {
+        var result = orderService.updatePaymentStatus(4L, PaymentStatus.PENDING, buyer);
         assertThat(result.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(result.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
+        verify(orderRepository, never()).save(any());
     }
 
     @Test
-    void updatePaymentWillPayLaterDoesNotConfirmOrder() {
-        User buyer = new User("Test Buyer", "9999999999", "A-101", UserRole.BUYER);
-        buyer.setId(1L);
-        Kitchen kitchen = new Kitchen("test-kitchen", "Test Kitchen", "desc", null, null);
-        kitchen.setId(1L);
-        Order order = new Order(buyer, kitchen);
-        order.setId(104L);
-        order.setOrderStatus(OrderStatus.ORDERED);
-        order.setPaymentStatus(PaymentStatus.PENDING);
+    void cancelledOrderCannotBeChangedByBuyer() {
+        order.setOrderStatus(OrderStatus.CANCELLED);
+        assertThatThrownBy(() -> orderService.updatePaymentStatus(4L, PaymentStatus.PAID, buyer))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(orderRepository, never()).save(any());
+    }
 
-        when(orderRepository.findById(104L)).thenReturn(Optional.of(order));
-        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        var result = orderService.updatePaymentStatus(104L, PaymentStatus.WILL_PAY_LATER, buyer);
-
-        assertThat(result.getPaymentStatus()).isEqualTo(PaymentStatus.WILL_PAY_LATER);
+    @Test
+    void buyerLegacyWillPayLaterIsPersistedAsPending() {
+        var result = orderService.updatePaymentStatus(4L, PaymentStatus.WILL_PAY_LATER, buyer);
+        assertThat(result.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(result.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void alreadyPaidStatusIsIdempotentForBuyerEndpoint() {
+        order.setPaymentStatus(PaymentStatus.PAID);
+        var result = orderService.updatePaymentStatus(4L, PaymentStatus.PAID, buyer);
+        assertThat(result.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+        verify(orderRepository, never()).save(any());
     }
 }

@@ -46,6 +46,10 @@ public class EnquiryService {
         }
         Kitchen kitchen = kitchenRepository.findById(kitchenId)
                 .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
+        if (!KitchenVisibility.isPubliclyVisible(kitchen) || !KitchenVisibility.isServiceAreaVisible(kitchen, buyer)) {
+            throw new com.example.my_first_spring_api.exception.InvalidKitchenSelectionException(
+                    "This kitchen is not available in your area.");
+        }
         Enquiry enquiry = new Enquiry();
         enquiry.setUser(buyer);
         enquiry.setKitchen(kitchen);

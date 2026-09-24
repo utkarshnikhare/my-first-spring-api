@@ -38,6 +38,7 @@ class EnquiryServiceNotificationTest {
     void submitSendsNotificationAndRecordsLedger() {
         User seller = new User("Seller", "9100000001", "A-101", UserRole.SELLER);
         seller.setId(10L);
+        seller.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
         Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller);
         kitchen.setId(1L);
         when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
@@ -66,6 +67,7 @@ class EnquiryServiceNotificationTest {
     void submitUsesZeroLeadFeeWhenNotConfigured() {
         User seller = new User("Seller", "9100000001", "A-101", UserRole.SELLER);
         seller.setId(10L);
+        seller.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
         Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller);
         kitchen.setId(1L);
         when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));

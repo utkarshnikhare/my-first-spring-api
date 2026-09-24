@@ -46,13 +46,14 @@ public class OrderService {
     public OrderDto createOrUpdateDraftOrder(Long kitchenId, List<OrderItemRequest> items, HttpSession session) {
         Kitchen kitchen = kitchenRepository.findById(kitchenId)
                 .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
+        User buyer = resolveBuyer(session);
+        if (buyer == null) throw new BuyerNotAuthenticatedException("Authentication required to create an order.");
         // One-kitchen-at-a-time: hidden / suspended / pending sellers' kitchens
-        // cannot be ordered from at all.
-        if (!KitchenVisibility.isPubliclyVisible(kitchen)) {
-            throw new InvalidKitchenSelectionException("This kitchen is not currently accepting orders.");
+        // cannot be ordered from at all, and service-area rules apply server-side.
+        if (!KitchenVisibility.isPubliclyVisible(kitchen) || !KitchenVisibility.isServiceAreaVisible(kitchen, buyer)) {
+            throw new InvalidKitchenSelectionException("This kitchen is not currently accepting orders in your area.");
         }
         Long draftId = (Long) session.getAttribute(DRAFT_ORDER_SESSION_KEY);
-        User buyer = resolveBuyer(session);
         Order draft;
         boolean isNewDraft = false;
         if (draftId == null) {
@@ -69,6 +70,9 @@ public class OrderService {
                 draft.setOrderStatus(OrderStatus.DRAFT);
                 draft.setOrderNumber(generateOrderNumber());
                 isNewDraft = true;
+            } else if (draft.getBuyer() == null || !draft.getBuyer().getId().equals(buyer.getId())) {
+                // Never let a stale or manipulated session pointer update another buyer's draft.
+                throw new InvalidKitchenSelectionException("Your current order session is no longer valid.");
             } else if (!draft.getKitchen().getId().equals(kitchenId)) {
                 // Kitchen switched — clear stale draft and start fresh.
                 // The frontend confirmation modal already ensures this is intentional.
@@ -197,12 +201,22 @@ public class OrderService {
         if (draftId == null) return null;
         Order draft = orderRepository.findById(draftId).orElse(null);
         if (draft == null) return null;
+        User buyer = resolveBuyer(session);
+        if (buyer == null || draft.getBuyer() == null || !draft.getBuyer().getId().equals(buyer.getId())) {
+            throw new OrderNotFoundException(draftId);
+        }
         return toOrderDto(draft);
     }
 
     public void clearDraftOrder(HttpSession session) {
         Long draftId = (Long) session.getAttribute(DRAFT_ORDER_SESSION_KEY);
         if (draftId != null) {
+            Order draft = orderRepository.findById(draftId).orElse(null);
+            User buyer = resolveBuyer(session);
+            if (draft != null && buyer != null
+                    && (draft.getBuyer() == null || !draft.getBuyer().getId().equals(buyer.getId()))) {
+                throw new OrderNotFoundException(draftId);
+            }
             orderRepository.deleteById(draftId);
             session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
         }
@@ -219,6 +233,11 @@ public class OrderService {
             session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
             throw new IllegalArgumentException("Your order session has expired. Please add items again.");
         }
+        User buyer = resolveBuyer(session);
+        if (buyer == null) throw new BuyerNotAuthenticatedException("Authentication required to place an order.");
+        if (order.getBuyer() == null || !order.getBuyer().getId().equals(buyer.getId())) {
+            throw new OrderNotFoundException(draftId);
+        }
         // One-kitchen rule: if the kitchen became unavailable after this draft was
         // created (seller suspended / rejected / hidden), the draft can no longer be
         // placed. Clear it so the buyer starts a fresh selection.
@@ -231,8 +250,6 @@ public class OrderService {
         if (order.getItems() == null || order.getItems().isEmpty()) {
             throw new IllegalArgumentException("Your order is empty. Please add items before placing it.");
         }
-        User buyer = resolveBuyer(session);
-        if (buyer == null) throw new BuyerNotAuthenticatedException("Authentication required to place an order.");
         order.setBuyer(buyer);
         if (buyerDetails != null) updateBuyerDetails(buyer, buyerDetails);
         if (customInstructions != null && !customInstructions.isBlank()) order.setCustomInstructions(customInstructions);
@@ -339,11 +356,15 @@ public class OrderService {
 
     public OrderDto reorder(Long orderId, HttpSession session, User buyer) {
         Order originalOrder = orderRepository.findById(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
+        if (originalOrder.getBuyer() == null || !originalOrder.getBuyer().getId().equals(buyer.getId())) {
+            throw new OrderNotFoundException(orderId);
+        }
         Kitchen kitchen = originalOrder.getKitchen();
         // One-kitchen rule: do not rebuild a draft from a kitchen that is no longer
-        // publicly active (seller suspended / rejected / hidden).
-        if (kitchen == null || !KitchenVisibility.isPubliclyVisible(kitchen)) {
-            throw new InvalidKitchenSelectionException("This kitchen is no longer accepting orders.");
+        // publicly active or does not serve this buyer's selected area.
+        if (kitchen == null || !KitchenVisibility.isPubliclyVisible(kitchen)
+                || !KitchenVisibility.isServiceAreaVisible(kitchen, buyer)) {
+            throw new InvalidKitchenSelectionException("This kitchen is no longer accepting orders in your area.");
         }
         Order newDraft = new Order(buyer, kitchen);
         newDraft.setOrderStatus(OrderStatus.DRAFT);
@@ -360,12 +381,26 @@ public class OrderService {
     }
 
     public OrderDto updatePaymentStatus(Long orderId, PaymentStatus paymentStatus, User buyer) {
+        if (paymentStatus == null) throw new IllegalArgumentException("Payment status is required.");
+        // Keep the existing buyer compatibility endpoint, but normalize the
+        // deferred-payment choice to the authoritative PENDING business state.
+        PaymentStatus requestedStatus = paymentStatus == PaymentStatus.WILL_PAY_LATER
+                ? PaymentStatus.PENDING : paymentStatus;
         Order order = orderRepository.findById(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
         if (order.getBuyer() == null || !order.getBuyer().getId().equals(buyer.getId())) throw new OrderNotFoundException(orderId);
-        order.setPaymentStatus(paymentStatus);
-        if (paymentStatus == PaymentStatus.PAID && order.getOrderStatus() == OrderStatus.ORDERED) {
-            order.setOrderStatus(OrderStatus.CONFIRMED);
+        if (order.getOrderStatus() == OrderStatus.CANCELLED) {
+            throw new IllegalArgumentException("A cancelled order cannot change payment status.");
         }
+        // Buyers cannot mark an order paid; the seller-only endpoint owns that transition.
+        if (requestedStatus == PaymentStatus.PAID && order.getPaymentStatus() != PaymentStatus.PAID) {
+            throw new IllegalArgumentException("Payment status is managed by the seller.");
+        }
+        if (order.getPaymentStatus() == PaymentStatus.PAID) {
+            if (requestedStatus == PaymentStatus.PAID) return toOrderDto(order);
+            throw new IllegalArgumentException("A paid order cannot be changed by the buyer.");
+        }
+        if (requestedStatus == order.getPaymentStatus()) return toOrderDto(order);
+        order.setPaymentStatus(requestedStatus);
         orderRepository.save(order);
         return toOrderDto(order);
     }

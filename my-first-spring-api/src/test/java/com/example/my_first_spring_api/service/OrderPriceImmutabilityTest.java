@@ -88,6 +88,7 @@ class OrderPriceImmutabilityTest {
         OrderItemRequest req = new OrderItemRequest();
         req.setProductId(1L);
         req.setQuantity(100);
+        sessionMap.put("BUYER_USER", buyer.getId());
 
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
             Order o = inv.getArgument(0);
@@ -167,6 +168,7 @@ class OrderPriceImmutabilityTest {
         OrderItemRequest req = new OrderItemRequest();
         req.setProductId(1L);
         req.setQuantity(100);
+        sessionMap.put("BUYER_USER", buyer.getId());
 
         OrderDto draft = orderService.createOrUpdateDraftOrder(1L, List.of(req), httpSession);
         assertThat(draft.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(3000));

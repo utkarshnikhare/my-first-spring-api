@@ -80,6 +80,7 @@ class OrderServiceNotificationTest {
         com.example.my_first_spring_api.dto.OrderItemRequest req = new com.example.my_first_spring_api.dto.OrderItemRequest();
         req.setProductId(1L);
         req.setQuantity(1);
+        sessionMap.put("BUYER_USER", buyer.getId());
 
         orderService.createOrUpdateDraftOrder(1L, List.of(req), httpSession);
         sessionMap.put("BUYER_USER", buyer.getId());
