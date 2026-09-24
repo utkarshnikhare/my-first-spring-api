@@ -47,6 +47,7 @@ public class SellerAppService {
     private final SellerTemplateRepository sellerTemplateRepository;
     private final FavouriteRepository favouriteRepository;
     private final AnalyticsEventRepository analyticsEventRepository;
+    private final FeatureService featureService;
 
     @Autowired
     public SellerAppService(KitchenRepository kitchenRepository,
@@ -54,13 +55,15 @@ public class SellerAppService {
                             OrderRepository orderRepository,
                             SellerTemplateRepository sellerTemplateRepository,
                             FavouriteRepository favouriteRepository,
-                            AnalyticsEventRepository analyticsEventRepository) {
+                            AnalyticsEventRepository analyticsEventRepository,
+                            FeatureService featureService) {
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
         this.orderRepository = orderRepository;
         this.sellerTemplateRepository = sellerTemplateRepository;
         this.favouriteRepository = favouriteRepository;
         this.analyticsEventRepository = analyticsEventRepository;
+        this.featureService = featureService;
     }
 
     // ==================== INVENTORY CONTROL ====================
@@ -81,7 +84,12 @@ public class SellerAppService {
                 .orElseThrow(() -> new ProductNotFoundException(productId));
         if (fresh.getRemainingQuantity() != null && fresh.getRemainingQuantity() <= 0) {
             fresh.setAvailableToday(false);
-        } else if (fresh.getRemainingQuantity() != null && fresh.getRemainingQuantity() > 0 && !fresh.getAvailableToday()) {
+        } else if (fresh.getRemainingQuantity() != null && fresh.getRemainingQuantity() > 0
+                && !fresh.getAvailableToday()
+                && !Boolean.TRUE.equals(fresh.getIsPreorder())
+                && (fresh.getAvailableDate() == null || fresh.getAvailableDate().equals(java.time.LocalDate.now()))) {
+            // Restocking restores same-day availability, but must not turn a
+            // future pre-order into a same-day offering.
             fresh.setAvailableToday(true);
         }
         return toProductDto(productRepository.save(fresh));
@@ -119,6 +127,16 @@ public class SellerAppService {
     }
     @Transactional
     public SellerTemplateDto addTemplate(User seller, SellerTemplateDto dto) {
+        String orderWindowStart = OfferingTiming.normalizeHhmm(dto.getOrderWindowStart(), "Orders Open");
+        String orderWindowEnd = OfferingTiming.normalizeHhmm(dto.getOrderWindowEnd(), "Orders Close");
+        if (orderWindowEnd != null) {
+            OfferingTiming.validateWindowPair(orderWindowStart, orderWindowEnd);
+        } else if (orderWindowStart != null) {
+            throw new IllegalArgumentException("Orders Close is required when Orders Open is provided.");
+        }
+        if (dto.getReadyByTime() != null && !dto.getReadyByTime().isBlank()) {
+            OfferingTiming.parseReadyByTime(dto.getReadyByTime());
+        }
         SellerTemplate template = new SellerTemplate();
         template.setSeller(seller);
         template.setName(dto.getName());
@@ -127,10 +145,10 @@ public class SellerAppService {
         template.setPriceUnit(dto.getPriceUnit());
         template.setImageUrl(dto.getImageUrl());
         template.setMaxQuantity(dto.getMaxQuantity());
-        template.setCutoffTime(dto.getCutoffTime());
+        template.setCutoffTime(orderWindowEnd);
         template.setReadyByTime(dto.getReadyByTime());
-        template.setOrderWindowStart(dto.getOrderWindowStart());
-        template.setOrderWindowEnd(dto.getOrderWindowEnd());
+        template.setOrderWindowStart(orderWindowStart);
+        template.setOrderWindowEnd(orderWindowEnd);
         if (dto.getCategory() != null && !dto.getCategory().isBlank()) {
             try {
                 template.setCategory(Category.valueOf(dto.getCategory().trim().toUpperCase()));
@@ -175,6 +193,8 @@ public class SellerAppService {
         if (!template.getSeller().getId().equals(seller.getId()))
             throw new SellerNotAuthorizedException("Not your template");
         Kitchen kitchen = getOwnedKitchen(seller);
+        boolean preorder = date != null && date.isAfter(java.time.LocalDate.now());
+        assertFeatureCompliance(seller, preorder, date);
         Product product = templateToProduct(template, kitchen, date);
         return toProductDto(productRepository.save(product));
     }
@@ -295,6 +315,7 @@ public class SellerAppService {
         List<Long> deduped = new ArrayList<>(new LinkedHashSet<>(productIds));
         List<ProductDto> result = new ArrayList<>();
         for (Long productId : deduped) {
+            assertFeatureCompliance(seller, date != null && date.isAfter(java.time.LocalDate.now()), date);
             Product original = productRepository.findById(productId)
                     .orElseThrow(() -> new ProductNotFoundException(productId));
             if (!original.getKitchen().getSeller().getId().equals(seller.getId()))
@@ -610,6 +631,25 @@ public class SellerAppService {
         return kitchens.get(0);
     }
 
+    private void assertFeatureCompliance(User seller, boolean isPreorder, LocalDate availableDate) {
+        if (isPreorder) {
+            featureService.assertSellerCanUse(seller, FeatureService.KEY_PREORDERS);
+        }
+        if (availableDate == null) return;
+        long daysAhead = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), availableDate);
+        if (daysAhead <= 0) return;
+        if (!featureService.sellerHasAccess(seller, FeatureService.KEY_MENU_ADVANCE_DAYS)) {
+            throw new IllegalStateException("Publishing menus in advance is currently disabled on the platform.");
+        }
+        Integer limit = featureService.sellerLimit(seller, FeatureService.KEY_MENU_ADVANCE_DAYS);
+        int allowed = limit != null ? limit : 0;
+        if (daysAhead > allowed) {
+            throw new IllegalStateException("This offering is " + daysAhead
+                    + " day(s) ahead, but your kitchen can publish menus only "
+                    + allowed + " day(s) in advance.");
+        }
+    }
+
     private ProductDto toProductDto(Product product) {
         Kitchen kitchen = product.getKitchen();
         ProductDto dto = new ProductDto(
@@ -661,38 +701,72 @@ public class SellerAppService {
 
     /** Converts a template into a brand-new Product for the given date. */
     private Product templateToProduct(SellerTemplate template, Kitchen kitchen, LocalDate date) {
+        LocalDate offeringDate = requirePublicationDate(date);
+        boolean preorder = offeringDate.isAfter(LocalDate.now());
+        if (preorder) {
+            // Future template/clone publications use the shared Product pre-order path.
+        }
+        String close = requirePublicationClose(template.getOrderWindowEnd(), template.getCutoffTime());
+        String readyBy = OfferingTiming.rebaseReadyByTime(template.getReadyByTime(), offeringDate);
+        OfferingTiming.validateNewOffering(offeringDate, preorder,
+                template.getOrderWindowStart(), close, readyBy);
         Product product = new Product(kitchen, template.getName(), template.getDescription(),
                 template.getPrice(), template.getImageUrl());
         product.setPriceUnit(template.getPriceUnit());
-        product.setAvailableDate(date);
-        product.setAvailableToday(date != null && date.equals(LocalDate.now()));
+        product.setAvailableDate(offeringDate);
+        product.setAvailableToday(offeringDate.equals(LocalDate.now()) && !preorder);
         product.setOrderWindowStart(template.getOrderWindowStart());
-        product.setOrderWindowEnd(template.getOrderWindowEnd());
+        product.setOrderWindowEnd(close);
         product.setMaxQuantity(template.getMaxQuantity());
         product.setRemainingQuantity(template.getMaxQuantity());
-        product.setIsPreorder(false);
+        product.setIsPreorder(preorder);
         product.setCategory(template.getCategory() != null ? template.getCategory().name() : null);
-        product.setCutoffTime(template.getCutoffTime());
-        product.setReadyByTime(template.getReadyByTime());
+        product.setCutoffTime(close);
+        product.setReadyByTime(readyBy);
         product.setBookedQuantity(0);
         return product;
     }
 
+    private LocalDate requirePublicationDate(LocalDate date) {
+        if (date == null) throw new IllegalArgumentException("Offering date is required.");
+        if (date.isBefore(LocalDate.now())) throw new IllegalArgumentException("Offering date cannot be in the past.");
+        return date;
+    }
+
+    private String requirePublicationClose(String orderWindowEnd, String cutoffTime) {
+        if (orderWindowEnd != null && !orderWindowEnd.isBlank()) {
+            return OfferingTiming.requireOrdersClose(orderWindowEnd);
+        }
+        if (cutoffTime != null && !cutoffTime.isBlank()) {
+            return OfferingTiming.requireOrdersClose(cutoffTime);
+        }
+        throw new IllegalArgumentException("Orders Close is required.");
+    }
+
     /** Clones an existing product into a brand-new independent offering for the given date. */
     private Product cloneProduct(Product original, Kitchen kitchen, LocalDate date) {
+        LocalDate offeringDate = requirePublicationDate(date);
+        boolean preorder = offeringDate.isAfter(LocalDate.now());
+        String close = requirePublicationClose(original.getOrderWindowEnd(), original.getCutoffTime());
+        boolean flexible = original.getPreorderType() == com.example.my_first_spring_api.model.PreorderType.FLEXIBLE;
+        String readyBy = flexible
+                ? offeringDate + "T23:59"
+                : OfferingTiming.rebaseReadyByTime(original.getReadyByTime(), offeringDate);
+        OfferingTiming.validateNewOffering(offeringDate, preorder,
+                original.getOrderWindowStart(), close, readyBy);
         Product clone = new Product(kitchen, original.getName(), original.getDescription(),
                 original.getPrice(), original.getImageUrl());
         clone.setPriceUnit(original.getPriceUnit());
-        clone.setAvailableDate(date);
-        clone.setAvailableToday(date != null && date.equals(LocalDate.now()));
+        clone.setAvailableDate(offeringDate);
+        clone.setAvailableToday(offeringDate.equals(LocalDate.now()) && !preorder);
         clone.setOrderWindowStart(original.getOrderWindowStart());
-        clone.setOrderWindowEnd(original.getOrderWindowEnd());
+        clone.setOrderWindowEnd(close);
         clone.setMaxQuantity(original.getMaxQuantity());
         clone.setRemainingQuantity(original.getMaxQuantity());
-        clone.setIsPreorder(original.getIsPreorder() != null ? original.getIsPreorder() : false);
+        clone.setIsPreorder(preorder);
         clone.setCategory(original.getCategory());
-        clone.setCutoffTime(original.getCutoffTime());
-        clone.setReadyByTime(original.getReadyByTime());
+        clone.setCutoffTime(close);
+        clone.setReadyByTime(flexible ? original.getReadyByTime() : readyBy);
         clone.setPreorderType(original.getPreorderType());
         clone.setAvailableUntilDate(original.getAvailableUntilDate());
         clone.setTimeSlots(original.getTimeSlots());

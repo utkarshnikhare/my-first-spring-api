@@ -19,6 +19,8 @@ import org.mockito.MockitoAnnotations;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -56,6 +58,7 @@ class SellerServiceCreateOfferingValidationTest {
             p.setId(100L);
             return p;
         });
+        allowFutureMenus();
     }
 
     private User approvedSeller() {
@@ -77,9 +80,9 @@ class SellerServiceCreateOfferingValidationTest {
         dto.setName("Poha");
         dto.setPrice(BigDecimal.valueOf(40));
         dto.setCategories(List.of("BREAKFAST"));
-        dto.setOrderWindowEnd("10:00");
-        dto.setCutoffTime("10:00");
-        dto.setReadyByTime("1:00 PM today");
+        dto.setAvailableDate(LocalDate.now().plusDays(1));
+        dto.setOrderWindowEnd("23:58");
+        dto.setReadyByTime(LocalDateTime.of(LocalDate.now().plusDays(1), LocalTime.of(23, 59)).toString());
         return dto;
     }
 
@@ -94,8 +97,8 @@ class SellerServiceCreateOfferingValidationTest {
         dto.setOrderWindowStart("");       // blank string from the form must also work
         var result = sellerService.createProduct(1L, dto, approvedSeller());
         assertThat(result.getOrderWindowStart()).isNull();
-        assertThat(result.getOrderWindowEnd()).isEqualTo("10:00");
-        assertThat(result.getReadyByTime()).isEqualTo("1:00 PM today");
+        assertThat(result.getOrderWindowEnd()).isEqualTo("23:58");
+        assertThat(result.getReadyByTime()).isEqualTo(validDto().getReadyByTime());
     }
 
     @Test
@@ -142,20 +145,9 @@ class SellerServiceCreateOfferingValidationTest {
     }
 
     @Test
-    void ordersCloseAfterCutoffBlocked() {
-        ProductCreateDto dto = validDto();
-        dto.setOrderWindowEnd("11:00");
-        dto.setCutoffTime("10:00");
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> sellerService.createProduct(1L, dto, approvedSeller()));
-        assertThat(ex.getMessage()).contains("Cutoff");
-    }
-
-    @Test
     void ordersCloseAfterDeliveryTimeBlocked() {
         ProductCreateDto dto = validDto();
         dto.setOrderWindowEnd("14:00");
-        dto.setCutoffTime("14:00"); // cutoff aligned so the Delivery rule is the one violated
         dto.setReadyByTime("1:00 PM today");
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> sellerService.createProduct(1L, dto, approvedSeller()));
@@ -170,7 +162,7 @@ class SellerServiceCreateOfferingValidationTest {
         dto.setReadyByTime("1:00 PM today"); // delivery today < offering in 3 days
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> sellerService.createProduct(1L, dto, approvedSeller()));
-        assertThat(ex.getMessage()).contains("earlier than the offering date");
+        assertThat(ex.getMessage()).contains("cannot be before");
     }
 
     @Test
@@ -194,7 +186,7 @@ class SellerServiceCreateOfferingValidationTest {
         dto.setReadyByTime("11:00 AM today");
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> sellerService.createProduct(1L, dto, approvedSeller()));
-        assertThat(ex.getMessage()).contains("earlier than the offering date");
+        assertThat(ex.getMessage()).contains("cannot be before");
     }
 
     @Test

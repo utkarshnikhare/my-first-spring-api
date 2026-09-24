@@ -21,11 +21,14 @@ public class ProductCreateDto {
     private String priceUnit;
     private String imageUrl;
     private Boolean availableToday;
+    @NotNull(message = "Offering For is required")
     private LocalDate availableDate;
     private String orderWindowStart;
+    @NotBlank(message = "Orders Close is required")
     private String orderWindowEnd;
-    private String cutoffTime;
+    @NotBlank(message = "Delivery / Ready By is required")
     private String readyByTime;
+    @Positive(message = "Quantity Available must be at least 1; leave blank for unlimited")
     private Integer maxQuantity;
     private Integer remainingQuantity;
     private Boolean isPreorder;
@@ -52,8 +55,6 @@ public class ProductCreateDto {
     public void setOrderWindowStart(String orderWindowStart) { this.orderWindowStart = orderWindowStart; }
     public String getOrderWindowEnd() { return orderWindowEnd; }
     public void setOrderWindowEnd(String orderWindowEnd) { this.orderWindowEnd = orderWindowEnd; }
-    public String getCutoffTime() { return cutoffTime; }
-    public void setCutoffTime(String cutoffTime) { this.cutoffTime = cutoffTime; }
     public String getReadyByTime() { return readyByTime; }
     public void setReadyByTime(String readyByTime) { this.readyByTime = readyByTime; }
     public Integer getMaxQuantity() { return maxQuantity; }

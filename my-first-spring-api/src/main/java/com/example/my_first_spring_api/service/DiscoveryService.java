@@ -69,15 +69,17 @@ public class DiscoveryService {
     }
 
     private static boolean orderableToday(Product p) {
-        return Boolean.TRUE.equals(p.getAvailableToday()) && !Boolean.TRUE.equals(p.getIsPreorder()) && !p.isSoldOut() && !p.isOrdersPaused();
+        return Boolean.TRUE.equals(p.getAvailableToday()) && !Boolean.TRUE.equals(p.getIsPreorder())
+                && OfferingTiming.isWindowOpenNow(p);
     }
 
     private static boolean availableTomorrow(Product p) {
-        return LocalDate.now().plusDays(1).equals(p.getAvailableDate()) && !p.isSoldOut() && !p.isOrdersPaused();
+        return LocalDate.now().plusDays(1).equals(p.getAvailableDate())
+                && Boolean.TRUE.equals(p.getIsPreorder()) && OfferingTiming.isWindowOpenNow(p);
     }
 
     private static boolean openPreorder(Product p) {
-        return Boolean.TRUE.equals(p.getIsPreorder()) && !p.isSoldOut() && !p.isOrdersPaused();
+        return Boolean.TRUE.equals(p.getIsPreorder()) && OfferingTiming.isWindowOpenNow(p);
     }
 
     private boolean hasToday(List<Product> items) { return items.stream().anyMatch(DiscoveryService::orderableToday); }

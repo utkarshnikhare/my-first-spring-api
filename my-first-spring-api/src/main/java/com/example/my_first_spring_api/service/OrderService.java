@@ -170,21 +170,9 @@ public class OrderService {
         item.setScheduledDate(scheduled);
     }
 
-    /** Cutoffs belong exclusively to offerings — this is where they are enforced. */
+    /** Enforces Offering For date plus Orders Open/Close on both draft and placement. */
     private void enforceCutoff(Product product, LocalDate cutoffDate, String context) {
-        String cutoff = product.getCutoffTime();
-        if (cutoff == null || cutoff.isBlank()) return;
-        LocalTime cutoffTime;
-        try {
-            cutoffTime = LocalTime.parse(cutoff);
-        } catch (Exception e) {
-            return;
-        }
-        LocalDate today = LocalDate.now();
-        if (cutoffDate.isBefore(today) || (cutoffDate.equals(today) && LocalTime.now().isAfter(cutoffTime))) {
-            throw new IllegalArgumentException("The order cutoff (" + cutoff + ") for '"
-                    + product.getName() + "' has passed — orders " + context + " are closed.");
-        }
+        OfferingTiming.enforceOrderWindow(product, cutoffDate, context);
     }
 
     private List<String> parseSlots(String timeSlots) {
@@ -585,6 +573,18 @@ public class OrderService {
                 throw new IllegalArgumentException("Orders are paused for '" + product.getName() + "'.");
             }
             boolean preorder = Boolean.TRUE.equals(product.getIsPreorder());
+            LocalDate orderingDate = LocalDate.now();
+            if (preorder) {
+                if (item.getScheduledDate() == null) {
+                    orderingDate = product.getAvailableDate() != null
+                            ? product.getAvailableDate().minusDays(1) : LocalDate.now();
+                } else {
+                    orderingDate = item.getScheduledDate().minusDays(1);
+                }
+            }
+            // Re-check at final placement: a draft may have been created before
+            // Orders Open or before the offering's Orders Close time.
+            OfferingTiming.enforceOrderWindow(product, orderingDate, "today");
             if (!preorder && Boolean.FALSE.equals(product.getAvailableToday())) {
                 throw new IllegalArgumentException("'" + product.getName() + "' is no longer available today.");
             }

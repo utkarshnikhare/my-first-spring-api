@@ -12,6 +12,9 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -66,8 +69,10 @@ class SellerServiceCategoryTest {
         dto.setName("Poha");
         dto.setPrice(BigDecimal.valueOf(40));
         dto.setCategories(List.of("BREAKFAST", "SNACKS"));
+        dto.setAvailableDate(LocalDate.now());
         dto.setOrderWindowStart("08:00");
-        dto.setOrderWindowEnd("10:00");
+        dto.setOrderWindowEnd("23:58");
+        dto.setReadyByTime(LocalDateTime.of(LocalDate.now(), LocalTime.of(23, 59)).toString());
 
         var result = sellerService.createProduct(1L, dto, seller);
         assertThat(result.getCategory()).isEqualTo("BREAKFAST,SNACKS");
@@ -88,8 +93,10 @@ class SellerServiceCategoryTest {
         dto.setName("Poha");
         dto.setPrice(BigDecimal.valueOf(40));
         dto.setCategories(List.of("LUNCH"));
+        dto.setAvailableDate(LocalDate.now());
         dto.setOrderWindowStart("08:00");
-        dto.setOrderWindowEnd("10:00");
+        dto.setOrderWindowEnd("23:58");
+        dto.setReadyByTime(LocalDateTime.of(LocalDate.now(), LocalTime.of(23, 59)).toString());
 
         var result = sellerService.createProduct(1L, dto, seller);
         assertThat(result.getCategory()).isEqualTo("LUNCH");

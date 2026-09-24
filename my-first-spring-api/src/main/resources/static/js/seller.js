@@ -1,7 +1,7 @@
 /**
  * SocioMart Seller App v1.0 - 5-tab SPA
  */
-var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], offeringFilterSociety: '', offeringFilterStatus: '' };
+var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFor: 'today' };
 var sellerRoutes = {
     '#/home': sellerHomeView, '#/add': sellerAddView, '#/create': sellerCreateView,
     '#/quick-post': sellerQuickPostView, '#/history': sellerHistoryView,
@@ -92,6 +92,15 @@ function sellerDeliveryLabel(p) {
 }
 function statusDot(paid, cancelled) { return cancelled ? '<span class="status-dot red"></span>' : paid ? '<span class="status-dot green"></span>' : '<span class="status-dot orange"></span>'; }
 function localDateStr(d) { var y = d.getFullYear(), m = ('0' + (d.getMonth() + 1)).slice(-2), day = ('0' + d.getDate()).slice(-2); return y + '-' + m + '-' + day; }
+function applyOfferingDatePicker(picker) {
+    if (!picker) return;
+    if (picker.value && picker.value < sellerDate('today')) {
+        toast('Offering date cannot be in the past', 'error');
+        picker.value = sellerDate('today');
+    }
+    var hidden = $('#availDate');
+    if (hidden && picker.value) hidden.value = picker.value;
+}
 function sellerDate(dateKey) {
     if (dateKey === 'tomorrow') return localDateStr(new Date(Date.now() + 864e5));
     if (dateKey && dateKey !== 'today' && dateKey !== 'pick') return dateKey;
@@ -198,6 +207,8 @@ async function sellerQuickPostView() {
 
 // SCREEN 3: CREATE OFFERING (MANUAL FORM)
 async function sellerCreateView() {
+    // A new form always starts in Today mode; never inherit a previous choice.
+    S.offeringFor = 'today';
     var t = S.draftOffering || {};
     var h = '<div class="view-enter">';
     h += '<div class="page-head"><h1>Create Offering</h1><p class="muted small">Fill in the details for your new dish.</p></div>';
@@ -207,14 +218,13 @@ async function sellerCreateView() {
     h += '<div class="form-group"><label class="form-label">Short Description</label><textarea class="form-textarea" name="description">' + esc(t.description || '') + '</textarea></div>';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Price (Rs) <span class="req">*</span></label><input class="form-input" name="price" type="number" value="' + (t.price || '') + '" placeholder="100" required></div>';
     h += '<div class="form-group"><label class="form-label">Unit <span class="req">*</span></label><select class="form-select" name="priceUnit"><option value="Per Piece">Per Piece</option><option value="Per Plate">Per Plate</option><option value="Per Box">Per Box</option></select></div></div>';
-    h += '<div class="form-group"><label class="form-label">Availability <span class="req">*</span></label><div class="radio-group"><label class="radio-option selected" data-action="set-availability" data-val="today">Today</label><label class="radio-option" data-action="set-availability" data-val="tomorrow">Tomorrow</label><label class="radio-option" data-action="set-availability" data-val="choose">Choose Date</label></div></div>';
+    h += '<div class="form-group"><label class="form-label">Offering For <span class="req">*</span></label><div class="radio-group"><label class="radio-option selected" data-action="set-availability" data-val="today">Today</label><label class="radio-option" data-action="set-availability" data-val="tomorrow">Tomorrow</label><label class="radio-option" data-action="set-availability" data-val="choose">Choose Date</label></div></div>';
     h += '<input type="hidden" name="availableDate" id="availDate" value="' + sellerDate('today') + '">';
-    h += '<div class="section-gap" id="chooseDateRow" hidden><input type="date" class="sort-select w-full" data-action="set-availability-date" value="' + sellerDate('today') + '"></div>';
-    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open</label><input class="form-input" name="orderWindowStart" type="time"><p class="muted small">Leave blank to start accepting orders immediately.</p></div>';
-    h += '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label><input class="form-input" name="orderWindowEnd" type="time" value="10:00" required><p class="muted small">Last date/time customers can place an order.</p></div></div>';
-    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Cutoff <span class="req">*</span></label><input class="form-input" name="cutoffTime" type="time" value="10:00"></div>';
-    h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTime" type="text" placeholder="e.g. 1:00 PM today" required><p class="muted small">Date/time by which the order will be ready/delivered.</p></div></div>';
-    h += '<div class="form-group"><label class="form-label">Quantity Available</label><input class="form-input" name="maxQuantity" type="number" min="0" placeholder="Blank for unlimited"><p class="muted small">Leave blank for unlimited quantity.</p></div>';
+    h += '<div class="form-group" id="chooseDateRow" hidden><label class="form-label">Offering Date <span class="req">*</span></label><input type="date" class="form-input" name="chosenOfferingDate" min="' + sellerDate('today') + '" data-action="set-availability-date" value="' + sellerDate('today') + '"></div>';
+    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open — Optional</label><input class="form-input" name="orderWindowStart" type="time"><p class="muted small">Leave blank to start accepting orders immediately.</p></div>';
+    h += '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label><input class="form-input" name="orderWindowEnd" type="time" required><p class="muted small">Last date/time customers can place an order.</p></div></div>';
+    h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTime" type="datetime-local" required><p class="muted small">Date/time by which the order will be ready/delivered.</p></div>';
+    h += '<div class="form-group"><label class="form-label">Quantity Available — Optional</label><input class="form-input" name="maxQuantity" type="number" min="1" step="1" placeholder="Blank for unlimited"><p class="muted small">Leave blank for unlimited quantity.</p></div>';
     h += '<div class="form-group"><label class="form-label">To be listed in <span class="req">*</span></label><div class="checkbox-group"><label class="checkbox-option"><input type="checkbox" name="categories" value="BREAKFAST"> Breakfast</label><label class="checkbox-option"><input type="checkbox" name="categories" value="LUNCH"> Lunch</label><label class="checkbox-option"><input type="checkbox" name="categories" value="DINNER"> Dinner</label><label class="checkbox-option"><input type="checkbox" name="categories" value="SNACKS"> Snacks</label></div><p class="muted small">Select at least one category.</p></div>';
     h += '<div class="toggle-row"><div><div class="toggle-text">Mark as Favourite</div><div class="toggle-note">Save as template (max 3).</div></div><div class="toggle-switch" id="favToggle" data-action="toggle-favourite"></div></div>';
     h += '<button class="btn btn-primary btn-block" type="submit">Publish Offering</button></form></div>';
@@ -443,80 +453,49 @@ document.addEventListener('submit', async function (e) {
             // an invalid empty timestamp to the backend.
             vals.orderWindowStart = parseOptionalHhmm(vals.orderWindowStart, 'Orders Open');
             vals.orderWindowEnd = parseOptionalHhmm(vals.orderWindowEnd, 'Orders Close');
-            vals.cutoffTime = parseOptionalHhmm(vals.cutoffTime, 'Cutoff');
+            if (!vals.orderWindowEnd) { toast('Orders Close is required', 'error'); return; }
             var readyBy = (vals.readyByTime || '').trim();
             if (!readyBy) { toast('Delivery / Ready By is required', 'error'); return; }
             vals.readyByTime = readyBy;
+            if (S.offeringFor === 'choose') {
+                vals.availableDate = vals.chosenOfferingDate || '';
+                if (!vals.availableDate) { toast('Choose an offering date', 'error'); return; }
+            } else {
+                vals.availableDate = sellerDate(S.offeringFor);
+            }
+            delete vals.chosenOfferingDate;
             if (vals.maxQuantity !== '' && vals.maxQuantity !== null && vals.maxQuantity !== undefined) {
                 var mq = Number(vals.maxQuantity);
-                if (isNaN(mq) || !Number.isInteger(mq) || mq < 0) {
-                    toast('Quantity Available must be a whole number of 0 or more', 'error');
+                if (!Number.isInteger(mq) || mq < 1) {
+                    toast('Quantity Available must be a whole number of at least 1, or blank for unlimited', 'error');
                     return;
                 }
                 vals.maxQuantity = mq;
             } else {
                 vals.maxQuantity = null; // blank = unlimited
             }
-            // Validation — impossible timing combinations are blocked client-side
-            // (the backend enforces the same rules independently).
-            var open = vals.orderWindowStart, close = vals.orderWindowEnd, cut = vals.cutoffTime;
-            var relDay = prettyDate(vals.availableDate);
+            // Immediate UX checks; the backend repeats these rules authoritatively.
+            var open = vals.orderWindowStart, close = vals.orderWindowEnd;
             if (open && close && open >= close) {
-                toast('Orders Open must be earlier than Orders Close', 'error');
+                toast('Orders Open must be before Orders Close', 'error');
                 return;
             }
-            if (close && cut && close > cut) {
-                toast('Orders Close must not be after the Cutoff time', 'error');
-                return;
+            var readyDate = readyBy.slice(0, 10);
+            if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(readyBy)) {
+                toast('Delivery / Ready By must be a valid date and time', 'error'); return;
             }
-            if (relDay === 'Tomorrow' || relDay === 'Today') {
-                var ampm = /^(\d{1,2}):(\d{2})\s*([AP])M?$/i.exec(readyBy.replace(/\s+/g, ' '));
-                var hour = null, minute = null, pm = false;
-                if (ampm) {
-                    hour = parseInt(ampm[1], 10); minute = parseInt(ampm[2], 10);
-                    pm = ampm[3].toUpperCase() === 'P';
-                    if (hour < 1 || hour > 12 || minute > 59) { toast('Delivery / Ready By must be a valid time, e.g. 1:00 PM today', 'error'); return; }
-                    hour = hour % 12 + (pm ? 12 : 0);
-                } else {
-                    var mil = /^(\d{1,2}):(\d{2})$/.exec(readyBy);
-                    if (mil) { hour = parseInt(mil[1], 10); minute = parseInt(mil[2], 10); }
-                    if (hour === null || hour > 23 || minute > 59) { toast('Delivery / Ready By must be a valid time, e.g. 1:00 PM today', 'error'); return; }
-                }
-                var offerDate = new Date(vals.availableDate + 'T00:00:00');
-                var closeMinutes = close ? (parseInt(close.split(':')[0], 10) * 60 + parseInt(close.split(':')[1], 10)) : null;
-                var readyMinutes = hour * 60 + minute;
-                // Rule C: delivery day must not be earlier than the offering day.
-                var dl = readyBy.toLowerCase();
-                var deliveryOffset = null;
-                if (/\btoday\b/.test(dl)) deliveryOffset = 0;
-                else if (/\b(tomorrow|tmr)\b/.test(dl)) deliveryOffset = 1;
-                else {
-                    var wd = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-                    for (var wi = 0; wi < 7; wi++) {
-                        if (dl.indexOf(wd[wi]) >= 0) {
-                            var wdDate = new Date(); wdDate.setHours(0, 0, 0, 0);
-                            var wdelta = (wi - wdDate.getDay() + 7) % 7; if (wdelta === 0) wdelta = 7;
-                            wdDate.setDate(wdDate.getDate() + wdelta);
-                            if (wdDate < offerDate) { toast('Delivery date cannot be earlier than the offering date', 'error'); return; }
-                            deliveryOffset = -1;
-                            break;
-                        }
-                    }
-                }
-                if (deliveryOffset === 0 || deliveryOffset === 1) {
-                    var deliveryDay = new Date(); deliveryDay.setHours(0, 0, 0, 0);
-                    deliveryDay.setDate(deliveryDay.getDate() + deliveryOffset);
-                    if (deliveryDay < offerDate) { toast('Delivery date cannot be earlier than the offering date', 'error'); return; }
-                }
-                // Rule A: Orders Close must be earlier than Delivery / Ready By.
-                if (closeMinutes !== null && readyMinutes < closeMinutes) {
-                    toast('Orders Close must be earlier than the Delivery / Ready By time', 'error');
-                    return;
-                }
+            if (readyDate < vals.availableDate) {
+                toast('Delivery / Ready By cannot be before the offering date', 'error'); return;
             }
-            if (close && !cut) {
-                // Keep backend cutoff consistent with the chosen order window.
-                vals.cutoffTime = close;
+            var orderingDate = vals.availableDate;
+            if (vals.availableDate > sellerDate('today')) {
+                var orderDate = new Date(vals.availableDate + 'T00:00:00');
+                orderDate.setDate(orderDate.getDate() - 1);
+                orderingDate = localDateStr(orderDate);
+            }
+            var closeDateTime = orderingDate + 'T' + close + ':00';
+            if (closeDateTime > readyBy) {
+                toast('Orders Close must be before Delivery / Ready By', 'error'); return;
             }
             var kid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
             if (!kid) {
@@ -747,10 +726,30 @@ document.addEventListener('click', async function (e) {
                 if (input) input.value = val;
                 break;
             }
-             case 'set-availability': $all('.radio-option').forEach(function (el) { el.classList.remove('selected'); }); t.classList.add('selected'); var av = $('#availDate'); if (av) av.value = sellerDate(t.dataset.val || 'today'); var cdr = $('#chooseDateRow'); if (cdr) { var val = t.dataset.val || 'today'; cdr.hidden = !(val === 'choose'); if (val === 'choose' && av) av.value = av.value; } break;
-             case 'set-availability-date': { var picker = t; var av2 = $('#availDate'); if (av2 && picker && picker.value) av2.value = picker.value; break; }
+             case 'set-availability': {
+                 $all('.radio-option').forEach(function (el) { el.classList.remove('selected'); });
+                 t.classList.add('selected');
+                 S.offeringFor = t.dataset.val || 'today';
+                 var cdr = $('#chooseDateRow');
+                 if (cdr) cdr.hidden = S.offeringFor !== 'choose';
+                 var picker = $('#chooseDateRow input[type="date"]');
+                 var av = $('#availDate');
+                 if (av) av.value = S.offeringFor === 'choose'
+                     ? (picker && picker.value || sellerDate('today'))
+                     : sellerDate(S.offeringFor);
+                 break;
+             }
+             case 'set-availability-date': {
+                 applyOfferingDatePicker(t);
+                 break;
+             }
         }
     } catch (err) { toast(err.message, 'error'); }
+});
+
+document.addEventListener('change', function (e) {
+    var picker = e.target.closest('[data-action="set-availability-date"]');
+    if (picker) applyOfferingDatePicker(picker);
 });
 
 // BOOT - never leaves the page on an infinite spinner
