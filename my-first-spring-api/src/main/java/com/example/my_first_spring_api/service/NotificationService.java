@@ -57,6 +57,16 @@ public class NotificationService {
                 "Your payment for order " + orderNumber + " has been recorded by the seller.");
     }
 
+    /**
+     * Requirement 19: notifies the owning seller when an order's payment status is
+     * actually updated. Callers must invoke this only on a real state transition;
+     * repeated Mark as Paid requests must not reach this method.
+     */
+    public void sendPaymentUpdatedNotification(User seller, String orderNumber) {
+        createEvent(seller, "Payment updated",
+                "Payment for order " + orderNumber + " was updated. Open SocioMart to review the order.");
+    }
+
     @Transactional(readOnly = true)
     public List<NotificationEventDto> getUnread(User user) {
         return notificationEventRepository.findByUserIdAndDeliveredFalseOrderByCreatedAtDesc(user.getId()).stream()

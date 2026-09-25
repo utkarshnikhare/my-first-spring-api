@@ -197,11 +197,14 @@ async function adminAction(action, t) {
                 var k = kitchen.find(function (x) { return x.id === kid; });
                 if (!k) { toast('Kitchen not found', 'error'); break; }
                 var currentAreas = (k.serviceAreas || k.area || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+                var societies = [];
+                try { societies = await api('/api/admin/societies') || []; } catch (eSoc) { societies = []; }
+                var societyOpts = societies.map(function (s) { return '<option value="' + esc(s) + '">' + esc(s) + '</option>'; }).join('');
                 var h = '<div class="view-enter"><div class="page-head"><h1>Service Areas</h1></div>' +
                     '<p class="muted small">Manage delivery societies for <strong>' + esc(k.displayName || k.name) + '</strong>.</p>' +
-                    '<div class="form-group"><label class="form-label">Service Areas</label>' +
+                    '<div class="form-group"><label class="form-label">Who can order from me? — select existing societies</label>' +
                     '<div id="adminServiceAreaList"></div>' +
-                    '<div class="form-row-2" style="margin-top:8px"><input class="form-input" id="adminNewServiceArea" placeholder="Add society (e.g. Lohegaon)"><button class="btn btn-secondary btn-sm" type="button" data-action="admin-add-service-area">Add</button></div>' +
+                    '<div class="form-row-2" style="margin-top:8px"><select class="form-input" id="adminNewServiceArea"><option value="">Select society</option>' + societyOpts + '</select><button class="btn btn-secondary btn-sm" type="button" data-action="admin-add-service-area">Add</button></div>' +
                     '<input type="hidden" id="adminServiceAreasInput" value="' + esc(k.serviceAreas || k.area || '') + '">' +
                     '</div>' +
                     '<div class="admin-actions">' +

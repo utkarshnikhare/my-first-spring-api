@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -35,12 +36,12 @@ public class MarketplaceService {
         analyticsService.record(AnalyticsService.EV_MARKETPLACE_VIEW, null, null, null, null);
         List<Kitchen> visibleKitchens = kitchenRepository.findAll().stream()
                 .filter(KitchenVisibility::isPubliclyVisible)
-                .filter(k -> isServiceAreaVisible(k, buyer))
+                .filter(k -> KitchenVisibility.isServiceAreaVisible(k, buyer))
                 .collect(Collectors.toList());
 
         List<ProductDto> availableToday = productRepository.findByAvailableTodayTrueOrderByCreatedAtDesc().stream()
                 .filter(p -> !p.isOrdersPaused())
-                .filter(p -> p.getKitchen() == null || (KitchenVisibility.isPubliclyVisible(p.getKitchen()) && isServiceAreaVisible(p.getKitchen(), buyer)))
+                .filter(p -> p.getKitchen() == null || (KitchenVisibility.isPubliclyVisible(p.getKitchen()) && KitchenVisibility.isServiceAreaVisible(p.getKitchen(), buyer)))
                 .map(this::toProductDto).collect(Collectors.toList());
 
         List<ProductDto> newProducts = availableToday;
@@ -56,7 +57,7 @@ public class MarketplaceService {
     public List<KitchenDto> getAllActiveKitchens(User buyer) {
         return kitchenRepository.findAll().stream()
                 .filter(KitchenVisibility::isPubliclyVisible)
-                .filter(k -> isServiceAreaVisible(k, buyer))
+                .filter(k -> KitchenVisibility.isServiceAreaVisible(k, buyer))
                 .map(this::toKitchenDto)
                 .collect(Collectors.toList());
     }
@@ -64,25 +65,9 @@ public class MarketplaceService {
     public List<ProductDto> getAllAvailableItems(User buyer) {
         return productRepository.findByAvailableTodayTrueOrderByCreatedAtDesc().stream()
                 .filter(p -> !p.isOrdersPaused())
-                .filter(p -> p.getKitchen() != null && KitchenVisibility.isPubliclyVisible(p.getKitchen()) && isServiceAreaVisible(p.getKitchen(), buyer))
+                .filter(p -> p.getKitchen() != null && KitchenVisibility.isPubliclyVisible(p.getKitchen()) && KitchenVisibility.isServiceAreaVisible(p.getKitchen(), buyer))
                 .map(this::toProductDto)
                 .collect(Collectors.toList());
-    }
-
-    private static boolean isServiceAreaVisible(Kitchen kitchen, User buyer) {
-        String areas = kitchen.getServiceAreas();
-        if (areas == null || areas.isBlank()) {
-            String society = kitchen.getSociety();
-            if (society == null || society.isBlank()) return true;
-            if (buyer == null || buyer.getSociety() == null) return true;
-            return society.equalsIgnoreCase(buyer.getSociety());
-        }
-        if (buyer == null || buyer.getSociety() == null) return true;
-        String[] parts = areas.split(",");
-        for (String part : parts) {
-            if (part.trim().equalsIgnoreCase(buyer.getSociety())) return true;
-        }
-        return false;
     }
 
     private KitchenDto toKitchenDto(Kitchen kitchen) {

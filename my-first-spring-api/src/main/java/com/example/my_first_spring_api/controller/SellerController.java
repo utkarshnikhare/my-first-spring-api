@@ -50,6 +50,13 @@ public class SellerController {
         return ResponseEntity.ok(sellerService.getMyKitchen(seller));
     }
 
+    /** Existing societies selectable as service areas ("Who can order from me?"). */
+    @GetMapping("/societies")
+    public ResponseEntity<List<String>> getKnownSocieties(HttpSession session) {
+        requireSeller(session);
+        return ResponseEntity.ok(sellerService.getKnownSocieties());
+    }
+
     @PostMapping("/kitchen")
     public ResponseEntity<KitchenDto> createKitchen(@Valid @RequestBody KitchenCreateDto dto, HttpSession session) {
         User seller = requireSeller(session);

@@ -55,6 +55,12 @@ public class AdminController {
         return ResponseEntity.ok(adminService.updateKitchenServiceAreas(kitchenId, serviceAreas));
     }
 
+    /** Existing societies assignable as service areas — same source sellers use. */
+    @GetMapping("/societies")
+    public ResponseEntity<List<String>> societies() {
+        return ResponseEntity.ok(adminService.societies());
+    }
+
     @GetMapping("/offerings")
     public ResponseEntity<List<Map<String, Object>>> offerings() {
         return ResponseEntity.ok(adminService.offerings());

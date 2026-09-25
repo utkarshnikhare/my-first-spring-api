@@ -48,7 +48,7 @@ public class KitchenService {
         if (KitchenVisibility.isPaused(kitchen)) {
             return closedDetail(kitchen);
         }
-        if (!KitchenVisibility.isPubliclyVisible(kitchen) || !isServiceAreaVisible(kitchen, buyer)) {
+        if (!KitchenVisibility.isPubliclyVisible(kitchen) || !KitchenVisibility.isServiceAreaVisible(kitchen, buyer)) {
             throw new KitchenNotFoundException(name);
         }
         analyticsService.record(AnalyticsService.EV_MENU_VIEW, null, null,
@@ -83,7 +83,7 @@ public class KitchenService {
         if (KitchenVisibility.isPaused(kitchen)) {
             return closedDetail(kitchen);
         }
-        if (!KitchenVisibility.isPubliclyVisible(kitchen) || !isServiceAreaVisible(kitchen, buyer)) {
+        if (!KitchenVisibility.isPubliclyVisible(kitchen) || !KitchenVisibility.isServiceAreaVisible(kitchen, buyer)) {
             throw new KitchenNotFoundException(id);
         }
         KitchenDto kitchenDto = toKitchenDto(kitchen);
@@ -104,7 +104,7 @@ public class KitchenService {
     public ProductDto getProductById(Long id, User buyer) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new com.example.my_first_spring_api.exception.ProductNotFoundException(id));
-        if (product.getKitchen() != null && (!KitchenVisibility.isPubliclyVisible(product.getKitchen()) || !isServiceAreaVisible(product.getKitchen(), buyer))) {
+        if (product.getKitchen() != null && (!KitchenVisibility.isPubliclyVisible(product.getKitchen()) || !KitchenVisibility.isServiceAreaVisible(product.getKitchen(), buyer))) {
             throw new com.example.my_first_spring_api.exception.ProductNotFoundException(id);
         }
         return toProductDto(product);
@@ -113,7 +113,7 @@ public class KitchenService {
     public List<ProductDto> getProductsByKitchenName(String kitchenName, User buyer) {
         Kitchen kitchen = kitchenRepository.findByName(kitchenName)
                 .orElseThrow(() -> new KitchenNotFoundException(kitchenName));
-        if (!KitchenVisibility.isPubliclyVisible(kitchen) || !isServiceAreaVisible(kitchen, buyer)) {
+        if (!KitchenVisibility.isPubliclyVisible(kitchen) || !KitchenVisibility.isServiceAreaVisible(kitchen, buyer)) {
             throw new KitchenNotFoundException(kitchenName);
         }
         return productRepository.findByKitchenAndAvailableTodayTrueOrderByCreatedAtDesc(kitchen).stream()
@@ -126,42 +126,25 @@ public class KitchenService {
                 .filter(p -> !p.isOrdersPaused())
                 .filter(p -> p.getKitchenId() == null
                         || kitchenRepository.findById(p.getKitchenId())
-                            .map(k -> KitchenVisibility.isPubliclyVisible(k) && isServiceAreaVisible(k, buyer))
+                            .map(k -> KitchenVisibility.isPubliclyVisible(k) && KitchenVisibility.isServiceAreaVisible(k, buyer))
                             .orElse(false))
                 .collect(Collectors.toList());
 
         Map<Long, KitchenDto> kitchens = new LinkedHashMap<>();
         kitchenRepository.findAll().stream()
                 .filter(KitchenVisibility::isPubliclyVisible)
-                .filter(k -> isServiceAreaVisible(k, buyer))
+                .filter(k -> KitchenVisibility.isServiceAreaVisible(k, buyer))
                 .filter(k -> k.getDisplayName().toLowerCase().contains(query.toLowerCase())
                         || k.getName().toLowerCase().contains(query.toLowerCase()))
                 .forEach(k -> kitchens.put(k.getId(), toKitchenDto(k)));
         for (ProductDto product : products) {
             if (product.getKitchenId() != null && !kitchens.containsKey(product.getKitchenId())) {
                 kitchenRepository.findById(product.getKitchenId())
-                        .filter(k -> KitchenVisibility.isPubliclyVisible(k) && isServiceAreaVisible(k, buyer))
+                        .filter(k -> KitchenVisibility.isPubliclyVisible(k) && KitchenVisibility.isServiceAreaVisible(k, buyer))
                         .ifPresent(k -> kitchens.put(k.getId(), toKitchenDto(k)));
             }
         }
         return new SearchResultDto(products, new ArrayList<>(kitchens.values()));
-    }
-
-    private static boolean isServiceAreaVisible(Kitchen kitchen, User buyer) {
-        if (kitchen == null) return true;
-        String areas = kitchen.getServiceAreas();
-        if (areas == null || areas.isBlank()) {
-            String society = kitchen.getSociety();
-            if (society == null || society.isBlank()) return true;
-            if (buyer == null || buyer.getSociety() == null) return true;
-            return society.equalsIgnoreCase(buyer.getSociety());
-        }
-        if (buyer == null || buyer.getSociety() == null) return true;
-        String[] parts = areas.split(",");
-        for (String part : parts) {
-            if (part.trim().equalsIgnoreCase(buyer.getSociety())) return true;
-        }
-        return false;
     }
 
     private KitchenDto toKitchenDto(Kitchen kitchen) {

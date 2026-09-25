@@ -35,18 +35,21 @@ public class SellerService {
     private final OrderItemRepository orderItemRepository;
     private final OrderService orderService;
     private final FeatureService featureService;
+    private final SocietyDirectory societyDirectory;
 
     @Autowired
     public SellerService(KitchenRepository kitchenRepository,
                          ProductRepository productRepository,
                          OrderItemRepository orderItemRepository,
                          OrderService orderService,
-                         FeatureService featureService) {
+                         FeatureService featureService,
+                         SocietyDirectory societyDirectory) {
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
         this.orderItemRepository = orderItemRepository;
         this.orderService = orderService;
         this.featureService = featureService;
+        this.societyDirectory = societyDirectory;
     }
 
     public KitchenDto createKitchen(KitchenCreateDto dto, User seller) {
@@ -57,7 +60,7 @@ public class SellerService {
         Kitchen kitchen = new Kitchen(slug, dto.getDisplayName(), dto.getDescription(), dto.getImageUrl(), seller);
         kitchen.setShortDescription(dto.getShortDescription());
         kitchen.setSociety(dto.getSociety());
-        kitchen.setServiceAreas(dto.getServiceAreas());
+        kitchen.setServiceAreas(societyDirectory.validateAndNormalize(dto.getServiceAreas()));
         kitchen.setBuilding(dto.getBuilding());
         kitchen.setWhatsappLink(dto.getWhatsappLink());
         kitchen.setInstagramLink(dto.getInstagramLink());
@@ -79,7 +82,9 @@ public class SellerService {
         if (dto.getDescription() != null) kitchen.setDescription(dto.getDescription());
         if (dto.getShortDescription() != null) kitchen.setShortDescription(dto.getShortDescription());
         if (dto.getImageUrl() != null) kitchen.setImageUrl(dto.getImageUrl());
-        if (dto.getServiceAreas() != null) kitchen.setServiceAreas(dto.getServiceAreas());
+        if (dto.getServiceAreas() != null) {
+            kitchen.setServiceAreas(societyDirectory.validateAndNormalize(dto.getServiceAreas()));
+        }
         if (dto.getWhatsappLink() != null) kitchen.setWhatsappLink(dto.getWhatsappLink());
         if (dto.getInstagramLink() != null) kitchen.setInstagramLink(dto.getInstagramLink());
         if (dto.getUpiId() != null) kitchen.setUpiId(dto.getUpiId());
@@ -113,6 +118,16 @@ public class SellerService {
     public KitchenDto getMyKitchen(User seller) {
         List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
         return kitchens.isEmpty() ? null : toKitchenDto(kitchens.get(0));
+    }
+
+    /**
+     * Existing societies the seller can select for "Who can order from me?"
+     * in Manage Kitchen. Derived from existing platform data — V1 references
+     * society IDs only (no GPS/maps/radius).
+     */
+    @Transactional(readOnly = true)
+    public List<String> getKnownSocieties() {
+        return societyDirectory.findAllSocieties();
     }
 
     public ProductDto createProduct(Long kitchenId, ProductCreateDto dto, User seller) {

@@ -28,12 +28,13 @@ public class AdminService {
     private final EnquiryRepository enquiryRepository;
     private final FavouriteRepository favouriteRepository;
     private final AnalyticsService analyticsService;
+    private final SocietyDirectory societyDirectory;
 
     @Autowired
     public AdminService(UserRepository userRepository, AnalyticsService analyticsService,
                         OrderRepository orderRepository, ProductRepository productRepository,
                         KitchenRepository kitchenRepository, EnquiryRepository enquiryRepository,
-                        FavouriteRepository favouriteRepository) {
+                        FavouriteRepository favouriteRepository, SocietyDirectory societyDirectory) {
         this.userRepository = userRepository;
         this.analyticsService = analyticsService;
         this.orderRepository = orderRepository;
@@ -41,6 +42,7 @@ public class AdminService {
         this.kitchenRepository = kitchenRepository;
         this.enquiryRepository = enquiryRepository;
         this.favouriteRepository = favouriteRepository;
+        this.societyDirectory = societyDirectory;
     }
 
     // ==================== Dashboard ====================
@@ -269,7 +271,7 @@ public class AdminService {
     public Map<String, Object> updateKitchenServiceAreas(Long kitchenId, String serviceAreas) {
         Kitchen kitchen = kitchenRepository.findById(kitchenId)
                 .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
-        kitchen.setServiceAreas(serviceAreas);
+        kitchen.setServiceAreas(societyDirectory.validateAndNormalize(serviceAreas));
         kitchenRepository.save(kitchen);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", kitchen.getId());
@@ -278,6 +280,15 @@ public class AdminService {
         out.put("serviceAreas", kitchen.getServiceAreas());
         out.put("society", kitchen.getSociety());
         return out;
+    }
+
+    /**
+     * Existing societies admins can assign as a kitchen's service areas.
+     * Same source as the seller's Manage Kitchen list — no second list.
+     */
+    @Transactional(readOnly = true)
+    public List<String> societies() {
+        return societyDirectory.findAllSocieties();
     }
 
     // ==================== Offerings ====================

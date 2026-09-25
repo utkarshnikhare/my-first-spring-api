@@ -301,6 +301,9 @@ async function sellerOrdersView() {
 async function sellerKitchenView() {
     var kitchen = null;
     try { kitchen = await api('/api/seller/kitchen'); S.myKitchen = kitchen; S.kitchen = kitchen; } catch (e) { }
+    var societies = [];
+    try { societies = await api('/api/seller/societies') || []; } catch (e) { }
+    var societyOptions = societies.map(function (s) { return '<option value="' + esc(s) + '">' + esc(s) + '</option>'; }).join('');
     var paused = !!(kitchen && kitchen.paused);
     var h = '<div class="view-enter"><div class="page-head"><h1>Manage Kitchen</h1></div>';
     h += '<div class="kitchen-status-badge' + (paused ? ' paused' : '') + '">' + (paused ? 'Kitchen PAUSED' : 'Kitchen Published') + '</div>';
@@ -311,9 +314,10 @@ async function sellerKitchenView() {
     h += '<form class="seller-form" id="kitchenForm">';
     h += '<div class="kitchen-avatar-upload"><div class="kitchen-avatar" data-action="upload-avatar" role="button" tabindex="0" aria-label="Upload kitchen photo">' + (kitchen && kitchen.imageUrl ? '<img src="' + esc(kitchen.imageUrl) + '" class="avatar-img" alt="Kitchen photo" onerror="imgFallback(this)">' : '📷') + '</div></div>';
     h += '<div class="form-group"><label class="form-label">Kitchen Name</label><input class="form-input" name="displayName" value="' + esc(kitchen && kitchen.displayName ? kitchen.displayName : 'Aarti Kitchen') + '"></div>';
-    h += '<div class="form-group"><label class="form-label">Service Areas (societies you deliver to)</label>';
+    h += '<div class="form-group"><label class="form-label">Who can order from me? (Service Areas)</label>';
+    h += '<div class="muted small" style="margin-bottom:6px">Select the societies you deliver to. Buyers outside these societies cannot discover or order from your kitchen.</div>';
     h += '<div id="serviceAreaList"></div>';
-    h += '<div class="form-row-2" style="margin-top:8px"><input class="form-input" id="newServiceArea" placeholder="Add society (e.g. Lohegaon)"><button class="btn btn-secondary btn-sm" type="button" data-action="add-service-area">Add</button></div>';
+    h += '<div class="form-row-2" style="margin-top:8px"><select class="form-input" id="newServiceArea"><option value="">Select society</option>' + societyOptions + '</select><button class="btn btn-secondary btn-sm" type="button" data-action="add-service-area">Add</button></div>';
     h += '<input type="hidden" name="serviceAreas" id="serviceAreasInput" value="' + esc(kitchen && kitchen.serviceAreas ? kitchen.serviceAreas : '') + '">';
     h += '</div>';
     h += '<div class="form-group"><label class="form-label">Speciality</label><input class="form-input" name="shortDescription" value="' + esc(kitchen && kitchen.shortDescription ? kitchen.shortDescription : 'Homemade Maharashtrian Food') + '"></div>';

@@ -445,6 +445,12 @@ public class OrderService {
         order.setPaymentStatus(PaymentStatus.PAID);
         orderRepository.save(order);
         if (order.getBuyer() != null) notificationService.sendPaymentReceivedNotification(order.getBuyer(), order.getOrderNumber());
+        // Requirement 19: the owning seller is notified on the real transition only.
+        // The PAID short-circuit above guarantees repeated Mark as Paid never duplicates.
+        if (order.getKitchen() != null && order.getKitchen().getSeller() != null) {
+            notificationService.sendPaymentUpdatedNotification(
+                    order.getKitchen().getSeller(), order.getOrderNumber());
+        }
         return toOrderDto(order);
     }
 
@@ -722,12 +728,15 @@ public class OrderService {
      * Sends sold-out notifications to the seller for any product whose tracked remainingQuantity
      * newly dropped to zero as a result of the given order. Only fires on the transition into
      * sold-out state — not on every order placement — preventing notification spam on refresh.
+     * Each product is notified at most once per order even when the draft lists it more than once.
      */
     private void notifyNewlySoldOut(Order order) {
         if (order.getKitchen() == null || order.getKitchen().getSeller() == null) return;
         if (order.getItems() == null) return;
+        Set<Long> notifiedProductIds = new HashSet<>();
         for (OrderItem item : order.getItems()) {
-            if (item.getProduct() == null) continue;
+            if (item.getProduct() == null || item.getProduct().getId() == null) continue;
+            if (!notifiedProductIds.add(item.getProduct().getId())) continue;
             Product fresh = productRepository.findById(item.getProduct().getId()).orElse(null);
             if (fresh != null && fresh.getRemainingQuantity() != null && fresh.getRemainingQuantity() <= 0) {
                 notificationService.sendSoldOutNotification(order.getKitchen().getSeller(), fresh.getName());
