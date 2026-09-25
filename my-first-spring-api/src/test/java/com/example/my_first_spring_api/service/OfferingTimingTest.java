@@ -108,6 +108,31 @@ class OfferingTimingTest {
     }
 
     @Test
+    void isLaterHhmmOnlyAcceptsARealExtension() {
+        assertThat(OfferingTiming.isLaterHhmm("22:00", "21:00")).isTrue();
+        assertThat(OfferingTiming.isLaterHhmm("21:00", "21:00")).isFalse();
+        assertThat(OfferingTiming.isLaterHhmm("20:00", "21:00")).isFalse();
+        // Late evening must not wrap around into "earlier" than a morning cutoff.
+        assertThat(OfferingTiming.isLaterHhmm("09:00", "22:00")).isFalse();
+        assertThat(OfferingTiming.isLaterHhmm("23:59", "00:01")).isTrue();
+    }
+
+    @Test
+    void isLaterHhmmIsNullSafe() {
+        assertThat(OfferingTiming.isLaterHhmm(null, "21:00")).isFalse();
+        assertThat(OfferingTiming.isLaterHhmm("22:00", null)).isFalse();
+        assertThat(OfferingTiming.isLaterHhmm("22:00", "  ")).isFalse();
+    }
+
+    @Test
+    void isLaterHhmmRejectsMalformedCutoffs() {
+        assertThatThrownBy(() -> OfferingTiming.isLaterHhmm("9:00", "21:00"))
+                .hasMessageContaining("24-hour HH:mm");
+        assertThatThrownBy(() -> OfferingTiming.isLaterHhmm("22:00", "25:00"))
+                .hasMessageContaining("24-hour HH:mm");
+    }
+
+    @Test
     void savedReadyTimeIsRebasedToNewOfferingDate() {
         assertThat(OfferingTiming.rebaseReadyByTime("2026-09-24T13:00",
                 LocalDate.of(2026, 9, 27))).isEqualTo("2026-09-27T13:00");

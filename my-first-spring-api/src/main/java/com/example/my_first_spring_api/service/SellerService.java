@@ -198,7 +198,12 @@ public class SellerService {
         }
         assertFeatureCompliance(seller, effectivePreorder, effectiveDate, product.getName());
 
-        boolean hasOrders = !orderItemRepository.findByProductId(productId).isEmpty();
+        // Backend-authoritative "has orders" test (Requirement 5): derived from
+        // persisted order items only. Draft carts are excluded so that an
+        // abandoned draft never locks a seller out of editing their own offering.
+        boolean hasOrders = !orderItemRepository
+                .findByProductIdAndOrderOrderStatusNot(productId, OrderStatus.DRAFT)
+                .isEmpty();
         String effectiveOpen = dto.getOrderWindowStart() != null
                 ? OfferingTiming.normalizeHhmm(dto.getOrderWindowStart(), "Orders Open")
                 : product.getOrderWindowStart();
@@ -242,9 +247,17 @@ public class SellerService {
                 throw new IllegalArgumentException("Cannot change availability date after orders exist.");
             if (dto.getOrderWindowStart() != null && !java.util.Objects.equals(effectiveOpen, product.getOrderWindowStart()))
                 throw new IllegalArgumentException("Cannot change order window start after orders exist.");
-            if ((dto.getOrderWindowEnd() != null || dto.getCutoffTime() != null)
-                    && !java.util.Objects.equals(effectiveClose, OfferingTiming.resolveOrdersClose(product)))
-                throw new IllegalArgumentException("Cannot change Orders Close after orders exist.");
+            // Orders Close is the one field that stays editable after the first
+            // order, but it may only be EXTENDED (Requirement 5) so that every
+            // already-accepted customer order keeps its original cutoff.
+            if (dto.getOrderWindowEnd() != null || dto.getCutoffTime() != null) {
+                String currentClose = OfferingTiming.resolveOrdersClose(product);
+                if (!java.util.Objects.equals(effectiveClose, currentClose)
+                        && !OfferingTiming.isLaterHhmm(effectiveClose, currentClose)) {
+                    throw new IllegalArgumentException(
+                            "Orders Close can only be extended after orders exist (currently " + currentClose + ").");
+                }
+            }
             if (dto.getReadyByTime() != null && !java.util.Objects.equals(effectiveReady, product.getReadyByTime()))
                 throw new IllegalArgumentException("Cannot change ready-by time after orders exist.");
         }

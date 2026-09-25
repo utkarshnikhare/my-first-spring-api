@@ -141,6 +141,21 @@ final class OfferingTiming {
     }
 
     /**
+     * V1 live-offering rule (Requirement 5): once an offering has orders, the
+     * Orders Close cutoff may only be EXTENDED, never shortened. Extending keeps
+     * every existing customer order intact while still letting the seller accept
+     * more orders. Comparison is time-of-day based (HH:mm) and null-safe.
+     *
+     * @return true when {@code candidate} is strictly later than {@code current}
+     */
+    static boolean isLaterHhmm(String candidate, String current) {
+        String a = normalizeHhmm(candidate, "Orders Close");
+        String b = normalizeHhmm(current, "Orders Close");
+        if (a == null || b == null) return false;
+        return minutes(a) > minutes(b);
+    }
+
+    /**
      * A saved template can contain a ready time saved for its original date.
      * When it is republished for a later date, retain the selected time-of-day
      * but move the delivery date forward so the template remains valid.

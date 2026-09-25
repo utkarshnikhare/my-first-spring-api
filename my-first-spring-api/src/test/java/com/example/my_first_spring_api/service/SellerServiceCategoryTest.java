@@ -111,7 +111,7 @@ class SellerServiceCategoryTest {
         product.setCategory("BREAKFAST");
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
         when(kitchenRepository.findBySeller(seller)).thenReturn(List.of(kitchen));
-        when(orderItemRepository.findByProductId(1L)).thenReturn(List.of());
+        when(orderItemRepository.findByProductIdAndOrderOrderStatusNot(1L, OrderStatus.DRAFT)).thenReturn(List.of());
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ProductUpdateDto dto = new ProductUpdateDto();
