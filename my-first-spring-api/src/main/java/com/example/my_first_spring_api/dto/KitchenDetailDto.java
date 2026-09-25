@@ -6,6 +6,7 @@ public class KitchenDetailDto {
     private KitchenDto kitchen;
     private List<ProductDto> products;
     private List<ProductDto> preorderProducts;
+    private List<QuickPostDto> quickPosts;
 
     public KitchenDetailDto() {}
 
@@ -20,4 +21,6 @@ public class KitchenDetailDto {
     public void setProducts(List<ProductDto> products) { this.products = products; }
     public List<ProductDto> getPreorderProducts() { return preorderProducts; }
     public void setPreorderProducts(List<ProductDto> preorderProducts) { this.preorderProducts = preorderProducts; }
+    public List<QuickPostDto> getQuickPosts() { return quickPosts; }
+    public void setQuickPosts(List<QuickPostDto> quickPosts) { this.quickPosts = quickPosts; }
 }

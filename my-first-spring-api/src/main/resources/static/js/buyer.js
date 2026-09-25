@@ -435,6 +435,7 @@ async function homemadeStoreView(hash) {
         if (!today.length && !preorder.length) {
             h += emptyHtml('📦', 'No products listed', 'This store has not listed any products yet.', '<a class="btn btn-primary" href="#/homemade">Back to Homemade</a>');
         }
+        h += quickPostsHtml(detail.quickPosts);
         h += '</div>';
         h += '<div class="section-gap"><button class="btn btn-secondary btn-block" data-action="open-enquiry" data-kid="' + k.id + '" data-kname="' + esc(k.displayName) + '">📩 Send Enquiry</button></div>';
     } catch (err) {
@@ -511,6 +512,7 @@ async function kitchenPageView(hash) {
         h += '<h3 class="section-gap mb-2">🍽️ Available Today</h3>';
         h += today.length ? today.map(function (p) { return offeringCardHtml(p, k, false); }).join('')
             : emptyHtml('🍽️', 'Nothing available today', 'This kitchen has no offerings for today — check pre-orders below.');
+        h += quickPostsHtml(detail.quickPosts);
 
         // Section 2: Pre-order
         h += '<h3 class="section-gap mb-2">🔮 Pre-order</h3>';
@@ -533,6 +535,16 @@ async function kitchenPageView(hash) {
     }
     h += '</div>';
     return h;
+}
+
+function quickPostsHtml(posts) {
+    if (!posts || !posts.length) return '';
+    var h = '<h3 class="section-gap mb-2">📢 Today\'s Quick Posts</h3><div class="quick-posts">';
+    posts.forEach(function (p) {
+        h += '<div class="card pad card-mb"><div>' + esc(p.message) + '</div>' +
+            (p.imageData ? '<img class="mt-2" style="max-width:100%;border-radius:8px" src="' + esc(p.imageData) + '" alt="Kitchen quick post">' : '') + '</div>';
+    });
+    return h + '</div>';
 }
 
 function offeringCardHtml(p, kitchen, isPreorderSection) {

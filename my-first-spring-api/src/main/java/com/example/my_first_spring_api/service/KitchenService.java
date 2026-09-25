@@ -3,17 +3,21 @@ package com.example.my_first_spring_api.service;
 import com.example.my_first_spring_api.dto.KitchenDetailDto;
 import com.example.my_first_spring_api.dto.KitchenDto;
 import com.example.my_first_spring_api.dto.ProductDto;
+import com.example.my_first_spring_api.dto.QuickPostDto;
 import com.example.my_first_spring_api.dto.SearchResultDto;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Product;
+import com.example.my_first_spring_api.model.QuickPost;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.ProductRepository;
+import com.example.my_first_spring_api.repository.QuickPostRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,13 +30,15 @@ public class KitchenService {
 
     private final KitchenRepository kitchenRepository;
     private final ProductRepository productRepository;
+    private final QuickPostRepository quickPostRepository;
     private final AnalyticsService analyticsService;
 
     @Autowired
     public KitchenService(KitchenRepository kitchenRepository, ProductRepository productRepository,
-                          AnalyticsService analyticsService) {
+                          QuickPostRepository quickPostRepository, AnalyticsService analyticsService) {
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
+        this.quickPostRepository = quickPostRepository;
         this.analyticsService = analyticsService;
     }
 
@@ -57,6 +63,7 @@ public class KitchenService {
                 .filter(p -> !Boolean.TRUE.equals(p.getIsPreorder())).collect(Collectors.toList());
         KitchenDetailDto detailDto = new KitchenDetailDto(kitchenDto, regularProducts);
         detailDto.setPreorderProducts(preorderProducts);
+        detailDto.setQuickPosts(toQuickPostDtos(quickPostRepository.findByKitchenAndPostedDateOrderByCreatedAtDesc(kitchen, LocalDate.now())));
         return detailDto;
     }
 
@@ -90,6 +97,7 @@ public class KitchenService {
                 .collect(Collectors.toList());
         KitchenDetailDto dto = new KitchenDetailDto(kitchenDto, today);
         dto.setPreorderProducts(preorder);
+        dto.setQuickPosts(toQuickPostDtos(quickPostRepository.findByKitchenAndPostedDateOrderByCreatedAtDesc(kitchen, LocalDate.now())));
         return dto;
     }
 
@@ -171,6 +179,11 @@ public class KitchenService {
         dto.setSellerType(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : null);
         dto.setPaused(KitchenVisibility.isPaused(kitchen));
         return dto;
+    }
+
+    private List<QuickPostDto> toQuickPostDtos(List<QuickPost> posts) {
+        return posts.stream().map(post -> new QuickPostDto(post.getId(), post.getMessage(),
+                post.getImageData(), post.getPostedDate(), post.getCreatedAt())).toList();
     }
 
     private KitchenDetailDto closedDetail(Kitchen kitchen) {

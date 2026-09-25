@@ -124,6 +124,24 @@ public class SellerAppController {
         return ResponseEntity.ok(sellerAppService.createProductFromTemplate(templateId, date, requireSeller(session)));
     }
 
+    @PostMapping("/quick-posts")
+    public ResponseEntity<QuickPostDto> createQuickPost(@RequestBody Map<String, Object> body,
+                                                       HttpSession session) {
+        Map<String, Object> values = body == null ? Map.of() : body;
+        String message = values.get("message") == null ? null : String.valueOf(values.get("message"));
+        String imageData = values.get("imageData") == null ? null : String.valueOf(values.get("imageData"));
+        String requestId = values.get("requestId") == null ? null : String.valueOf(values.get("requestId"));
+        LocalDate postedDate = values.get("postedDate") == null ? null
+                : LocalDate.parse(String.valueOf(values.get("postedDate")));
+        return ResponseEntity.ok(sellerAppService.createQuickPost(
+                requireSeller(session), message, imageData, requestId, postedDate));
+    }
+
+    @GetMapping("/quick-posts")
+    public ResponseEntity<List<QuickPostDto>> getQuickPosts(HttpSession session) {
+        return ResponseEntity.ok(sellerAppService.getQuickPosts(requireSeller(session)));
+    }
+
     @PostMapping("/parse-message")
     public ResponseEntity<QuickPostParseResultDto> parseMessage(@RequestBody(required = false) Map<String, String> body, HttpSession session) {
         requireSeller(session);

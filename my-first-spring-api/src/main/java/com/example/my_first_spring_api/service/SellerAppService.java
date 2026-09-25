@@ -12,6 +12,7 @@ import com.example.my_first_spring_api.model.OrderItem;
 import com.example.my_first_spring_api.model.OrderStatus;
 import com.example.my_first_spring_api.model.PaymentStatus;
 import com.example.my_first_spring_api.model.Product;
+import com.example.my_first_spring_api.model.QuickPost;
 import com.example.my_first_spring_api.model.SellerTemplate;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.repository.AnalyticsEventRepository;
@@ -19,7 +20,9 @@ import com.example.my_first_spring_api.repository.FavouriteRepository;
 import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.OrderRepository;
 import com.example.my_first_spring_api.repository.ProductRepository;
+import com.example.my_first_spring_api.repository.QuickPostRepository;
 import com.example.my_first_spring_api.repository.SellerTemplateRepository;
+import com.example.my_first_spring_api.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +36,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Base64;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -45,6 +49,8 @@ public class SellerAppService {
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
     private final SellerTemplateRepository sellerTemplateRepository;
+    private final QuickPostRepository quickPostRepository;
+    private final UserRepository userRepository;
     private final FavouriteRepository favouriteRepository;
     private final AnalyticsEventRepository analyticsEventRepository;
     private final FeatureService featureService;
@@ -54,6 +60,8 @@ public class SellerAppService {
                             ProductRepository productRepository,
                             OrderRepository orderRepository,
                             SellerTemplateRepository sellerTemplateRepository,
+                            QuickPostRepository quickPostRepository,
+                            UserRepository userRepository,
                             FavouriteRepository favouriteRepository,
                             AnalyticsEventRepository analyticsEventRepository,
                             FeatureService featureService) {
@@ -61,6 +69,8 @@ public class SellerAppService {
         this.productRepository = productRepository;
         this.orderRepository = orderRepository;
         this.sellerTemplateRepository = sellerTemplateRepository;
+        this.quickPostRepository = quickPostRepository;
+        this.userRepository = userRepository;
         this.favouriteRepository = favouriteRepository;
         this.analyticsEventRepository = analyticsEventRepository;
         this.featureService = featureService;
@@ -159,8 +169,13 @@ public class SellerAppService {
                         + "'. Allowed values: " + allowed);
             }
         }
+        // Serialize all additions for this seller before counting. The seller row
+        // lock prevents two concurrent requests from both observing two templates.
+        User lockedSeller = userRepository.findByIdForUpdate(seller.getId())
+                .orElseThrow(() -> new SellerNotAuthorizedException("Seller not found"));
+        template.setSeller(lockedSeller);
         // Cap enforced AFTER input validation so sellers see their real error first.
-        long count = sellerTemplateRepository.countBySeller(seller);
+        long count = sellerTemplateRepository.countBySeller(lockedSeller);
         if (count >= 3) {
             throw new IllegalStateException(
                     "Maximum 3 favourite templates allowed. Remove an existing favourite to save a new one.");
@@ -287,6 +302,74 @@ public class SellerAppService {
         result.setPublishable(
                 result.getName() != null && !result.getName().isBlank() && result.getPrice() != null);
         return result;
+    }
+
+    // ==================== QUICK POST (TODAY ONLY) ====================
+
+    /**
+     * Persists a lightweight WhatsApp announcement. Quick Posts are not Products
+     * and never create structured, future, or orderable offerings.
+     */
+    @Transactional
+    public QuickPostDto createQuickPost(User seller, String message, String imageData,
+                                         String requestId, LocalDate requestedDate) {
+        // Serialize Quick Post creation per seller so concurrent UI retries with
+        // the same request reference observe the first persisted post.
+        User lockedSeller = userRepository.findByIdForUpdate(seller.getId())
+                .orElseThrow(() -> new SellerNotAuthorizedException("Seller not found"));
+        Kitchen kitchen = getOwnedKitchen(lockedSeller);
+        String text = message == null ? "" : message.trim();
+        if (text.isBlank()) throw new IllegalArgumentException("Quick Post message is required.");
+        if (text.length() > 5000) throw new IllegalArgumentException("Quick Post message is too long.");
+        if (imageData != null && !imageData.isBlank()) {
+            String normalized = imageData.trim();
+            if (!normalized.matches("(?i)^data:image/(png|jpe?g|gif|webp);base64,[a-z0-9+/=\\s]+$")) {
+                throw new IllegalArgumentException("Quick Post image must be a valid PNG, JPEG, GIF, or WebP image.");
+            }
+            try {
+                byte[] decoded = Base64.getMimeDecoder().decode(normalized.substring(normalized.indexOf(',') + 1));
+                if (decoded.length > 2 * 1024 * 1024) {
+                    throw new IllegalArgumentException("Quick Post image must be 2 MB or smaller.");
+                }
+            } catch (IllegalArgumentException ex) {
+                if (ex.getMessage() != null && ex.getMessage().startsWith("Quick Post image")) throw ex;
+                throw new IllegalArgumentException("Quick Post image must be valid base64 image data.");
+            }
+            imageData = normalized;
+        } else {
+            imageData = null;
+        }
+        LocalDate today = LocalDate.now();
+        if (requestedDate != null && !today.equals(requestedDate)) {
+            throw new IllegalArgumentException("Quick Post is available for Today only.");
+        }
+        String idempotencyKey = requestId == null || requestId.isBlank()
+                ? java.util.UUID.randomUUID().toString() : requestId.trim();
+        if (idempotencyKey.length() > 80) {
+            throw new IllegalArgumentException("Quick Post request reference is too long.");
+        }
+        var existing = quickPostRepository.findByRequestId(idempotencyKey);
+        if (existing.isPresent()) {
+            QuickPost post = existing.get();
+            if (!post.getKitchen().getId().equals(kitchen.getId())) {
+                throw new IllegalStateException("Quick Post request reference is already in use.");
+            }
+            return toQuickPostDto(post);
+        }
+        QuickPost post = quickPostRepository.save(new QuickPost(kitchen, text, imageData, today, idempotencyKey));
+        return toQuickPostDto(post);
+    }
+
+    @Transactional(readOnly = true)
+    public List<QuickPostDto> getQuickPosts(User seller) {
+        Kitchen kitchen = getOwnedKitchen(seller);
+        return quickPostRepository.findByKitchenAndPostedDateOrderByCreatedAtDesc(kitchen, LocalDate.now())
+                .stream().map(this::toQuickPostDto).toList();
+    }
+
+    private QuickPostDto toQuickPostDto(QuickPost post) {
+        return new QuickPostDto(post.getId(), post.getMessage(), post.getImageData(),
+                post.getPostedDate(), post.getCreatedAt());
     }
 
     // ==================== HISTORY & BATCH REPUBLISH ====================

@@ -1,7 +1,7 @@
 /**
  * SocioMart Seller App v1.0 - 5-tab SPA
  */
-var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFor: 'today' };
+var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFor: 'today', quickPostRequestId: null };
 var sellerRoutes = {
     '#/home': sellerHomeView, '#/add': sellerAddView, '#/create': sellerCreateView,
     '#/quick-post': sellerQuickPostView, '#/history': sellerHistoryView,
@@ -127,13 +127,14 @@ function foodEmoji(name) {
 // SCREEN 2: ADD OFFERING ENTRY POINT
 async function sellerAddView() {
     var h = '<div class="view-enter">';
-    h += '<div class="page-head"><h1>Add Offering</h1><p class="muted small">Choose how you want to add your new offering.</p></div>';
+    h += '<div class="page-head"><h1>Add Offering</h1><p class="muted small">Favourites are manual reusable templates (maximum 3). History is automatic published-offering history.</p></div>';
+    h += '<p class="muted small mb-2"><a class="text-brand" href="#/history">View automatic History →</a></p>';
     try { S.favTemplates = await api('/api/seller-app/templates'); } catch (e) { S.favTemplates = []; }
     h += '<div class="pathway-card" data-action="go-use-favourite"><div class="pc-icon">⭐</div><div class="pc-title">Create from Favourite</div><div class="pc-desc">Quickly post from saved templates (max 3).</div>';
     if (S.favTemplates.length > 0) { h += '<div class="favourite-pills">'; S.favTemplates.forEach(function (t) { h += '<span class="fav-pill" data-action="use-template" data-tid="' + t.id + '">⭐ ' + esc(t.name) + '</span>'; }); h += '</div>'; }
     h += '</div>';
     h += '<div class="pathway-card" data-action="go-create"><div class="pc-icon">✨</div><div class="pc-title">Create New Offering</div><div class="pc-desc">Fill in all details manually.</div></div>';
-    h += '<div class="pathway-card" data-action="go-quick-post"><div class="pc-icon">📋</div><div class="pc-title">Quick Create</div><div class="pc-desc">Paste a WhatsApp message — we auto-fill details.</div></div>';
+    h += '<div class="pathway-card" data-action="go-quick-post"><div class="pc-icon">📋</div><div class="pc-title">Quick Post</div><div class="pc-desc">Paste a WhatsApp message and publish a simple Today announcement.</div></div>';
     h += '</div>';
     return h;
 }
@@ -200,13 +201,23 @@ async function sellerHistoryView() {
     return h;
 }
 
-// SCREEN 4: QUICK POST
+// SCREEN 4: QUICK POST — Today only
 async function sellerQuickPostView() {
     var h = '<div class="view-enter">';
-    h += '<div class="page-head"><h1>Quick Create</h1><p class="muted small">Paste your WhatsApp promotional message.</p></div>';
-    h += '<div class="segmented"><button type="button" class="active" data-action="set-view-mode" data-mode="editor">Editor View</button><button type="button" data-action="set-view-mode" data-mode="buyer">Buyer View</button></div>';
-    h += '<textarea class="qp-textarea" id="qpMessage" placeholder="Paste your WhatsApp message here..."></textarea>';
-    h += '<button class="btn btn-primary btn-block" type="button" data-action="parse-message">Parse Message</button><div id="parseResult"></div></div>';
+    h += '<div class="page-head"><h1>Quick Post</h1><p class="muted small">Paste your WhatsApp message. Quick Posts are always published for Today.</p></div>';
+    h += '<form class="seller-form" id="quickPostForm">';
+    h += '<div class="form-group"><label class="form-label">Paste WhatsApp message <span class="req">*</span></label><textarea class="form-textarea" id="qpMessage" name="message" rows="6" placeholder="Paste your WhatsApp message here..." required></textarea></div>';
+    h += '<div class="form-group"><label class="form-label">Add image <span class="muted small">(optional)</span></label><input class="form-input" id="qpImage" type="file" accept="image/png,image/jpeg,image/gif,image/webp"><p class="muted small">PNG, JPEG, GIF, or WebP up to 2 MB.</p></div>';
+    h += '<button class="btn btn-primary btn-block" type="submit" id="qpSubmit">Post</button>';
+    h += '</form>';
+    try {
+        var posts = await api('/api/seller-app/quick-posts');
+        if (posts && posts.length) {
+            h += '<h3 class="section-gap mb-2">Today\'s Quick Posts</h3>';
+            posts.forEach(function (p) { h += '<div class="card pad card-mb"><div class="font-700">' + esc(p.message) + '</div>' + (p.imageData ? '<img class="mt-2" style="max-width:100%;border-radius:8px" src="' + esc(p.imageData) + '" alt="Quick Post image">' : '') + '</div>'; });
+        }
+    } catch (e) { /* form remains available if list refresh fails */ }
+    h += '</div>';
     return h;
 }
 
@@ -535,6 +546,34 @@ document.addEventListener('submit', async function (e) {
             S.republishSourceId = null;
             S.offeringFor = 'today';
             sellerNavigate('#/home');
+        } else if (form.id === 'quickPostForm') {
+            var message = (form.querySelector('[name="message"]').value || '').trim();
+            if (!message) { toast('Paste a WhatsApp message first', 'error'); return; }
+            var fileInput = form.querySelector('#qpImage');
+            var file = fileInput && fileInput.files && fileInput.files[0];
+            var imageData = null;
+            if (file) {
+                if (file.size > 2 * 1024 * 1024) { toast('Quick Post image must be 2 MB or smaller', 'error'); return; }
+                imageData = await new Promise(function (resolve, reject) {
+                    var reader = new FileReader();
+                    reader.onload = function () { resolve(reader.result); };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+            }
+            var submitButton = form.querySelector('#qpSubmit');
+            if (!S.quickPostRequestId) S.quickPostRequestId = 'ui-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+            if (submitButton) submitButton.disabled = true;
+            try {
+                await api('/api/seller-app/quick-posts', { method: 'POST', body: {
+                    message: message, imageData: imageData, requestId: S.quickPostRequestId
+                }});
+                S.quickPostRequestId = null;
+                toast('Quick Post published for Today', 'success');
+                await sellerRender();
+            } finally {
+                if (submitButton) submitButton.disabled = false;
+            }
         } else if (form.id === 'kitchenForm') {
             var kid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
             if (!kid) {
