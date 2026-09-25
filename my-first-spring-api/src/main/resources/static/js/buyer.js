@@ -550,6 +550,7 @@ function quickPostsHtml(posts) {
 function offeringCardHtml(p, kitchen, isPreorderSection) {
     var soldOut = p.soldOut || (p.remainingQuantity != null && p.remainingQuantity <= 0);
     var paused = !!p.ordersPaused;
+    var ordersClosed = !!p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED';
     var max = p.maxQuantity || ((p.bookedQuantity || 0) + (p.remainingQuantity || 0)) || 50;
     var booked = p.bookedQuantity || 0;
     var pct = max > 0 ? Math.min(100, Math.round(booked / max * 100)) : 0;
@@ -582,6 +583,9 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
             : paused
             ? '<div class="oc-footer"><span class="pill pill-amber">⏸️ Orders paused</span>' +
               '<button class="btn btn-outline btn-sm" disabled>Orders paused</button></div>'
+            : ordersClosed
+            ? '<div class="oc-footer"><span class="pill pill-red">🔒 ORDERS CLOSED</span>' +
+              '<button class="btn btn-outline btn-sm" disabled>Orders closed</button></div>'
             : '<div class="oc-footer"><span class="pill ' + (isPre ? 'pill-blue">🔵 Pre-order' : 'pill-green">🟢 Today') + '</span>' +
               '<button class="btn btn-primary btn-sm" type="button" data-action="open-order-sheet" data-product="' + encodeURIComponent(JSON.stringify(p)) + '" data-kitchen="' + kitchenJson + '">' +
               (isPre ? 'PRE-ORDER' : 'ORDER') + '</button></div>') +
@@ -598,6 +602,11 @@ function openOrderSheet(productJson, kitchenJson) {
     if (p.ordersPaused) {
         closeSheet();
         toast('Orders are paused for this offering', 'error');
+        return;
+    }
+    if (p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED') {
+        closeSheet();
+        toast('ORDERS CLOSED — this offering can no longer be ordered', 'error');
         return;
     }
     sheet = { product: p, kitchen: k, qty: 1, date: null, slot: null };

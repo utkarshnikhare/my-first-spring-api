@@ -113,6 +113,34 @@ class OfferingTimingTest {
                 LocalDate.of(2026, 9, 27))).isEqualTo("2026-09-27T13:00");
     }
 
+    @Test
+    void lifecycleUsesServerTimeAndKeepsCloseStateDistinct() {
+        Product live = product(TODAY, false, null, "12:00", 10);
+        assertThat(OfferingTiming.lifecycleState(live, TODAY, LocalTime.of(11, 59))).isEqualTo("LIVE");
+        assertThat(OfferingTiming.lifecycleState(live, TODAY, LocalTime.of(12, 0))).isEqualTo("LIVE");
+        assertThat(OfferingTiming.lifecycleState(live, TODAY, LocalTime.of(12, 1))).isEqualTo("ORDERS_CLOSED");
+    }
+
+    @Test
+    void pausedAndSoldOutTakePrecedenceOverOrdersClosed() {
+        Product paused = product(TODAY, false, null, "12:00", 10);
+        paused.setOrdersPaused(true);
+        Product soldOut = product(TODAY, false, null, "12:00", 0);
+        assertThat(OfferingTiming.lifecycleState(paused, TODAY, LocalTime.of(13, 0))).isEqualTo("PAUSED");
+        assertThat(OfferingTiming.lifecycleState(soldOut, TODAY, LocalTime.of(13, 0))).isEqualTo("SOLD_OUT");
+    }
+
+    @Test
+    void yesterdayOfferingIsHistoryWhileCurrentAndFutureRemainOutOfHistory() {
+        assertThat(OfferingTiming.lifecycleState(product(TODAY.minusDays(1), false, null, "12:00", 10),
+                TODAY, LocalTime.NOON)).isEqualTo("HISTORY");
+        assertThat(OfferingTiming.lifecycleState(product(TODAY, false, null, "23:58", 10),
+                TODAY, LocalTime.NOON)).isEqualTo("LIVE");
+        assertThat(OfferingTiming.lifecycleState(product(TODAY.plusDays(1), true, null, "23:58", 10),
+                TODAY, LocalTime.NOON)).isEqualTo("PRE_ORDER");
+    }
+
+
     private Product product(LocalDate date, boolean preorder, String open, String close, int remaining) {
         User seller = new User("Seller", "9100000001", "A-1", UserRole.SELLER);
         seller.setId(1L);

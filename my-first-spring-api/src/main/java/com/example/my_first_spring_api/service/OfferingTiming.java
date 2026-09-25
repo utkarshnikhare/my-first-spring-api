@@ -119,6 +119,19 @@ final class OfferingTiming {
         }
     }
 
+    /** Query-time lifecycle state used consistently by Buyer and Seller DTOs. */
+    static String lifecycleState(Product product, LocalDate today, LocalTime now) {
+        if (product.isOrdersPaused()) return "PAUSED";
+        if (product.isSoldOut()) return "SOLD_OUT";
+        LocalDate offeringDate = product.getAvailableDate() != null
+                ? product.getAvailableDate() : today;
+        if (offeringDate.isBefore(today)) return "HISTORY";
+        LocalDate orderingDate = Boolean.TRUE.equals(product.getIsPreorder())
+                ? offeringDate.minusDays(1) : offeringDate;
+        if (!isWindowOpenNow(product, today, now)) return "ORDERS_CLOSED";
+        return Boolean.TRUE.equals(product.getIsPreorder()) ? "PRE_ORDER" : "LIVE";
+    }
+
     static void validateWindowPair(String orderWindowStart, String orderWindowEnd) {
         String open = normalizeHhmm(orderWindowStart, "Orders Open");
         String close = requireOrdersClose(orderWindowEnd);

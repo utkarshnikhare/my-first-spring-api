@@ -12,6 +12,7 @@ public class SellerEarningsDto {
     private BigDecimal pending;
     private BigDecimal thisMonth;
     private List<ItemEarning> items;
+    private boolean hasEarnings;
 
     public static class ItemEarning {
         private Long productId;
@@ -43,5 +44,8 @@ public class SellerEarningsDto {
     public void setThisMonth(BigDecimal thisMonth) { this.thisMonth = thisMonth; }
     public List<ItemEarning> getItems() { return items; }
     public void setItems(List<ItemEarning> items) { this.items = items; }
+    public boolean hasEarnings() { return hasEarnings; }
+    public boolean isHasEarnings() { return hasEarnings; }
+    public void setHasEarnings(boolean hasEarnings) { this.hasEarnings = hasEarnings; }
 }
 

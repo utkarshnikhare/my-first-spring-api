@@ -21,6 +21,7 @@ public class SellerDashboardDto {
     private BigDecimal confirmedToday;
     private BigDecimal pending;
     private BigDecimal thisMonth;
+    private boolean hasEarnings;
 
     // Kitchen info
     private Long kitchenId;
@@ -42,6 +43,9 @@ public class SellerDashboardDto {
     public void setPending(BigDecimal pending) { this.pending = pending; }
     public BigDecimal getThisMonth() { return thisMonth; }
     public void setThisMonth(BigDecimal thisMonth) { this.thisMonth = thisMonth; }
+    public boolean hasEarnings() { return hasEarnings; }
+    public boolean isHasEarnings() { return hasEarnings; }
+    public void setHasEarnings(boolean hasEarnings) { this.hasEarnings = hasEarnings; }
     public Long getKitchenId() { return kitchenId; }
     public void setKitchenId(Long kitchenId) { this.kitchenId = kitchenId; }
     public String getKitchenName() { return kitchenName; }

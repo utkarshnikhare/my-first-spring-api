@@ -428,7 +428,9 @@ public class SellerAppService {
                         LocalDate.now().atStartOfDay()));
 
         List<Product> products = productRepository.findByKitchen(kitchen);
-        dto.setOfferings(products.stream().map(this::toProductDto).collect(Collectors.toList()));
+        dto.setOfferings(products.stream()
+                .filter(p -> p.getAvailableDate() == null || !p.getAvailableDate().isBefore(LocalDate.now()))
+                .map(this::toProductDto).collect(Collectors.toList()));
 
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
         LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
@@ -451,6 +453,10 @@ public class SellerAppService {
         dto.setConfirmedToday(confirmedToday);
         dto.setPending(pendingToday);
         dto.setThisMonth(monthRevenue);
+        boolean hasEarnings = allOrders.stream()
+                .anyMatch(o -> o.getOrderStatus() != OrderStatus.CANCELLED
+                        && o.getPaymentStatus() == PaymentStatus.PAID);
+        dto.setHasEarnings(hasEarnings);
         return dto;
     }
     // ==================== ORDER AGGREGATION (SCREEN 7A) ====================
@@ -705,6 +711,9 @@ public class SellerAppService {
         dto.setPending(pending);
         dto.setThisMonth(thisMonth);
         dto.setItems(new ArrayList<>(itemMap.values()));
+        dto.setHasEarnings(allOrders.stream()
+                .anyMatch(o -> o.getOrderStatus() != OrderStatus.CANCELLED
+                        && o.getPaymentStatus() == PaymentStatus.PAID));
         return dto;
     }
     // ==================== HELPERS ====================
@@ -763,6 +772,9 @@ public class SellerAppService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
+        String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(), java.time.LocalTime.now());
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle));
+        dto.setLifecycleState(lifecycle);
         dto.setCreatedAt(product.getCreatedAt());
         return dto;
     }

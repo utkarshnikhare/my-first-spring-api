@@ -69,7 +69,8 @@ function greeting() { var h = new Date().getHours(); return h < 12 ? 'Good morni
 function offeringStatusBadge(p) {
     if (p.soldOut) return '<span class="oc-badge soldout">SOLD OUT</span>';
     if (p.ordersPaused) return '<span class="oc-badge paused">PAUSED</span>';
-    if (p.isPreorder) return '<span class="oc-badge live">PRE-ORDER • LIVE</span>';
+    if (p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED') return '<span class="oc-badge closed">ORDERS CLOSED</span>';
+    if (p.isPreorder || p.lifecycleState === 'PRE_ORDER') return '<span class="oc-badge live">PRE-ORDER • LIVE</span>';
     return '<span class="oc-badge live">LIVE</span>';
 }
 /** "Orders close" value for a dashboard offering card: pretty time, plus the
@@ -146,13 +147,22 @@ async function sellerHomeView() {
     try {
         var dash = await api('/api/seller-app/dashboard');
         S.kitchen = { id: dash.kitchenId, name: dash.kitchenName };
-        h += '<div class="metric-cards-row">';
-        h += '<div class="metric-card"><div class="metric-value">' + dash.viewsToday + '</div><div class="metric-label">Views Today</div></div>';
-        h += '<div class="metric-card"><div class="metric-value">' + dash.followers + '</div><div class="metric-label">Followers</div></div>';
-        h += '<div class="metric-card"><div class="metric-value">' + dash.totalOrders + '</div><div class="metric-label">Total Orders</div></div></div>';
+        var hasActivity = (!dash.totalOrders || dash.totalOrders === 0)
+            && (!dash.hasEarnings || dash.hasEarnings === false)
+            && (!dash.pending || dash.pending === 0)
+            && (!dash.followers || dash.followers === 0)
+            && (!dash.viewsToday || dash.viewsToday === 0);
+        if (!hasActivity) {
+            h += '<div class="metric-cards-row">' +
+                '<div class="metric-card"><div class="metric-value">' + dash.viewsToday + '</div><div class="metric-label">Views Today</div></div>' +
+                '<div class="metric-card"><div class="metric-value">' + dash.followers + '</div><div class="metric-label">Followers</div></div>' +
+                '<div class="metric-card"><div class="metric-value">' + dash.totalOrders + '</div><div class="metric-label">Total Orders</div></div></div>';
+        }
         h += '<div class="section-head"><h2>My Offerings</h2></div>';
-        if (!dash.offerings || dash.offerings.length === 0) { h += emptyHtml('🍽️', 'No offerings yet', 'Tap "+ Add Offering" to publish your first dish.'); }
-        else {
+        if (!dash.offerings || dash.offerings.length === 0) {
+            h += emptyHtml('🍽️', 'No Offerings', 'Nothing on sale right now. Create your first offering and start taking orders.',
+                '<a class="btn btn-primary card-mt" href="#/create">+ Create Offering</a>');
+        } else {
             dash.offerings.forEach(function (p) {
                 h += '<div class="offering-card">';
                 h += '<div class="oc-photo" data-emoji="' + foodEmoji(p.name) + '">' + (p.imageUrl ? '<img src="' + esc(p.imageUrl) + '" alt="' + esc(p.name) + '" onerror="imgFallback(this)">' : foodEmoji(p.name)) + '</div>';
@@ -170,10 +180,16 @@ async function sellerHomeView() {
             });
         }
         h += '<button class="btn-add-offering" type="button" data-action="go-add">+ Add Offering</button>';
-        h += '<div class="earnings-preview"><h3>Earnings Summary</h3>';
-        h += '<div class="ep-row"><span class="ep-label">Confirmed Today</span><span class="ep-value green">' + money(dash.confirmedToday) + '</span></div>';
-        h += '<div class="ep-row"><span class="ep-label">Pending</span><span class="ep-value orange">' + money(dash.pending) + '</span></div>';
-        h += '<div class="ep-row"><span class="ep-label">This Month</span><span class="ep-value">' + money(dash.thisMonth) + '</span></div></div>';
+        var hasPending = dash.pending != null && Number(dash.pending) !== 0;
+        if (dash.hasEarnings) {
+            h += '<div class="earnings-preview"><h3>Earnings Summary</h3>';
+            h += '<div class="ep-row"><span class="ep-label">Confirmed Today</span><span class="ep-value green">' + money(dash.confirmedToday) + '</span></div>';
+            if (hasPending) h += '<div class="ep-row"><span class="ep-label">Pending</span><span class="ep-value orange">' + money(dash.pending) + '</span></div>';
+            h += '<div class="ep-row"><span class="ep-label">This Month</span><span class="ep-value">' + money(dash.thisMonth) + '</span></div></div>';
+        } else {
+            h += emptyHtml('💰', 'No Earnings', 'No earnings to show yet');
+            if (hasPending) h += '<div class="earnings-preview"><h3>Pending Payments</h3><div class="ep-row"><span class="ep-label">Pending</span><span class="ep-value orange">' + money(dash.pending) + '</span></div></div>';
+        }
     } catch (e) { h += emptyHtml('⚠️', 'Could not load dashboard', e.message); }
     h += '</div>';
     return h;
@@ -257,12 +273,18 @@ async function sellerOrdersView() {
     h += '<div class="date-tabs"><button class="date-tab' + (S.selectedDate === 'today' ? ' active' : '') + '" data-action="set-date" data-date="today">Today</button><button class="date-tab' + (S.selectedDate === 'tomorrow' ? ' active' : '') + '" data-action="set-date" data-date="tomorrow">Tomorrow</button><button class="date-tab' + (S.selectedDate !== 'today' && S.selectedDate !== 'tomorrow' ? ' active' : '') + '" data-action="set-date" data-date="pick">Pick date</button></div>';
     try {
         var summary = await api('/api/seller-app/orders/summary?date=' + sellerDate(S.selectedDate));
-        h += '<div class="daily-total-card"><div class="dtc-number">' + summary.totalOrderCount + '</div><div class="dtc-label">Total Orders</div>';
-        h += '<div class="dtc-badges"><span class="dtc-badge green">✓ ' + summary.paidCount + ' Paid</span><span class="dtc-badge orange">⏳ ' + summary.pendingCount + ' Pending</span><span class="dtc-badge red">✕ ' + summary.cancelledCount + ' Cancelled</span></div>';
-        if (summary.totalRevenue) { h += '<div class="tiny muted mt-2">Revenue: <strong class="text-brand">' + money(summary.totalRevenue) + '</strong></div>'; }
-        h += '</div>';
-        if (!summary.products || summary.products.length === 0) { h += emptyHtml('📋', 'No orders', 'Orders for this date will appear here.'); }
-        else {
+        var hasOrders = summary.totalOrderCount > 0;
+        if (hasOrders) {
+            h += '<div class="daily-total-card"><div class="dtc-number">' + summary.totalOrderCount + '</div><div class="dtc-label">Total Orders</div>';
+            h += '<div class="dtc-badges"><span class="dtc-badge green">✓ ' + summary.paidCount + ' Paid</span><span class="dtc-badge orange">⏳ ' + summary.pendingCount + ' Pending</span><span class="dtc-badge red">✕ ' + summary.cancelledCount + ' Cancelled</span></div>';
+            if (summary.totalRevenue) h += '<div class="tiny muted mt-2">Revenue: <strong class="text-brand">' + money(summary.totalRevenue) + '</strong></div>';
+            h += '</div>';
+        } else {
+            h += emptyHtml('📋', 'No Orders', 'No orders yet. New orders will appear here.');
+        }
+        if (!summary.products || summary.products.length === 0) {
+            if (hasOrders) h += emptyHtml('📋', 'No order items', 'No order items exist for this date.');
+        } else {
             summary.products.forEach(function (p) {
                 h += '<div class="order-product-card"><div class="opc-header"><span class="opc-name">' + esc(p.productName) + '</span><span class="opc-revenue">' + money(p.revenue) + '</span></div>';
                 h += '<div class="opc-meta">' + p.totalOrders + ' orders · ' + p.totalPlates + ' plates</div>';
@@ -310,10 +332,16 @@ async function sellerEarningsView() {
     var h = '<div class="view-enter"><div class="page-head"><h1>Earnings</h1></div>';
     try {
         var e = await api('/api/seller-app/earnings');
-        h += '<div class="earnings-header-card"><div class="ehc-label">CONFIRMED TODAY</div><div class="ehc-main">' + money(e.confirmedToday) + '</div>';
-        h += '<div class="ehc-row"><div class="ehc-item"><div class="ehc-val orange">' + money(e.pending) + '</div><div class="ehc-sub">PENDING</div></div><div class="ehc-item"><div class="ehc-val">' + money(e.thisMonth) + '</div><div class="ehc-sub">THIS MONTH</div></div></div></div>';
-        if (!e.items || e.items.length === 0) { h += emptyHtml('💰', 'No earnings yet', 'Your earnings breakdown appears here.'); }
-        else { e.items.forEach(function (item) { h += '<div class="earning-item"><span class="ei-icon">🍽️</span><span class="ei-body"><span class="ei-name">' + esc(item.productName) + '</span><span class="ei-orders">' + item.totalOrders + ' orders</span></span><span class="ei-revenue"><span class="ei-confirmed">' + money(item.confirmedRevenue) + '</span><br><span class="ei-pending">' + money(item.pendingRevenue) + '</span></span></div>'; }); }
+        if (!e.hasEarnings) {
+            h += emptyHtml('💰', 'No Earnings', 'No earnings to show yet');
+            if (e.pending != null && Number(e.pending) !== 0) {
+                h += '<div class="earnings-header-card"><div class="ehc-label">PENDING PAYMENTS</div><div class="ehc-main">' + money(e.pending) + '</div></div>';
+            }
+        } else {
+            h += '<div class="earnings-header-card"><div class="ehc-label">CONFIRMED TODAY</div><div class="ehc-main">' + money(e.confirmedToday) + '</div>';
+            h += '<div class="ehc-row"><div class="ehc-item"><div class="ehc-val orange">' + money(e.pending) + '</div><div class="ehc-sub">PENDING</div></div><div class="ehc-item"><div class="ehc-val">' + money(e.thisMonth) + '</div><div class="ehc-sub">THIS MONTH</div></div></div></div>';
+            if (e.items && e.items.length) e.items.forEach(function (item) { h += '<div class="earning-item"><span class="ei-icon">🍽️</span><span class="ei-body"><span class="ei-name">' + esc(item.productName) + '</span><span class="ei-orders">' + item.totalOrders + ' orders</span></span><span class="ei-revenue"><span class="ei-confirmed">' + money(item.confirmedRevenue) + '</span><br><span class="ei-pending">' + money(item.pendingRevenue) + '</span></span></div>'; });
+        }
         h += '<a class="btn btn-secondary btn-block" href="#/history">VIEW FULL HISTORY</a>';
     } catch (err) { h += emptyHtml('⚠️', 'Could not load earnings', err.message); }
     h += '</div>';

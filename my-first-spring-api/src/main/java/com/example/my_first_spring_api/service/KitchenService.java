@@ -215,6 +215,9 @@ public class KitchenService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
+        String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(), java.time.LocalTime.now());
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle));
+        dto.setLifecycleState(lifecycle);
         return dto;
     }
 }
