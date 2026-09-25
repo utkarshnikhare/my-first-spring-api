@@ -1,6 +1,7 @@
 package com.example.my_first_spring_api.service;
 
 import com.example.my_first_spring_api.dto.ProductUpdateDto;
+import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Order;
 import com.example.my_first_spring_api.model.OrderItem;
@@ -219,6 +220,79 @@ class Requirement5LiveOfferingEditTest {
         assertThatThrownBy(() -> sellerService.updateProduct(product.getId(), dto, seller))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Cannot change price after orders exist.");
+    }
+
+    // ==================== the edit read model that feeds the Seller UI ====================
+
+    @Test
+    void editReadModelMarksDraftCartsAsUnlocked() {
+        Product product = productWithOrder(OrderStatus.DRAFT);
+
+        var edit = sellerService.getOfferingForEdit(product.getId(), seller);
+
+        assertThat(edit.getId()).isEqualTo(product.getId());
+        assertThat(edit.getHasOrders()).isFalse();
+        assertThat(edit.getOrderCount()).isZero();
+        assertThat(edit.getName()).isEqualTo("Poha");
+        assertThat(edit.getAvailableDate()).isEqualTo(product.getAvailableDate());
+        assertThat(edit.getOrderWindowEnd()).isEqualTo(CLOSE);
+        assertThat(edit.getRemainingQuantity()).isEqualTo(8);
+        assertThat(edit.getBookedQuantity()).isZero();
+    }
+
+    @Test
+    void editReadModelReportsLiveOrdersAndTheLockedValues() {
+        Product product = productWithOrder(OrderStatus.CONFIRMED);
+
+        var edit = sellerService.getOfferingForEdit(product.getId(), seller);
+
+        assertThat(edit.getHasOrders()).isTrue();
+        assertThat(edit.getOrderCount()).isEqualTo(1);
+        assertThat(edit.getName()).isEqualTo("Poha");
+        assertThat(edit.getDescription()).isEqualTo("Hot poha");
+        assertThat(edit.getPrice()).isEqualByComparingTo(BigDecimal.valueOf(40));
+        assertThat(edit.getPriceUnit()).isEqualTo("plate");
+        assertThat(edit.getAvailableDate()).isEqualTo(product.getAvailableDate());
+        assertThat(edit.getOrderWindowStart()).isNull();
+        assertThat(edit.getOrderWindowEnd()).isEqualTo(CLOSE);
+        assertThat(edit.getReadyByTime()).isEqualTo(product.getAvailableDate() + "T23:59");
+        assertThat(edit.getMaxQuantity()).isEqualTo(10);
+        assertThat(edit.getRemainingQuantity()).isEqualTo(8);
+        assertThat(edit.getIsPreorder()).isTrue();
+        assertThat(edit.getLifecycleState()).isEqualTo("PRE_ORDER");
+        assertThat(edit.getOrdersPaused()).isFalse();
+        assertThat(edit.getSoldOut()).isFalse();
+    }
+
+    @Test
+    void editReadModelFallsBackToTheLegacyCutoffColumn() {
+        Product legacy = new Product(kitchen, "Legacy", "Old row", BigDecimal.valueOf(30), null);
+        legacy.setPriceUnit("plate");
+        legacy.setAvailableDate(LocalDate.now());
+        legacy.setAvailableToday(true);
+        legacy.setIsPreorder(false);
+        legacy.setCutoffTime("23:00");
+        legacy.setReadyByTime(LocalDate.now() + "T23:00");
+        legacy.setMaxQuantity(5);
+        legacy.setRemainingQuantity(5);
+        legacy = products.saveAndFlush(legacy);
+
+        var edit = sellerService.getOfferingForEdit(legacy.getId(), seller);
+
+        assertThat(edit.getHasOrders()).isFalse();
+        assertThat(edit.getOrderWindowEnd()).isEqualTo("23:00");
+    }
+
+    @Test
+    void editReadModelIsOwnerScoped() {
+        Product product = productWithOrder(OrderStatus.CONFIRMED);
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        User intruder = new User("Intruder" + suffix, "92" + suffix + "01", "X-1", UserRole.SELLER);
+        intruder.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
+        User other = users.saveAndFlush(intruder);
+
+        assertThatThrownBy(() -> sellerService.getOfferingForEdit(product.getId(), other))
+                .isInstanceOf(SellerNotAuthorizedException.class);
     }
 
     // ==================== fixtures ====================

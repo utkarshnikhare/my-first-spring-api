@@ -897,6 +897,14 @@
     color: var(--text);
     transition: border-color .15s ease, box-shadow .15s ease;
 }
+/* Requirement 5: values frozen once an offering already has orders */
+.seller-form .form-input:disabled,
+.seller-form .form-textarea:disabled,
+.seller-form .form-select:disabled,
+.seller-form .radio-option[aria-disabled="true"] {
+    opacity: .6;
+    cursor: not-allowed;
+}
 .seller-form .form-input:focus,
 .seller-form .form-textarea:focus,
 .seller-form .form-select:focus {

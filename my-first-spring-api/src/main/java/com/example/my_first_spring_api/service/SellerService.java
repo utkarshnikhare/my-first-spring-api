@@ -8,10 +8,12 @@ import com.example.my_first_spring_api.dto.SellerOrderSummaryRowDto;
 import com.example.my_first_spring_api.dto.ProductCreateDto;
 import com.example.my_first_spring_api.dto.ProductDto;
 import com.example.my_first_spring_api.dto.ProductUpdateDto;
+import com.example.my_first_spring_api.dto.SellerOfferingEditDto;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.model.Kitchen;
+import com.example.my_first_spring_api.model.OrderItem;
 import com.example.my_first_spring_api.model.OrderStatus;
 import com.example.my_first_spring_api.model.Product;
 import com.example.my_first_spring_api.model.User;
@@ -23,7 +25,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -283,6 +287,50 @@ public class SellerService {
         if (dto.getIsPreorder() != null) product.setIsPreorder(effectivePreorder);
         if (dto.getCategories() != null) product.setCategory(joinCategories(dto.getCategories()));
         return toProductDto(productRepository.save(product));
+    }
+
+    /**
+     * Requirement 5 — authoritative read model for the Seller "Edit Offering"
+     * screen. Ownership is enforced exactly like updateProduct(), and the
+     * "has orders" flag is derived from the same persisted-order query (draft
+     * carts excluded) so the UI and the server can never disagree about which
+     * fields are frozen.
+     */
+    @Transactional(readOnly = true)
+    public SellerOfferingEditDto getOfferingForEdit(Long productId, User seller) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ProductNotFoundException(productId));
+        getOwnedKitchen(product.getKitchen().getId(), seller);
+        List<OrderItem> liveItems = orderItemRepository
+                .findByProductIdAndOrderOrderStatusNot(productId, OrderStatus.DRAFT);
+        long orderCount = liveItems.stream()
+                .map(item -> item.getOrder() != null ? item.getOrder().getId() : null)
+                .filter(Objects::nonNull)
+                .distinct()
+                .count();
+        SellerOfferingEditDto dto = new SellerOfferingEditDto();
+        dto.setId(product.getId());
+        dto.setName(product.getName());
+        dto.setDescription(product.getDescription());
+        dto.setPrice(product.getPrice());
+        dto.setPriceUnit(product.getPriceUnit());
+        dto.setImageUrl(product.getImageUrl());
+        dto.setCategory(product.getCategory());
+        dto.setAvailableDate(product.getAvailableDate());
+        dto.setOrderWindowStart(product.getOrderWindowStart());
+        // Effective cutoff: orderWindowEnd first, legacy cutoffTime as fallback.
+        dto.setOrderWindowEnd(OfferingTiming.resolveOrdersClose(product));
+        dto.setReadyByTime(product.getReadyByTime());
+        dto.setMaxQuantity(product.getMaxQuantity());
+        dto.setRemainingQuantity(product.getRemainingQuantity());
+        dto.setBookedQuantity(product.getBookedQuantity());
+        dto.setIsPreorder(product.getIsPreorder());
+        dto.setSoldOut(product.isSoldOut());
+        dto.setOrdersPaused(product.isOrdersPaused());
+        dto.setLifecycleState(OfferingTiming.lifecycleState(product, LocalDate.now(), LocalTime.now()));
+        dto.setHasOrders(orderCount > 0);
+        dto.setOrderCount((int) orderCount);
+        return dto;
     }
 
     public void deleteProduct(Long productId, User seller) {

@@ -1,9 +1,10 @@
 /**
  * SocioMart Seller App v1.0 - 5-tab SPA
  */
-var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFor: 'today', quickPostRequestId: null };
+var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFor: 'today', quickPostRequestId: null, editOffering: null };
 var sellerRoutes = {
     '#/home': sellerHomeView, '#/add': sellerAddView, '#/create': sellerCreateView,
+    '#/edit-offering': sellerEditOfferingView,
     '#/quick-post': sellerQuickPostView, '#/history': sellerHistoryView,
     '#/kitchen': sellerKitchenView, '#/orders': sellerOrdersView,
     '#/order-detail': sellerOrderDetailView, '#/earnings': sellerEarningsView,
@@ -175,6 +176,7 @@ async function sellerHomeView() {
                 if (!p.soldOut && !p.ordersPaused) { h += '<button class="btn-soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Mark Sold Out</button>'; }
                 if (!p.soldOut && !p.ordersPaused) { h += '<button class="btn btn-secondary btn-sm btn-block btn-mt-sm" type="button" data-action="pause-orders" data-pid="' + p.id + '">Pause Orders</button>'; }
                 if (p.ordersPaused && !p.soldOut) { h += '<button class="btn btn-secondary btn-sm btn-block btn-mt-sm" type="button" data-action="resume-orders" data-pid="' + p.id + '">Resume Orders</button>'; }
+                h += '<button class="btn btn-secondary btn-sm btn-block btn-mt-sm" type="button" data-action="edit-offering" data-pid="' + p.id + '">Edit Offering</button>';
                 h += '<a class="btn btn-secondary btn-sm btn-block btn-mt-sm" href="#/order-detail/' + p.id + '">View Orders</a>';
                 h += '</div></div>';
             });
@@ -237,33 +239,145 @@ async function sellerQuickPostView() {
     return h;
 }
 
+// ==================== Offering form (shared by Create + Edit) ====================
+
+/** One "Offering For" choice; a locked offering renders it as non-interactive text. */
+function availabilityOption(val, label, mode, locked) {
+    return '<label class="radio-option' + (mode === val ? ' selected' : '') + '"' +
+        (locked ? ' aria-disabled="true"' : ' data-action="set-availability" data-val="' + val + '"') + '>' + label + '</label>';
+}
+/** One category checkbox, pre-checked from the stored category list. */
+function offeringCategoryBox(value, label, selected) {
+    return '<label class="checkbox-option"><input type="checkbox" name="categories" value="' + value + '"' +
+        (selected.indexOf(value) >= 0 ? ' checked' : '') + '> ' + label + '</label>';
+}
+/** Cross-field timing rules shared by Create and Edit; returns an error text or null. */
+function offeringTimingError(availableDate, openHhmm, closeHhmm, readyBy) {
+    if (openHhmm && closeHhmm && openHhmm >= closeHhmm) return 'Orders Open must be before Orders Close';
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(readyBy)) return 'Delivery / Ready By must be a valid date and time';
+    var readyDate = readyBy.slice(0, 10);
+    if (readyDate < availableDate) return 'Delivery / Ready By cannot be before the offering date';
+    var orderingDate = availableDate;
+    if (availableDate > sellerDate('today')) {
+        var orderDate = new Date(availableDate + 'T00:00:00');
+        orderDate.setDate(orderDate.getDate() - 1);
+        orderingDate = localDateStr(orderDate);
+    }
+    if (orderingDate + 'T' + closeHhmm + ':00' > readyBy) return 'Orders Close must be before Delivery / Ready By';
+    return null;
+}
+/** Which "Offering For" mode matches a stored offering date (Edit screen). */
+function offeringForMode(isoDate) {
+    if (!isoDate || isoDate === sellerDate('today')) return 'today';
+    if (isoDate === sellerDate('tomorrow')) return 'tomorrow';
+    return 'choose';
+}
+
+/**
+ * The offering form markup, shared by Create Offering (opts.edit false) and Edit
+ * Offering (Requirement 5). With `opts.locked` the fields customers already
+ * agreed to stay visible but can no longer be changed.
+ */
+function offeringFormHtml(t, opts) {
+    opts = opts || {};
+    t = t || {};
+    var isEdit = !!opts.edit;
+    var locked = !!opts.locked;
+    var mode = opts.mode || 'today';
+    var lockAttr = locked ? ' disabled' : '';
+    var todayIso = sellerDate('today');
+    var chosenDate = isEdit ? (t.availableDate || todayIso) : todayIso;
+    var selectedUnit = t.priceUnit || 'Per Piece';
+    var categoryValues = String(t.category || '').split(',').map(function (c) { return c.trim().toUpperCase(); }).filter(Boolean);
+    var h = '<form class="seller-form" id="' + (opts.formId || 'createOfferingForm') + '">';
+    h += '<div class="form-group"><label class="form-label">Photos <span class="req">*</span></label><div class="photo-upload-row"><div class="photo-tile" data-action="add-photo">' + (isEdit && t.imageUrl ? '<img src="' + esc(t.imageUrl) + '" alt="' + esc(t.name) + '" onerror="imgFallback(this)">' : '+') + '</div></div></div>';
+    h += '<div class="form-group"><label class="form-label">Item Name <span class="req">*</span></label><input class="form-input" name="name" value="' + esc(t.name || '') + '" placeholder="e.g. POHA" required' + lockAttr + '></div>';
+    h += '<div class="form-group"><label class="form-label">Short Description</label><textarea class="form-textarea" name="description">' + esc(t.description || '') + '</textarea></div>';
+    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Price (Rs) <span class="req">*</span></label><input class="form-input" name="price" type="number" value="' + (t.price || '') + '" placeholder="100" required' + lockAttr + '></div>';
+    h += '<div class="form-group"><label class="form-label">Unit <span class="req">*</span></label><select class="form-select" name="priceUnit"' + lockAttr + '><option value="Per Piece"' + (selectedUnit === 'Per Piece' ? ' selected' : '') + '>Per Piece</option><option value="Per Plate"' + (selectedUnit === 'Per Plate' ? ' selected' : '') + '>Per Plate</option><option value="Per Box"' + (selectedUnit === 'Per Box' ? ' selected' : '') + '>Per Box</option></select></div></div>';
+    h += '<input type="hidden" name="imageUrl" value="' + esc(t.imageUrl || '') + '">';
+    h += '<div class="form-group"><label class="form-label">Offering For <span class="req">*</span></label><div class="radio-group">' + availabilityOption('today', 'Today', mode, locked) + availabilityOption('tomorrow', 'Tomorrow', mode, locked) + availabilityOption('choose', 'Choose Date', mode, locked) + '</div></div>';
+    h += '<input type="hidden" name="availableDate" id="availDate" value="' + esc(chosenDate) + '">';
+    h += '<div class="form-group" id="chooseDateRow"' + (mode === 'choose' ? '' : ' hidden') + '><label class="form-label">Offering Date <span class="req">*</span></label><input type="date" class="form-input" name="chosenOfferingDate" min="' + todayIso + '" data-action="set-availability-date" value="' + esc(chosenDate) + '"' + lockAttr + '></div>';
+
 // SCREEN 3: CREATE OFFERING (MANUAL FORM)
 async function sellerCreateView() {
     // A new form always starts in Today mode; never inherit a previous choice.
     S.offeringFor = 'today';
     var t = S.draftOffering || {};
-    var selectedUnit = t.priceUnit || 'Per Piece';
-    var categoryValues = String(t.category || '').split(',').map(function (c) { return c.trim().toUpperCase(); }).filter(Boolean);
     var h = '<div class="view-enter">';
     h += '<div class="page-head"><h1>Create Offering</h1><p class="muted small">' +
         (S.republishSourceId ? 'Review the previous offering details, then set fresh timing and quantity.' : 'Fill in the details for your new dish.') + '</p></div>';
-    h += '<form class="seller-form" id="createOfferingForm">';
-    h += '<div class="form-group"><label class="form-label">Photos <span class="req">*</span></label><div class="photo-upload-row"><div class="photo-tile" data-action="add-photo">+</div></div></div>';
-    h += '<div class="form-group"><label class="form-label">Item Name <span class="req">*</span></label><input class="form-input" name="name" value="' + esc(t.name || '') + '" placeholder="e.g. POHA" required></div>';
-    h += '<div class="form-group"><label class="form-label">Short Description</label><textarea class="form-textarea" name="description">' + esc(t.description || '') + '</textarea></div>';
-    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Price (Rs) <span class="req">*</span></label><input class="form-input" name="price" type="number" value="' + (t.price || '') + '" placeholder="100" required></div>';
-    h += '<div class="form-group"><label class="form-label">Unit <span class="req">*</span></label><select class="form-select" name="priceUnit"><option value="Per Piece"' + (selectedUnit === 'Per Piece' ? ' selected' : '') + '>Per Piece</option><option value="Per Plate"' + (selectedUnit === 'Per Plate' ? ' selected' : '') + '>Per Plate</option><option value="Per Box"' + (selectedUnit === 'Per Box' ? ' selected' : '') + '>Per Box</option></select></div></div>';
-    h += '<input type="hidden" name="imageUrl" value="' + esc(t.imageUrl || '') + '">';
-    h += '<div class="form-group"><label class="form-label">Offering For <span class="req">*</span></label><div class="radio-group"><label class="radio-option selected" data-action="set-availability" data-val="today">Today</label><label class="radio-option" data-action="set-availability" data-val="tomorrow">Tomorrow</label><label class="radio-option" data-action="set-availability" data-val="choose">Choose Date</label></div></div>';
-    h += '<input type="hidden" name="availableDate" id="availDate" value="' + sellerDate('today') + '">';
-    h += '<div class="form-group" id="chooseDateRow" hidden><label class="form-label">Offering Date <span class="req">*</span></label><input type="date" class="form-input" name="chosenOfferingDate" min="' + sellerDate('today') + '" data-action="set-availability-date" value="' + sellerDate('today') + '"></div>';
-    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open — Optional</label><input class="form-input" name="orderWindowStart" type="time"><p class="muted small">Leave blank to start accepting orders immediately.</p></div>';
-    h += '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label><input class="form-input" name="orderWindowEnd" type="time" required><p class="muted small">Last date/time customers can place an order.</p></div></div>';
-    h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTime" type="datetime-local" required><p class="muted small">Date/time by which the order will be ready/delivered.</p></div>';
-    h += '<div class="form-group"><label class="form-label">Quantity Available — Optional</label><input class="form-input" name="maxQuantity" type="number" min="1" step="1" value="' + (t.maxQuantity != null ? esc(String(t.maxQuantity)) : '') + '" placeholder="Blank for unlimited"><p class="muted small">Leave blank for unlimited quantity.</p></div>';
-    h += '<div class="form-group"><label class="form-label">To be listed in <span class="req">*</span></label><div class="checkbox-group"><label class="checkbox-option"><input type="checkbox" name="categories" value="BREAKFAST"' + (categoryValues.indexOf('BREAKFAST') >= 0 ? ' checked' : '') + '> Breakfast</label><label class="checkbox-option"><input type="checkbox" name="categories" value="LUNCH"' + (categoryValues.indexOf('LUNCH') >= 0 ? ' checked' : '') + '> Lunch</label><label class="checkbox-option"><input type="checkbox" name="categories" value="DINNER"' + (categoryValues.indexOf('DINNER') >= 0 ? ' checked' : '') + '> Dinner</label><label class="checkbox-option"><input type="checkbox" name="categories" value="SNACKS"' + (categoryValues.indexOf('SNACKS') >= 0 ? ' checked' : '') + '> Snacks</label></div><p class="muted small">Select at least one category.</p></div>';
-    h += '<div class="toggle-row"><div><div class="toggle-text">Mark as Favourite</div><div class="toggle-note">Save as template (max 3).</div></div><div class="toggle-switch" id="favToggle" data-action="toggle-favourite"></div></div>';
-    h += '<button class="btn btn-primary btn-block" type="submit">Publish Offering</button></form></div>';
+    h += offeringFormHtml(t, { formId: 'createOfferingForm', mode: 'today' });
+    h += '</div>';
+    return h;
+}
+
+    var openValue = isEdit ? (t.orderWindowStart || '') : '';
+    var closeValue = isEdit ? (t.orderWindowEnd || '') : '';
+    var closeNote = locked
+        ? 'Has orders — can only be extended (currently ' + prettyTime(t.orderWindowEnd) + ').'
+        : 'Last date/time customers can place an order.';
+    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open — Optional</label><input class="form-input" name="orderWindowStart" type="time" value="' + esc(openValue) + '"' + lockAttr + '><p class="muted small">Leave blank to start accepting orders immediately.</p></div>';
+    h += '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label><input class="form-input" name="orderWindowEnd" type="time" required value="' + esc(closeValue) + '"><p class="muted small">' + esc(closeNote) + '</p></div></div>';
+    var readyIso = !!(t.readyByTime && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(t.readyByTime));
+    var readyNote = 'Date/time by which the order will be ready/delivered.';
+    if (locked) {
+        var readyDisplay = t.readyByTime
+            ? (readyIso ? prettyDate(t.readyByTime.slice(0, 10)) + ', ' + prettyTime(t.readyByTime.slice(11, 16)) : t.readyByTime)
+            : '--';
+        h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTimeLocked" type="text" value="' + esc(readyDisplay) + '" disabled><p class="muted small">' + esc(readyNote) + '</p></div>';
+    } else {
+        if (isEdit && t.readyByTime && !readyIso) readyNote = 'Saved value: ' + t.readyByTime + '. Pick a new date/time to replace it.';
+        h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTime" type="datetime-local"' + (isEdit ? '' : ' required') + ' value="' + esc(readyIso ? t.readyByTime : '') + '"><p class="muted small">' + esc(readyNote) + '</p></div>';
+    }
+    var qtyValue = '', qtyAttr = '', qtyNote = 'Leave blank for unlimited quantity.';
+    if (isEdit) {
+        if (t.maxQuantity == null) {
+            qtyAttr = ' disabled';
+            qtyNote = 'This offering has no quantity limit.';
+        } else {
+            qtyValue = String(t.remainingQuantity == null ? 0 : t.remainingQuantity);
+            qtyNote = 'Plates buyers can still order (booked so far: ' + (t.bookedQuantity || 0) + ').';
+        }
+    } else if (t.maxQuantity != null) {
+        qtyValue = String(t.maxQuantity);
+    }
+    h += '<div class="form-group"><label class="form-label">' + (isEdit ? 'Quantity Available Now' : 'Quantity Available — Optional') + '</label><input class="form-input" name="' + (isEdit ? 'availableQuantity' : 'maxQuantity') + '" type="number" min="' + (isEdit ? '0' : '1') + '" step="1" value="' + esc(qtyValue) + '" placeholder="' + (isEdit ? 'Unlimited' : 'Blank for unlimited') + '"' + qtyAttr + '><p class="muted small">' + esc(qtyNote) + '</p></div>';
+    h += '<div class="form-group"><label class="form-label">To be listed in <span class="req">*</span></label><div class="checkbox-group">' + offeringCategoryBox('BREAKFAST', 'Breakfast', categoryValues) + offeringCategoryBox('LUNCH', 'Lunch', categoryValues) + offeringCategoryBox('DINNER', 'Dinner', categoryValues) + offeringCategoryBox('SNACKS', 'Snacks', categoryValues) + '</div><p class="muted small">Select at least one category.</p></div>';
+    if (!isEdit) {
+        h += '<div class="toggle-row"><div><div class="toggle-text">Mark as Favourite</div><div class="toggle-note">Save as template (max 3).</div></div><div class="toggle-switch" id="favToggle" data-action="toggle-favourite"></div></div>';
+    }
+    h += '<button class="btn btn-primary btn-block" type="submit">' + (isEdit ? 'Save Changes' : 'Publish Offering') + '</button></form>';
+    return h;
+}
+
+// SCREEN 3B: EDIT OFFERING (Requirement 5 — edit rules for a live offering)
+async function sellerEditOfferingView() {
+    var o = S.editOffering;
+    if (!o || !o.id) {
+        return '<div class="view-enter">' + emptyHtml('🍽️', 'Offering not found', 'Open an offering from your dashboard and tap Edit again.') + '</div>';
+    }
+    var locked = !!o.hasOrders;
+    // Pre-select the Offering For choice that matches the stored date.
+    S.offeringFor = offeringForMode(o.availableDate);
+    var h = '<div class="view-enter">';
+    h += '<div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button><h2 class="flex-1">Edit Offering</h2></div>';
+    if (locked) {
+        h += '<div class="info-box">⚠️ This offering already has orders. Some details cannot be changed.</div>';
+        h += '<p class="muted small">Name, price, unit, offering date, Orders Open and Delivery / Ready By are frozen so existing customers keep what they agreed to. Orders Close can only be extended.';
+        if (o.orderCount) {
+            h += ' ' + o.orderCount + ' order' + (o.orderCount === 1 ? '' : 's') + ' so far';
+            if (o.bookedQuantity) h += ' · ' + o.bookedQuantity + ' plate' + (o.bookedQuantity === 1 ? '' : 's') + ' booked';
+            h += '.';
+        }
+        h += '</p>';
+    } else {
+        h += '<p class="muted small">No orders yet — every detail stays editable until the first order arrives.</p>';
+    }
+    if (o.soldOut) h += '<div class="info-box">🔴 Sold out. Raise the quantity available to restock it.</div>';
+    h += offeringFormHtml(o, { formId: 'editOfferingForm', edit: true, locked: locked, mode: S.offeringFor });
+    h += '</div>';
     return h;
 }
 
@@ -496,6 +610,106 @@ function parseOptionalHhmm(value, label) {
     return v;
 }
 
+/**
+ * Requirement 5 — saves the Edit Offering form.
+ *
+ * Only fields the seller may still change are sent, so frozen values are never
+ * round-tripped. Timing/price edits use the existing partial update; the
+ * availability change uses the existing atomic inventory endpoint so a
+ * concurrent buyer order is never overwritten and the max/zero guards apply.
+ */
+async function submitOfferingEdit(form) {
+    var o = S.editOffering;
+    if (!o || !o.id) { toast('This offering is no longer available', 'error'); return; }
+    var locked = !!o.hasOrders;
+    var ev = formVals(form);
+    var payload = {};
+    var booked = o.bookedQuantity || 0;
+    var remainingNow = o.remainingQuantity == null ? 0 : o.remainingQuantity;
+    var delta = 0;
+
+    // Description and photo stay editable on every offering.
+    var description = ev.description == null ? '' : ev.description;
+    if (description !== (o.description || '')) payload.description = description;
+    if ((ev.imageUrl || '') !== (o.imageUrl || '')) payload.imageUrl = ev.imageUrl || '';
+
+    var categories = [];
+    $all('input[name="categories"]:checked', form).forEach(function (cb) { categories.push(cb.value); });
+    if (categories.length === 0) { toast('Select at least one category', 'error'); return; }
+    if (categories.join(',') !== (o.category || '')) payload.categories = categories;
+
+    var closeVal = parseOptionalHhmm(ev.orderWindowEnd, 'Orders Close');
+    if (!closeVal) { toast('Orders Close is required', 'error'); return; }
+    if (locked && closeVal < o.orderWindowEnd) {
+        toast('This offering already has orders, so Orders Close can only be extended (currently ' + prettyTime(o.orderWindowEnd) + ')', 'error');
+        return;
+    }
+    if (closeVal !== (o.orderWindowEnd || '')) payload.orderWindowEnd = closeVal;
+
+    if (!locked) {
+        // Nothing has been ordered yet, so every timing and price field is free.
+        var openVal = parseOptionalHhmm(ev.orderWindowStart, 'Orders Open');
+        if ((openVal || '') !== (o.orderWindowStart || '')) payload.orderWindowStart = openVal || '';
+        var offeringDate = S.offeringFor === 'choose' ? (ev.chosenOfferingDate || '') : sellerDate(S.offeringFor);
+        if (!offeringDate) { toast('Choose an offering date', 'error'); return; }
+        if (offeringDate !== (o.availableDate || '')) payload.availableDate = offeringDate;
+        var readyInput = (ev.readyByTime || '').trim();
+        if (readyInput !== (o.readyByTime || '')) {
+            if (!readyInput) { toast('Delivery / Ready By is required', 'error'); return; }
+            payload.readyByTime = readyInput;
+        }
+        if ((ev.name || '') !== (o.name || '')) {
+            if (!ev.name) { toast('Item Name is required', 'error'); return; }
+            payload.name = ev.name;
+        }
+        if ((ev.price || '') !== (o.price == null ? '' : String(o.price))) {
+            if (!ev.price) { toast('Price is required', 'error'); return; }
+            payload.price = Number(ev.price);
+        }
+        if ((ev.priceUnit || '') !== (o.priceUnit || '')) payload.priceUnit = ev.priceUnit;
+        var effectiveOpen = payload.orderWindowStart != null ? payload.orderWindowStart : o.orderWindowStart;
+        if (effectiveOpen && effectiveOpen >= closeVal) { toast('Orders Open must be before Orders Close', 'error'); return; }
+        // A stored legacy ready-by text is left untouched unless the seller types
+        // a new value; only newly typed values are pre-checked here (the server
+        // re-validates authoritatively).
+        if (payload.readyByTime) {
+            var timingProblem = offeringTimingError(payload.availableDate || o.availableDate,
+                effectiveOpen, closeVal, payload.readyByTime);
+            if (timingProblem) { toast(timingProblem, 'error'); return; }
+        }
+    }
+
+    // Quantity: raise the limit first when the seller offers more than before,
+    // then apply the availability change atomically.
+    if (o.maxQuantity != null) {
+        var availableVal = Number(ev.availableQuantity);
+        if (!Number.isInteger(availableVal) || availableVal < 0) {
+            toast('Quantity Available must be a whole number of 0 or more', 'error');
+            return;
+        }
+        if (availableVal !== remainingNow) {
+            if (booked + availableVal < 1) {
+                toast('Quantity Available must be at least 1, or use Mark Sold Out to stop orders', 'error');
+                return;
+            }
+            if (booked + availableVal > o.maxQuantity) payload.maxQuantity = booked + availableVal;
+            delta = availableVal - remainingNow;
+        }
+    }
+
+    if (Object.keys(payload).length === 0 && delta === 0) { toast('No changes to save', 'info'); return; }
+    if (Object.keys(payload).length > 0) {
+        await api('/api/seller/products/' + o.id, { method: 'PUT', body: payload });
+    }
+    if (delta !== 0) {
+        await api('/api/seller-app/products/' + o.id + '/inventory', { method: 'PATCH', body: { delta: delta } });
+    }
+    toast('Offering updated', 'success');
+    S.editOffering = null;
+    S.offeringFor = 'today';
+    sellerNavigate('#/home');
+}
+
 // Form submission
 document.addEventListener('submit', async function (e) {
     var form = e.target.closest('form');
@@ -530,27 +744,10 @@ document.addEventListener('submit', async function (e) {
                 vals.maxQuantity = null; // blank = unlimited
             }
             // Immediate UX checks; the backend repeats these rules authoritatively.
-            var open = vals.orderWindowStart, close = vals.orderWindowEnd;
-            if (open && close && open >= close) {
-                toast('Orders Open must be before Orders Close', 'error');
+            var timingError = offeringTimingError(vals.availableDate, vals.orderWindowStart, vals.orderWindowEnd, readyBy);
+            if (timingError) {
+                toast(timingError, 'error');
                 return;
-            }
-            var readyDate = readyBy.slice(0, 10);
-            if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(readyBy)) {
-                toast('Delivery / Ready By must be a valid date and time', 'error'); return;
-            }
-            if (readyDate < vals.availableDate) {
-                toast('Delivery / Ready By cannot be before the offering date', 'error'); return;
-            }
-            var orderingDate = vals.availableDate;
-            if (vals.availableDate > sellerDate('today')) {
-                var orderDate = new Date(vals.availableDate + 'T00:00:00');
-                orderDate.setDate(orderDate.getDate() - 1);
-                orderingDate = localDateStr(orderDate);
-            }
-            var closeDateTime = orderingDate + 'T' + close + ':00';
-            if (closeDateTime > readyBy) {
-                toast('Orders Close must be before Delivery / Ready By', 'error'); return;
             }
             var kid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
             if (!kid) {
@@ -578,6 +775,8 @@ document.addEventListener('submit', async function (e) {
             S.republishSourceId = null;
             S.offeringFor = 'today';
             sellerNavigate('#/home');
+        } else if (form.id === 'editOfferingForm') {
+            await submitOfferingEdit(form);
         } else if (form.id === 'quickPostForm') {
             var message = (form.querySelector('[name="message"]').value || '').trim();
             if (!message) { toast('Paste a WhatsApp message first', 'error'); return; }
@@ -742,6 +941,20 @@ document.addEventListener('click', async function (e) {
                 } catch (err) {
                     t.disabled = false;
                     toast(err.message || 'Could not cancel order', 'error');
+                }
+                break;
+            }
+            case 'edit-offering': {
+                if (t.disabled) return;
+                var editPid = Number(t.dataset.pid);
+                t.disabled = true;
+                try {
+                    // Authoritative state (incl. whether orders already freeze fields).
+                    S.editOffering = await api('/api/seller/products/' + editPid);
+                    sellerNavigate('#/edit-offering');
+                } catch (err) {
+                    t.disabled = false;
+                    toast(err.message || 'Could not load this offering', 'error');
                 }
                 break;
             }
