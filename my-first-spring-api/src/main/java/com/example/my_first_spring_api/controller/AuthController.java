@@ -70,7 +70,8 @@ public class AuthController {
         return ResponseEntity.ok(new AuthResponseDto(
                 true, "Logged in successfully",
                 buyer.getId(), buyer.getName(), buyer.getMobileNumber(),
-                buyer.getFlatHouseNumber(), buyer.getRole().name(), buyer.getSellerApprovalStatus()));
+                buyer.getFlatHouseNumber(), buyer.getRole().name(), buyer.getSellerApprovalStatus(),
+                buyer.getSociety(), buyer.getBuilding()));
     }
 
     @GetMapping("/me")
@@ -82,7 +83,7 @@ public class AuthController {
         return ResponseEntity.ok(new AuthResponseDto(
                 true, "Authenticated", buyer.getId(), buyer.getName(),
                 buyer.getMobileNumber(), buyer.getFlatHouseNumber(), buyer.getRole().name(),
-                buyer.getSellerApprovalStatus()));
+                buyer.getSellerApprovalStatus(), buyer.getSociety(), buyer.getBuilding()));
     }
 
     @PostMapping("/become-seller")
@@ -97,7 +98,7 @@ public class AuthController {
         return ResponseEntity.ok(new AuthResponseDto(
                 true, "Seller account created — pending admin approval", user.getId(), user.getName(),
                 user.getMobileNumber(), user.getFlatHouseNumber(), user.getRole().name(),
-                user.getSellerApprovalStatus()));
+                user.getSellerApprovalStatus(), user.getSociety(), user.getBuilding()));
     }
 
     @PostMapping("/logout")

@@ -1381,10 +1381,13 @@ async function profileView() {
     h += '<form data-form="profile-edit"><div class="card pad card-mb">' +
         '<div class="profile-row"><span class="pr-label">Name</span>' +
         '<input class="form-input form-input-sm" name="name" value="' + esc(u.name || '') + '"></div>' +
+        // Never fall back to a placeholder here: the form value is saved straight
+        // back to the buyer's profile, so a fake default would overwrite the real
+        // persisted society and break service-area eligibility at order time.
         '<div class="profile-row"><span class="pr-label">Community / Society</span>' +
-        '<input class="form-input form-input-sm" name="society" value="' + esc(u.society || LOCATION) + '"></div>' +
+        '<input class="form-input form-input-sm" name="society" value="' + esc(u.society || '') + '" placeholder="e.g. Sunshine Society"></div>' +
         '<div class="profile-row"><span class="pr-label">Building</span>' +
-        '<input class="form-input form-input-sm" name="building" value="' + esc(u.building || '') + '"></div>' +
+        '<input class="form-input form-input-sm" name="building" value="' + esc(u.building || '') + '" placeholder="e.g. A Wing"></div>' +
         '<div class="profile-row"><span class="pr-label">Flat #</span>' +
         '<input class="form-input form-input-sm" name="flatHouseNumber" value="' + esc(u.flatHouseNumber || '') + '"></div>' +
         '<button class="btn btn-secondary btn-block btn-sm mt-2" type="submit">Save Profile</button></div></form>';

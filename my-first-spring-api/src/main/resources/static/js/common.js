@@ -438,9 +438,39 @@ function commitItem(newItem, kitchen) {
 
 function requireAuth(onAuthenticated) {
     if (state.user) {
-        onAuthenticated();
-        return;
+        return confirmSessionThen(onAuthenticated);
     }
+    state.pendingAuthAction = onAuthenticated;
+    openAuthModal();
+    return Promise.resolve();
+}
+
+/**
+ * Run the action only while the server still recognises this session.
+ *
+ * A truthy state.user is NOT proof of a live server session: the session can be
+ * gone (server restart, idle expiry, invalidated elsewhere) while the tab still
+ * holds the old identity. Re-running the action in that state just fails again
+ * and the buyer sees a dead button, so confirm with the server first and fall
+ * back to the login gate when the session is stale.
+ *
+ * Only the session probe is guarded here — errors raised by the action itself
+ * must still reach the caller's own handler.
+ */
+async function confirmSessionThen(onAuthenticated) {
+    var live = false;
+    try {
+        var me = await api('/api/auth/me');
+        if (me && me.authenticated) {
+            state.user = me;
+            live = true;
+        }
+    } catch (e) {
+        // Probe failed (network/parse): treat the session as unverified.
+    }
+    if (live) return onAuthenticated();
+    // Stale or unknown session — clear the local identity and ask for login.
+    state.user = null;
     state.pendingAuthAction = onAuthenticated;
     openAuthModal();
 }
@@ -473,22 +503,30 @@ async function handleAuthLogin() {
     var btn = $('#authSubmit');
     btn.disabled = true;
     btn.innerHTML = '<span class="btn-spinner"></span> Logging in...';
+    var me;
     try {
-        var me = await api('/api/auth/demo-login', { method: 'POST', body: { mobileNumber: mobile } });
-        state.user = me;
-        closeModal();
-        toast('Welcome, ' + (me.name || 'neighbour') + '!', 'success');
-        var action = state.pendingAuthAction;
-        state.pendingAuthAction = null;
-        if (action) {
-            action();
-        } else if (typeof render === 'function') {
-            render();
-        }
+        me = await api('/api/auth/demo-login', { method: 'POST', body: { mobileNumber: mobile } });
     } catch (err) {
         btn.disabled = false;
         btn.textContent = 'Log in';
         toast('Login failed: ' + err.message, 'error');
+        return;
+    }
+    state.user = me;
+    closeModal();
+    toast('Welcome, ' + (me.name || 'neighbour') + '!', 'success');
+    var action = state.pendingAuthAction;
+    state.pendingAuthAction = null;
+    // Resume the deferred action outside the login try/catch: a failure here is
+    // the action's own error and must be reported as such, not as a login error.
+    try {
+        if (action) {
+            await action();
+        } else if (typeof render === 'function') {
+            await render();
+        }
+    } catch (err) {
+        toast(err.message || 'Could not continue. Please try again.', 'error');
     }
 }
 
@@ -498,8 +536,9 @@ async function withAuthGate(actionFn) {
         return await actionFn();
     } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
-            requireAuth(actionFn);
-            return null;
+            // Hand the action to the auth gate. Awaited so a deferred failure
+            // surfaces to our caller instead of becoming an unhandled rejection.
+            return await requireAuth(actionFn);
         }
         throw err;
     }

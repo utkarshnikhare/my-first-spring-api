@@ -237,8 +237,11 @@ document.addEventListener('submit', async function (e) {
             if (mob) mob.value = mobile;
         } else if (kind === 'profile-edit') {
             var vals = formVals(form);
-            await api('/api/buyer/profile', { method: 'PUT', body: vals });
-            state.user = Object.assign({}, state.user, vals);
+            // The server response is authoritative: it reflects what was really
+            // persisted. Trusting the submitted values here could keep a stale
+            // society/building in the UI and re-submit it on the next save.
+            var saved = await api('/api/buyer/profile', { method: 'PUT', body: vals });
+            state.user = Object.assign({}, state.user, saved);
             toast('Profile saved', 'success');
             await render();
         }

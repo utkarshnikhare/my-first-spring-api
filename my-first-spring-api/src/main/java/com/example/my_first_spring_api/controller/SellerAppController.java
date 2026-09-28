@@ -59,7 +59,8 @@ public class SellerAppController {
         return ResponseEntity.ok(new AuthResponseDto(
                 true, "Demo login successful",
                 aarti.getId(), aarti.getName(), aarti.getMobileNumber(),
-                aarti.getFlatHouseNumber(), aarti.getRole().name(), aarti.getSellerApprovalStatus()));
+                aarti.getFlatHouseNumber(), aarti.getRole().name(), aarti.getSellerApprovalStatus(),
+                aarti.getSociety(), aarti.getBuilding()));
     }
 
     /** Parses a date parameter accepting human aliases; falls back to today when absent. */

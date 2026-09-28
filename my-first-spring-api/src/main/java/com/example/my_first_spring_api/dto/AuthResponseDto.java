@@ -9,6 +9,8 @@ public class AuthResponseDto {
     private String name;
     private String mobileNumber;
     private String flatHouseNumber;
+    private String society;
+    private String building;
     private String role;
     private SellerApprovalStatus sellerApprovalStatus;
 
@@ -16,12 +18,26 @@ public class AuthResponseDto {
 
     public AuthResponseDto(boolean authenticated, String message, Long userId, String name,
                            String mobileNumber, String flatHouseNumber, String role) {
-        this(authenticated, message, userId, name, mobileNumber, flatHouseNumber, role, null);
+        this(authenticated, message, userId, name, mobileNumber, flatHouseNumber, role, null, null, null);
     }
 
     public AuthResponseDto(boolean authenticated, String message, Long userId, String name,
                            String mobileNumber, String flatHouseNumber, String role,
                            SellerApprovalStatus sellerApprovalStatus) {
+        this(authenticated, message, userId, name, mobileNumber, flatHouseNumber, role,
+                sellerApprovalStatus, null, null);
+    }
+
+    /**
+     * Full constructor including the buyer's persisted society/building.
+     * The client renders the profile form and the "Deliver to" summary from
+     * this payload, so it MUST carry the real persisted values — otherwise the
+     * UI falls back to a placeholder and saving the form would overwrite the
+     * buyer's actual service area.
+     */
+    public AuthResponseDto(boolean authenticated, String message, Long userId, String name,
+                           String mobileNumber, String flatHouseNumber, String role,
+                           SellerApprovalStatus sellerApprovalStatus, String society, String building) {
         this.authenticated = authenticated;
         this.message = message;
         this.userId = userId;
@@ -30,6 +46,8 @@ public class AuthResponseDto {
         this.flatHouseNumber = flatHouseNumber;
         this.role = role;
         this.sellerApprovalStatus = sellerApprovalStatus;
+        this.society = society;
+        this.building = building;
     }
 
     public boolean isAuthenticated() { return authenticated; }
@@ -46,6 +64,10 @@ public class AuthResponseDto {
     public void setFlatHouseNumber(String flatHouseNumber) { this.flatHouseNumber = flatHouseNumber; }
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+    public String getSociety() { return society; }
+    public void setSociety(String society) { this.society = society; }
+    public String getBuilding() { return building; }
+    public void setBuilding(String building) { this.building = building; }
     public SellerApprovalStatus getSellerApprovalStatus() { return sellerApprovalStatus; }
     public void setSellerApprovalStatus(SellerApprovalStatus sellerApprovalStatus) { this.sellerApprovalStatus = sellerApprovalStatus; }
 }
