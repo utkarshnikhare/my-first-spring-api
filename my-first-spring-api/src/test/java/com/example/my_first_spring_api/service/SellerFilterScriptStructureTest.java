@@ -100,6 +100,24 @@ class SellerFilterScriptStructureTest {
     }
 
     @Test
+    void drillDownExplainsTheDashboardBookedFigureBesideItsOwnTotal() {
+        int start = sellerJs.indexOf("async function sellerOrderDetailView(");
+        int end = sellerJs.indexOf("function offeringCustomersHtml(");
+        assertThat(start).isGreaterThanOrEqualTo(0);
+        assertThat(end).isGreaterThan(start);
+        String view = sellerJs.substring(start, end);
+
+        assertThat(view)
+                .as("\"N booked\" on the dashboard covers every date of the offering, so the "
+                        + "date-scoped drill-down must surface that figure instead of contradicting it")
+                .contains("detail.dashboardBookedQuantity")
+                .contains("detail.totalPlates");
+        assertThat(view)
+                .as("the note is only rendered when the two figures genuinely differ")
+                .contains("bookedTotal !== (detail.totalPlates || 0)");
+    }
+
+    @Test
     void customerRowsStillOpenTheMatchingOrderAndKeepTheEmptyState() {
         int start = sellerJs.indexOf("function offeringCustomersHtml(");
         int end = sellerJs.indexOf("async function sellerOrderDetailByOrderView(");

@@ -244,6 +244,39 @@ class DemoViewOrdersScenarioTest {
     }
 
     // ------------------------------------------------------------------
+    // Booked inventory vs the date-scoped rows: both are correct, so the
+    // drill-down carries the dashboard figure to explain the difference
+    // ------------------------------------------------------------------
+
+    @Test
+    void drillDownCarriesTheBookedFigureSoBothScreensAgreeOnMeaning() {
+        OrderItemDetailDto today = sellerApp.getOrderItemDetail(aarti, poha.getId(), LocalDate.now(), null, null);
+        Product p = refreshedPoha();
+
+        assertThat(today.getDashboardBookedQuantity())
+                .as("the drill-down reports exactly the booked figure the dashboard card shows")
+                .isEqualTo(p.getBookedQuantity());
+        assertThat(today.getDashboardBookedQuantity())
+                .as("booked spans every date the offering is posted for, so it can never sit below one date's plates")
+                .isGreaterThanOrEqualTo(today.getTotalPlates());
+        assertThat(today.getProductUnit())
+                .as("the wording follows the offering's own unit")
+                .isEqualTo(p.getPriceUnit());
+
+        // Whatever the difference is, it must be fully accounted for by plates
+        // booked on dates other than the one being viewed - never by a lost order.
+        int platesOnOtherDates = 0;
+        for (Order o : persistedOrders()) {
+            if (o.getOrderStatus() == OrderStatus.CANCELLED) continue;
+            if (o.getCreatedAt() == null || o.getCreatedAt().toLocalDate().equals(LocalDate.now())) continue;
+            platesOnOtherDates += quantityOf(poha, o);
+        }
+        assertThat(today.getDashboardBookedQuantity() - today.getTotalPlates())
+                .as("booked minus this date's plates equals the plates booked on the other dates")
+                .isEqualTo(platesOnOtherDates);
+    }
+
+    // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
 

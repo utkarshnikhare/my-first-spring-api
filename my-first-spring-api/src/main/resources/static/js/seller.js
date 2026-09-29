@@ -660,6 +660,19 @@ async function sellerOrderDetailView(productId) {
             '<span class="dtc-badge red">' + (detail.cancelledCount || 0) + ' Cancelled</span>' +
             '</div></div>';
 
+        // Reconcile with the dashboard card: "N booked" is the offering's live
+        // reservation total across every date it is posted for, while these rows
+        // cover ONE date. Whenever the two differ, say why instead of letting the
+        // seller read it as missing orders.
+        var bookedTotal = detail.dashboardBookedQuantity;
+        if (typeof bookedTotal === 'number' && bookedTotal !== (detail.totalPlates || 0)) {
+            var bookedUnit = detail.productUnit || 'units';
+            if (bookedTotal !== 1 && bookedUnit.slice(-1) !== 's') bookedUnit += 's';
+            h += '<div class="tiny muted mt-1">Dashboard shows ' + bookedTotal + ' ' +
+                esc(bookedUnit) + ' booked — that covers every date of this ' +
+                'offering. These orders are ' + esc(prettyDate(sellerDate(S.selectedDate))) + ' only.</div>';
+        }
+
         // Filters only. Sorting within a single offering is meaningless - the
         // seller is already looking at one item - so no sort control is offered.
         h += '<div class="oc-filters">';

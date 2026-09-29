@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.dto.OrderItemDetailDto;
 import com.example.my_first_spring_api.dto.SellerOrderSummaryDto;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Order;
@@ -183,5 +184,48 @@ class SellerOrderSummaryBucketsTest {
         assertThat(s.getCancelledCount()).isZero();
         assertThat(s.getTotalRevenue()).isEqualByComparingTo("0");
         assertThat(s.getProducts()).isEmpty();
+    }
+
+    @Test
+    void anUnplacedDraftBasketIsNotAnOrderOnEitherScreen() {
+        place(3, PaymentStatus.PAID, OrderStatus.CONFIRMED);
+        place(2, PaymentStatus.PENDING, OrderStatus.ORDERED);
+        // An abandoned basket: it reserves no inventory and the buyer never
+        // placed it, so it must not appear as (or count towards) an order.
+        place(1, PaymentStatus.PENDING, OrderStatus.DRAFT);
+
+        SellerOrderSummaryDto s = summary();
+
+        assertThat(s.getTotalOrderCount())
+                .as("a draft never became an order")
+                .isEqualTo(2);
+        assertThat(s.getPaidCount() + s.getPendingCount() + s.getCancelledCount())
+                .as("the buckets must always add up to the total")
+                .isEqualTo(s.getTotalOrderCount());
+        assertThat(pohaAgg(s).getTotalPlates()).as("the draft plate is not booked").isEqualTo(5);
+
+        OrderItemDetailDto d = sellerApp.getOrderItemDetail(seller, poha.getId(), LocalDate.now(), null, null);
+        assertThat(d.getTotalOrders()).isEqualTo(2);
+        assertThat(d.getCustomers()).as("no draft row in the drill-down").hasSize(2);
+        assertThat(d.getTotalPlates()).isEqualTo(5);
+    }
+
+    @Test
+    void drillDownCarriesTheBookedFigureTheDashboardCardShows() {
+        // 5 plates booked by today's order + 2 by an order on another date: the
+        // two screens legitimately show different numbers, so the drill-down has
+        // to carry the dashboard figure to explain the difference.
+        poha.setPriceUnit("plate");
+        poha.setBookedQuantity(7);
+        products.saveAndFlush(poha);
+        place(5, PaymentStatus.PAID, OrderStatus.CONFIRMED);
+
+        OrderItemDetailDto d = sellerApp.getOrderItemDetail(seller, poha.getId(), LocalDate.now(), null, null);
+
+        assertThat(d.getTotalPlates()).as("plates counted for THIS date").isEqualTo(5);
+        assertThat(d.getDashboardBookedQuantity())
+                .as("the drill-down exposes the same booked figure as the dashboard card")
+                .isEqualTo(7);
+        assertThat(d.getProductUnit()).isEqualTo("plate");
     }
 }

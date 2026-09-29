@@ -470,8 +470,15 @@ public class SellerAppService {
         Kitchen kitchen = getOwnedKitchen(seller);
         LocalDateTime start = date.atStartOfDay();
         LocalDateTime end = date.plusDays(1).atStartOfDay();
-        List<Order> orders = orderRepository
-                .findByKitchenAndCreatedAtBetweenOrderByCreatedAtDesc(kitchen, start, end);
+        // Draft orders are baskets the buyer never placed. They hold no inventory
+        // reservation and are not customer orders, so they are excluded from every
+        // counter here (the same rule the rest of the app applies) - otherwise
+        // Paid + Pending + Cancelled could never add up to the total order count.
+        List<Order> orders = new ArrayList<>();
+        for (Order o : orderRepository
+                .findByKitchenAndCreatedAtBetweenOrderByCreatedAtDesc(kitchen, start, end)) {
+            if (o.getOrderStatus() != OrderStatus.DRAFT) orders.add(o);
+        }
 
         SellerOrderSummaryDto dto = new SellerOrderSummaryDto();
         int paidCount = 0, pendingCount = 0, cancelledCount = 0;
@@ -550,13 +557,26 @@ public class SellerAppService {
 
         LocalDateTime start = date.atStartOfDay();
         LocalDateTime end = date.plusDays(1).atStartOfDay();
-        List<Order> orders = orderRepository
-                .findByKitchenAndCreatedAtBetweenOrderByCreatedAtDesc(kitchen, start, end);
+        // Same rule as Screen 7A: an unplaced draft basket is not a customer
+        // order and reserves nothing, so it must never show up as a row here
+        // (it would make the row count disagree with the booked inventory).
+        List<Order> orders = new ArrayList<>();
+        for (Order o : orderRepository
+                .findByKitchenAndCreatedAtBetweenOrderByCreatedAtDesc(kitchen, start, end)) {
+            if (o.getOrderStatus() != OrderStatus.DRAFT) orders.add(o);
+        }
 
         OrderItemDetailDto dto = new OrderItemDetailDto();
         dto.setProductId(productId);
         dto.setProductName(product.getName());
         dto.setProductImageUrl(product.getImageUrl());
+        // The dashboard card's "N booked" is the live reservation total for the
+        // whole offering (every date it is posted for), while the rows below are
+        // one date only. Ship the dashboard figure so the page can reconcile the
+        // two instead of looking contradictory.
+        dto.setDashboardBookedQuantity(product.getBookedQuantity());
+        dto.setProductUnit(product.getPriceUnit() != null && !product.getPriceUnit().isBlank()
+                ? product.getPriceUnit() : "units");
 
         int totalPlates = 0, paidCount = 0, pendingCount = 0, cancelledCount = 0, totalOrders = 0;
         int filteredTotalPlates = 0, filteredPaidCount = 0, filteredPendingCount = 0, filteredCancelledCount = 0;

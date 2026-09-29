@@ -27,6 +27,16 @@ public class OrderItemDetailDto {
     private List<CustomerOrderRow> customers;
     /** Distinct societies among ALL orders for this offering on this date (unfiltered), for the dropdown. */
     private List<String> availableSocieties;
+    /**
+     * The booked figure the Seller dashboard card shows for this offering: the
+     * active (non-cancelled) reservations stored on the offering row, which
+     * cover every date that offering has been posted for. Null = unlimited stock.
+     * Exposed so the date-scoped drill-down can explain the dashboard number
+     * instead of appearing to contradict it.
+     */
+    private Integer dashboardBookedQuantity;
+    /** Price unit of the offering ("plate", "piece", ...) for wording the booked note. */
+    private String productUnit;
 
     public static class CustomerOrderRow {
         private Long orderId;
@@ -111,5 +121,9 @@ public class OrderItemDetailDto {
     public void setCustomers(List<CustomerOrderRow> customers) { this.customers = customers; }
     public List<String> getAvailableSocieties() { return availableSocieties; }
     public void setAvailableSocieties(List<String> availableSocieties) { this.availableSocieties = availableSocieties; }
+    public Integer getDashboardBookedQuantity() { return dashboardBookedQuantity; }
+    public void setDashboardBookedQuantity(Integer dashboardBookedQuantity) { this.dashboardBookedQuantity = dashboardBookedQuantity; }
+    public String getProductUnit() { return productUnit; }
+    public void setProductUnit(String productUnit) { this.productUnit = productUnit; }
 }
 
