@@ -813,12 +813,9 @@ async function goCheckout() {
     var cart = getCart();
     if (!cart || !cart.items || !cart.items.length) { toast('Your order is empty', 'error'); return; }
     var note = $('#orderNote') ? $('#orderNote').value.trim() : '';
-    var items = cart.items.map(function (i) {
-        return { productId: i.productId, quantity: i.qty, scheduledDate: i.scheduledDate || null, scheduledSlot: i.scheduledSlot || null };
-    });
     try {
         await withAuthGate(async function () {
-            await api('/api/buyer/orders/draft?kitchenId=' + cart.kitchenId, { method: 'POST', body: items });
+            if (!(await rebuildDraftFromCart())) throw new Error('Could not prepare your order. Please try again.');
             // Session may be valid even when this tab's UI state isn't (e.g. login
             // happened in another tab). Sync the UI identity so Confirm Order and
             // My Orders show the real buyer. Display-state only — no flow change.
@@ -836,6 +833,61 @@ async function goCheckout() {
     }
 }
 
+/**
+ * Rebuild the server-side draft from the cart still held in localStorage.
+ * The draft is the app's existing, authoritative in-progress order; this only
+ * re-sends what the buyer already chose, so the backend still re-prices and
+ * re-validates everything.
+ */
+async function rebuildDraftFromCart() {
+    var cart = getCart();
+    if (!cart || !cart.items || !cart.items.length || !cart.kitchenId) return false;
+    var items = cart.items.map(function (i) {
+        return { productId: i.productId, quantity: i.qty, scheduledDate: i.scheduledDate || null, scheduledSlot: i.scheduledSlot || null };
+    });
+    var rebuilt = await api('/api/buyer/orders/draft?kitchenId=' + cart.kitchenId, { method: 'POST', body: items });
+    return !!(rebuilt && rebuilt.id);
+}
+
+/**
+ * Re-establish THIS buyer's own server session after another same-origin login
+ * (the Seller app's demo-login) replaced it.
+ *
+ * It uses the mobile number the server itself handed us for this buyer, so no
+ * identity is hardcoded and the server still re-checks the persisted role. This
+ * mirrors the Seller app's own session recovery. Returns false when it cannot.
+ */
+async function restoreBuyerSession() {
+    var mobile = (state.user && state.user.mobileNumber) || '';
+    if (!/^\d{10}$/.test(mobile)) return false;
+    try {
+        var me = await api('/api/auth/demo-login', { method: 'POST', body: { mobileNumber: mobile } });
+        if (me && me.authenticated && me.role === 'BUYER') {
+            state.user = me;
+            return true;
+        }
+    } catch (e) { /* fall through */ }
+    return false;
+}
+
+/**
+ * True only for failures that PROVE no order was created.
+ *
+ * The in-progress order is tracked in the server session, so a login from
+ * another app on the same origin (the Seller app) can replace the session
+ * identity and orphan the buyer's draft. The backend reports that as 401, which
+ * also covers a genuinely expired session. In both cases the place attempt
+ * created nothing, so recovering and trying once more cannot duplicate an order.
+ *
+ * A 404 is deliberately NOT included: that is the cross-buyer guard, and it must
+ * stay a hard refusal rather than something the client retries around.
+ * Stock, service-area, profile and validation failures are excluded too, so
+ * genuine problems still surface instead of being retried away.
+ */
+function isRecoverableOrderSessionError(err) {
+    return err instanceof ApiError && err.status === 401;
+}
+
 /** Place the draft order directly with the selected payment status. */
 async function placeOrderWithStatus(paymentStatus) {
     if (state.placingOrder) return;
@@ -844,10 +896,22 @@ async function placeOrderWithStatus(paymentStatus) {
     try {
         await withAuthGate(async function () {
             var submittedPaymentStatus = paymentStatus === 'WILL_PAY_LATER' ? 'PENDING' : paymentStatus;
-            var placed = await api('/api/buyer/orders/place', {
-                method: 'POST',
-                body: { paymentStatus: submittedPaymentStatus, customInstructions: note }
-            });
+            var placeBody = { paymentStatus: submittedPaymentStatus, customInstructions: note };
+            var placed;
+            try {
+                placed = await api('/api/buyer/orders/place', { method: 'POST', body: placeBody });
+            } catch (err) {
+                // The order session lives on the server, so a session replaced
+                // elsewhere leaves our in-progress order unreachable and this
+                // attempt created nothing. Sign back in as this buyer, rebuild
+                // the order from the cart and place once more.
+                // Bounded: a single recovery, never a loop.
+                if (!isRecoverableOrderSessionError(err)) throw err;
+                if (!(await restoreBuyerSession())) throw err;
+                if (!(await rebuildDraftFromCart())) throw err;
+                placed = await api('/api/buyer/orders/place', { method: 'POST', body: placeBody });
+            }
+            // Only now, with the backend's own response, is the order real.
             clearCart();
             state.pendingCheckout = null;
             state.lastOrder = placed;
@@ -855,6 +919,12 @@ async function placeOrderWithStatus(paymentStatus) {
         });
     } catch (err) {
         if (!(err instanceof ApiError && err.status === 401)) toast(err.message, 'error');
+        // This screen is now unusable, so return the buyer to their cart, where
+        // the selection is still present and the order can simply be retried.
+        if (err instanceof ApiError && (err.status === 400 || err.status === 404)) {
+            await render();
+            navigate('#/summary');
+        }
     } finally {
         state.placingOrder = false;
     }

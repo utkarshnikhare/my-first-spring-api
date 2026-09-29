@@ -48,6 +48,13 @@ public class OrderService {
                 .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
         User buyer = resolveBuyer(session);
         if (buyer == null) throw new BuyerNotAuthenticatedException("Authentication required to create an order.");
+        // Only a BUYER may start an order. The Buyer and Seller apps share one
+        // browser session, so a Seller login elsewhere (e.g. the Seller app's
+        // demo-login) can leave a SELLER identity in this session. Without this
+        // check that identity would silently become the order's buyer.
+        if (buyer.getRole() != UserRole.BUYER) {
+            throw new BuyerNotAuthenticatedException("Only buyers can place an order. Please log in as a buyer.");
+        }
         // One-kitchen-at-a-time: hidden / suspended / pending sellers' kitchens
         // cannot be ordered from at all, and service-area rules apply server-side.
         if (!KitchenVisibility.isPubliclyVisible(kitchen) || !KitchenVisibility.isServiceAreaVisible(kitchen, buyer)) {
@@ -227,7 +234,20 @@ public class OrderService {
         }
         User buyer = resolveBuyer(session);
         if (buyer == null) throw new BuyerNotAuthenticatedException("Authentication required to place an order.");
+        if (buyer.getRole() != UserRole.BUYER) {
+            // A non-buyer identity (the Seller app's demo-login, or an admin)
+            // replaced this shared session. The buyer's draft pointer is now
+            // unreachable, so drop it and report an ordinary 401 - the status
+            // the frontend already understands as "sign in again" - instead of
+            // letting the check fall through to the cross-buyer 404 below,
+            // which has no recovery path and dead-ended the checkout.
+            session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
+            throw new BuyerNotAuthenticatedException("Only buyers can place an order. Please log in as a buyer.");
+        }
         if (order.getBuyer() == null || !order.getBuyer().getId().equals(buyer.getId())) {
+            // Another BUYER's draft. Keep the 404: it refuses the request AND
+            // avoids confirming that the order exists at all. This is the
+            // deliberate cross-buyer protection and must not be softened.
             throw new OrderNotFoundException(draftId);
         }
         // One-kitchen rule: if the kitchen became unavailable after this draft was
