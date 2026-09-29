@@ -189,4 +189,36 @@ class SellerAppScriptStructureTest {
         assertThat(sellerJs).contains("await sellerRender()");
         assertThat(sellerJs).contains("location.hash = '#/home'");
     }
+
+    @Test
+    void sellerRenderRevalidatesTheServerSessionBeforeOwnerScopedCalls() {
+        // The Buyer and Seller apps share one browser session, so a Buyer login
+        // elsewhere silently replaces the seller identity. sellerRender must ask
+        // the server who the session is instead of trusting cached state.
+        assertThat(sellerJs)
+                .as("seller.js must define the session guard")
+                .contains("async function ensureSellerSession()");
+        assertThat(sellerJs)
+                .as("the guard must consult the server")
+                .contains("api('/api/auth/me')");
+        assertThat(sellerJs)
+                .as("the guard must be able to restore the seller session")
+                .contains("api('/api/seller-app/demo-login'");
+
+        // The guard must run before the route function is invoked, otherwise the
+        // dashboard still renders the raw 403.
+        int guard = sellerJs.indexOf("await ensureSellerSession()");
+        int routeCall = sellerJs.indexOf("await route.fn(route.arg)");
+        assertThat(guard).isGreaterThanOrEqualTo(0);
+        assertThat(routeCall).isGreaterThan(guard);
+    }
+
+    @Test
+    void sellerBootDoesNotSilentlySwallowAuthenticationFailure() {
+        // A failed seller login must surface a retry state, not fall through to
+        // render an "Only sellers can perform this action" screen.
+        assertThat(sellerJs).doesNotContain("console.warn('demo-login failed:'");
+        assertThat(sellerJs).contains("sellerAuthErrorHtml()");
+        assertThat(sellerJs).contains("data-action=\"seller-retry\"");
+    }
 }

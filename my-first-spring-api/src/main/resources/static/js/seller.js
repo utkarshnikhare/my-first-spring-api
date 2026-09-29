@@ -16,12 +16,58 @@ function sellerResolveRoute(hash) {
     if (hash.startsWith('#/order-detail/')) return { fn: sellerOrderDetailView, arg: hash.split('/')[2] };
     return { fn: sellerHomeView, arg: '#/home' };
 }
+/**
+ * Seller session guard.
+ *
+ * The Buyer and Seller apps run on the same origin and therefore share ONE
+ * browser session. Logging in as a Buyer overwrites the server-side identity the
+ * Seller app depends on, so the Seller app used to show a raw
+ * "Only sellers can perform this action" until the page was reloaded: it
+ * authenticated once at boot and then trusted that cached state.
+ *
+ * The backend stays authoritative here. We ask the server who the current
+ * session is, and only when it is not our seller session do we re-establish it
+ * through the app's existing /api/seller-app/demo-login. The expected role is
+ * read from the server's own response - nothing here is hardcoded and no
+ * authorization is bypassed: a Buyer calling the seller APIs directly still
+ * gets 403, because requireSeller() re-checks the persisted role server-side.
+ */
+async function ensureSellerSession() {
+    try {
+        var me = await api('/api/auth/me');
+        if (me && me.authenticated && me.role === 'SELLER') return true;
+    } catch (e) {
+        // Unknown session state - fall through and re-authenticate below.
+    }
+    // Stale, missing, or logged in as a non-seller: restore the seller session.
+    try {
+        var s = await api('/api/seller-app/demo-login', { method: 'POST' });
+        return !!(s && s.authenticated && s.role === 'SELLER');
+    } catch (e) {
+        return false;
+    }
+}
+
+function sellerAuthErrorHtml() {
+    return '<div class="view-enter">' +
+        emptyHtml('🔒', 'Seller session required',
+            'We could not verify your seller session. Please retry.',
+            '<button class="btn btn-primary btn-mt-md" type="button" data-action="seller-retry">Retry</button>') +
+        '</div>';
+}
+
 async function sellerRender() {
     var hash = location.hash || '#/home';
     var route = sellerResolveRoute(hash);
     var view = viewEl();
     view.innerHTML = '<div class="page-loading"><div class="spinner"></div></div>';
     closeSheet();
+    // Verify the server session before calling any owner-scoped endpoint, so a
+    // Buyer login elsewhere cannot leave this screen stuck on an auth error.
+    if (!(await ensureSellerSession())) {
+        view.innerHTML = sellerAuthErrorHtml();
+        return;
+    }
     try { view.innerHTML = await route.fn(route.arg) || ''; sellerUpdateNav(hash); await loadUnreadNotifications(); if (typeof applyThemeUiState === 'function') applyThemeUiState(); window.scrollTo(0, 0); var saInput = $('#serviceAreasInput'); if (saInput) renderServiceAreas(saInput.value); }
     catch (err) { view.innerHTML = '<div class="view-enter">' + emptyHtml('⚠️', 'Something went wrong', err.message) + '</div>'; }
 }
@@ -1084,10 +1130,12 @@ window.addEventListener('hashchange', function () { if (sellerBooted) sellerRend
 window.addEventListener('DOMContentLoaded', async function () {
     try {
         initTheme();
-        try {
-            await api('/api/seller-app/demo-login', { method: 'POST' });
-        } catch (e) {
-            console.warn('demo-login failed:', e && e.message);
+        // Establish the seller session up front. If this genuinely fails we show
+        // a retry state instead of silently continuing into an auth error.
+        if (!(await ensureSellerSession())) {
+            var v0 = viewEl();
+            if (v0) v0.innerHTML = sellerAuthErrorHtml();
+            return;
         }
         if (!location.hash) {
             sellerBooted = true;
