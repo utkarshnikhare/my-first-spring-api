@@ -14,10 +14,12 @@ public class OrderItemDetailDto {
     private String productImageUrl;
     private BigDecimal totalRevenue;
     private int totalPlates;
+    private int totalOrders;
     private int paidCount;
     private int pendingCount;
     private int cancelledCount;
     private int filteredTotalPlates;
+    private int filteredTotalOrders;
     private int filteredPaidCount;
     private int filteredPendingCount;
     private int filteredCancelledCount;
@@ -83,6 +85,10 @@ public class OrderItemDetailDto {
     public void setTotalRevenue(BigDecimal totalRevenue) { this.totalRevenue = totalRevenue; }
     public int getTotalPlates() { return totalPlates; }
     public void setTotalPlates(int totalPlates) { this.totalPlates = totalPlates; }
+    public int getTotalOrders() { return totalOrders; }
+    public void setTotalOrders(int totalOrders) { this.totalOrders = totalOrders; }
+    public int getFilteredTotalOrders() { return filteredTotalOrders; }
+    public void setFilteredTotalOrders(int filteredTotalOrders) { this.filteredTotalOrders = filteredTotalOrders; }
     public int getPaidCount() { return paidCount; }
     public void setPaidCount(int paidCount) { this.paidCount = paidCount; }
     public int getPendingCount() { return pendingCount; }

@@ -540,8 +540,9 @@ public class SellerAppService {
         dto.setProductName(product.getName());
         dto.setProductImageUrl(product.getImageUrl());
 
-        int totalPlates = 0, paidCount = 0, pendingCount = 0, cancelledCount = 0;
+        int totalPlates = 0, paidCount = 0, pendingCount = 0, cancelledCount = 0, totalOrders = 0;
         int filteredTotalPlates = 0, filteredPaidCount = 0, filteredPendingCount = 0, filteredCancelledCount = 0;
+        int filteredTotalOrders = 0;
         BigDecimal totalRevenue = BigDecimal.ZERO;
         BigDecimal filteredTotalRevenue = BigDecimal.ZERO;
         List<OrderItemDetailDto.CustomerOrderRow> rows = new ArrayList<>();
@@ -563,20 +564,26 @@ public class SellerAppService {
             if (qtyForProduct > 0) {
                 boolean paid = order.getPaymentStatus() == PaymentStatus.PAID;
                 boolean cancelled = order.getOrderStatus() == OrderStatus.CANCELLED;
+                // One row per ORDER that contains this offering, so the headline
+                // count always equals paid + pending + cancelled.
+                totalOrders++;
                 if (cancelled) {
                     cancelledCount++;
                 } else {
                     if (paid) paidCount++;
-                    else if (order.getPaymentStatus() == PaymentStatus.PENDING) pendingCount++;
+                    else if (order.getPaymentStatus() == PaymentStatus.PENDING
+                            || order.getPaymentStatus() == PaymentStatus.WILL_PAY_LATER) pendingCount++;
                     totalPlates += qtyForProduct;
                     totalRevenue = totalRevenue.add(itemRevenue);
                 }
                 if (matchesFilters(order, society, status)) {
+                    filteredTotalOrders++;
                     if (cancelled) {
                         filteredCancelledCount++;
                     } else {
                         if (paid) filteredPaidCount++;
-                        else if (order.getPaymentStatus() == PaymentStatus.PENDING) filteredPendingCount++;
+                        else if (order.getPaymentStatus() == PaymentStatus.PENDING
+                                || order.getPaymentStatus() == PaymentStatus.WILL_PAY_LATER) filteredPendingCount++;
                         filteredTotalPlates += qtyForProduct;
                         filteredTotalRevenue = filteredTotalRevenue.add(itemRevenue);
                     }
@@ -587,11 +594,13 @@ public class SellerAppService {
 
         dto.setTotalRevenue(totalRevenue);
         dto.setTotalPlates(totalPlates);
+        dto.setTotalOrders(totalOrders);
         dto.setPaidCount(paidCount);
         dto.setPendingCount(pendingCount);
         dto.setCancelledCount(cancelledCount);
         dto.setCustomers(rows);
         dto.setFilteredTotalPlates(filteredTotalPlates);
+        dto.setFilteredTotalOrders(filteredTotalOrders);
         dto.setFilteredPaidCount(filteredPaidCount);
         dto.setFilteredPendingCount(filteredPendingCount);
         dto.setFilteredCancelledCount(filteredCancelledCount);
@@ -610,7 +619,11 @@ public class SellerAppService {
             String s = status.toLowerCase();
             boolean cancelled = order.getOrderStatus() == OrderStatus.CANCELLED;
             boolean paid = order.getPaymentStatus() == PaymentStatus.PAID;
-            boolean pending = order.getPaymentStatus() == PaymentStatus.PENDING;
+            // WILL_PAY_LATER is the legacy spelling of an unpaid order, so it
+            // belongs in the same bucket as PENDING. The buckets stay mutually
+            // exclusive: a cancelled order is never "paid" or "pending" here.
+            boolean pending = order.getPaymentStatus() == PaymentStatus.PENDING
+                    || order.getPaymentStatus() == PaymentStatus.WILL_PAY_LATER;
             if (s.equals("cancelled")) return cancelled;
             if (s.equals("paid")) return paid && !cancelled;
             if (s.equals("pending")) return pending && !cancelled;

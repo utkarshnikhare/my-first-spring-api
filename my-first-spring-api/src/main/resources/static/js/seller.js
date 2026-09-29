@@ -263,12 +263,21 @@ async function sellerHomeView() {
                 var booked = p.bookedQuantity || 0, remaining = p.remainingQuantity, maxQty = p.maxQuantity;
                 h += '<div class="oc-stats"><strong>' + booked + ' booked</strong> • ' + (remaining != null ? '<strong>' + remaining + ' available</strong>' : 'No limit') + '</div>';
                 h += '<div class="oc-time-row"><span>Orders close: <span class="time-label">' + esc(sellerOrdersCloseLabel(p)) + '</span></span><span>Delivery: <span class="time-label">' + esc(sellerDeliveryLabel(p)) + '</span></span></div>';
-                if (maxQty != null && remaining != null && remaining >= 0 && !p.soldOut && !p.ordersPaused) { h += '<div class="stepper"><button type="button" data-action="inv-dec" data-pid="' + p.id + '" aria-label="Decrease">-</button><span class="stepper-value" id="inv-' + p.id + '">' + remaining + '</span><button type="button" data-action="inv-inc" data-pid="' + p.id + '" aria-label="Increase">+</button></div>'; }
-                if (!p.soldOut && !p.ordersPaused) { h += '<button class="btn-soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Mark Sold Out</button>'; }
-                if (!p.soldOut && !p.ordersPaused) { h += '<button class="btn btn-secondary btn-sm btn-block btn-mt-sm" type="button" data-action="pause-orders" data-pid="' + p.id + '">Pause Orders</button>'; }
-                if (p.ordersPaused && !p.soldOut) { h += '<button class="btn btn-secondary btn-sm btn-block btn-mt-sm" type="button" data-action="resume-orders" data-pid="' + p.id + '">Resume Orders</button>'; }
-                h += '<button class="btn btn-secondary btn-sm btn-block btn-mt-sm" type="button" data-action="edit-offering" data-pid="' + p.id + '">Edit Offering</button>';
-                h += '<a class="btn btn-secondary btn-sm btn-block btn-mt-sm" href="#/order-detail/' + p.id + '">View Orders</a>';
+                if (maxQty != null && remaining != null && remaining >= 0 && !p.soldOut && !p.ordersPaused) { h += '<div class="stepper oc-stepper"><button type="button" data-action="inv-dec" data-pid="' + p.id + '" aria-label="Decrease available quantity for ' + esc(p.name) + '">−</button><span class="stepper-value" id="inv-' + p.id + '">' + remaining + '</span><button type="button" data-action="inv-inc" data-pid="' + p.id + '" aria-label="Increase available quantity for ' + esc(p.name) + '">+</button></div>'; }
+                // Compact action bar with a clear hierarchy:
+                //   View Orders  = primary    (solid accent)
+                //   Edit         = secondary  (outline)
+                //   Pause/Resume = neutral    (label follows the real state)
+                //   Sold Out     = destructive (restrained red)
+                // Handlers, confirmations and semantics are unchanged - only the
+                // grouping and class names differ from the old stacked buttons.
+                h += '<div class="oc-actions">';
+                h += '<a class="oc-act oc-act-primary" href="#/order-detail/' + p.id + '">View Orders</a>';
+                h += '<button class="oc-act oc-act-ghost" type="button" data-action="edit-offering" data-pid="' + p.id + '">Edit</button>';
+                if (!p.soldOut && !p.ordersPaused) { h += '<button class="oc-act oc-act-pause" type="button" data-action="pause-orders" data-pid="' + p.id + '">Pause</button>'; }
+                if (p.ordersPaused && !p.soldOut) { h += '<button class="oc-act oc-act-resume" type="button" data-action="resume-orders" data-pid="' + p.id + '">Resume</button>'; }
+                if (!p.soldOut && !p.ordersPaused) { h += '<button class="oc-act oc-act-danger" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Sold Out</button>'; }
+                h += '</div>';
                 h += '</div></div>';
             });
         }
@@ -587,59 +596,97 @@ async function sellerEnquiriesView() {
 }
 
 // SCREEN 7B: OFFERING ORDERS (summary-first with filters)
+//
+// This view returns an HTML STRING. sellerRender() only assigns that string to
+// view.innerHTML after this function resolves, so nothing here may touch the
+// DOM: an earlier version did (it set #offeringName and called
+// renderOfferingCustomers on an element that did not exist yet), which left the
+// customer list permanently empty. Everything is now built into the string.
 async function sellerOrderDetailView(productId) {
     S.offeringFilterSociety = S.offeringFilterSociety || '';
     S.offeringFilterStatus = S.offeringFilterStatus || '';
-    var h = '<div class="view-enter"><div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button><h2 class="flex-1" id="offeringName"></h2></div>';
+    var h = '<div class="view-enter">';
     try {
         var detail = await sellerApi('/api/seller-app/orders/product/' + productId + '?date=' + sellerDate(S.selectedDate) + (S.offeringFilterSociety ? '&society=' + encodeURIComponent(S.offeringFilterSociety) : '') + (S.offeringFilterStatus ? '&status=' + encodeURIComponent(S.offeringFilterStatus) : ''));
         var pname = detail.productName || 'Offering';
-        var el = document.getElementById('offeringName');
-        if (el) el.textContent = pname;
+        var kitchenName = S.kitchen && S.kitchen.name ? S.kitchen.name : '';
+        var orderCount = detail.totalOrders || 0;
+        var orderWord = orderCount === 1 ? 'order' : 'orders';
+
+        h += '<div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button>' +
+            '<h2 class="flex-1">Order Summary</h2></div>';
+        if (kitchenName) h += '<p class="muted small text-sm card-mb">🏪 ' + esc(kitchenName) + '</p>';
+
+        // Headline: N orders • X plates • ₹Y - all from persisted order data.
         h += '<div class="drilldown-header"><h3>' + esc(pname) + '</h3>';
-        h += '<div class="dd-stats">' + (detail.totalPlates || 0) + ' plates · ' + money(detail.totalRevenue || 0) + '</div>';
-        h += '<div class="dtc-badges"><span class="dtc-badge green">' + (detail.paidCount || 0) + ' Paid</span><span class="dtc-badge orange">' + (detail.pendingCount || 0) + ' Pending</span><span class="dtc-badge red">' + (detail.cancelledCount || 0) + ' Cancelled</span></div></div>';
-        h += '<div class="form-row-2" style="margin-top:10px">';
+        h += '<div class="dd-stats">' + orderCount + ' ' + orderWord + ' • ' +
+            (detail.totalPlates || 0) + ' plates • ' + money(detail.totalRevenue || 0) + '</div>';
+        h += '<div class="dtc-badges">' +
+            '<span class="dtc-badge green">' + (detail.paidCount || 0) + ' Paid</span>' +
+            '<span class="dtc-badge orange">' + (detail.pendingCount || 0) + ' Pending</span>' +
+            '<span class="dtc-badge red">' + (detail.cancelledCount || 0) + ' Cancelled</span>' +
+            '</div></div>';
+
         var societies = [];
-        var statusOpts = ['All Status', 'Paid', 'Pending', 'Cancelled'];
         (detail.customers || []).forEach(function (c) { if (c.society && societies.indexOf(c.society) === -1) societies.push(c.society); });
-        h += '<select class="sort-select" data-action="set-offering-society"><option value="">All Societies</option>';
+        // Filters only. Sorting within a single offering is meaningless - the
+        // seller is already looking at one item - so no sort control is offered.
+        h += '<div class="oc-filters">';
+        h += '<select class="oc-filter-select" data-action="set-offering-society" aria-label="Filter by society"><option value="">All Societies</option>';
         societies.forEach(function (s) { h += '<option value="' + esc(s) + '"' + (S.offeringFilterSociety === s ? ' selected' : '') + '>' + esc(s) + '</option>'; });
         h += '</select>';
-        h += '<select class="sort-select" data-action="set-offering-status"><option value="">All Status</option>';
-        statusOpts.forEach(function (s) { var val = s === 'All Status' ? '' : s.toLowerCase(); h += '<option value="' + val + '"' + (S.offeringFilterStatus === val ? ' selected' : '') + '>' + esc(s) + '</option>'; });
+        h += '<select class="oc-filter-select" data-action="set-offering-status" aria-label="Filter by status"><option value="">All Status</option>';
+        [['paid', 'Paid'], ['pending', 'Pending'], ['cancelled', 'Cancelled']].forEach(function (pair) {
+            h += '<option value="' + pair[0] + '"' + (S.offeringFilterStatus === pair[0] ? ' selected' : '') + '>' + pair[1] + '</option>';
+        });
         h += '</select></div>';
+
         if (S.offeringFilterSociety || S.offeringFilterStatus) {
-            h += '<div class="tiny muted mt-1">Showing filtered results</div>';
+            h += '<div class="tiny muted mt-1">Showing ' + (detail.filteredTotalOrders || 0) + ' of ' + orderCount + ' orders</div>';
         }
-        h += '<div id="offeringCustomers"></div>';
-        h += '</div>';
-        renderOfferingCustomers(detail);
-    } catch (e) { h += emptyHtml('⚠️', 'Could not load details', e.message); h += '</div>'; }
+        h += '<div id="offeringCustomers">' + offeringCustomersHtml(detail) + '</div>';
+    } catch (e) {
+        h += '<div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button>' +
+            '<h2 class="flex-1">Order Summary</h2></div>';
+        h += emptyHtml('⚠️', 'Could not load orders', e.message,
+            '<button class="btn btn-primary card-mt" type="button" data-action="seller-retry">Retry</button>');
+    }
+    h += '</div>';
     return h;
 }
 
-function renderOfferingCustomers(detail) {
-    var container = document.getElementById('offeringCustomers');
-    if (!container) return;
-    container.innerHTML = '';
-    var customers = detail.customers || [];
-    if (customers.length === 0) { container.innerHTML = emptyHtml('📋', 'No customer orders', 'No orders match the selected filters.'); return; }
+/** Compact customer-order rows as a string (never written to the live DOM). */
+function offeringCustomersHtml(detail) {
+    var customers = (detail && detail.customers) || [];
+    if (customers.length === 0) {
+        return emptyHtml('📋', 'No customer orders', 'No orders match the selected filters.');
+    }
+    var out = '';
     customers.forEach(function (c) {
-        var statusClass = c.cancelled ? 'cancelled' : (c.paid ? 'paid' : 'pending');
-        var statusLabel = c.cancelled ? 'CANCELLED' : (c.paid ? 'PAID' : 'PENDING');
-        var addrParts = [];
-        if (c.society) addrParts.push(c.society);
-        if (c.building) addrParts.push(c.building);
-        if (c.buyerFlat) addrParts.push(c.buyerFlat);
-        var remarkHtml = c.remark ? '<span class="remark-icon" data-action="show-remark" data-remark="' + esc(c.remark) + '" title="Has remark">💬</span>' : '';
-        var html = '<div class="customer-row compact" data-action="open-order" data-order="' + c.orderId + '">';
-        html += '<div class="cr-top"><span class="cr-qty">' + c.quantity + ' ' + esc(c.unit || 'plate') + (c.quantity !== 1 ? 's' : '') + '</span><span class="status-dot ' + statusClass + '"></span><span class="cr-status ' + statusClass + '">' + statusLabel + '</span></div>';
-        html += '<div class="cr-loc">' + esc(addrParts.join(' • ')) + '</div>';
-        html += remarkHtml;
-        html += '</div>';
-        container.innerHTML += html;
+        // Order lifecycle decides the colour bucket; payment status decides
+        // Paid vs Pending. A cancelled order is never shown as paid/pending.
+        var bucket = c.cancelled ? 'cancelled' : (c.paid ? 'paid' : 'pending');
+        var label = c.cancelled ? 'CANCELLED' : (c.paid ? 'PAID' : 'PENDING');
+        var addr = [];
+        if (c.society) addr.push(c.society);
+        if (c.building) addr.push(c.building);
+        if (c.buyerFlat) addr.push(c.buyerFlat);
+        var qtyLabel = c.quantity + ' ' + esc(c.unit || 'plate') + (c.quantity !== 1 ? 's' : '');
+        var remark = c.remark
+            ? '<button type="button" class="remark-icon" data-action="show-remark" data-remark="' + esc(c.remark) + '" aria-label="View customer remark">💬</button>'
+            : '';
+        out += '<div class="customer-row compact oc-row" role="button" tabindex="0" data-action="open-order" data-order="' + esc(c.orderId) + '">';
+        out += '<span class="status-dot ' + bucket + '" aria-hidden="true"></span>';
+        out += '<div class="oc-row-main">';
+        out += '<div class="oc-row-top"><span class="cr-qty">' + qtyLabel + '</span>' +
+            '<span class="cr-status ' + bucket + '">' + label + '</span></div>';
+        if (addr.length) out += '<div class="cr-loc">' + esc(addr.join(' • ')) + '</div>';
+        out += '</div>';
+        out += remark;
+        out += '<span class="oc-row-chevron" aria-hidden="true">›</span>';
+        out += '</div>';
     });
+    return out;
 }
 
 // SCREEN 7C: INDIVIDUAL ORDER DETAIL
@@ -1006,7 +1053,20 @@ document.addEventListener('click', async function (e) {
             case 'set-offering-society': S.offeringFilterSociety = t.value; await sellerRender(); break;
             case 'set-offering-status': S.offeringFilterStatus = t.value; await sellerRender(); break;
             case 'open-order': sellerNavigate('#/order-detail/order/' + t.dataset.order); break;
-            case 'show-remark': alert(t.dataset.remark); break;
+            case 'show-remark':
+                // Reuse the EXISTING modal helpers (openModal/closeModal) rather
+                // than a raw alert(). No new component and no chat system invented.
+                // The remark button is the closest [data-action] ancestor, so this
+                // does NOT also trigger the row's open-order navigation.
+                if (typeof openModal === 'function') {
+                    openModal('<div class="modal-icon">💬</div>' +
+                        '<h3>Customer remark</h3>' +
+                        '<p class="muted small">' + esc(t.dataset.remark || '') + '</p>' +
+                        '<div class="modal-actions">' +
+                        '<button class="btn btn-primary" type="button" onclick="closeModal()">Close</button>' +
+                        '</div>');
+                }
+                break;
             case 'parse-message': {
                 var msg = $('#qpMessage').value;
                 if (!msg.trim()) { toast('Please paste a message first', 'error'); return; }
@@ -1166,7 +1226,16 @@ document.addEventListener('click', async function (e) {
 
 document.addEventListener('change', function (e) {
     var picker = e.target.closest('[data-action="set-availability-date"]');
-    if (picker) applyOfferingDatePicker(picker);
+    if (picker) { applyOfferingDatePicker(picker); return; }
+    // A <select> reports the chosen option through 'change', not 'click' -
+    // clicking the dropdown only fires 'click' with the OLD value still set.
+    // Without these the offering-orders society/status filters never applied.
+    var societyFilter = e.target.closest('[data-action="set-offering-society"]');
+    if (societyFilter) { S.offeringFilterSociety = societyFilter.value; sellerRender(); return; }
+    var statusFilter = e.target.closest('[data-action="set-offering-status"]');
+    if (statusFilter) { S.offeringFilterStatus = statusFilter.value; sellerRender(); return; }
+    var dateInput = e.target.closest('[data-action="set-date-calendar"]');
+    if (dateInput) { S.selectedDate = dateInput.value; sellerRender(); return; }
 });
 
 // BOOT - never leaves the page on an infinite spinner

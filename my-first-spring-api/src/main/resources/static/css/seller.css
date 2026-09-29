@@ -1513,3 +1513,167 @@
 .view {
     min-width: 0;
 }
+
+/* =====================================================================
+   Offering Orders page + offering-card action bar
+   Scoped to the offering card and the offering-specific orders screen.
+   No global element or layout rules are touched here.
+   ===================================================================== */
+
+/* ---- Filters (society + status) ---- */
+.oc-filters {
+    display: flex;
+    gap: 8px;
+    margin: 12px 0 4px;
+    flex-wrap: wrap;
+}
+.oc-filter-select {
+    flex: 1 1 140px;
+    min-width: 0;
+    padding: 9px 10px;
+    font-size: .85rem;
+    font-family: inherit;
+    background: var(--surface);
+    color: inherit;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    min-height: 40px;
+}
+.oc-filter-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ---- Compact customer-order rows ---- */
+.customer-row.oc-row {
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease;
+}
+.customer-row.oc-row:hover { border-color: var(--accent); }
+.customer-row.oc-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.oc-row-main { flex: 1; min-width: 0; }
+.oc-row-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.customer-row.oc-row .cr-qty { font-weight: 800; font-size: .9rem; }
+.customer-row.oc-row .cr-loc { margin-top: 2px; }
+
+/* Status is conveyed by BOTH colour and an explicit text label, so it is
+   never communicated by colour alone. */
+.customer-row .status-dot.paid { background: var(--green); }
+.customer-row .status-dot.pending { background: var(--amber); }
+.customer-row .status-dot.cancelled { background: var(--danger); }
+.customer-row .cr-status {
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .04em;
+    padding: 2px 7px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+.customer-row .cr-status.paid { background: var(--green-soft); color: var(--green); }
+.customer-row .cr-status.pending { background: var(--amber-soft); color: var(--amber); }
+.customer-row .cr-status.cancelled { background: var(--danger-soft); color: var(--danger); }
+
+.customer-row .remark-icon {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .95rem;
+    line-height: 1;
+    background: var(--surface-2, var(--surface));
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    padding: 0;
+}
+.customer-row .remark-icon:hover { background: var(--accent-soft); }
+.customer-row .remark-icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.oc-row-chevron {
+    flex-shrink: 0;
+    align-self: center;
+    color: var(--muted);
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+/* ---- Offering card: compact action bar ---- */
+.oc-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+.oc-act {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    /* Comfortable tap target without the old oversized full-width blocks. */
+    min-height: 36px;
+    padding: 7px 12px;
+    font-size: .8rem;
+    font-weight: 700;
+    font-family: inherit;
+    line-height: 1.2;
+    text-decoration: none;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.oc-act:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.oc-act:active { transform: scale(.97); }
+.oc-act:disabled, .oc-act[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+
+/* Primary: View Orders - the one clear next step. */
+.oc-act-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    flex: 1 1 auto;
+}
+.oc-act-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+/* Secondary: Edit - present but quieter than the primary. */
+.oc-act-ghost {
+    background: transparent;
+    color: var(--accent);
+    border-color: var(--border);
+}
+.oc-act-ghost:hover { background: var(--accent-soft); border-color: var(--accent); }
+
+/* Pause: neutral/amber, clearly distinct from the destructive action. */
+.oc-act-pause { background: var(--amber-soft); color: var(--amber); border-color: transparent; }
+.oc-act-pause:hover { border-color: var(--amber); }
+
+/* Resume: the positive counterpart to Pause. */
+.oc-act-resume { background: var(--green-soft); color: var(--green); border-color: transparent; }
+.oc-act-resume:hover { border-color: var(--green); }
+
+/* Destructive: Sold Out - restrained red, never confusable with Pause. */
+.oc-act-danger { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+.oc-act-danger:hover { border-color: var(--danger); }
+
+/* ---- Offering card: smaller, balanced quantity stepper ---- */
+.stepper.oc-stepper { gap: 6px; }
+.stepper.oc-stepper button { width: 34px; height: 34px; font-size: 1rem; }
+.stepper.oc-stepper .stepper-value { min-width: 28px; font-size: .92rem; }
+
+/* On a narrow phone the primary action keeps its own line, the rest share one. */
+@media (max-width: 400px) {
+    .oc-act-primary { flex: 1 1 100%; }
+    .oc-act { flex: 1 1 calc(50% - 3px); }
+    .oc-filters { flex-direction: column; }
+    .oc-filter-select { flex: 1 1 auto; width: 100%; }
+}

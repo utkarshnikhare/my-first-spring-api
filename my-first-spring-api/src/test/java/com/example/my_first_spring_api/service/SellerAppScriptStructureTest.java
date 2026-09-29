@@ -297,4 +297,108 @@ class SellerAppScriptStructureTest {
                 .as("a non-auth error must propagate untouched")
                 .contains("if (!isSellerAuthError(err)) throw err;");
     }
+
+    // ------------------------------------------------------------------
+    // P0 regression - "View Orders" for an offering rendered no customer
+    // rows at all.
+    //
+    // sellerOrderDetailView() returns an HTML STRING, and sellerRender() only
+    // assigns that string to view.innerHTML AFTER the function resolves. The
+    // view was calling document.getElementById('offeringName') and
+    // renderOfferingCustomers() on elements that did not exist yet, so the
+    // header stayed blank and the customer list was permanently empty even
+    // though the API had returned the rows.
+    // ------------------------------------------------------------------
+
+    @Test
+    void theOfferingOrdersViewBuildsItsRowsAsAStringNotThroughTheDom() {
+        int start = sellerJs.indexOf("async function sellerOrderDetailView(");
+        int end = sellerJs.indexOf("async function sellerOrderDetailByOrderView(");
+        assertThat(start).as("sellerOrderDetailView must exist").isGreaterThanOrEqualTo(0);
+        assertThat(end).isGreaterThan(start);
+        String view = sellerJs.substring(start, end);
+
+        // A view returning a string must not reach into the live document.
+        assertThat(view)
+                .as("the view must not query the DOM before sellerRender inserts it")
+                .doesNotContain("document.getElementById");
+        assertThat(view)
+                .as("customer rows must be inlined into the returned string")
+                .contains("offeringCustomersHtml(detail)");
+        assertThat(sellerJs)
+                .as("the DOM-writing variant must be gone")
+                .doesNotContain("function renderOfferingCustomers(");
+    }
+
+    @Test
+    void theOfferingOrdersViewKeepsFiltersAndDropsTheSortByItemControl() {
+        int start = sellerJs.indexOf("async function sellerOrderDetailView(");
+        int end = sellerJs.indexOf("async function sellerOrderDetailByOrderView(");
+        String view = sellerJs.substring(start, end);
+
+        // Society + status filters, both wired to the existing change handlers.
+        assertThat(view).contains("data-action=\"set-offering-society\"");
+        assertThat(view).contains("data-action=\"set-offering-status\"");
+        assertThat(view).contains("All Societies");
+        assertThat(view).contains("All Status");
+        // A per-item sort control must not be offered: the seller is already
+        // looking at a single offering. Asserted on the rendered option label
+        // and on the absence of any sort action.
+        assertThat(view)
+                .doesNotContain(">Sort by Item<")
+                .doesNotContain("Sort by Item</option>")
+                .doesNotContain("set-offering-sort");
+        // Summary counts come from the backend payload, never hardcoded.
+        assertThat(view).contains("detail.totalOrders").contains("detail.totalPlates")
+                .contains("detail.totalRevenue");
+    }
+
+    @Test
+    void offeringCardActionsKeepTheirHandlersAndGainACompactHierarchy() {
+        int start = sellerJs.indexOf("async function sellerHomeView(");
+        int end = sellerJs.indexOf("async function sellerHistoryView(");
+        assertThat(start).as("sellerHomeView must exist").isGreaterThanOrEqualTo(0);
+        assertThat(end).isGreaterThan(start);
+        String home = sellerJs.substring(start, end);
+
+        // Every action keeps its ORIGINAL data-action, so behaviour is unchanged.
+        assertThat(home).contains("data-action=\"mark-soldout\"");
+        assertThat(home).contains("data-action=\"pause-orders\"");
+        assertThat(home).contains("data-action=\"resume-orders\"");
+        assertThat(home).contains("data-action=\"edit-offering\"");
+        assertThat(home).contains("data-action=\"inv-inc\"").contains("data-action=\"inv-dec\"");
+        // View Orders still routes by the offering id.
+        assertThat(home).contains("href=\"#/order-detail/' + p.id + '\"");
+        // Compact hierarchy classes replace the stacked full-width buttons.
+        assertThat(home).contains("oc-actions").contains("oc-act-primary")
+                .contains("oc-act-ghost").contains("oc-act-pause")
+                .contains("oc-act-resume").contains("oc-act-danger");
+        // Pause is still only offered when the offering is actually pausable.
+        assertThat(home).contains("if (!p.soldOut && !p.ordersPaused) { h += '<button class=\"oc-act oc-act-pause\"");
+    }
+
+    /**
+     * P0 regression - the offering-orders filters never applied.
+     *
+     * A &lt;select&gt; reports the chosen option through the 'change' event.
+     * Clicking the dropdown only fires 'click', and at that moment the control
+     * still holds the PREVIOUS value, so handling these actions in the click
+     * listener left the society/status filters inert: the view re-rendered with
+     * the old filter and the "Showing N of M" indicator never appeared.
+     */
+    @Test
+    void theOfferingOrderFiltersAreHandledOnChangeNotOnlyOnClick() {
+        int ch = sellerJs.indexOf("document.addEventListener('change'");
+        assertThat(ch).as("a change listener must exist").isGreaterThanOrEqualTo(0);
+        String changeListener = sellerJs.substring(ch, ch + 1200);
+
+        assertThat(changeListener)
+                .as("society filter must react to change")
+                .contains("data-action=\"set-offering-society\"");
+        assertThat(changeListener)
+                .as("status filter must react to change")
+                .contains("data-action=\"set-offering-status\"");
+        // It must re-render so the filtered rows and the indicator update.
+        assertThat(changeListener).contains("sellerRender()");
+    }
 }
