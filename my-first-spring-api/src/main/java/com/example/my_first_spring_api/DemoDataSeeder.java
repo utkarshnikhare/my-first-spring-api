@@ -26,6 +26,7 @@ import org.springframework.stereotype.Component;
 
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -45,6 +46,7 @@ public class DemoDataSeeder {
     private static final String DEMO_ORDERS_FLAG = "demo_orders_seeded";
     private static final String DEMO_ENQUIRIES_FLAG = "demo_enquiries_seeded";
     private static final String DEMO_FAVOURITES_FLAG = "demo_favourites_seeded";
+    private static final String DEMO_VIEW_ORDERS_FLAG = "demo_view_orders_seeded";
     private int orderCounter = 0;
 
     private final UserRepository userRepository;
@@ -74,6 +76,7 @@ public class DemoDataSeeder {
         seedIfEmpty();
         seedBuyersIfEmpty();
         seedOrdersIfEmpty();
+        seedViewOrdersScenarioIfEmpty();
         seedEnquiriesIfEmpty();
         seedFavouritesIfEmpty();
     }
@@ -151,7 +154,10 @@ public class DemoDataSeeder {
         product(kAarti, "Thalipeeth", "Multi-grain flatbread served with white butter and curd", 60, "plate", 20, 10, 4.4);
 
         // Pre-order demo: Puran Poli for next Monday
-        Product prePuran = new Product(kAarti, "Puran Poli (Pre-order)", "Sweet flatbread stuffed with chana dal and jaggery, served with ghee — pre-order for Monday", BigDecimal.valueOf(70), "piece");
+        // NOTE: Product's 5th constructor arg is imageUrl (not unit) — pass null
+        // and set the unit via setPriceUnit, otherwise imageUrl="piece" renders
+        // <img src="piece"> and the browser requests GET /piece (404 + console error).
+        Product prePuran = new Product(kAarti, "Puran Poli (Pre-order)", "Sweet flatbread stuffed with chana dal and jaggery, served with ghee — pre-order for Monday", BigDecimal.valueOf(70), null);
         prePuran.setPriceUnit("piece");
         prePuran.setAvailableToday(false);
         prePuran.setAvailableDate(java.time.LocalDate.now().plusDays(7 - java.time.LocalDate.now().getDayOfWeek().getValue() + 1));
@@ -355,6 +361,109 @@ public class DemoDataSeeder {
         o.setOrderTime(ts);
         o.setUpdatedAt(ts);
         return orderRepository.save(o);
+    }
+
+    // ==================== VIEW-ORDERS DEMO SCENARIO (AFFECTED OFFERING) ====================
+
+    /**
+     * Deterministic scenario for the offering reported on the Seller "View Orders"
+     * screen — Aarti Kitchen's Poha.
+     *
+     * The generic seeder above drops at most one small order per product per day
+     * and never applies the inventory rules that real checkout uses
+     * (ProductRepository.consumeStock / restoreStock), so the offering card could
+     * advertise a booked quantity that no persisted order ever accounted for.
+     *
+     * This step creates six fixed orders — all stamped today — for six seeded
+     * buyers across two societies: three PAID, one PENDING, one WILL_PAY_LATER and
+     * one CANCELLED, with different quantities (6+3+2+4+3 booked plates plus a
+     * cancelled 2-plate order). It then re-derives the offering's inventory from
+     * ALL persisted orders using the existing business rules:
+     *   booked    = sum of non-cancelled order plates (a cancelled order's stock is
+     *               counted as restored, exactly like OrderService.restoreStock);
+     *   remaining = maxQuantity - booked.
+     *
+     * Guarded by a platform_settings flag so re-seeding never duplicates orders,
+     * customers or inventory movements, and the reconciliation is an absolute
+     * computation from persisted orders, so it is idempotent by construction.
+     * The dashboard's booked/available figures are therefore backed 1:1 by the
+     * orders the seller can open under View Orders.
+     */
+    public void seedViewOrdersScenarioIfEmpty() {
+        if (platformSettingRepository.findBySettingKey(DEMO_VIEW_ORDERS_FLAG).isPresent()) return;
+
+        User aarti = userRepository.findByMobileNumber("9100000001").orElse(null);
+        if (aarti != null) {
+            java.util.List<Kitchen> kits = kitchenRepository.findBySeller(aarti);
+            if (!kits.isEmpty()) {
+                Product poha = productRepository.findByKitchen(kits.get(0)).stream()
+                        .filter(p -> "Poha".equalsIgnoreCase(p.getName()))
+                        .findFirst().orElse(null);
+                if (poha != null) {
+                    // {buyer mobile, quantity, payment status, order status, remark, minutes ago}
+                    String[][] rows = {
+                            {"9876500001", "6", "PAID", "CONFIRMED", "Extra chutney", "18"},
+                            {"9876500002", "3", "PENDING", "ORDERED", "", "46"},
+                            {"9876500003", "2", "WILL_PAY_LATER", "ORDERED", "Less spicy please", "74"},
+                            {"9876500004", "4", "PAID", "CONFIRMED", "No onions", "102"},
+                            {"9876500005", "3", "PAID", "CONFIRMED", "", "130"},
+                            {"9876500006", "2", "PAID", "CANCELLED", "Ordered by mistake", "158"}
+                    };
+                    LocalDateTime now = LocalDateTime.now();
+                    LocalDateTime dayStart = LocalDate.now().atStartOfDay();
+                    for (int i = 0; i < rows.length; i++) {
+                        User buyer = userRepository.findByMobileNumber(rows[i][0]).orElse(null);
+                        if (buyer == null) continue;
+                        LocalDateTime ts = now.minusMinutes(Long.parseLong(rows[i][5]));
+                        if (ts.isBefore(dayStart.plusMinutes(1))) ts = dayStart.plusMinutes(1 + i);
+                        createScenarioOrder(buyer, poha, Integer.parseInt(rows[i][1]),
+                                rows[i][2], rows[i][3], rows[i][4], "SM-71" + i, ts);
+                    }
+                    reconcileOfferingInventory(poha);
+                }
+            }
+        }
+        platformSettingRepository.save(new PlatformSetting(DEMO_VIEW_ORDERS_FLAG, "true"));
+    }
+
+    /** Like {@link #createOrder} but with a fixed order number and timestamp (deterministic). */
+    private Order createScenarioOrder(User buyer, Product p, int qty, String payStatus, String ordStatus,
+                                      String remark, String orderNumber, LocalDateTime ts) {
+        Order o = new Order(buyer, p.getKitchen());
+        o.setOrderStatus(OrderStatus.valueOf(ordStatus));
+        o.setPaymentStatus(PaymentStatus.valueOf(payStatus));
+        o.setCustomInstructions(remark == null || remark.isBlank() ? null : remark);
+        o.setOrderNumber(orderNumber);
+        o = orderRepository.save(o);
+        o.addItem(new OrderItem(p, qty, p.getPrice()));
+        o.recalculateTotal();
+        o.setCreatedAt(ts);
+        o.setOrderTime(ts);
+        o.setUpdatedAt(ts);
+        return orderRepository.save(o);
+    }
+
+    /**
+     * Derives the offering's booked/available quantities from the authoritative
+     * persisted orders under the existing inventory rules (non-cancelled plates
+     * are booked; remaining = max - booked). Being an absolute computation, it
+     * can never double-decrement no matter how often the seeder runs.
+     */
+    private void reconcileOfferingInventory(Product p) {
+        if (p.getRemainingQuantity() == null || p.getMaxQuantity() == null) return;
+        int booked = 0;
+        LocalDateTime allTime = LocalDateTime.of(2000, 1, 1, 0, 0);
+        for (Order o : orderRepository.findByKitchenAndCreatedAtAfterWithItems(p.getKitchen(), allTime)) {
+            if (o.getOrderStatus() == OrderStatus.CANCELLED || o.getOrderStatus() == OrderStatus.DRAFT) continue;
+            for (OrderItem item : o.getItems()) {
+                if (item == null || item.getProduct() == null || item.getProduct().getId() == null) continue;
+                if (!item.getProduct().getId().equals(p.getId())) continue;
+                booked += item.getQuantity() != null ? item.getQuantity() : 0;
+            }
+        }
+        p.setBookedQuantity(booked);
+        p.setRemainingQuantity(Math.max(0, p.getMaxQuantity() - booked));
+        productRepository.save(p);
     }
 
     private User seller(String name, String mobile, String flat, SellerApprovalStatus status, String society, String building) {

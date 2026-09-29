@@ -25,6 +25,8 @@ public class OrderItemDetailDto {
     private int filteredCancelledCount;
     private BigDecimal filteredTotalRevenue;
     private List<CustomerOrderRow> customers;
+    /** Distinct societies among ALL orders for this offering on this date (unfiltered), for the dropdown. */
+    private List<String> availableSocieties;
 
     public static class CustomerOrderRow {
         private Long orderId;
@@ -107,5 +109,7 @@ public class OrderItemDetailDto {
     public void setFilteredTotalRevenue(BigDecimal filteredTotalRevenue) { this.filteredTotalRevenue = filteredTotalRevenue; }
     public List<CustomerOrderRow> getCustomers() { return customers; }
     public void setCustomers(List<CustomerOrderRow> customers) { this.customers = customers; }
+    public List<String> getAvailableSocieties() { return availableSocieties; }
+    public void setAvailableSocieties(List<String> availableSocieties) { this.availableSocieties = availableSocieties; }
 }
 

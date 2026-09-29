@@ -204,6 +204,22 @@ function prettyDateTime(iso) {
     var d = new Date(iso);
     return prettyDate(d.toISOString().split('T')[0]) + ' ' + prettyTime(d.toTimeString().slice(0,5));
 }
+function sellerImg(url) {
+    if (!url) return '';
+    var u = String(url).trim();
+    if (!u) return '';
+    // Legacy seed data sometimes carried a bare unit word ("piece"/"plate")
+    // in the image column. Those are NOT fetchable URLs - rendering them as
+    // <img src> triggers a same-origin request like /piece that 404s and
+    // logs a console error. Only pass through real image references; the
+    // caller falls back to the emoji placeholder otherwise.
+    var low = u.toLowerCase();
+    if (low === 'piece' || low === 'plate' || low === 'per piece' || low === 'per plate' || low === 'per box' || low === 'box' || low === 'cup' || low === 'bowl') return '';
+    if (u.slice(0, 8) === 'https://' || u.slice(0, 7) === 'http://') return u;
+    if (u.charAt(0) === '/' || u.slice(0, 5) === 'data:') return u;
+    if (/\.(png|jpe?g|gif|webp|svg|avif)(\?.*)?$/i.test(u)) return u;
+    return '';
+}
 function foodEmoji(name) {
     var n = (name || '').toLowerCase();
     if (n.indexOf('poha') >= 0 || n.indexOf('misal') >= 0) return '🍲';
@@ -257,7 +273,7 @@ async function sellerHomeView() {
         } else {
             dash.offerings.forEach(function (p) {
                 h += '<div class="offering-card">';
-                h += '<div class="oc-photo" data-emoji="' + foodEmoji(p.name) + '">' + (p.imageUrl ? '<img src="' + esc(p.imageUrl) + '" alt="' + esc(p.name) + '" onerror="imgFallback(this)">' : foodEmoji(p.name)) + '</div>';
+                h += '<div class="oc-photo" data-emoji="' + foodEmoji(p.name) + '">' + (sellerImg(p.imageUrl) ? '<img src="' + esc(sellerImg(p.imageUrl)) + '" alt="' + esc(p.name) + '" onerror="imgFallback(this)">' : foodEmoji(p.name)) + '</div>';
                 h += '<div class="oc-body">';
                 h += '<div class="oc-header"><span class="oc-name">' + esc(p.name) + '</span>' + offeringStatusBadge(p) + '</div>';
                 var booked = p.bookedQuantity || 0, remaining = p.remainingQuantity, maxQty = p.maxQuantity;
@@ -390,7 +406,7 @@ function offeringFormHtml(t, opts) {
     var selectedUnit = t.priceUnit || 'Per Piece';
     var categoryValues = String(t.category || '').split(',').map(function (c) { return c.trim().toUpperCase(); }).filter(Boolean);
     var h = '<form class="seller-form" id="' + (opts.formId || 'createOfferingForm') + '">';
-    h += '<div class="form-group"><label class="form-label">Photos <span class="req">*</span></label><div class="photo-upload-row"><div class="photo-tile" data-action="add-photo">' + (isEdit && t.imageUrl ? '<img src="' + esc(t.imageUrl) + '" alt="' + esc(t.name) + '" onerror="imgFallback(this)">' : '+') + '</div></div></div>';
+    h += '<div class="form-group"><label class="form-label">Photos <span class="req">*</span></label><div class="photo-upload-row"><div class="photo-tile" data-action="add-photo">' + (isEdit && sellerImg(t.imageUrl) ? '<img src="' + esc(sellerImg(t.imageUrl)) + '" alt="' + esc(t.name) + '" onerror="imgFallback(this)">' : '+') + '</div></div></div>';
     h += '<div class="form-group"><label class="form-label">Item Name <span class="req">*</span></label><input class="form-input" name="name" value="' + esc(t.name || '') + '" placeholder="e.g. POHA" required' + lockAttr + '></div>';
     h += '<div class="form-group"><label class="form-label">Short Description</label><textarea class="form-textarea" name="description">' + esc(t.description || '') + '</textarea></div>';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Price (Rs) <span class="req">*</span></label><input class="form-input" name="price" type="number" value="' + (t.price || '') + '" placeholder="100" required' + lockAttr + '></div>';
@@ -526,7 +542,7 @@ async function sellerKitchenView() {
         : '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="pause-kitchen">Pause Kitchen</button>';
     h += '<button class="btn btn-secondary btn-sm btn-block btn-mt-sm" type="button" data-action="preview-kitchen">Preview Kitchen Page</button>';
     h += '<form class="seller-form" id="kitchenForm">';
-    h += '<div class="kitchen-avatar-upload"><div class="kitchen-avatar" data-action="upload-avatar" role="button" tabindex="0" aria-label="Upload kitchen photo">' + (kitchen && kitchen.imageUrl ? '<img src="' + esc(kitchen.imageUrl) + '" class="avatar-img" alt="Kitchen photo" onerror="imgFallback(this)">' : '📷') + '</div></div>';
+    h += '<div class="kitchen-avatar-upload"><div class="kitchen-avatar" data-action="upload-avatar" role="button" tabindex="0" aria-label="Upload kitchen photo">' + (kitchen && sellerImg(kitchen.imageUrl) ? '<img src="' + esc(sellerImg(kitchen.imageUrl)) + '" class="avatar-img" alt="Kitchen photo" onerror="imgFallback(this)">' : '📷') + '</div></div>';
     h += '<div class="form-group"><label class="form-label">Kitchen Name</label><input class="form-input" name="displayName" value="' + esc(kitchen && kitchen.displayName ? kitchen.displayName : 'Aarti Kitchen') + '"></div>';
     h += '<div class="form-group"><label class="form-label">Who can order from me? (Service Areas)</label>';
     h += '<div class="muted small" style="margin-bottom:6px">Select the societies you deliver to. Buyers outside these societies cannot discover or order from your kitchen.</div>';
@@ -608,6 +624,23 @@ async function sellerOrderDetailView(productId) {
     var h = '<div class="view-enter">';
     try {
         var detail = await sellerApi('/api/seller-app/orders/product/' + productId + '?date=' + sellerDate(S.selectedDate) + (S.offeringFilterSociety ? '&society=' + encodeURIComponent(S.offeringFilterSociety) : '') + (S.offeringFilterStatus ? '&status=' + encodeURIComponent(S.offeringFilterStatus) : ''));
+        // Options come from the UNFILTERED society list for this offering/date, so
+        // the dropdown can never collapse to the currently selected society and
+        // switching between societies works repeatedly (also for status = non-All).
+        var societies = [];
+        var societyPool = detail.availableSocieties || [];
+        if (societyPool.length) {
+            societyPool.forEach(function (s) { if (s && societies.indexOf(s) === -1) societies.push(s); });
+        } else {
+            (detail.customers || []).forEach(function (c) { if (c.society && societies.indexOf(c.society) === -1) societies.push(c.society); });
+        }
+        if (S.offeringFilterSociety && societies.indexOf(S.offeringFilterSociety) === -1) {
+            // The selected society has no orders for this offering on this date
+            // any more (e.g. the date changed): clear it and reload once so the
+            // rows, the "Showing N of M" line and the control stay in agreement.
+            S.offeringFilterSociety = '';
+            return sellerOrderDetailView(productId);
+        }
         var pname = detail.productName || 'Offering';
         var kitchenName = S.kitchen && S.kitchen.name ? S.kitchen.name : '';
         var orderCount = detail.totalOrders || 0;
@@ -627,8 +660,6 @@ async function sellerOrderDetailView(productId) {
             '<span class="dtc-badge red">' + (detail.cancelledCount || 0) + ' Cancelled</span>' +
             '</div></div>';
 
-        var societies = [];
-        (detail.customers || []).forEach(function (c) { if (c.society && societies.indexOf(c.society) === -1) societies.push(c.society); });
         // Filters only. Sorting within a single offering is meaningless - the
         // seller is already looking at one item - so no sort control is offered.
         h += '<div class="oc-filters">';
@@ -1047,11 +1078,12 @@ document.addEventListener('click', async function (e) {
             }
             case 'set-view-mode': S.viewMode = t.dataset.mode; await sellerRender(); break;
             case 'set-date': S.selectedDate = t.dataset.date; await sellerRender(); break;
-            case 'set-date-calendar': S.selectedDate = t.value; await sellerRender(); break;
+            // set-date-calendar / set-offering-society / set-offering-status are
+            // <input>/<select> controls: they are handled ONLY by the 'change'
+            // listener below. Reading their value from 'click' yields the OLD
+            // selection and re-renders the view over the freshly filtered one.
             case 'set-sort': S.sortFilter = t.value; break;
             case 'set-detail-sort': S.selectedSort = t.value; await sellerRender(); break;
-            case 'set-offering-society': S.offeringFilterSociety = t.value; await sellerRender(); break;
-            case 'set-offering-status': S.offeringFilterStatus = t.value; await sellerRender(); break;
             case 'open-order': sellerNavigate('#/order-detail/order/' + t.dataset.order); break;
             case 'show-remark':
                 // Reuse the EXISTING modal helpers (openModal/closeModal) rather

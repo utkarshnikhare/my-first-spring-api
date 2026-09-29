@@ -32,11 +32,15 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Base64;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -474,6 +478,9 @@ public class SellerAppService {
         BigDecimal totalRevenue = BigDecimal.ZERO;
 
         Map<Long, SellerOrderSummaryDto.ProductOrderAggregate> productAgg = new LinkedHashMap<>();
+        // productId -> order ids already counted for that product, so multiple
+        // items of the same offering in one order never double-count as orders.
+        Map<Long, Set<Long>> productOrdersSeen = new HashMap<>();
 
         for (Order order : orders) {
             if (order.getOrderStatus() == OrderStatus.CANCELLED) {
@@ -481,10 +488,15 @@ public class SellerAppService {
                 continue; // cancelled orders never count towards revenue or item aggregates
             }
             if (order.getPaymentStatus() == PaymentStatus.PAID) paidCount++;
-            else if (order.getPaymentStatus() == PaymentStatus.PENDING) pendingCount++;
+            else if (order.getPaymentStatus() == PaymentStatus.PENDING
+                    || order.getPaymentStatus() == PaymentStatus.WILL_PAY_LATER) pendingCount++;
             BigDecimal amt = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
             totalRevenue = totalRevenue.add(amt);
 
+            // Order-based counters must be incremented ONCE per distinct order per
+            // product: an order containing this offering as two items (or any join
+            // returning its items twice) must still count as ONE order.
+            Map<Long, Set<Long>> ordersCountedPerProduct = productOrdersSeen;
             for (OrderItem item : order.getItems()) {
                 Product product = item.getProduct();
                 Long pid = product.getId();
@@ -497,17 +509,23 @@ public class SellerAppService {
                     a.setRevenue(BigDecimal.ZERO);
                     return a;
                 });
-                agg.setTotalOrders(agg.getTotalOrders() + 1);
+                boolean firstItemOfThisOrder = ordersCountedPerProduct
+                        .computeIfAbsent(pid, k -> new HashSet<>())
+                        .add(order.getId());
+                if (firstItemOfThisOrder) {
+                    agg.setTotalOrders(agg.getTotalOrders() + 1);
+                    if (order.getPaymentStatus() == PaymentStatus.PAID)
+                        agg.setPaidCount(agg.getPaidCount() + 1);
+                    else if (order.getPaymentStatus() == PaymentStatus.PENDING
+                            || order.getPaymentStatus() == PaymentStatus.WILL_PAY_LATER)
+                        agg.setPendingCount(agg.getPendingCount() + 1);
+                }
                 int qty = item.getQuantity() != null ? item.getQuantity() : 0;
                 agg.setTotalPlates(agg.getTotalPlates() + qty);
                 BigDecimal itemRevenue = item.getPrice() != null
                         ? item.getPrice().multiply(BigDecimal.valueOf(qty))
                         : BigDecimal.ZERO;
                 agg.setRevenue(agg.getRevenue().add(itemRevenue));
-                if (order.getPaymentStatus() == PaymentStatus.PAID)
-                    agg.setPaidCount(agg.getPaidCount() + 1);
-                else if (order.getPaymentStatus() == PaymentStatus.PENDING)
-                    agg.setPendingCount(agg.getPendingCount() + 1);
             }
         }
 
@@ -546,6 +564,11 @@ public class SellerAppService {
         BigDecimal totalRevenue = BigDecimal.ZERO;
         BigDecimal filteredTotalRevenue = BigDecimal.ZERO;
         List<OrderItemDetailDto.CustomerOrderRow> rows = new ArrayList<>();
+        // Societies offered in the filter dropdown are collected from ALL orders
+        // for this offering on this date — never from the filtered rows — so the
+        // option list cannot collapse to the currently selected society and the
+        // seller can switch between societies repeatedly.
+        Set<String> availableSocieties = new TreeSet<>();
 
         for (Order order : orders) {
             int qtyForProduct = 0;
@@ -562,6 +585,10 @@ public class SellerAppService {
                 }
             }
             if (qtyForProduct > 0) {
+                if (order.getBuyer() != null && order.getBuyer().getSociety() != null) {
+                    String s = order.getBuyer().getSociety().trim();
+                    if (!s.isEmpty()) availableSocieties.add(s);
+                }
                 boolean paid = order.getPaymentStatus() == PaymentStatus.PAID;
                 boolean cancelled = order.getOrderStatus() == OrderStatus.CANCELLED;
                 // One row per ORDER that contains this offering, so the headline
@@ -605,13 +632,18 @@ public class SellerAppService {
         dto.setFilteredPendingCount(filteredPendingCount);
         dto.setFilteredCancelledCount(filteredCancelledCount);
         dto.setFilteredTotalRevenue(filteredTotalRevenue);
+        dto.setAvailableSocieties(new ArrayList<>(availableSocieties));
         return dto;
     }
 
     private boolean matchesFilters(Order order, String society, String status) {
         if (society != null && !society.isBlank()) {
+            // Match on the persisted buyer society, normalised (trim + case) so
+            // legacy casing still matches while a partial value can never pull in
+            // unrelated records. Buyers without society never match a selection.
+            String wanted = society.trim();
             String buyerSociety = order.getBuyer() != null ? order.getBuyer().getSociety() : null;
-            if (buyerSociety == null || !buyerSociety.toLowerCase().contains(society.toLowerCase())) {
+            if (buyerSociety == null || !buyerSociety.trim().equalsIgnoreCase(wanted)) {
                 return false;
             }
         }
