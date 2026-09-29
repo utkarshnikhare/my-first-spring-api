@@ -300,19 +300,6 @@ function offeringFormHtml(t, opts) {
     h += '<input type="hidden" name="availableDate" id="availDate" value="' + esc(chosenDate) + '">';
     h += '<div class="form-group" id="chooseDateRow"' + (mode === 'choose' ? '' : ' hidden') + '><label class="form-label">Offering Date <span class="req">*</span></label><input type="date" class="form-input" name="chosenOfferingDate" min="' + todayIso + '" data-action="set-availability-date" value="' + esc(chosenDate) + '"' + lockAttr + '></div>';
 
-// SCREEN 3: CREATE OFFERING (MANUAL FORM)
-async function sellerCreateView() {
-    // A new form always starts in Today mode; never inherit a previous choice.
-    S.offeringFor = 'today';
-    var t = S.draftOffering || {};
-    var h = '<div class="view-enter">';
-    h += '<div class="page-head"><h1>Create Offering</h1><p class="muted small">' +
-        (S.republishSourceId ? 'Review the previous offering details, then set fresh timing and quantity.' : 'Fill in the details for your new dish.') + '</p></div>';
-    h += offeringFormHtml(t, { formId: 'createOfferingForm', mode: 'today' });
-    h += '</div>';
-    return h;
-}
-
     var openValue = isEdit ? (t.orderWindowStart || '') : '';
     var closeValue = isEdit ? (t.orderWindowEnd || '') : '';
     var closeNote = locked
@@ -349,6 +336,19 @@ async function sellerCreateView() {
         h += '<div class="toggle-row"><div><div class="toggle-text">Mark as Favourite</div><div class="toggle-note">Save as template (max 3).</div></div><div class="toggle-switch" id="favToggle" data-action="toggle-favourite"></div></div>';
     }
     h += '<button class="btn btn-primary btn-block" type="submit">' + (isEdit ? 'Save Changes' : 'Publish Offering') + '</button></form>';
+    return h;
+}
+
+// SCREEN 3: CREATE OFFERING (MANUAL FORM)
+async function sellerCreateView() {
+    // A new form always starts in Today mode; never inherit a previous choice.
+    S.offeringFor = 'today';
+    var t = S.draftOffering || {};
+    var h = '<div class="view-enter">';
+    h += '<div class="page-head"><h1>Create Offering</h1><p class="muted small">' +
+        (S.republishSourceId ? 'Review the previous offering details, then set fresh timing and quantity.' : 'Fill in the details for your new dish.') + '</p></div>';
+    h += offeringFormHtml(t, { formId: 'createOfferingForm', mode: 'today' });
+    h += '</div>';
     return h;
 }
 
