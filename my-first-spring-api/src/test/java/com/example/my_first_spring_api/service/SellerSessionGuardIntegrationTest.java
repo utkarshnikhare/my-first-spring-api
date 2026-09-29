@@ -121,4 +121,94 @@ class SellerSessionGuardIntegrationTest {
         MockHttpSession session = new MockHttpSession();
         assertThat(buyerService.getCurrentBuyer(session)).isNull();
     }
+
+    /**
+     * P0 regression - the exact window that produced the reported screen.
+     *
+     * The frontend guard (GET /api/auth/me) and the route's own request are two
+     * separate HTTP calls. This test reproduces a Buyer login landing BETWEEN
+     * them, which is what made a legitimately authenticated Seller request fail
+     * with "Only sellers can perform this action" and left the screen stuck.
+     *
+     * The server must keep rejecting that request - the authorization is
+     * correct - but re-establishing the seller session must make the very next
+     * attempt succeed, without any reload. That is precisely what sellerApi()'
+     * single bounded retry relies on.
+     */
+    @Test
+    void sessionLostBetweenTheGuardAndTheRequestRecoversOnTheNextAttempt() {
+        MockHttpSession session = new MockHttpSession();
+
+        // 1. The guard's probe: the session is a seller, so the client proceeds.
+        session.setAttribute(BuyerService.BUYER_SESSION_KEY, seller.getId());
+        User probed = buyerService.getCurrentBuyer(session);
+        assertThat(probed.getRole()).isEqualTo(UserRole.SELLER);
+
+        // 2. A Buyer logs in on the same session during the gap.
+        session.setAttribute(BuyerService.BUYER_SESSION_KEY, buyer.getId());
+
+        // 3. The route's request is correctly refused - authorization is intact.
+        assertThatThrownBy(() -> assertSellerAccess(session))
+                .isInstanceOf(SellerNotAuthorizedException.class)
+                .hasMessageContaining("Only sellers can perform this action");
+
+        // 4. The client re-authenticates and retries ONCE: this must now work,
+        //    with no page reload and no change to the persisted roles.
+        session.setAttribute(BuyerService.BUYER_SESSION_KEY, seller.getId());
+        assertSellerAccess(session);
+        assertThat(sellerAppService.getDashboard(seller).getKitchenName()).isNotBlank();
+    }
+
+    @Test
+    void theRetryCannotEscalateANonSellerBecauseTheRoleIsReReadEveryTime() {
+        // The self-heal is a frontend convenience only. Even after a seller
+        // session existed earlier in the same session object, a buyer identity
+        // must still be refused - the role is re-read from the database on
+        // every single request, never cached on the client.
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute(BuyerService.BUYER_SESSION_KEY, seller.getId());
+        assertSellerAccess(session);
+
+        session.setAttribute(BuyerService.BUYER_SESSION_KEY, buyer.getId());
+        assertThatThrownBy(() -> assertSellerAccess(session))
+                .isInstanceOf(SellerNotAuthorizedException.class);
+
+        // Re-reading the persisted user still yields the buyer role, so the
+        // frontend cannot talk its way past the check.
+        User reread = buyerService.getCurrentBuyer(session);
+        assertThat(reread.getRole()).isEqualTo(UserRole.BUYER);
+    }
+
+    @Test
+    void sellerOwnershipIsStillEnforcedAfterAnyReLogin() {
+        // A second seller must not be able to read or mutate the first seller's
+        // offerings, even though both hold valid SELLER sessions. The self-heal
+        // restores a seller session; it must never widen ownership.
+        MockHttpSession otherSession = new MockHttpSession();
+        otherSession.setAttribute(BuyerService.BUYER_SESSION_KEY, seller.getId());
+        assertSellerAccess(otherSession);
+
+        User intruder = new User("Other", "95" + UUID.randomUUID().toString().replace("-", "").substring(0, 8) + "01",
+                "B-1", UserRole.SELLER);
+        intruder.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
+        User persistedIntruder = users.saveAndFlush(intruder);
+
+        MockHttpSession intruderSession = new MockHttpSession();
+        intruderSession.setAttribute(BuyerService.BUYER_SESSION_KEY, persistedIntruder.getId());
+        assertSellerAccess(intruderSession);
+
+        // The intruder is a valid seller, yet owns no kitchen, so the
+        // owner-scoped dashboard call must still refuse them. The frontend
+        // self-heal restores a *seller* session - it must never widen ownership.
+        assertThat(kitchens.findBySeller(persistedIntruder))
+                .as("intruder must not own the seller's kitchen")
+                .isEmpty();
+        assertThat(kitchens.findBySeller(seller))
+                .as("the real seller still owns exactly their own kitchen")
+                .extracting(Kitchen::getId)
+                .containsExactly(kitchen.getId());
+        assertThatThrownBy(() -> sellerAppService.getDashboard(persistedIntruder))
+                .as("a seller without a kitchen must be rejected, not served another seller's data")
+                .isInstanceOf(Exception.class);
+    }
 }

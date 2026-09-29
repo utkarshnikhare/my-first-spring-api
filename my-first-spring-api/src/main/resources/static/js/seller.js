@@ -40,11 +40,56 @@ async function ensureSellerSession() {
         // Unknown session state - fall through and re-authenticate below.
     }
     // Stale, missing, or logged in as a non-seller: restore the seller session.
+    return restoreSellerSession();
+}
+
+/**
+ * Forces a fresh seller login and reports whether the server really handed back
+ * a seller. Used when a request has already failed with an auth error: at that
+ * point the session is known NOT to be a seller, so re-probing /api/auth/me
+ * would be a wasted round trip that can race the same way.
+ *
+ * The expected role is read from the server's own response - nothing is
+ * hardcoded and no authorization is bypassed: requireSeller() still re-checks
+ * the persisted role server-side on every request.
+ */
+async function restoreSellerSession() {
     try {
         var s = await api('/api/seller-app/demo-login', { method: 'POST' });
         return !!(s && s.authenticated && s.role === 'SELLER');
     } catch (e) {
         return false;
+    }
+}
+
+/** True for the two statuses that mean "this session is not the seller". */
+function isSellerAuthError(err) {
+    return !!err && (err.status === 401 || err.status === 403);
+}
+
+/**
+ * Seller-scoped request with bounded self-heal.
+ *
+ * ensureSellerSession() runs before the route, but that guard and the route's
+ * own request are two separate HTTP calls. The Buyer and Seller apps share ONE
+ * browser session, so a Buyer login landing in that gap makes an otherwise
+ * valid seller request fail with 401/403 - and the view then rendered that raw
+ * error permanently, leaving the Seller screen stuck on "Could not load
+ * dashboard / Only sellers can perform this action" with no way back except a
+ * manual reload.
+ *
+ * So on an auth failure: re-establish the seller session and retry ONCE. The
+ * retry is strictly bounded (no loop, no backoff). Any non-auth error, and any
+ * second auth failure, propagates untouched, so genuine server, network and
+ * permission problems are still reported honestly rather than hidden.
+ */
+async function sellerApi(path, opts) {
+    try {
+        return await api(path, opts);
+    } catch (err) {
+        if (!isSellerAuthError(err)) throw err;
+        if (!(await restoreSellerSession())) throw err;
+        return await api(path, opts);
     }
 }
 
@@ -177,7 +222,7 @@ async function sellerAddView() {
     var h = '<div class="view-enter">';
     h += '<div class="page-head"><h1>Add Offering</h1><p class="muted small">Favourites are manual reusable templates (maximum 3). History is automatic published-offering history.</p></div>';
     h += '<p class="muted small mb-2"><a class="text-brand" href="#/history">View automatic History →</a></p>';
-    try { S.favTemplates = await api('/api/seller-app/templates'); } catch (e) { S.favTemplates = []; }
+    try { S.favTemplates = await sellerApi('/api/seller-app/templates'); } catch (e) { S.favTemplates = []; }
     h += '<div class="pathway-card" data-action="go-use-favourite"><div class="pc-icon">⭐</div><div class="pc-title">Create from Favourite</div><div class="pc-desc">Quickly post from saved templates (max 3).</div>';
     if (S.favTemplates.length > 0) { h += '<div class="favourite-pills">'; S.favTemplates.forEach(function (t) { h += '<span class="fav-pill" data-action="use-template" data-tid="' + t.id + '">⭐ ' + esc(t.name) + '</span>'; }); h += '</div>'; }
     h += '</div>';
@@ -192,7 +237,7 @@ async function sellerHomeView() {
     var h = '<div class="view-enter">';
     h += '<div class="seller-header"><div class="sdh-text"><p class="sdh-greeting">' + greeting() + ', ' + esc(S.user && S.user.name ? S.user.name : 'Seller') + '</p><h1 class="sdh-title">Your Dashboard</h1></div><span class="notif-bell">' + notificationBadgeHtml() + '<button class="icon-btn" type="button" data-action="toggle-theme" aria-label="Toggle theme">🌓</button>' + notificationPanelHtml('sellerNotifPanel') + '</span></div>';
     try {
-        var dash = await api('/api/seller-app/dashboard');
+        var dash = await sellerApi('/api/seller-app/dashboard');
         S.kitchen = { id: dash.kitchenId, name: dash.kitchenName };
         var hasActivity = (!dash.totalOrders || dash.totalOrders === 0)
             && (!dash.hasEarnings || dash.hasEarnings === false)
@@ -247,7 +292,7 @@ async function sellerHomeView() {
 async function sellerHistoryView() {
     var h = '<div class="view-enter"><div class="page-head"><h1>History</h1><p class="muted small">Previous offerings from your kitchen.</p></div>';
     try {
-        var items = await api('/api/seller-app/history');
+        var items = await sellerApi('/api/seller-app/history');
         S.historyItems = items || [];
         if (!items.length) {
             h += emptyHtml('🕘', 'No previous items', 'Expired offerings for your kitchen will appear here.');
@@ -275,7 +320,7 @@ async function sellerQuickPostView() {
     h += '<button class="btn btn-primary btn-block" type="submit" id="qpSubmit">Post</button>';
     h += '</form>';
     try {
-        var posts = await api('/api/seller-app/quick-posts');
+        var posts = await sellerApi('/api/seller-app/quick-posts');
         if (posts && posts.length) {
             h += '<h3 class="section-gap mb-2">Today\'s Quick Posts</h3>';
             posts.forEach(function (p) { h += '<div class="card pad card-mb"><div class="font-700">' + esc(p.message) + '</div>' + (p.imageData ? '<img class="mt-2" style="max-width:100%;border-radius:8px" src="' + esc(p.imageData) + '" alt="Quick Post image">' : '') + '</div>'; });
@@ -432,7 +477,7 @@ async function sellerOrdersView() {
     var h = '<div class="view-enter"><div class="page-head"><h1>Orders</h1></div>';
     h += '<div class="date-tabs"><button class="date-tab' + (S.selectedDate === 'today' ? ' active' : '') + '" data-action="set-date" data-date="today">Today</button><button class="date-tab' + (S.selectedDate === 'tomorrow' ? ' active' : '') + '" data-action="set-date" data-date="tomorrow">Tomorrow</button><button class="date-tab' + (S.selectedDate !== 'today' && S.selectedDate !== 'tomorrow' ? ' active' : '') + '" data-action="set-date" data-date="pick">Pick date</button></div>';
     try {
-        var summary = await api('/api/seller-app/orders/summary?date=' + sellerDate(S.selectedDate));
+        var summary = await sellerApi('/api/seller-app/orders/summary?date=' + sellerDate(S.selectedDate));
         var hasOrders = summary.totalOrderCount > 0;
         if (hasOrders) {
             h += '<div class="daily-total-card"><div class="dtc-number">' + summary.totalOrderCount + '</div><div class="dtc-label">Total Orders</div>';
@@ -460,9 +505,9 @@ async function sellerOrdersView() {
 // SCREEN 6: MANAGE KITCHEN
 async function sellerKitchenView() {
     var kitchen = null;
-    try { kitchen = await api('/api/seller/kitchen'); S.myKitchen = kitchen; S.kitchen = kitchen; } catch (e) { }
+    try { kitchen = await sellerApi('/api/seller/kitchen'); S.myKitchen = kitchen; S.kitchen = kitchen; } catch (e) { }
     var societies = [];
-    try { societies = await api('/api/seller/societies') || []; } catch (e) { }
+    try { societies = await sellerApi('/api/seller/societies') || []; } catch (e) { }
     var societyOptions = societies.map(function (s) { return '<option value="' + esc(s) + '">' + esc(s) + '</option>'; }).join('');
     var paused = !!(kitchen && kitchen.paused);
     var h = '<div class="view-enter"><div class="page-head"><h1>Manage Kitchen</h1></div>';
@@ -495,7 +540,7 @@ async function sellerKitchenView() {
 async function sellerEarningsView() {
     var h = '<div class="view-enter"><div class="page-head"><h1>Earnings</h1></div>';
     try {
-        var e = await api('/api/seller-app/earnings');
+        var e = await sellerApi('/api/seller-app/earnings');
         if (!e.hasEarnings) {
             h += emptyHtml('💰', 'No Earnings', 'No earnings to show yet');
             if (e.pending != null && Number(e.pending) !== 0) {
@@ -547,7 +592,7 @@ async function sellerOrderDetailView(productId) {
     S.offeringFilterStatus = S.offeringFilterStatus || '';
     var h = '<div class="view-enter"><div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button><h2 class="flex-1" id="offeringName"></h2></div>';
     try {
-        var detail = await api('/api/seller-app/orders/product/' + productId + '?date=' + sellerDate(S.selectedDate) + (S.offeringFilterSociety ? '&society=' + encodeURIComponent(S.offeringFilterSociety) : '') + (S.offeringFilterStatus ? '&status=' + encodeURIComponent(S.offeringFilterStatus) : ''));
+        var detail = await sellerApi('/api/seller-app/orders/product/' + productId + '?date=' + sellerDate(S.selectedDate) + (S.offeringFilterSociety ? '&society=' + encodeURIComponent(S.offeringFilterSociety) : '') + (S.offeringFilterStatus ? '&status=' + encodeURIComponent(S.offeringFilterStatus) : ''));
         var pname = detail.productName || 'Offering';
         var el = document.getElementById('offeringName');
         if (el) el.textContent = pname;
@@ -601,7 +646,7 @@ function renderOfferingCustomers(detail) {
 async function sellerOrderDetailByOrderView(orderId) {
     var h = '<div class="view-enter"><div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button><h2 class="flex-1">Order Details</h2></div>';
     try {
-        var order = await api('/api/seller/orders/' + orderId);
+        var order = await sellerApi('/api/seller/orders/' + orderId);
         h += '<div class="card pad card-mb">';
         h += '<div class="top-row"><div class="font-700">#' + esc(order.orderNumber) + '</div>';
         var statusClass = order.orderStatus === 'CANCELLED' ? 'cancelled' : (order.paymentStatus === 'PAID' ? 'paid' : 'pending');
@@ -745,10 +790,10 @@ async function submitOfferingEdit(form) {
 
     if (Object.keys(payload).length === 0 && delta === 0) { toast('No changes to save', 'info'); return; }
     if (Object.keys(payload).length > 0) {
-        await api('/api/seller/products/' + o.id, { method: 'PUT', body: payload });
+        await sellerApi('/api/seller/products/' + o.id, { method: 'PUT', body: payload });
     }
     if (delta !== 0) {
-        await api('/api/seller-app/products/' + o.id + '/inventory', { method: 'PATCH', body: { delta: delta } });
+        await sellerApi('/api/seller-app/products/' + o.id + '/inventory', { method: 'PATCH', body: { delta: delta } });
     }
     toast('Offering updated', 'success');
     S.editOffering = null;
@@ -797,7 +842,7 @@ document.addEventListener('submit', async function (e) {
             }
             var kid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
             if (!kid) {
-                var k = await api('/api/seller/kitchen');
+                var k = await sellerApi('/api/seller/kitchen');
                 kid = k.id;
                 S.myKitchen = k;
             }
@@ -812,10 +857,10 @@ document.addEventListener('submit', async function (e) {
             if (saveFav) {
                 try {
                     var favBody = { name: vals.name, description: vals.description || '', price: Number(vals.price), priceUnit: vals.priceUnit, maxQuantity: vals.maxQuantity, orderWindowStart: vals.orderWindowStart, orderWindowEnd: vals.orderWindowEnd, cutoffTime: vals.cutoffTime, readyByTime: vals.readyByTime, availableDate: vals.availableDate, category: (categories && categories[0]) || '' };
-                    await api('/api/seller-app/templates', { method: 'POST', body: favBody });
+                    await sellerApi('/api/seller-app/templates', { method: 'POST', body: favBody });
                 } catch (favErr) { toast('Could not save favourite: ' + favErr.message, 'error'); }
             }
-            await api('/api/seller/products?kitchenId=' + kid, { method: 'POST', body: vals });
+            await sellerApi('/api/seller/products?kitchenId=' + kid, { method: 'POST', body: vals });
             toast('Offering published!', 'success');
             S.draftOffering = null;
             S.republishSourceId = null;
@@ -842,7 +887,7 @@ document.addEventListener('submit', async function (e) {
             if (!S.quickPostRequestId) S.quickPostRequestId = 'ui-' + Date.now() + '-' + Math.random().toString(36).slice(2);
             if (submitButton) submitButton.disabled = true;
             try {
-                await api('/api/seller-app/quick-posts', { method: 'POST', body: {
+                await sellerApi('/api/seller-app/quick-posts', { method: 'POST', body: {
                     message: message, imageData: imageData, requestId: S.quickPostRequestId
                 }});
                 S.quickPostRequestId = null;
@@ -854,11 +899,11 @@ document.addEventListener('submit', async function (e) {
         } else if (form.id === 'kitchenForm') {
             var kid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
             if (!kid) {
-                var k = await api('/api/seller/kitchen');
+                var k = await sellerApi('/api/seller/kitchen');
                 kid = k.id;
                 S.myKitchen = k;
             }
-            await api('/api/seller/kitchen/' + kid, { method: 'PUT', body: formVals(form) });
+            await sellerApi('/api/seller/kitchen/' + kid, { method: 'PUT', body: formVals(form) });
             toast('All changes saved', 'success');
         }
     } catch (err) { toast(err.message, 'error'); }
@@ -892,13 +937,13 @@ document.addEventListener('click', async function (e) {
             }
             case 'inv-inc': {
                 var pid = Number(t.dataset.pid);
-                await api('/api/seller-app/products/' + pid + '/inventory', { method: 'PATCH', body: { delta: 1 } });
+                await sellerApi('/api/seller-app/products/' + pid + '/inventory', { method: 'PATCH', body: { delta: 1 } });
                 var el = $('#inv-' + pid); if (el) el.textContent = parseInt(el.textContent) + 1;
                 toast('Quantity updated', 'success'); break;
             }
             case 'inv-dec': {
                 var pid = Number(t.dataset.pid);
-                await api('/api/seller-app/products/' + pid + '/inventory', { method: 'PATCH', body: { delta: -1 } });
+                await sellerApi('/api/seller-app/products/' + pid + '/inventory', { method: 'PATCH', body: { delta: -1 } });
                 var el = $('#inv-' + pid); if (el) el.textContent = parseInt(el.textContent) - 1;
                 toast('Quantity updated', 'success'); break;
             }
@@ -910,7 +955,7 @@ document.addEventListener('click', async function (e) {
                     message: 'This will mark the offering as sold out and hide it from buyers.',
                     okLabel: 'Yes, Sold Out',
                     onOk: async function () {
-                        await api('/api/seller-app/products/' + pid + '/sold-out', { method: 'POST' });
+                        await sellerApi('/api/seller-app/products/' + pid + '/sold-out', { method: 'POST' });
                         toast('Marked as Sold Out', 'success');
                         sellerRender();
                     }
@@ -919,14 +964,14 @@ document.addEventListener('click', async function (e) {
             }
             case 'pause-orders': {
                 var pausePid = Number(t.dataset.pid);
-                await api('/api/seller-app/products/' + pausePid + '/pause', { method: 'POST' });
+                await sellerApi('/api/seller-app/products/' + pausePid + '/pause', { method: 'POST' });
                 toast('Orders paused', 'success');
                 await sellerRender();
                 break;
             }
             case 'resume-orders': {
                 var resumePid = Number(t.dataset.pid);
-                await api('/api/seller-app/products/' + resumePid + '/resume', { method: 'POST' });
+                await sellerApi('/api/seller-app/products/' + resumePid + '/resume', { method: 'POST' });
                 toast('Orders resumed', 'success');
                 await sellerRender();
                 break;
@@ -939,7 +984,7 @@ document.addEventListener('click', async function (e) {
                     message: 'Customers will no longer be able to discover your kitchen or place new orders. Existing confirmed orders will not be affected.',
                     okLabel: 'Yes, Pause Kitchen',
                     onOk: async function () {
-                        await api('/api/seller/kitchen/' + S.myKitchen.id + '/pause', { method: 'POST' });
+                        await sellerApi('/api/seller/kitchen/' + S.myKitchen.id + '/pause', { method: 'POST' });
                         toast('Kitchen paused', 'success');
                         await sellerRender();
                     }
@@ -948,7 +993,7 @@ document.addEventListener('click', async function (e) {
             }
             case 'resume-kitchen': {
                 if (!S.myKitchen) { toast('Kitchen is not available', 'error'); break; }
-                await api('/api/seller/kitchen/' + S.myKitchen.id + '/resume', { method: 'POST' });
+                await sellerApi('/api/seller/kitchen/' + S.myKitchen.id + '/resume', { method: 'POST' });
                 toast('Kitchen resumed', 'success');
                 await sellerRender();
                 break;
@@ -965,7 +1010,7 @@ document.addEventListener('click', async function (e) {
             case 'parse-message': {
                 var msg = $('#qpMessage').value;
                 if (!msg.trim()) { toast('Please paste a message first', 'error'); return; }
-                var result = await api('/api/seller-app/parse-message', { method: 'POST', body: { message: msg } });
+                var result = await sellerApi('/api/seller-app/parse-message', { method: 'POST', body: { message: msg } });
                 var box = $('#parseResult');
                 if (box) {
                     var html = '<div class="parse-result-box"><h4>Extracted Details (Review before publishing)</h4>';
@@ -981,7 +1026,7 @@ document.addEventListener('click', async function (e) {
                 if (t.disabled) return;
                 t.disabled = true;
                 try {
-                    await api('/api/seller/orders/' + encodeURIComponent(t.dataset.orderId) + '/status', { method: 'PATCH', body: { orderStatus: 'CANCELLED' } });
+                    await sellerApi('/api/seller/orders/' + encodeURIComponent(t.dataset.orderId) + '/status', { method: 'PATCH', body: { orderStatus: 'CANCELLED' } });
                     toast('Order cancelled', 'success');
                     await sellerRender();
                 } catch (err) {
@@ -996,7 +1041,7 @@ document.addEventListener('click', async function (e) {
                 t.disabled = true;
                 try {
                     // Authoritative state (incl. whether orders already freeze fields).
-                    S.editOffering = await api('/api/seller/products/' + editPid);
+                    S.editOffering = await sellerApi('/api/seller/products/' + editPid);
                     sellerNavigate('#/edit-offering');
                 } catch (err) {
                     t.disabled = false;
@@ -1018,7 +1063,7 @@ document.addEventListener('click', async function (e) {
             }
             case 'batch-republish': {
                 if (S.historySelected.length === 0) { toast('Select at least one item', 'error'); return; }
-                await api('/api/seller-app/batch-republish', { method: 'POST', body: { productIds: S.historySelected, availableDate: sellerDate('today') } });
+                await sellerApi('/api/seller-app/batch-republish', { method: 'POST', body: { productIds: S.historySelected, availableDate: sellerDate('today') } });
                 toast('Republished ' + S.historySelected.length + ' items!', 'success'); sellerNavigate('#/home');
                 break;
             }
@@ -1035,7 +1080,7 @@ document.addEventListener('click', async function (e) {
                 if (t.disabled) return;
                 t.disabled = true;
                 try {
-                    await api('/api/seller/orders/' + oid + '/payment-status', { method: 'PATCH' });
+                    await sellerApi('/api/seller/orders/' + oid + '/payment-status', { method: 'PATCH' });
                     toast('Order marked as paid', 'success');
                     await sellerRender();
                 } catch (err) {
