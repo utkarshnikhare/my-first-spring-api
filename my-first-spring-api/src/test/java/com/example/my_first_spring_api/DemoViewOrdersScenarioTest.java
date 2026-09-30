@@ -14,6 +14,7 @@ import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.OrderRepository;
 import com.example.my_first_spring_api.repository.PlatformSettingRepository;
 import com.example.my_first_spring_api.repository.ProductRepository;
+import com.example.my_first_spring_api.repository.SellerTemplateRepository;
 import com.example.my_first_spring_api.repository.UserRepository;
 import com.example.my_first_spring_api.service.SellerAppService;
 import org.junit.jupiter.api.BeforeAll;
@@ -69,6 +70,7 @@ class DemoViewOrdersScenarioTest {
     @Autowired OrderRepository orders;
     @Autowired EnquiryRepository enquiries;
     @Autowired FavouriteRepository favourites;
+    @Autowired SellerTemplateRepository templates;
     @Autowired SellerAppService sellerApp;
 
     private DemoDataSeeder seeder;
@@ -78,7 +80,7 @@ class DemoViewOrdersScenarioTest {
 
     @BeforeAll
     void seedOnce() {
-        seeder = new DemoDataSeeder(users, kitchens, products, settings, orders, enquiries, favourites);
+        seeder = new DemoDataSeeder(users, kitchens, products, settings, orders, enquiries, favourites, templates);
         seeder.seedAll();
         aarti = users.findByMobileNumber("9100000001").orElseThrow();
         kitchen = kitchens.findBySeller(aarti).get(0);

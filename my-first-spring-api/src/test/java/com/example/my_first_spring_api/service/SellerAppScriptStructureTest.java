@@ -401,4 +401,54 @@ class SellerAppScriptStructureTest {
         // It must re-render so the filtered rows and the indicator update.
         assertThat(changeListener).contains("sellerRender()");
     }
+
+    /**
+     * P1 regression - Favourites and History showed no data.
+     *
+     * One real cause was in the render path: the favourites read collapsed a failed
+     * request into an empty array, so a seller with saved templates saw the
+     * "no favourites" state and had no way to tell the two apart. The History view
+     * already kept the two states separate and must keep doing so.
+     *
+     * The "Create from Favourite" card also carried a data-action no handler ever
+     * implemented, so clicking it did nothing at all.
+     */
+    @Test
+    void aFailedFavouritesReadIsNeverShownAsAnEmptyFavouriteList() {
+        int start = sellerJs.indexOf("async function sellerAddView(");
+        int end = sellerJs.indexOf("// SCREEN 1: SELLER DASHBOARD");
+        assertThat(start).as("sellerAddView must exist").isGreaterThanOrEqualTo(0);
+        assertThat(end).isGreaterThan(start);
+        String add = sellerJs.substring(start, end);
+
+        assertThat(add).as("the loader must keep the failure separate from the list")
+                .contains("S.favError = null")
+                .contains("S.favError = e.message");
+        assertThat(add).as("a failure must never be flattened into an empty favourite list")
+                .doesNotContain("catch (e) { S.favTemplates = []; }");
+        assertThat(add).as("the failure state offers a retry")
+                .contains("data-action=\"retry-favourites\"");
+        // Saved templates still render from persisted state through the same pills.
+        assertThat(add).contains("/api/seller-app/templates")
+                .contains("data-action=\"use-template\"").contains("fav-pill");
+    }
+
+    @Test
+    void everyFavouritesAndHistoryActionOnScreenHasAHandler() {
+        assertThat(sellerJs)
+                .as("the Favourites pathway card used to carry an unhandled action")
+                .contains("case 'go-use-favourite'")
+                .contains("case 'retry-favourites'")
+                .contains("case 'use-template'");
+
+        int start = sellerJs.indexOf("async function sellerHistoryView(");
+        int end = sellerJs.indexOf("// SCREEN 4: QUICK POST");
+        assertThat(start).as("sellerHistoryView must exist").isGreaterThanOrEqualTo(0);
+        assertThat(end).isGreaterThan(start);
+        String history = sellerJs.substring(start, end);
+        // Empty and error stay two different states, and records come from the API.
+        assertThat(history).contains("/api/seller-app/history")
+                .contains("No previous items")
+                .contains("Could not load history");
+    }
 }

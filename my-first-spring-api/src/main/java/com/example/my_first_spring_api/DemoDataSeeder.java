@@ -2,6 +2,7 @@ package com.example.my_first_spring_api;
 
 import com.example.my_first_spring_api.model.Enquiry;
 import com.example.my_first_spring_api.model.EnquiryStatus;
+import com.example.my_first_spring_api.model.SellerTemplate;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Order;
 import com.example.my_first_spring_api.model.OrderItem;
@@ -10,12 +11,14 @@ import com.example.my_first_spring_api.model.PaymentStatus;
 import com.example.my_first_spring_api.model.PlatformSetting;
 import com.example.my_first_spring_api.model.PreorderType;
 import com.example.my_first_spring_api.model.Product;
+import com.example.my_first_spring_api.model.Category;
 import com.example.my_first_spring_api.model.SellerApprovalStatus;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.model.UserRole;
 import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.PlatformSettingRepository;
 import com.example.my_first_spring_api.repository.ProductRepository;
+import com.example.my_first_spring_api.repository.SellerTemplateRepository;
 import com.example.my_first_spring_api.repository.UserRepository;
 import com.example.my_first_spring_api.repository.EnquiryRepository;
 import com.example.my_first_spring_api.repository.FavouriteRepository;
@@ -47,6 +50,9 @@ public class DemoDataSeeder {
     private static final String DEMO_ENQUIRIES_FLAG = "demo_enquiries_seeded";
     private static final String DEMO_FAVOURITES_FLAG = "demo_favourites_seeded";
     private static final String DEMO_VIEW_ORDERS_FLAG = "demo_view_orders_seeded";
+    private static final String DEMO_SELLER_ARCHIVE_FLAG = "demo_seller_archive_seeded";
+    /** The seller the Seller App demo-login signs in as — its archive is what the demo shows. */
+    private static final String DEMO_SELLER_MOBILE = "9100000001";
     private int orderCounter = 0;
 
     private final UserRepository userRepository;
@@ -56,12 +62,14 @@ public class DemoDataSeeder {
     private final com.example.my_first_spring_api.repository.OrderRepository orderRepository;
     private final EnquiryRepository enquiryRepository;
     private final FavouriteRepository favouriteRepository;
+    private final SellerTemplateRepository sellerTemplateRepository;
 
     @Autowired
     public DemoDataSeeder(UserRepository userRepository, KitchenRepository kitchenRepository,
                            ProductRepository productRepository, PlatformSettingRepository platformSettingRepository,
                            com.example.my_first_spring_api.repository.OrderRepository orderRepository,
-                           EnquiryRepository enquiryRepository, FavouriteRepository favouriteRepository) {
+                           EnquiryRepository enquiryRepository, FavouriteRepository favouriteRepository,
+                           SellerTemplateRepository sellerTemplateRepository) {
         this.userRepository = userRepository;
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
@@ -69,6 +77,7 @@ public class DemoDataSeeder {
         this.orderRepository = orderRepository;
         this.enquiryRepository = enquiryRepository;
         this.favouriteRepository = favouriteRepository;
+        this.sellerTemplateRepository = sellerTemplateRepository;
     }
 
     /** Idempotent entry point called from DataInitializer on every startup. */
@@ -79,6 +88,7 @@ public class DemoDataSeeder {
         seedViewOrdersScenarioIfEmpty();
         seedEnquiriesIfEmpty();
         seedFavouritesIfEmpty();
+        seedSellerArchiveIfEmpty();
     }
 
     @Transactional
@@ -643,5 +653,103 @@ public class DemoDataSeeder {
             favouriteRepository.save(f);
         }
         platformSettingRepository.save(new PlatformSetting(DEMO_FAVOURITES_FLAG, "true"));
+    }
+
+    // ==================== DEMO SELLER FAVOURITES & HISTORY ====================
+
+    /**
+     * Seeds the demo seller's own archive so the Favourites and History screens
+     * display real persisted records instead of an empty list:
+     *
+     * <ul>
+     *   <li>Favourites are {@link SellerTemplate} rows — the very same entity the
+     *       create-form "Save as template" toggle writes, so the pills, the 3-cap
+     *       and template publishing all work on them unchanged.</li>
+     *   <li>History is not a separate entity: it is offerings whose authoritative
+     *       offering date has passed ({@code availableDate < today}), which is the
+     *       exact complement of the dashboard filter. Seeding those rows is the
+     *       only honest way to make History non-empty — dated relative to today so
+     *       the rule holds whatever day the demo runs.</li>
+     * </ul>
+     *
+     * Additive and idempotent: its own flag plus an per-entity emptiness check
+     * mean a boot never duplicates a saved template or an offering, and no
+     * existing row is ever edited. Past-dated offerings stay hidden from every
+     * live buyer surface because they are not available today.
+     */
+    @Transactional
+    public void seedSellerArchiveIfEmpty() {
+        if (platformSettingRepository.findBySettingKey(DEMO_SELLER_ARCHIVE_FLAG).isPresent()) return;
+        User demoSeller = userRepository.findByMobileNumber(DEMO_SELLER_MOBILE).orElse(null);
+        if (demoSeller == null) return;
+        java.util.List<Kitchen> kitchens = kitchenRepository.findBySeller(demoSeller);
+        if (kitchens.isEmpty()) return;
+        Kitchen kitchen = kitchens.get(0);
+
+        if (sellerTemplateRepository.countBySeller(demoSeller) == 0) {
+            savedTemplate(demoSeller, "Poha + Jalebi", "Breakfast poha with homemade jalebi.",
+                    45, "plate", 30, "BREAKFAST", "07:00", "11:00", "1:00 PM today");
+            savedTemplate(demoSeller, "Misal Pav", "Spicy misal topped with kanda, sev and pav.",
+                    70, "plate", 25, "LUNCH", "09:00", "12:30", "4:00 PM today");
+            savedTemplate(demoSeller, "Puran Poli", "Gud and chana dal stuffed poli, ghee on the side.",
+                    90, "poli", 20, "SPECIAL", "09:00", "12:30", "4:00 PM today");
+        }
+
+        // Names deliberately differ from today's live catalog (Poha, Modak, Idli,
+        // Misal Pav, Puran Poli, Sabudana Khichdi, Thalipeeth): History must never
+        // show the same dish as a currently-on-sale offering, or the two screens
+        // contradict each other on screen.
+        LocalDate today = LocalDate.now();
+        if (productRepository.findByKitchenAndAvailableDateBeforeOrderByAvailableDateDescCreatedAtDesc(kitchen, today).isEmpty()) {
+            pastOffering(kitchen, "Vada Pav", "Classic batata vada in a soft pav, served with butter and chaat masala.",
+                    40, "pav", "SNACKS", today.minusDays(1));
+            pastOffering(kitchen, "Methi Muthiya", "Steamed fenugreek dumplings tempered with mustard seeds and curry leaf.",
+                    55, "plate", "BREAKFAST", today.minusDays(2));
+            pastOffering(kitchen, "Sheera", "Semolina sweet upma with ghee, cashews and raisins.",
+                    65, "bowl", "SPECIAL", today.minusDays(3));
+        }
+
+        platformSettingRepository.save(new PlatformSetting(DEMO_SELLER_ARCHIVE_FLAG, "true"));
+    }
+
+    /** A saved favourite, built exactly as the create-form template toggle persists it. */
+    private SellerTemplate savedTemplate(User seller, String name, String description, int price,
+                                         String unit, int maxQ, String category,
+                                         String open, String close, String readyBy) {
+        SellerTemplate t = new SellerTemplate();
+        t.setSeller(seller);
+        t.setName(name);
+        t.setDescription(description);
+        t.setPrice(BigDecimal.valueOf(price));
+        t.setPriceUnit(unit);
+        t.setMaxQuantity(maxQ);
+        t.setCategory(Category.valueOf(category));
+        t.setOrderWindowStart(open);
+        t.setOrderWindowEnd(close);
+        t.setCutoffTime(close);
+        t.setReadyByTime(readyBy);
+        return sellerTemplateRepository.save(t);
+    }
+
+    /**
+     * An offering from a previous day. Stock is left full so the row is reported
+     * with the HISTORY lifecycle rather than SOLD_OUT, and availableToday is left
+     * false so the row is never a live, orderable offering.
+     */
+    private Product pastOffering(Kitchen k, String name, String description, int price,
+                                 String unit, String category, LocalDate offeringDate) {
+        Product p = new Product(k, name, description, BigDecimal.valueOf(price), null);
+        p.setPriceUnit(unit);
+        p.setAvailableToday(false);
+        p.setAvailableDate(offeringDate);
+        p.setIsPreorder(false);
+        p.setMaxQuantity(20);
+        p.setRemainingQuantity(20);
+        p.setBookedQuantity(0);
+        p.setRating(4.6);
+        p.setCategory(category);
+        p.setCutoffTime("12:30");
+        p.setReadyByTime("4:00 PM");
+        return productRepository.save(p);
     }
 }

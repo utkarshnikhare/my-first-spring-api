@@ -1,7 +1,7 @@
 /**
  * SocioMart Seller App v1.0 - 5-tab SPA
  */
-var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFor: 'today', quickPostRequestId: null, editOffering: null };
+var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFor: 'today', quickPostRequestId: null, editOffering: null };
 var sellerRoutes = {
     '#/home': sellerHomeView, '#/add': sellerAddView, '#/create': sellerCreateView,
     '#/edit-offering': sellerEditOfferingView,
@@ -238,9 +238,13 @@ async function sellerAddView() {
     var h = '<div class="view-enter">';
     h += '<div class="page-head"><h1>Add Offering</h1><p class="muted small">Favourites are manual reusable templates (maximum 3). History is automatic published-offering history.</p></div>';
     h += '<p class="muted small mb-2"><a class="text-brand" href="#/history">View automatic History →</a></p>';
-    try { S.favTemplates = await sellerApi('/api/seller-app/templates'); } catch (e) { S.favTemplates = []; }
+    // A failed read is NOT the same as "you have no favourites": keep the error
+    // separate from the legitimately empty list so real data is never hidden by it.
+    S.favTemplates = []; S.favError = null;
+    try { S.favTemplates = (await sellerApi('/api/seller-app/templates')) || []; } catch (e) { S.favError = e.message || 'please try again'; }
     h += '<div class="pathway-card" data-action="go-use-favourite"><div class="pc-icon">⭐</div><div class="pc-title">Create from Favourite</div><div class="pc-desc">Quickly post from saved templates (max 3).</div>';
-    if (S.favTemplates.length > 0) { h += '<div class="favourite-pills">'; S.favTemplates.forEach(function (t) { h += '<span class="fav-pill" data-action="use-template" data-tid="' + t.id + '">⭐ ' + esc(t.name) + '</span>'; }); h += '</div>'; }
+    if (S.favError) { h += '<div class="pc-desc">Could not load your saved favourites - ' + esc(S.favError) + ' <button class="btn btn-secondary btn-sm" type="button" data-action="retry-favourites">Retry</button></div>'; } else if (S.favTemplates.length > 0) { h += '<div class="favourite-pills">'; S.favTemplates.forEach(function (t) { h += '<span class="fav-pill" data-action="use-template" data-tid="' + t.id + '">⭐ ' + esc(t.name) + '</span>'; }); h += '</div>'; }
+    else { h += '<div class="pc-desc">No saved favourites yet - turn on Save as template (max 3) while creating an offering.</div>'; }
     h += '</div>';
     h += '<div class="pathway-card" data-action="go-create"><div class="pc-icon">✨</div><div class="pc-title">Create New Offering</div><div class="pc-desc">Fill in all details manually.</div></div>';
     h += '<div class="pathway-card" data-action="go-quick-post"><div class="pc-icon">📋</div><div class="pc-title">Quick Post</div><div class="pc-desc">Paste a WhatsApp message and publish a simple Today announcement.</div></div>';
@@ -319,10 +323,12 @@ async function sellerHistoryView() {
     try {
         var items = await sellerApi('/api/seller-app/history');
         S.historyItems = items || [];
-        if (!items.length) {
+        // Render the normalised list rather than the raw response: a null body would
+        // otherwise throw here and be reported as "could not load history".
+        if (S.historyItems.length === 0) {
             h += emptyHtml('🕘', 'No previous items', 'Expired offerings for your kitchen will appear here.');
         } else {
-            items.forEach(function (p) {
+            S.historyItems.forEach(function (p) {
                 var offeringDate = p.availableDate ? prettyDate(p.availableDate) : 'Previous offering';
                 h += '<div class="history-card"><span class="hc-body"><span class="hc-name">' + esc(p.name) + '</span>' +
                     '<span class="hc-meta">' + esc(offeringDate) + ' · ' + esc(p.category || 'Uncategorised') + '</span></span>' +
@@ -1013,6 +1019,16 @@ document.addEventListener('click', async function (e) {
             case 'read-notification': await readNotification(t.dataset.notificationId); break;
             case 'toggle-theme': toggleTheme(); break;
             case 'go-add': sellerNavigate('#/add'); break;
+            case 'retry-favourites': await sellerRender(); break;
+            // The saved favourites are already listed as pills inside this card, so a
+            // click on the card body must tell the seller what to do next instead of
+            // silently doing nothing - this action had no handler at all before.
+            case 'go-use-favourite': {
+                if (S.favError) { await sellerRender(); break; }
+                if (S.favTemplates.length === 0) { toast('No saved favourites yet - turn on Save as template (max 3) while creating an offering.', 'info'); break; }
+                toast('Tap one of your saved favourites to use it', 'info');
+                break;
+            }
             case 'go-create': sellerNavigate('#/create'); break;
             case 'go-quick-post': sellerNavigate('#/quick-post'); break;
             case 'go-kitchen': sellerNavigate('#/kitchen'); break;
