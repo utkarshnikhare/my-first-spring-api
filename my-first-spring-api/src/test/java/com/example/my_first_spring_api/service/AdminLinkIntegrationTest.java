@@ -111,11 +111,43 @@ class AdminLinkIntegrationTest {
 
     @Test
     void adminApisRemainRoleProtected() {
-        // The entry link must not have weakened the backend.
+        // The entry link must not have weakened the backend. /api/admin/** is
+        // ADMIN+SUPER_ADMIN; /api/superadmin/** stays SUPER_ADMIN only. The
+        // matcher order matters, so the superadmin rule must be declared first.
+        int superRule = securityConfig.indexOf(".requestMatchers(\"/api/superadmin/**\").hasRole(\"SUPER_ADMIN\")");
+        int adminRule = securityConfig.indexOf(".requestMatchers(\"/api/admin/**\").hasAnyRole(\"ADMIN\", \"SUPER_ADMIN\")");
+        assertThat(superRule).as("superadmin must be SUPER_ADMIN only").isGreaterThanOrEqualTo(0);
+        assertThat(adminRule).as("admin must be ADMIN or SUPER_ADMIN").isGreaterThanOrEqualTo(0);
+        assertThat(superRule)
+                .as("the more specific superadmin rule must be declared before /api/admin/**")
+                .isLessThan(adminRule);
+    }
+
+    @Test
+    void noAdminApiIsPubliclyPermitted() {
+        // admin.html is a public STATIC page, but every /api/admin/** call must
+        // still be gated. Guard against an admin path leaking into permitAll().
+        String permitBlock = securityConfig.substring(securityConfig.indexOf(".permitAll()"));
+        assertThat(permitBlock)
+                .as("no admin or superadmin API may sit inside the permitAll block")
+                .doesNotContain("/api/admin/")
+                .doesNotContain("/api/superadmin/");
+    }
+
+    @Test
+    void anonymousAdminRequestsGet401NotAServerError() {
+        // An unauthenticated admin call must be rejected cleanly, not with a 500.
         assertThat(securityConfig)
-                .as("admin APIs must stay restricted to ADMIN/SUPER_ADMIN")
-                .contains("/api/admin/**").contains("hasAnyRole(\"ADMIN\", \"SUPER_ADMIN\")")
-                .contains("/api/superadmin/**").contains("hasRole(\"SUPER_ADMIN\")");
+                .as("an authentication entry point returns 401 for anonymous callers")
+                .contains("AUTHENTICATION_REQUIRED")
+                .contains("response.setStatus(401)");
+    }
+
+    @Test
+    void httpBasicStaysDisabledSoNoAlternateAdminLoginPathExists() {
+        assertThat(securityConfig)
+                .as("only the existing session mechanism may authenticate an Admin")
+                .contains("httpBasic(basic -> basic.disable())");
     }
 
     @Test

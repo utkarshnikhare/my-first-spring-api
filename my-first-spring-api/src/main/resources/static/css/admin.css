@@ -297,4 +297,126 @@ a.dash-card:hover { border-color: var(--brand); box-shadow: 0 4px 14px rgba(0,0,
 }
 @media (min-width: 1280px) {
     .admin-view { max-width: 1000px; }
+
+/* ============================================================
+   Admin UX additions — search bar, attention list, error state.
+   Scoped to admin.css only; the shared Buyer/Seller stylesheet
+   is not touched.
+   ============================================================ */
+
+/* Search + filter bar used by the list screens. */
+.admin-searchbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.admin-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1 1 220px;
+    min-width: 0;
+}
+.admin-search .as-icon {
+    position: absolute;
+    left: 10px;
+    font-size: 0.85rem;
+    opacity: 0.6;
+    pointer-events: none;
+}
+.admin-search .form-input {
+    width: 100%;
+    min-width: 0;
+    padding-left: 30px;
+}
+/* Visually hidden but exposed to screen readers. */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+/* Capsules used as filter chips must read as buttons. */
+.capsule {
+    font: inherit;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+}
+.capsule.active {
+    font-weight: 700;
+}
+.capsule:focus-visible,
+.admin-search input:focus-visible {
+    outline: 2px solid var(--primary, #4F46E5);
+    outline-offset: 2px;
+}
+
+/* Needs-attention list on the dashboard. */
+.attention-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.attention-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 10px);
+    background: var(--surface);
+    color: var(--text);
+    text-decoration: none;
+    min-width: 0;
+}
+.attention-row:hover { background: var(--surface-2, rgba(79, 70, 229, 0.06)); }
+.attention-row:focus-visible { outline: 2px solid var(--primary, #4F46E5); outline-offset: 2px; }
+.attention-row .att-icon { flex: 0 0 auto; }
+.attention-row .att-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.86rem;
+    overflow-wrap: anywhere;
+}
+.attention-row .att-count {
+    flex: 0 0 auto;
+    font-weight: 800;
+    font-size: 0.95rem;
+}
+.attention-row .att-go { flex: 0 0 auto; opacity: 0.6; }
+
+.admin-empty-inline { border: 0; background: transparent; padding: 8px 0; }
+
+/* Error state — must be visibly different from an empty list. */
+.admin-error-msg {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--danger, #DC2626);
+    background: rgba(220, 38, 38, 0.08);
+    font-size: 0.86rem;
+    overflow-wrap: anywhere;
+}
+
+/* Long values (service areas, messages) must not force horizontal scroll. */
+.seller-row .sr-body { overflow-wrap: anywhere; }
+
+/* Narrow screens: keep the filter row and attention rows usable. */
+@media (max-width: 420px) {
+    .admin-searchbar .capsule { flex: 1 1 auto; }
+    .admin-search { flex: 1 1 100%; }
+    .attention-row .att-label { font-size: 0.82rem; }
+}
+
 }

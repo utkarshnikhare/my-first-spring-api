@@ -26,9 +26,25 @@ function adminResolveRoute(hash) {
     if (adminRoutes[hash]) return { fn: adminRoutes[hash], arg: hash };
     return { fn: adminHomeView, arg: '#/home' };
 }
+/**
+ * Normalise the address bar to a real route.
+ *
+ * An unknown hash (typo, stale bookmark, old link) used to render the Home content
+ * while leaving the bogus hash in the URL and with NO nav item highlighted, so the
+ * console looked broken. We now resolve to the actual route and correct the URL.
+ */
+function adminNormaliseHash() {
+    var hash = location.hash || '#/home';
+    if (adminRoutes[hash]) return hash;
+    return '#/home';
+}
 async function adminRender() {
     if (!A.role) { await adminGate(); return; }
-    var hash = location.hash || '#/home';
+    var hash = adminNormaliseHash();
+    if (location.hash !== hash) {
+        // replaceState avoids pushing a bogus entry onto the history stack.
+        history.replaceState(null, '', hash);
+    }
     var route = adminResolveRoute(hash);
     var view = viewEl();
     view.innerHTML = '<div class="page-loading"><div class="spinner"></div></div>';
@@ -36,9 +52,26 @@ async function adminRender() {
         view.innerHTML = await route.fn(route.arg) || '';
         adminUpdateNav(hash);
         window.scrollTo(0, 0);
+        adminRestoreFocus();
     } catch (err) {
-        view.innerHTML = '<div class="view-enter"><div class="section-head admin-section-head"><div><h1>Error</h1><p class="muted small">' + esc(err.message) + '</p></div></div></div>';
+        view.innerHTML = adminErrorView(err);
     }
+}
+/**
+ * Error state with an explicit retry.
+ *
+ * Previously the whole view was replaced by a bare "Error" heading with the raw
+ * message and no way to recover short of reloading the page. An empty result and a
+ * failed request must look different, and the operator must be able to retry.
+ */
+function adminErrorView(err) {
+    var msg = (err && err.message) ? err.message : 'Something went wrong.';
+    return '<div class="view-enter"><div class="section-head admin-section-head">' +
+        '<div><h1>Could not load this view</h1>' +
+        '<p class="muted small">The data could not be fetched. Nothing was changed.</p></div></div>' +
+        '<div class="card pad"><p class="admin-error-msg">' + esc(msg) + '</p>' +
+        '<div class="admin-actions"><button class="btn btn-primary btn-block" type="button" ' +
+        'data-action="admin-retry">Retry</button></div></div></div>';
 }
 function adminUpdateNav(hash) {
     $all('.nav-item').forEach(function (el) { el.classList.remove('active'); });
@@ -49,6 +82,81 @@ function adminUpdateNav(hash) {
     if (consoleTab) consoleTab.style.display = (A.role === 'SUPER_ADMIN') ? '' : 'none';
 }
 function adminNavigate(hash) { if (location.hash === hash) adminRender(); else location.hash = hash; }
+// ==================== SEARCH ====================
+/**
+ * Debounced search state.
+ *
+ * Searching used to fire on every keystroke: the `keyup` handler re-rendered the
+ * whole view, which DESTROYED the input that had focus. Typing "SM" into the order
+ * search left a single "S" in the box and focus was lost, so the operator could
+ * never enter a term. Now typing is debounced, and focus plus the caret position
+ * are restored after the re-render.
+ */
+A.searchTerms = A.searchTerms || {};
+A._searchTimer = null;
+
+function adminSearchTerm(key) { return A.searchTerms[key] || ''; }
+
+/** Debounced handler bound to a search box. */
+function adminSearchHandler(key, id) {
+    var input = document.getElementById(id);
+    if (!input) return;
+    A.searchTerms[key] = input.value;
+    if (A._searchTimer) clearTimeout(A._searchTimer);
+    A._searchTimer = setTimeout(function () { adminRender(); }, 250);
+}
+
+/** Re-focus the active search box and put the caret back where it was. */
+function adminRestoreFocus() {
+    var id = document.activeElement && document.activeElement.id;
+    var remembered = A._focusId;
+    var want = remembered || id;
+    if (!want || want.indexOf('adminSearch') !== 0) return;
+    var input = document.getElementById(want);
+    if (!input) return;
+    input.focus();
+    var pos = typeof A._caretPos === 'number' ? A._caretPos : (input.value || '').length;
+    try { input.setSelectionRange(pos, pos); } catch (e) { /* type without selection */ }
+}
+
+/**
+ * Renders the standard search + filter bar used by the list screens.
+ * `filters` is an array of { key, label } rendered as capsule buttons.
+ */
+function adminSearchBar(opts) {
+    var term = adminSearchTerm(opts.key);
+    var h = '<div class="admin-filters admin-searchbar">';
+    h += '<label class="admin-search">' +
+        '<span class="sr-only">Search ' + esc(opts.label || 'records') + '</span>' +
+        '<span class="as-icon" aria-hidden="true">🔍</span>' +
+        '<input type="search" class="form-input form-input-sm" id="adminSearch_' + esc(opts.key) + '" ' +
+        'placeholder="' + esc(opts.placeholder || 'Search…') + '" value="' + esc(term) + '" ' +
+        'autocomplete="off" spellcheck="false"></label>';
+    (opts.filters || []).forEach(function (f) {
+        h += '<button class="capsule' + (f.active ? ' active' : '') + '" type="button" ' +
+            'data-action="' + esc(opts.filterAction) + '" data-key="' + esc(f.key) + '" data-value="' + esc(f.value) + '"' +
+            (f.active ? ' aria-current="true"' : '') + '>' + esc(f.label) + '</button>';
+    });
+    h += '</div>';
+    return h;
+}
+
+/** Case-insensitive "does any of these fields contain the term" match. */
+function adminMatches(term, fields) {
+    var q = (term || '').trim().toLowerCase();
+    if (!q) return true;
+    return fields.some(function (f) {
+        return f !== null && f !== undefined && String(f).toLowerCase().indexOf(q) >= 0;
+    });
+}
+
+/** Empty-state that distinguishes "no matches" from "nothing exists yet". */
+function adminEmptyState(term, noun) {
+    if ((term || '').trim()) {
+        return '<div class="admin-empty">No ' + esc(noun) + ' match “' + esc(term.trim()) + '”.</div>';
+    }
+    return '<div class="admin-empty">No ' + esc(noun) + ' yet.</div>';
+}
 function greeting() { var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
 /** Readable date/time for admin rows, e.g. "7 Sep 2026, 10:42 AM". */
 function adminDate(iso) {
@@ -110,6 +218,23 @@ function renderBlockedScreen(role) {
 }
 
 // ==================== ACTIONS ====================
+/**
+ * Guard against a double submission.
+ *
+ * Approve/Reject previously fired a POST per click; an impatient double click could
+ * send two mutations before the list refreshed. The button is disabled and marked
+ * aria-busy for the duration of the request.
+ */
+async function adminRunOnce(btn, fn) {
+    if (btn && btn.disabled) return;
+    if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
+    try {
+        await fn();
+    } finally {
+        if (btn && btn.isConnected) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
+    }
+}
+
 async function adminAction(action, t) {
     try {
         switch (action) {
@@ -140,8 +265,10 @@ async function adminAction(action, t) {
             case 'go-tab': adminNavigate(t.dataset.hash); break;
             case 'approve-seller': {
                 var id = Number(t.dataset.id);
-                await api('/api/admin/sellers/' + id + '/approve', { method: 'POST' });
-                toast('Seller approved', 'success');
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/sellers/' + id + '/approve', { method: 'POST' });
+                    toast('Seller approved', 'success');
+                });
                 await adminRender();
                 break;
             }
@@ -152,7 +279,7 @@ async function adminAction(action, t) {
                      '<div class="form-group"><textarea id="rejectReason" class="admin-textarea" rows="2" maxlength="200" placeholder="Reason (optional)"></textarea></div>' +
                     '<div class="modal-actions">' +
                     '<button class="btn btn-outline" type="button" data-action="cancel-reject">Cancel</button>' +
-                    '<button class="btn btn-danger" type="button" data-action="confirm-reject" data-id="' + t.dataset.id + '">Reject</button>' +
+                    '<button class="btn btn-danger" type="button" data-action="confirm-reject" data-id="' + t.dataset.id + '" data-name="' + esc(t.dataset.name || 'seller') + '">Reject</button>' +
                     '</div>');
                 break;
             }
@@ -160,9 +287,16 @@ async function adminAction(action, t) {
             case 'confirm-reject': {
                 var id = Number(t.dataset.id);
                 var reason = $('#rejectReason') ? $('#rejectReason').value.trim() : '';
+                var name = t.dataset.name || 'seller';
                 closeModal();
-                await api('/api/admin/sellers/' + id + '/reject', { method: 'POST', body: { reason: reason || null } });
-                toast('Seller rejected', 'success');
+                // Confirm before the consequential action, not after.
+                var ok = window.confirm('Reject ' + name + '?' +
+                    (reason ? '\n\nReason: ' + reason : '\n\nNo reason was given.'));
+                if (!ok) break;
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/sellers/' + id + '/reject', { method: 'POST', body: { reason: reason || null } });
+                    toast('Seller rejected', 'success');
+                });
                 await adminRender();
                 break;
             }
@@ -171,10 +305,34 @@ async function adminAction(action, t) {
                 await adminRender();
                 break;
             }
-            case 'admin-order-search': {
-                var input = $('#adminOrderSearch');
-                if (input) A.orderSearch = input.value;
+            case 'admin-seller-status': {
+                A.sellerStatus = t.dataset.value || '';
                 await adminRender();
+                break;
+            }
+            case 'admin-offering-status': {
+                A.offeringStatus = t.dataset.value || '';
+                await adminRender();
+                break;
+            }
+            case 'admin-enquiry-status': {
+                A.enquiryStatus = t.dataset.value || '';
+                await adminRender();
+                break;
+            }
+            case 'admin-clear-search': {
+                A.searchTerms = {};
+                await adminRender();
+                break;
+            }
+            case 'admin-retry': {
+                await adminRender();
+                break;
+            }
+            case 'admin-order-search': {
+                // Kept for compatibility with the old keyup path; the debounced
+                // input handler below is what runs now.
+                adminSearchHandler('orders', 'adminSearch_orders');
                 break;
             }
             case 'admin-order-detail': {
@@ -310,6 +468,45 @@ async function adminHomeView() {
         '<div class="flex-1 min-140"><span class="pill pill-grey">● Pending</span><div class="font-700 mt-1">' + (data.pendingPaymentCount || 0) + ' orders</div><div class="muted small">' + money(data.pendingPaymentValue || 0) + '</div></div>' +
         '</div></div>';
 
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Order Status</h3>' +
+        '<p class="muted tiny" style="margin:0 0 12px">Every order sits in exactly one of these buckets; they sum to the total.</p>' +
+        '<div class="flex gap-2 wrap">' +
+        '<div class="flex-1 min-140"><span class="pill pill-amber">Awaiting seller</span><div class="font-700 orange mt-1">' + (data.ordersAwaitingSellerConfirmation || 0) + ' orders</div><div class="muted small">placed, not yet confirmed</div></div>' +
+        '<div class="flex-1 min-140"><span class="pill pill-blue">In fulfilment</span><div class="font-700 mt-1">' + (data.ordersInFulfilment || 0) + ' orders</div><div class="muted small">confirmed / ready</div></div>' +
+        '<div class="flex-1 min-140"><span class="pill pill-green">Fulfilled</span><div class="font-700 green mt-1">' + (data.ordersFulfilled || 0) + ' orders</div><div class="muted small">delivered / completed</div></div>' +
+        '<div class="flex-1 min-140"><span class="pill pill-red">Cancelled</span><div class="font-700 red mt-1">' + (data.ordersCancelled || 0) + ' orders</div><div class="muted small">inventory restored</div></div>' +
+        '</div></div>';
+
+    // Operational attention — routes into the existing screens, no new statuses.
+    var attention = [];
+    if (data.pendingSellers > 0) {
+        attention.push({ icon: '⏳', label: 'Seller applications awaiting approval', n: data.pendingSellers, hash: '#/pending' });
+    }
+    if (data.ordersAwaitingSellerConfirmation > 0) {
+        attention.push({ icon: '📦', label: 'Orders not yet confirmed by sellers', n: data.ordersAwaitingSellerConfirmation, hash: '#/orders' });
+    }
+    if (data.openEnquiries > 0) {
+        attention.push({ icon: '✉️', label: 'Enquiries awaiting a seller response', n: data.openEnquiries, hash: '#/enquiries' });
+    }
+    if (data.pendingPaymentCount > 0) {
+        attention.push({ icon: '💳', label: 'Orders with payment still pending', n: data.pendingPaymentCount, hash: '#/orders' });
+    }
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Needs Attention</h3>';
+    if (!attention.length) {
+        h += '<div class="admin-empty admin-empty-inline">🎉 Nothing is waiting on the Admin team right now.</div>';
+    } else {
+        h += '<ul class="attention-list">';
+        attention.forEach(function (a) {
+            h += '<li><a class="attention-row" href="' + a.hash + '" data-action="go-tab" data-hash="' + a.hash + '">' +
+                '<span class="att-icon" aria-hidden="true">' + a.icon + '</span>' +
+                '<span class="att-label">' + esc(a.label) + '</span>' +
+                '<span class="att-count">' + a.n + '</span>' +
+                '<span class="att-go" aria-hidden="true">→</span></a></li>';
+        });
+        h += '</ul>';
+    }
+    h += '</div>';
+
     h += '</div>';
     return h;
 }
@@ -339,12 +536,18 @@ async function adminPendingView() {
 
 async function adminBuyersView() {
     var list = await api('/api/admin/buyers');
+    var term = adminSearchTerm('buyers');
+    var rows = (list || []).filter(function (b) {
+        return adminMatches(term, [b.name, b.mobileNumber, b.society, b.building]);
+    });
     var h = '<div class="view-enter">';
-    h += '<div class="section-head admin-section-head"><div><h1>Buyers</h1><p class="muted small">' + (list ? list.length : 0) + ' registered buyers</p></div></div>';
-    if (!list || !list.length) {
-        return h + '<div class="admin-empty">No buyers yet.</div></div>';
+    h += '<div class="section-head admin-section-head"><div><h1>Buyers</h1><p class="muted small">' +
+        rows.length + ' of ' + (list ? list.length : 0) + ' registered buyers</p></div></div>';
+    h += adminSearchBar({ key: 'buyers', label: 'buyers', placeholder: 'Name, mobile, society…' });
+    if (!rows.length) {
+        return h + adminEmptyState(term, 'buyers') + '</div>';
     }
-    list.forEach(function (b) {
+    rows.forEach(function (b) {
         h += '<div class="seller-row">' +
             '<div class="sr-avatar">' + esc(String(b.name || '?').charAt(0).toUpperCase()) + '</div>' +
             '<div class="sr-body">' +
@@ -358,13 +561,43 @@ async function adminBuyersView() {
 }
 
 async function adminSellersView() {
-    var list = await api('/api/admin/sellers');
+    // The backend already supported ?status= but the console never sent it, so the
+    // capability was dead. Filtering now uses it rather than a second data source.
+    var status = A.sellerStatus || '';
+    var url = '/api/admin/sellers' + (status ? '?status=' + encodeURIComponent(status) : '');
+    var list = await api(url);
+    var term = adminSearchTerm('sellers');
+    var rows = (list || []).filter(function (s) {
+        return adminMatches(term, [s.name, s.mobileNumber, s.kitchenName, s.area, s.sellerApprovalStatus]);
+    });
+    var all = await api('/api/admin/sellers');
+    var counts = {
+        '': (all || []).length,
+        PENDING: 0, APPROVED: 0, REJECTED: 0, SUSPENDED: 0
+    };
+    (all || []).forEach(function (s) {
+        if (counts[s.sellerApprovalStatus] !== undefined) counts[s.sellerApprovalStatus]++;
+    });
     var h = '<div class="view-enter">';
-    h += '<div class="section-head admin-section-head"><div><h1>Sellers</h1><p class="muted small">' + (list ? list.length : 0) + ' registered sellers</p></div></div>';
-    if (!list || !list.length) {
-        return h + '<div class="admin-empty">No sellers yet.</div></div>';
+    h += '<div class="section-head admin-section-head"><div><h1>Sellers</h1><p class="muted small">' +
+        rows.length + ' of ' + (list ? list.length : 0) + ' sellers</p></div></div>';
+    h += adminSearchBar({
+        key: 'sellers',
+        label: 'sellers',
+        placeholder: 'Name, mobile, kitchen…',
+        filterAction: 'admin-seller-status',
+        filters: [
+            { label: 'All (' + counts[''] + ')', value: '', active: status === '' },
+            { label: 'Pending (' + counts.PENDING + ')', value: 'PENDING', active: status === 'PENDING' },
+            { label: 'Approved (' + counts.APPROVED + ')', value: 'APPROVED', active: status === 'APPROVED' },
+            { label: 'Rejected (' + counts.REJECTED + ')', value: 'REJECTED', active: status === 'REJECTED' },
+            { label: 'Suspended (' + counts.SUSPENDED + ')', value: 'SUSPENDED', active: status === 'SUSPENDED' },
+        ],
+    });
+    if (!rows.length) {
+        return h + adminEmptyState(term, 'sellers') + '</div>';
     }
-    list.forEach(function (s) {
+    rows.forEach(function (s) {
         var st = s.sellerApprovalStatus || '';
         var needsAction = st === 'PENDING' || st === 'REJECTED';
         h += '<div class="seller-row">' +
@@ -390,14 +623,29 @@ async function adminKitchensView() {
     var filter = A.kitchenFilter || '';
     var url = '/api/admin/kitchens' + (filter ? '?sellerType=' + encodeURIComponent(filter) : '');
     var list = await api(url);
+    var term = adminSearchTerm('kitchens');
+    var rows = (list || []).filter(function (k) {
+        return adminMatches(term, [k.displayName, k.name, k.sellerName, k.area, k.serviceAreas]);
+    });
     var title = filter === 'HOMEMADE_PRODUCTS' ? 'Homemade Stores' : filter === 'KITCHEN' ? 'Kitchens' : 'All Kitchens';
     var h = '<div class="view-enter">';
-    h += '<div class="section-head admin-section-head"><div><h1>' + esc(title) + '</h1><p class="muted small">' + (list ? list.length : 0) + ' stores</p></div></div>';
-    h += '<div class="capsule-row"><button class="capsule' + (filter === 'HOMEMADE_PRODUCTS' ? ' active' : '') + '" data-action="admin-set-kitchen-filter" data-filter="HOMEMADE_PRODUCTS">Homemade Products</button><button class="capsule' + (filter === 'KITCHEN' ? ' active' : '') + '" data-action="admin-set-kitchen-filter" data-filter="KITCHEN">Kitchens</button><button class="capsule' + (!filter ? ' active' : '') + '" data-action="admin-set-kitchen-filter" data-filter="">All</button></div>';
-    if (!list || !list.length) {
-        return h + '<div class="admin-empty">No stores found.</div></div>';
+    h += '<div class="section-head admin-section-head"><div><h1>' + esc(title) + '</h1><p class="muted small">' +
+        rows.length + ' of ' + (list ? list.length : 0) + ' stores</p></div></div>';
+    h += adminSearchBar({
+        key: 'kitchens',
+        label: 'stores',
+        placeholder: 'Store, seller, service area…',
+        filterAction: 'admin-set-kitchen-filter',
+        filters: [
+            { label: 'All', value: '', active: !filter },
+            { label: 'Homemade Products', value: 'HOMEMADE_PRODUCTS', active: filter === 'HOMEMADE_PRODUCTS' },
+            { label: 'Kitchens', value: 'KITCHEN', active: filter === 'KITCHEN' },
+        ],
+    });
+    if (!rows.length) {
+        return h + adminEmptyState(term, 'stores') + '</div>';
     }
-    list.forEach(function (k) {
+    rows.forEach(function (k) {
         var areas = k.serviceAreas || k.area || '';
         var areaText = areas ? areas.split(',').map(function (a) { return a.trim(); }).filter(Boolean).join(', ') : '';
         h += '<div class="seller-row">' +
@@ -416,12 +664,35 @@ async function adminKitchensView() {
 
 async function adminOfferingsView() {
     var list = await api('/api/admin/offerings');
+    var term = adminSearchTerm('offerings');
+    var status = A.offeringStatus || '';
+    var rows = (list || []).filter(function (p) {
+        if (status && (p.status || '') !== status) return false;
+        return adminMatches(term, [p.name, p.kitchenName, p.sellerName, p.status, p.priceUnit]);
+    });
+    var counts = { '': (list || []).length, LIVE: 0, PRE_ORDER: 0, SOLD_OUT: 0 };
+    (list || []).forEach(function (p) {
+        if (counts[p.status] !== undefined) counts[p.status]++;
+    });
     var h = '<div class="view-enter">';
-    h += '<div class="section-head admin-section-head"><div><h1>Offerings</h1><p class="muted small">' + (list ? list.length : 0) + ' offerings</p></div></div>';
-    if (!list || !list.length) {
-        return h + '<div class="admin-empty">No offerings yet.</div></div>';
+    h += '<div class="section-head admin-section-head"><div><h1>Offerings</h1><p class="muted small">' +
+        rows.length + ' of ' + (list ? list.length : 0) + ' offerings</p></div></div>';
+    h += adminSearchBar({
+        key: 'offerings',
+        label: 'offerings',
+        placeholder: 'Offering, kitchen, seller…',
+        filterAction: 'admin-offering-status',
+        filters: [
+            { label: 'All (' + counts[''] + ')', value: '', active: status === '' },
+            { label: 'Live (' + counts.LIVE + ')', value: 'LIVE', active: status === 'LIVE' },
+            { label: 'Pre-order (' + counts.PRE_ORDER + ')', value: 'PRE_ORDER', active: status === 'PRE_ORDER' },
+            { label: 'Sold out (' + counts.SOLD_OUT + ')', value: 'SOLD_OUT', active: status === 'SOLD_OUT' },
+        ],
+    });
+    if (!rows.length) {
+        return h + adminEmptyState(term, 'offerings') + '</div>';
     }
-    list.forEach(function (p) {
+    rows.forEach(function (p) {
         h += '<div class="seller-row">' +
             '<div class="sr-avatar">🍽️</div>' +
             '<div class="sr-body">' +
@@ -436,18 +707,24 @@ async function adminOfferingsView() {
 
 async function adminOrdersView() {
     var filter = A.orderFilter || 'all';
-    var search = A.orderSearch || '';
+    var search = adminSearchTerm('orders');
+    A.orderSearch = search; // keep the server-side search param in step
     var qs = '?filter=' + encodeURIComponent(filter) + '&search=' + encodeURIComponent(search);
     var list = await api('/api/admin/orders' + qs);
     var h = '<div class="view-enter">';
     h += '<div class="section-head admin-section-head"><div><h1>Orders</h1><p class="muted small">' + (list ? list.length : 0) + ' orders</p></div></div>';
-    h += '<div class="admin-filters">';
-    h += '<input type="text" class="form-input form-input-sm" placeholder="Search orders..." value="' + esc(search) + '" id="adminOrderSearch">';
-    h += '<button class="btn btn-sm ' + (filter === 'all' ? 'btn-primary' : 'btn-secondary') + '" data-action="admin-order-filter" data-filter="all">All</button>';
-    h += '<button class="btn btn-sm ' + (filter === 'last3days' ? 'btn-primary' : 'btn-secondary') + '" data-action="admin-order-filter" data-filter="last3days">Last 3 Days</button>';
-    h += '</div>';
+    h += adminSearchBar({
+        key: 'orders',
+        label: 'orders',
+        placeholder: 'Order number, buyer, kitchen…',
+        filterAction: 'admin-order-filter',
+        filters: [
+            { label: 'All', value: 'all', active: filter === 'all' },
+            { label: 'Last 3 Days', value: 'last3days', active: filter === 'last3days' },
+        ],
+    });
     if (!list || !list.length) {
-        return h + '<div class="admin-empty">No orders yet.</div></div>';
+        return h + adminEmptyState(search, 'orders') + '</div>';
     }
     list.forEach(function (o) {
         var os = o.orderStatus || '';
@@ -518,12 +795,32 @@ async function adminOrderDetailView(id) {
 
 async function adminEnquiriesView() {
     var list = await api('/api/admin/enquiries');
+    var term = adminSearchTerm('enquiries');
+    var status = A.enquiryStatus || '';
+    var rows = (list || []).filter(function (e) {
+        if (status && (e.status || '') !== status) return false;
+        return adminMatches(term, [e.kitchenName, e.userName, e.message, e.status]);
+    });
+    var counts = { '': (list || []).length };
+    (list || []).forEach(function (e) { counts[e.status] = (counts[e.status] || 0) + 1; });
     var h = '<div class="view-enter">';
-    h += '<div class="section-head admin-section-head"><div><h1>Enquiries</h1><p class="muted small">' + (list ? list.length : 0) + ' enquiries</p></div></div>';
-    if (!list || !list.length) {
-        return h + '<div class="admin-empty">No enquiries yet.</div></div>';
+    h += '<div class="section-head admin-section-head"><div><h1>Enquiries</h1><p class="muted small">' +
+        rows.length + ' of ' + (list ? list.length : 0) + ' enquiries</p></div></div>';
+    h += adminSearchBar({
+        key: 'enquiries',
+        label: 'enquiries',
+        placeholder: 'Kitchen, buyer, message…',
+        filterAction: 'admin-enquiry-status',
+        filters: [
+            { label: 'All (' + counts[''] + ')', value: '', active: status === '' },
+            { label: 'Awaiting response (' + (counts.WAITING_FOR_RESPONSE || 0) + ')', value: 'WAITING_FOR_RESPONSE', active: status === 'WAITING_FOR_RESPONSE' },
+            { label: 'Seller responded (' + (counts.SELLER_RESPONDED || 0) + ')', value: 'SELLER_RESPONDED', active: status === 'SELLER_RESPONDED' },
+        ],
+    });
+    if (!rows.length) {
+        return h + adminEmptyState(term, 'enquiries') + '</div>';
     }
-    list.forEach(function (e) {
+    rows.forEach(function (e) {
         var es = e.status || '';
         var esPill = es === 'WAITING_FOR_RESPONSE' ? '<span class="pill pill-amber">⏳ Awaiting response</span>'
             : es === 'SELLER_RESPONDED' ? '<span class="pill pill-green">✓ Seller responded</span>'
@@ -708,8 +1005,24 @@ document.addEventListener('click', async function (ev) {
 // ==================== BOOT ====================
 window.addEventListener('hashchange', function () { if (A.role) adminRender(); });
 window.addEventListener('DOMContentLoaded', function () { initTheme(); adminGate(); });
+
+/**
+ * Debounced search input.
+ *
+ * The previous `keyup` handler re-rendered on every keystroke, destroying the very
+ * input that had focus. Typing "SM" left a single "S" behind and the operator could
+ * not enter a search term at all. We now record the caret, debounce the re-render,
+ * and restore focus afterwards.
+ */
+document.addEventListener('input', function (ev) {
+    var el = ev.target;
+    if (!el || !el.id || el.id.indexOf('adminSearch_') !== 0) return;
+    var key = el.id.substring('adminSearch_'.length);
+    A._focusId = el.id;
+    A._caretPos = el.selectionStart;
+    adminSearchHandler(key, el.id);
+});
 document.addEventListener('keyup', function (ev) {
-    if (ev.target.id === 'adminOrderSearch') {
-        adminAction('admin-order-search', ev.target);
-    }
+    var el = ev.target;
+    if (el && el.id && el.id.indexOf('adminSearch_') === 0) A._caretPos = el.selectionStart;
 });

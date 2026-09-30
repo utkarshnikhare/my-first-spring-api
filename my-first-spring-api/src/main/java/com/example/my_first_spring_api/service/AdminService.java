@@ -126,6 +126,28 @@ public class AdminService {
                 .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        // Order-status breakdown for the Admin dashboard. Counted in memory from the
+        // allOrders list this method has ALREADY loaded, so it adds no extra queries.
+        // /api/admin/** is Admin-only, so no Buyer/Seller behaviour is affected.
+        // The buckets below are mutually exclusive and sum to totalOrders:
+        //   awaitingSellerConfirmation = ORDERED   (placed, seller has not confirmed)
+        //   inFulfilment               = CONFIRMED + READY
+        //   fulfilled                   = DELIVERED + COMPLETED
+        //   cancelled                   = CANCELLED
+        //   draft                       = DRAFT (not a real order yet)
+        Map<OrderStatus, Long> ordersByStatus = new EnumMap<>(OrderStatus.class);
+        for (OrderStatus st : OrderStatus.values()) ordersByStatus.put(st, 0L);
+        for (Order o : allOrders) {
+            if (o.getOrderStatus() != null) ordersByStatus.merge(o.getOrderStatus(), 1L, Long::sum);
+        }
+        long ordersAwaitingSellerConfirmation = ordersByStatus.getOrDefault(OrderStatus.ORDERED, 0L);
+        long ordersInFulfilment = ordersByStatus.getOrDefault(OrderStatus.CONFIRMED, 0L)
+                + ordersByStatus.getOrDefault(OrderStatus.READY, 0L);
+        long ordersFulfilled = ordersByStatus.getOrDefault(OrderStatus.DELIVERED, 0L)
+                + ordersByStatus.getOrDefault(OrderStatus.COMPLETED, 0L);
+        long ordersCancelled = ordersByStatus.getOrDefault(OrderStatus.CANCELLED, 0L);
+        long ordersDraft = ordersByStatus.getOrDefault(OrderStatus.DRAFT, 0L);
+
         long totalEnquiries = allEnquiries.size();
         long openEnquiries = allEnquiries.stream().filter(e -> e.getStatus() == EnquiryStatus.NEW).count();
         long resolvedEnquiries = allEnquiries.stream().filter(e -> e.getStatus() == EnquiryStatus.CONTACTED || e.getStatus() == EnquiryStatus.CLOSED).count();
@@ -163,6 +185,13 @@ public class AdminService {
         out.put("openEnquiries", openEnquiries);
         out.put("resolvedEnquiries", resolvedEnquiries);
         out.put("totalFavourites", totalFavourites);
+        // Additive keys for the Admin order-status breakdown (see comment above).
+        out.put("ordersByStatus", ordersByStatus);
+        out.put("ordersAwaitingSellerConfirmation", ordersAwaitingSellerConfirmation);
+        out.put("ordersInFulfilment", ordersInFulfilment);
+        out.put("ordersFulfilled", ordersFulfilled);
+        out.put("ordersCancelled", ordersCancelled);
+        out.put("ordersDraft", ordersDraft);
         return out;
     }
 
