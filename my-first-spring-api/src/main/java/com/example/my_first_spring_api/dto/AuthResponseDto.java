@@ -11,6 +11,12 @@ public class AuthResponseDto {
     private String flatHouseNumber;
     private String society;
     private String building;
+    /**
+     * The buyer's persisted area. Additive field with its own accessors so every
+     * existing constructor call site stays source-compatible. The profile screen
+     * restores the Area dropdown from here on reload.
+     */
+    private String area;
     private String role;
     private SellerApprovalStatus sellerApprovalStatus;
 
@@ -66,6 +72,8 @@ public class AuthResponseDto {
     public void setRole(String role) { this.role = role; }
     public String getSociety() { return society; }
     public void setSociety(String society) { this.society = society; }
+    public String getArea() { return area; }
+    public void setArea(String area) { this.area = area; }
     public String getBuilding() { return building; }
     public void setBuilding(String building) { this.building = building; }
     public SellerApprovalStatus getSellerApprovalStatus() { return sellerApprovalStatus; }

@@ -21,6 +21,13 @@ public class User {
 
     @Column(name = "society")
     private String society;
+    /**
+     * The buyer's locality. Nullable and additive: existing profiles that only
+     * ever stored a society keep working and simply have no area until they pick
+     * one. Buyer-side only - it has no effect on seller service areas.
+     */
+    @Column(name = "area")
+    private String area;
 
     @Column(name = "building")
     private String building;
@@ -76,6 +83,8 @@ public class User {
     public void setFlatHouseNumber(String flatHouseNumber) { this.flatHouseNumber = flatHouseNumber; }
     public String getSociety() { return society; }
     public void setSociety(String society) { this.society = society; }
+    public String getArea() { return area; }
+    public void setArea(String area) { this.area = area; }
     public String getBuilding() { return building; }
     public void setBuilding(String building) { this.building = building; }
     public UserRole getRole() { return role; }

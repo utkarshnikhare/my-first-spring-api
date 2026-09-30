@@ -307,14 +307,27 @@ h3 { font-size: 1.05rem; font-weight: 700; font-family: 'Montserrat', 'Segoe UI'
 .hero p.sub { opacity: .9; font-size: .95rem; }
 .hero p.prompt { margin-top: 12px; font-weight: 700; font-size: 1rem; }
 
-.tiles-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+/* minmax(0, 1fr) - NOT `1fr 1fr`. A bare `1fr` is minmax(auto, 1fr), whose
+   automatic minimum is the item's min-content width. The Home tiles contain a
+   `.pill` badge with `white-space: nowrap` ("CAKES - SNACKS & MORE"), so each
+   track was floored at ~217px instead of the ~157px actually available, the grid
+   overflowed, the document scrollWidth grew and the fixed bottom nav stretched
+   to match - 92px of horizontal scroll at 320px. minmax(0,...) lets the tracks
+   shrink and the label wrap instead of pushing the page wide. */
+.tiles-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
 .tile {
     position: relative; border-radius: var(--radius); padding: 18px;
     background: var(--surface); border: 1px solid var(--border);
     box-shadow: var(--shadow); text-decoration: none; color: var(--text);
     display: flex; flex-direction: column; gap: 10px; min-height: 120px;
+    /* Let the tile itself shrink below its content's min-content width. */
+    min-width: 0;
     transition: transform .15s ease, box-shadow .2s ease;
 }
+/* Inside a narrow tile the badge must wrap rather than hold the column open.
+   Scoped to .tile so every other `.pill` on the app keeps nowrap. */
+.tile .pill { white-space: normal; }
+.tile-name { overflow-wrap: break-word; word-break: normal; }
 @media (hover: hover) {
     .tile:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
 }

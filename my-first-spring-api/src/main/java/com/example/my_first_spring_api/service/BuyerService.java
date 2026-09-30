@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.dto.AreaDto;
 import com.example.my_first_spring_api.dto.BuyerProfileDto;
 import com.example.my_first_spring_api.exception.BuyerNotAuthenticatedException;
 import com.example.my_first_spring_api.model.SellerApprovalStatus;
@@ -14,8 +15,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class BuyerService {
@@ -25,13 +28,16 @@ public class BuyerService {
     private final UserRepository userRepository;
     private final AnalyticsService analyticsService;
     private final SocietyDirectory societyDirectory;
+    private final com.example.my_first_spring_api.repository.AreaRepository areaRepository;
 
     @Autowired
     public BuyerService(UserRepository userRepository, AnalyticsService analyticsService,
-                        SocietyDirectory societyDirectory) {
+                        SocietyDirectory societyDirectory,
+                        com.example.my_first_spring_api.repository.AreaRepository areaRepository) {
         this.userRepository = userRepository;
         this.analyticsService = analyticsService;
         this.societyDirectory = societyDirectory;
+        this.areaRepository = areaRepository;
     }
 
     /**
@@ -110,8 +116,22 @@ public class BuyerService {
                 buyer.getFlatHouseNumber()
         );
         dto.setSociety(buyer.getSociety());
+        dto.setArea(buyer.getArea());
         dto.setBuilding(buyer.getBuilding());
         return dto;
+    }
+
+    /**
+     * The approved areas, each with the societies that belong to it. Buyers choose
+     * an Area first, then a Society from that Area only.
+     */
+    @Transactional(readOnly = true)
+    public List<AreaDto> getAreas(HttpSession session) {
+        requireCurrentBuyer(session);
+        return areaRepository.findAll().stream()
+                .sorted(Comparator.comparing(a -> a.getName(), String.CASE_INSENSITIVE_ORDER))
+                .map(a -> new AreaDto(a.getName(), new ArrayList<>(a.getSocieties())))
+                .collect(Collectors.toList());
     }
 
     /**
@@ -149,6 +169,22 @@ public class BuyerService {
         throw new IllegalArgumentException("Please choose your community from the list.");
     }
 
+    /** The canonical names of the societies inside an area (blank when unknown). */
+    private List<String> societiesInArea(String areaName) {
+        return areaRepository.findByNameIgnoreCase(areaName)
+                .map(a -> a.getSocieties().stream().map(String::trim).collect(Collectors.toList()))
+                .orElse(List.of());
+    }
+
+    /** Resolves a submitted area to its stored spelling; unknown areas are rejected. */
+    private String canonicalizeBuyerArea(String submitted) {
+        String candidate = submitted == null ? "" : submitted.trim();
+        if (candidate.isEmpty()) return "";
+        return areaRepository.findByNameIgnoreCase(candidate)
+                .map(com.example.my_first_spring_api.model.Area::getName)
+                .orElseThrow(() -> new IllegalArgumentException("Please choose an area from the list."));
+    }
+
     @Transactional
     public BuyerProfileDto updateProfile(BuyerProfileDto profileDto, HttpSession session) {
         User buyer = requireCurrentBuyer(session);
@@ -165,6 +201,18 @@ public class BuyerService {
             // keeps the existing "no society set" behaviour.
             buyer.setSociety(canonicalizeBuyerSociety(profileDto.getSociety(), buyer));
         }
+        // Area is validated independently, then the society is re-checked against
+        // the EFFECTIVE area so a client cannot pair a real society with an area
+        // that does not contain it.
+        if (profileDto.getArea() != null) {
+            String area = canonicalizeBuyerArea(profileDto.getArea());
+            buyer.setArea(area);
+            String society = buyer.getSociety();
+            if (area != null && !area.isEmpty() && society != null && !society.isEmpty()
+                    && !societiesInArea(area).contains(society)) {
+                throw new IllegalArgumentException("Please choose a community that belongs to the selected area.");
+            }
+        }
         if (profileDto.getBuilding() != null) {
             buyer.setBuilding(profileDto.getBuilding());
         }
@@ -176,6 +224,7 @@ public class BuyerService {
                 buyer.getFlatHouseNumber()
         );
         dto.setSociety(buyer.getSociety());
+        dto.setArea(buyer.getArea());
         dto.setBuilding(buyer.getBuilding());
         return dto;
     }

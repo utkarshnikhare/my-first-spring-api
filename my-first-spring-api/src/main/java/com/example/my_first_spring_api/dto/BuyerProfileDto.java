@@ -6,6 +6,7 @@ public class BuyerProfileDto {
     private String mobileNumber;
     private String flatHouseNumber;
     private String society;
+    private String area;
     private String building;
 
     public BuyerProfileDto() {}
@@ -27,6 +28,8 @@ public class BuyerProfileDto {
     public void setFlatHouseNumber(String flatHouseNumber) { this.flatHouseNumber = flatHouseNumber; }
     public String getSociety() { return society; }
     public void setSociety(String society) { this.society = society; }
+    public String getArea() { return area; }
+    public void setArea(String area) { this.area = area; }
     public String getBuilding() { return building; }
     public void setBuilding(String building) { this.building = building; }
 }

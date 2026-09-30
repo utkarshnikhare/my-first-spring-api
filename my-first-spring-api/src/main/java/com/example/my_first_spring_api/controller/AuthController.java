@@ -67,11 +67,13 @@ public class AuthController {
         SecurityContextHolder.setContext(context);
         securityContextRepository.saveContext(context, request, response);
 
-        return ResponseEntity.ok(new AuthResponseDto(
+        AuthResponseDto dto = new AuthResponseDto(
                 true, "Logged in successfully",
                 buyer.getId(), buyer.getName(), buyer.getMobileNumber(),
                 buyer.getFlatHouseNumber(), buyer.getRole().name(), buyer.getSellerApprovalStatus(),
-                buyer.getSociety(), buyer.getBuilding()));
+                buyer.getSociety(), buyer.getBuilding());
+        dto.setArea(buyer.getArea());
+        return ResponseEntity.ok(dto);
     }
 
     @GetMapping("/me")
@@ -80,10 +82,14 @@ public class AuthController {
         if (buyer == null) {
             return ResponseEntity.ok(new AuthResponseDto(false, "Not authenticated", null, null, null, null, null));
         }
-        return ResponseEntity.ok(new AuthResponseDto(
+        AuthResponseDto dto = new AuthResponseDto(
                 true, "Authenticated", buyer.getId(), buyer.getName(),
                 buyer.getMobileNumber(), buyer.getFlatHouseNumber(), buyer.getRole().name(),
-                buyer.getSellerApprovalStatus(), buyer.getSociety(), buyer.getBuilding()));
+                buyer.getSellerApprovalStatus(), buyer.getSociety(), buyer.getBuilding());
+        // The profile screen restores the Area dropdown from /api/auth/me, so the
+        // saved area has to travel with the session payload.
+        dto.setArea(buyer.getArea());
+        return ResponseEntity.ok(dto);
     }
 
     @PostMapping("/become-seller")

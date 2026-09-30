@@ -9,6 +9,7 @@ import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.OrderItemRepository;
 import com.example.my_first_spring_api.repository.ProductRepository;
 import com.example.my_first_spring_api.repository.UserRepository;
+import com.example.my_first_spring_api.repository.AreaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -37,6 +38,7 @@ class SellerServiceAreaTest {
     @Mock private OrderService orderService;
     @Mock private FeatureService featureService;
     @Mock private UserRepository userRepository;
+    @Mock private AreaRepository areaRepository;
 
     private SellerService sellerService;
 
@@ -44,7 +46,7 @@ class SellerServiceAreaTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         sellerService = new SellerService(kitchenRepository, productRepository, orderItemRepository,
-                orderService, featureService, new SocietyDirectory(userRepository, kitchenRepository));
+                orderService, featureService, new SocietyDirectory(userRepository, kitchenRepository, areaRepository));
         when(userRepository.findAll()).thenReturn(List.of(
                 user("Buyer A", "9876500001", "Alpha Society"),
                 user("Buyer B", "9876500002", "Beta Society")));

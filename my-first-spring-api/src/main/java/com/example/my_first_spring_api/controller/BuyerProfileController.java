@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.controller;
 
+import com.example.my_first_spring_api.dto.AreaDto;
 import com.example.my_first_spring_api.dto.BuyerProfileDto;
 import com.example.my_first_spring_api.service.BuyerService;
 import jakarta.servlet.http.HttpSession;
@@ -29,6 +30,12 @@ public class BuyerProfileController {
     @GetMapping("/societies")
     public ResponseEntity<List<String>> getSelectableSocieties(HttpSession session) {
         return ResponseEntity.ok(buyerService.getSelectableSocieties(session));
+    }
+
+    /** Approved areas and the societies inside each, for the dependent dropdowns. */
+    @GetMapping("/areas")
+    public ResponseEntity<List<AreaDto>> getAreas(HttpSession session) {
+        return ResponseEntity.ok(buyerService.getAreas(session));
     }
 
     @PutMapping

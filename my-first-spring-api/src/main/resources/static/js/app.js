@@ -218,6 +218,48 @@ async function toggleFavourite(type, id, btnEl) {
 
 // ==================== Form delegation ====================
 
+// ==================== Dependent Area -> Community dropdown ====================
+
+/**
+ * The profile offers one society per chosen area, so changing the area has to
+ * re-derive the community list and drop a community that does not belong to the
+ * new area. The area/society data comes from the backend, never hard-coded.
+ */
+document.addEventListener('change', function (e) {
+    var areaSel = e.target;
+    if (!areaSel || areaSel.id !== 'profileArea') return;
+    var societySel = document.getElementById('profileSociety');
+    if (!societySel) return;
+
+    var areas = state.profileAreas || [];
+    var chosen = areaSel.value;
+    var match = null;
+    for (var i = 0; i < areas.length; i++) {
+        if (areas[i].name.toLowerCase() === String(chosen).toLowerCase()) { match = areas[i]; break; }
+    }
+
+    var previous = societySel.value;
+    societySel.innerHTML = '<option value="">' + (match ? 'Select your community' : 'Select an area first') + '</option>';
+    if (match) {
+        (match.societies || []).forEach(function (s) {
+            var opt = document.createElement('option');
+            opt.value = s;
+            opt.textContent = s;
+            // Keep the choice only if it is still valid for the new area.
+            if (previous && s.toLowerCase() === String(previous).toLowerCase()) opt.selected = true;
+            societySel.appendChild(opt);
+        });
+    }
+    societySel.disabled = !match;
+    if (match && previous && !(match.societies || []).some(function (s) {
+        return s.toLowerCase() === String(previous).toLowerCase();
+    })) {
+        // The old community does not belong here - clear it so the form never
+        // submits an invalid Area/Society pair.
+        societySel.value = '';
+    }
+});
+
 document.addEventListener('submit', async function (e) {
     var form = e.target.closest('form[data-form]');
     if (!form) return;
@@ -237,6 +279,14 @@ document.addEventListener('submit', async function (e) {
             if (mob) mob.value = mobile;
         } else if (kind === 'profile-edit') {
             var vals = formVals(form);
+            // The community dropdown is disabled until an area is chosen. A disabled
+            // select still reports a value to formVals, so without this the save
+            // would blank a community the buyer already had. Only send the society
+            // the user could actually pick.
+            var societySel = form.querySelector('#profileSociety');
+            if (societySel && societySel.disabled) {
+                vals.society = (state.user && state.user.society) || '';
+            }
             // The server response is authoritative: it reflects what was really
             // persisted. Trusting the submitted values here could keep a stale
             // society/building in the UI and re-submit it on the next save.

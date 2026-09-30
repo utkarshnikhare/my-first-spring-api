@@ -2,6 +2,7 @@ package com.example.my_first_spring_api.service;
 
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.User;
+import com.example.my_first_spring_api.repository.AreaRepository;
 import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,11 +32,14 @@ public class SocietyDirectory {
 
     private final UserRepository userRepository;
     private final KitchenRepository kitchenRepository;
+    private final AreaRepository areaRepository;
 
     @Autowired
-    public SocietyDirectory(UserRepository userRepository, KitchenRepository kitchenRepository) {
+    public SocietyDirectory(UserRepository userRepository, KitchenRepository kitchenRepository,
+                            AreaRepository areaRepository) {
         this.userRepository = userRepository;
         this.kitchenRepository = kitchenRepository;
+        this.areaRepository = areaRepository;
     }
 
     /**
@@ -86,8 +90,13 @@ public class SocietyDirectory {
 
     /**
      * Existing societies sourced from: every user's profile society, every
-     * kitchen's primary society, and any society already referenced by a
-     * stored service-area selection (so existing configurations stay editable).
+     * kitchen's primary society, any society already referenced by a stored
+     * service-area selection (so existing configurations stay editable), and the
+     * societies declared inside an {@link com.example.my_first_spring_api.model.Area}.
+     *
+     * <p>Area societies are folded into this ONE directory rather than a second
+     * catalogue, so a society declared by an Area is the same society the seller
+     * service-area and buyer validation paths already know about.
      */
     private Map<String, String> knownSocieties() {
         Map<String, String> known = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
@@ -98,6 +107,10 @@ public class SocietyDirectory {
             if (kitchen == null) continue;
             addSociety(known, kitchen.getSociety());
             addServiceAreaEntries(known, kitchen.getServiceAreas());
+        }
+        for (com.example.my_first_spring_api.model.Area area : areaRepository.findAll()) {
+            if (area == null) continue;
+            for (String society : area.getSocieties()) addSociety(known, society);
         }
         return known;
     }

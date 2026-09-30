@@ -3,6 +3,7 @@ package com.example.my_first_spring_api;
 import com.example.my_first_spring_api.model.Enquiry;
 import com.example.my_first_spring_api.model.EnquiryStatus;
 import com.example.my_first_spring_api.model.SellerTemplate;
+import com.example.my_first_spring_api.model.Area;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Order;
 import com.example.my_first_spring_api.model.OrderItem;
@@ -53,6 +54,10 @@ public class DemoDataSeeder {
     private static final String DEMO_SELLER_ARCHIVE_FLAG = "demo_seller_archive_seeded";
     /** The seller the Seller App demo-login signs in as — its archive is what the demo shows. */
     private static final String DEMO_SELLER_MOBILE = "9100000001";
+    /** The approved demo area. */
+    private static final String DEMO_AREA_NAME = "Charholi / Lohegaon";
+    /** The only society approved to live inside that area. */
+    private static final String DEMO_AREA_SOCIETY = "Pride World City";
     private int orderCounter = 0;
 
     private final UserRepository userRepository;
@@ -63,13 +68,15 @@ public class DemoDataSeeder {
     private final EnquiryRepository enquiryRepository;
     private final FavouriteRepository favouriteRepository;
     private final SellerTemplateRepository sellerTemplateRepository;
+    private final com.example.my_first_spring_api.repository.AreaRepository areaRepository;
 
     @Autowired
     public DemoDataSeeder(UserRepository userRepository, KitchenRepository kitchenRepository,
                            ProductRepository productRepository, PlatformSettingRepository platformSettingRepository,
                            com.example.my_first_spring_api.repository.OrderRepository orderRepository,
                            EnquiryRepository enquiryRepository, FavouriteRepository favouriteRepository,
-                           SellerTemplateRepository sellerTemplateRepository) {
+                           SellerTemplateRepository sellerTemplateRepository,
+                           com.example.my_first_spring_api.repository.AreaRepository areaRepository) {
         this.userRepository = userRepository;
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
@@ -78,6 +85,7 @@ public class DemoDataSeeder {
         this.enquiryRepository = enquiryRepository;
         this.favouriteRepository = favouriteRepository;
         this.sellerTemplateRepository = sellerTemplateRepository;
+        this.areaRepository = areaRepository;
     }
 
     /** Idempotent entry point called from DataInitializer on every startup. */
@@ -89,6 +97,39 @@ public class DemoDataSeeder {
         seedEnquiriesIfEmpty();
         seedFavouritesIfEmpty();
         seedSellerArchiveIfEmpty();
+        seedAreasIfEmpty();
+    }
+
+    // ==================== DEMO AREAS ====================
+
+    /**
+     * Seeds the single approved Area -> Society mapping.
+     *
+     * <p>Idempotent: matched by name (case-insensitively), so repeated boots reuse
+     * the existing row instead of duplicating it. Additive: only the missing
+     * society is attached - an area that already exists with other societies keeps
+     * them, and no buyer, kitchen, offering or order row is touched. Safe for an
+     * environment that already holds demo data: this creates no user and rewrites
+     * no existing profile selection.
+     */
+    @Transactional
+    public void seedAreasIfEmpty() {
+        Area area = areaRepository.findByNameIgnoreCase(DEMO_AREA_NAME).orElse(null);
+        boolean created = false;
+        if (area == null) {
+            area = new Area(DEMO_AREA_NAME);
+            created = true;
+        }
+        // Attach the approved society only if it is not already linked. A duplicate
+        // differing only in case/formatting is the SAME society, so it is skipped.
+        boolean changed = created;
+        boolean linked = area.getSocieties().stream()
+                .anyMatch(s -> s != null && s.trim().equalsIgnoreCase(DEMO_AREA_SOCIETY));
+        if (!linked) {
+            area.getSocieties().add(DEMO_AREA_SOCIETY);
+            changed = true;
+        }
+        if (changed) areaRepository.save(area);
     }
 
     @Transactional

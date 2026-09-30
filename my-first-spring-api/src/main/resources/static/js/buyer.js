@@ -1462,20 +1462,34 @@ async function profileView() {
 
     // Logged-in state
     var u = state.user;
-    // Community is chosen from the authoritative society directory instead of
-    // being typed, so a buyer cannot store free text that would silently break
-    // service-area eligibility. The backend also returns the buyer's current
-    // society as an option, so an existing profile stays editable.
-    var societies = [];
-    var societyLoadFailed = false;
-    try { societies = await api('/api/buyer/profile/societies') || []; } catch (e) { societyLoadFailed = true; }
-    if (societies.length && !societies.some(function (s) { return u.society && s.toLowerCase() === String(u.society).toLowerCase(); }) && u.society) {
-        societies.push(u.society);
-    }
-    var societyOptions = '<option value="">Select your community</option>' + societies.map(function (s) {
-        var sel = (u.society && s.toLowerCase() === String(u.society).toLowerCase()) ? ' selected' : '';
-        return '<option value="' + esc(s) + '"' + sel + '>' + esc(s) + '</option>';
+    // Dependent Area -> Society dropdowns. Areas come from the backend (never
+    // hard-coded); the Society list is only the societies of the chosen Area.
+    var areas = [];
+    var areaLoadFailed = false;
+    try { areas = await api('/api/buyer/profile/areas') || []; } catch (e) { areaLoadFailed = true; }
+    // Kept on state so the change handler can re-derive the society list when the
+    // buyer picks a different area, without another round trip.
+    state.profileAreas = areas;
+
+    var savedArea = (state.user && state.user.area) ? state.user.area : '';
+    var areaOptions = '<option value="">Select your area</option>' + areas.map(function (a) {
+        var sel = (savedArea && a.name.toLowerCase() === String(savedArea).toLowerCase()) ? ' selected' : '';
+        return '<option value="' + esc(a.name) + '"' + sel + '>' + esc(a.name) + '</option>';
     }).join('');
+
+    // Communities are only offered for the currently selected area. With no area
+    // chosen the Society dropdown stays disabled, so an invalid Area/Society pair
+    // cannot be submitted; the app.js save handler preserves any society the buyer
+    // already had rather than clearing it.
+    var activeArea = areas.filter(function (a) {
+        return savedArea && a.name.toLowerCase() === String(savedArea).toLowerCase();
+    })[0];
+    var societyChoices = activeArea ? (activeArea.societies || []) : [];
+    var societyOptions = '<option value="">' + (activeArea ? 'Select your community' : 'Select an area first') + '</option>' +
+        societyChoices.map(function (s) {
+            var sel = (u.society && s.toLowerCase() === String(u.society).toLowerCase()) ? ' selected' : '';
+            return '<option value="' + esc(s) + '"' + sel + '>' + esc(s) + '</option>';
+        }).join('');
 
     h += '<div class="card pad card-mb">' +
         '<div class="flex items-center gap-3">' +
@@ -1486,14 +1500,20 @@ async function profileView() {
     h += '<form data-form="profile-edit"><div class="card pad card-mb">' +
         '<div class="profile-row"><span class="pr-label">Name</span>' +
         '<input class="form-input form-input-sm" name="name" value="' + esc(u.name || '') + '"></div>' +
-        // Never fall back to a placeholder that is then saved back: the form value
-        // goes straight to the buyer's profile, so a fake default would overwrite
-        // the real persisted society and break service-area eligibility at order
-        // time. The dropdown only offers societies the backend vouched for.
+        // The Area and Community dropdowns are driven by the approved backend
+        // data. No option is hard-coded here, and no free-text fallback exists -
+        // a typed community would silently break service-area eligibility at
+        // order time.
+        '<div class="profile-row"><span class="pr-label">Area</span>' +
+        (areaLoadFailed
+            ? '<span class="muted small">Could not load the area list. Please retry.</span>'
+            : '<select class="form-input form-input-sm" name="area" id="profileArea" aria-label="Area"' +
+              (areas.length ? '' : ' disabled') + '>' + areaOptions + '</select>') + '</div>' +
         '<div class="profile-row"><span class="pr-label">Community / Society</span>' +
-        (societyLoadFailed
-            ? '<span class="muted small">Could not load the community list. Please retry.</span>'
-            : '<select class="form-input form-input-sm" name="society" aria-label="Community / Society">' + societyOptions + '</select>') + '</div>' +
+        (areaLoadFailed
+            ? '<span class="muted small">Select an area first.</span>'
+            : '<select class="form-input form-input-sm" name="society" id="profileSociety" aria-label="Community / Society"' +
+              (activeArea ? '' : ' disabled') + '>' + societyOptions + '</select>') + '</div>' +
         '<div class="profile-row"><span class="pr-label">Building</span>' +
         '<input class="form-input form-input-sm" name="building" value="' + esc(u.building || '') + '" placeholder="e.g. A Wing"></div>' +
         '<div class="profile-row"><span class="pr-label">Flat #</span>' +

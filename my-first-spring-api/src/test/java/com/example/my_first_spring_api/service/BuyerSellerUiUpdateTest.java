@@ -200,12 +200,19 @@ class BuyerSellerUiUpdateTest {
     // ---------- 4. Buyer community from the authoritative directory ----------
 
     @Test
-    void buyerProfileUsesASocietyDropdownNotFreeText() {
-        String view = buyerJs.substring(buyerJs.indexOf("async function profileView("),
-                buyerJs.indexOf("async function profileView(") + 4000);
-        assertThat(view).as("community is chosen from the authoritative list")
-                .contains("/api/buyer/profile/societies")
+    void buyerProfileUsesDependentDropdownsNotFreeText() {
+        int profileStart = buyerJs.indexOf("async function profileView(");
+        assertThat(profileStart).as("profileView must exist").isGreaterThanOrEqualTo(0);
+        // Clamp: profileView is near the end of the file, so a fixed window can overrun.
+        String view = buyerJs.substring(profileStart, Math.min(buyerJs.length(), profileStart + 8000));
+        // Updated by the Area work: the community is now chosen from the selected
+        // area's own societies rather than from a flat directory call. The rule it
+        // protected - no free-text community that could silently break
+        // service-area eligibility - still holds.
+        assertThat(view).as("area and community are both chosen from backend data")
+                .contains("/api/buyer/profile/areas")
                 .contains("<select")
+                .contains("name=\"area\"")
                 .contains("name=\"society\"");
         assertThat(view).as("no typed community field remains")
                 .doesNotContain("placeholder=\"e.g. Sunshine Society\"");
