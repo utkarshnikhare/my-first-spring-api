@@ -438,6 +438,9 @@ public class SellerService {
         dto.setUpiId(kitchen.getUpiId());
         dto.setGalleryImages(kitchen.getGalleryImages());
         dto.setOrderDeadline(kitchen.getOrderDeadline());
+        // The kitchen owner's name, read from the seller's own User record so the
+        // UI never has to derive it from the kitchen name. Seller-facing DTO only.
+        dto.setSellerName(kitchen.getSeller() == null ? null : kitchen.getSeller().getName());
         dto.setSellerType(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : null);
         dto.setPaused(KitchenVisibility.isPaused(kitchen));
         return dto;

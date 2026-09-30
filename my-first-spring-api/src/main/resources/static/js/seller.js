@@ -5,7 +5,10 @@ var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', 
 var sellerRoutes = {
     '#/home': sellerHomeView, '#/add': sellerAddView, '#/create': sellerCreateView,
     '#/edit-offering': sellerEditOfferingView,
-    '#/quick-post': sellerQuickPostView, '#/history': sellerHistoryView,
+    '#/quick-post': sellerQuickPostView,
+    // "My Offerings". '#/history' stays registered as an alias so existing
+    // bookmarks, deep links and the dashboard's history link keep working.
+    '#/my-offerings': sellerHistoryView, '#/history': sellerHistoryView,
     '#/kitchen': sellerKitchenView, '#/orders': sellerOrdersView,
     '#/order-detail': sellerOrderDetailView, '#/earnings': sellerEarningsView,
     '#/enquiries': sellerEnquiriesView
@@ -118,7 +121,7 @@ async function sellerRender() {
 }
 function sellerUpdateNav(hash) {
     $all('.nav-item').forEach(function (el) { el.classList.remove('active'); });
-    var key = hash === '#/home' ? 'home' : hash === '#/kitchen' ? 'kitchen' : (hash === '#/orders' || hash.startsWith('#/order-detail/')) ? 'orders' : hash === '#/enquiries' ? 'enquiries' : hash === '#/history' ? 'history' : hash === '#/earnings' ? 'earnings' : null;
+    var key = hash === '#/home' ? 'home' : hash === '#/kitchen' ? 'kitchen' : (hash === '#/orders' || hash.startsWith('#/order-detail/')) ? 'orders' : hash === '#/enquiries' ? 'enquiries' : (hash === '#/history' || hash === '#/my-offerings') ? 'history' : hash === '#/earnings' ? 'earnings' : null;
     var el = document.querySelector('[data-nav="' + (key || '') + '"]');
     if (el) el.classList.add('active');
 }
@@ -259,6 +262,11 @@ async function sellerHomeView() {
     try {
         var dash = await sellerApi('/api/seller-app/dashboard');
         S.kitchen = { id: dash.kitchenId, name: dash.kitchenName };
+        // Seller name comes from the authenticated seller's own profile. It is
+        // rendered only when the backend actually returned one, so a missing name
+        // never shows as "undefined"/"null".
+        var sellerLine = (dash.sellerName && String(dash.sellerName).trim())
+            ? '<p class="muted small">Seller: ' + esc(String(dash.sellerName).trim()) + '</p>' : '';
         var hasActivity = (!dash.totalOrders || dash.totalOrders === 0)
             && (!dash.hasEarnings || dash.hasEarnings === false)
             && (!dash.pending || dash.pending === 0)
@@ -270,6 +278,10 @@ async function sellerHomeView() {
                 '<div class="metric-card"><div class="metric-value">' + dash.followers + '</div><div class="metric-label">Followers</div></div>' +
                 '<div class="metric-card"><div class="metric-value">' + dash.totalOrders + '</div><div class="metric-label">Total Orders</div></div></div>';
         }
+        // Kitchen name stays the primary heading; the seller name sits directly
+        // beneath it and is omitted entirely when the backend sent none.
+        h += '<div class="kitchen-identity"><h2 class="ki-name">' + esc(dash.kitchenName || '') + '</h2>' +
+            (sellerLine ? '<p class="ki-seller muted small">Seller: ' + esc(String(dash.sellerName).trim()) + '</p>' : '') + '</div>';
         h += '<div class="section-head"><h2>My Offerings</h2></div>';
         if (!dash.offerings || dash.offerings.length === 0) {
             h += emptyHtml('🍽️', 'No Offerings', 'Nothing on sale right now. Create your first offering and start taking orders.',
@@ -317,9 +329,18 @@ async function sellerHomeView() {
     return h;
 }
 
-// SCREEN 5: HISTORY
+// SCREEN 5: MY OFFERINGS (formerly "History")
 async function sellerHistoryView() {
-    var h = '<div class="view-enter"><div class="page-head"><h1>History</h1><p class="muted small">Previous offerings from your kitchen.</p></div>';
+    var h = '<div class="view-enter"><div class="page-head"><h1>My Offerings</h1>' +
+        '<p class="muted small">Create a new offering, or revisit the ones you have already run.</p></div>';
+    // Primary action sits above the history so it is reachable without scrolling.
+    // It reuses the existing Add Offering screen (#/add -> the same create flow).
+    // Plain anchor on the existing #/add route: navigating by hash means the SPA
+    // router handles it exactly like every other in-app link (a data-action here
+    // would also fire sellerNavigate and render the view twice).
+    h += '<a class="btn btn-primary btn-block btn-mt-sm" href="#/add">+ Add Offering</a>';
+    h += '<div class="section-head"><h2>Offering History</h2></div>';
+    h += '<p class="muted small mb-2">Previous offerings listed here...</p>';
     try {
         var items = await sellerApi('/api/seller-app/history');
         S.historyItems = items || [];
@@ -541,7 +562,11 @@ async function sellerKitchenView() {
     try { societies = await sellerApi('/api/seller/societies') || []; } catch (e) { }
     var societyOptions = societies.map(function (s) { return '<option value="' + esc(s) + '">' + esc(s) + '</option>'; }).join('');
     var paused = !!(kitchen && kitchen.paused);
-    var h = '<div class="view-enter"><div class="page-head"><h1>Manage Kitchen</h1></div>';
+    // Kitchen Name remains the primary heading; the owner name is shown beneath it,
+    // sourced from the seller's own profile and omitted when absent.
+    var kitchenSellerLine = (kitchen && kitchen.sellerName && String(kitchen.sellerName).trim())
+        ? '<p class="ki-seller muted small">Seller: ' + esc(String(kitchen.sellerName).trim()) + '</p>' : '';
+    var h = '<div class="view-enter"><div class="page-head"><h1>Manage Kitchen</h1>' + kitchenSellerLine + '</div>';
     h += '<div class="kitchen-status-badge' + (paused ? ' paused' : '') + '">' + (paused ? 'Kitchen PAUSED' : 'Kitchen Published') + '</div>';
     h += paused
         ? '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="resume-kitchen">Resume Kitchen</button>'
@@ -582,7 +607,7 @@ async function sellerEarningsView() {
             h += '<div class="ehc-row"><div class="ehc-item"><div class="ehc-val orange">' + money(e.pending) + '</div><div class="ehc-sub">PENDING</div></div><div class="ehc-item"><div class="ehc-val">' + money(e.thisMonth) + '</div><div class="ehc-sub">THIS MONTH</div></div></div></div>';
             if (e.items && e.items.length) e.items.forEach(function (item) { h += '<div class="earning-item"><span class="ei-icon">🍽️</span><span class="ei-body"><span class="ei-name">' + esc(item.productName) + '</span><span class="ei-orders">' + item.totalOrders + ' orders</span></span><span class="ei-revenue"><span class="ei-confirmed">' + money(item.confirmedRevenue) + '</span><br><span class="ei-pending">' + money(item.pendingRevenue) + '</span></span></div>'; });
         }
-        h += '<a class="btn btn-secondary btn-block" href="#/history">VIEW FULL HISTORY</a>';
+        h += '<a class="btn btn-secondary btn-block" href="#/my-offerings">VIEW FULL HISTORY</a>';
     } catch (err) { h += emptyHtml('⚠️', 'Could not load earnings', err.message); }
     h += '</div>';
     return h;

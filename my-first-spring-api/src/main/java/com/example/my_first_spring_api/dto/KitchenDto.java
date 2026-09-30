@@ -19,6 +19,8 @@ public class KitchenDto {
     private Boolean paused;
     private String orderDeadline;
     private Long sellerId;
+    /** The kitchen owner's name. Seller-facing only - not exposed to Buyer DTOs. */
+    private String sellerName;
     private String sellerType;
 
     public KitchenDto() {}
@@ -71,6 +73,8 @@ public class KitchenDto {
     public void setOrderDeadline(String orderDeadline) { this.orderDeadline = orderDeadline; }
     public Long getSellerId() { return sellerId; }
     public void setSellerId(Long sellerId) { this.sellerId = sellerId; }
+    public String getSellerName() { return sellerName; }
+    public void setSellerName(String sellerName) { this.sellerName = sellerName; }
     public String getSellerType() { return sellerType; }
     public void setSellerType(String sellerType) { this.sellerType = sellerType; }
 }

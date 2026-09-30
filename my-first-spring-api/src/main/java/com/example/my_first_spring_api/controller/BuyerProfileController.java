@@ -7,6 +7,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/buyer/profile")
 public class BuyerProfileController {
@@ -21,6 +23,12 @@ public class BuyerProfileController {
     @GetMapping
     public ResponseEntity<BuyerProfileDto> getProfile(HttpSession session) {
         return ResponseEntity.ok(buyerService.getProfile(session));
+    }
+
+    /** Communities a buyer may choose from, from the authoritative society directory. */
+    @GetMapping("/societies")
+    public ResponseEntity<List<String>> getSelectableSocieties(HttpSession session) {
+        return ResponseEntity.ok(buyerService.getSelectableSocieties(session));
     }
 
     @PutMapping

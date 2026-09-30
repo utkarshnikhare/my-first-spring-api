@@ -423,6 +423,9 @@ public class SellerAppService {
         SellerDashboardDto dto = new SellerDashboardDto();
         dto.setKitchenId(kitchen.getId());
         dto.setKitchenName(kitchen.getDisplayName());
+        // The seller's own name comes from the authenticated seller's User record,
+        // never derived from the kitchen name, and is seller-facing only.
+        dto.setSellerName(kitchen.getSeller() == null ? null : kitchen.getSeller().getName());
 
         List<Order> allOrders = orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen);
         dto.setTotalOrders(allOrders.size());

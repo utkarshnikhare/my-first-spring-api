@@ -529,6 +529,14 @@ h3 { font-size: 1.05rem; font-weight: 700; font-family: 'Montserrat', 'Segoe UI'
 .oc-price { font-weight: 800; font-size: 1.05rem; margin-top: 8px; }
 .oc-price .unit { font-size: .72rem; color: var(--muted); font-weight: 600; }
 .oc-timing { font-size: .75rem; color: var(--muted); margin-top: 5px; }
+/* Low-stock hint. Buyers only ever see their own scarcity ("Only N left") and
+   never how many plates other buyers already took. */
+.oc-scarcity {
+    display: inline-block; margin-top: 6px;
+    background: var(--amber-soft); color: var(--amber);
+    border-radius: 8px; padding: 3px 9px;
+    font-size: .72rem; font-weight: 800;
+}
 .oc-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
 .oc-heart { position: absolute; top: 10px; right: 10px; }
 

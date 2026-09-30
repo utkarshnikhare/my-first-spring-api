@@ -13,6 +13,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -22,11 +24,14 @@ public class BuyerService {
 
     private final UserRepository userRepository;
     private final AnalyticsService analyticsService;
+    private final SocietyDirectory societyDirectory;
 
     @Autowired
-    public BuyerService(UserRepository userRepository, AnalyticsService analyticsService) {
+    public BuyerService(UserRepository userRepository, AnalyticsService analyticsService,
+                        SocietyDirectory societyDirectory) {
         this.userRepository = userRepository;
         this.analyticsService = analyticsService;
+        this.societyDirectory = societyDirectory;
     }
 
     /**
@@ -109,6 +114,41 @@ public class BuyerService {
         return dto;
     }
 
+    /**
+     * The societies a buyer may choose from on their profile, taken from the
+     * authoritative SocietyDirectory (derived from existing users and kitchens).
+     * The buyer's CURRENT society is always included even if it is no longer in
+     * the directory, so an existing profile is never silently invalidated.
+     */
+    @Transactional(readOnly = true)
+    public List<String> getSelectableSocieties(HttpSession session) {
+        User buyer = requireCurrentBuyer(session);
+        List<String> societies = new ArrayList<>(societyDirectory.findAllSocieties());
+        String current = buyer.getSociety() == null ? "" : buyer.getSociety().trim();
+        if (!current.isEmpty() && societies.stream().noneMatch(s -> s.equalsIgnoreCase(current))) {
+            societies.add(current);
+        }
+        societies.sort(String.CASE_INSENSITIVE_ORDER);
+        return societies;
+    }
+
+    /**
+     * Resolves a submitted society to its stored spelling. A value that matches a
+     * known society (ignoring case) is canonicalized to that exact spelling. The
+     * buyer's own current society is accepted unchanged so an existing profile
+     * stays editable; anything else is rejected rather than stored as free text.
+     */
+    private String canonicalizeBuyerSociety(String submitted, User buyer) {
+        String candidate = submitted == null ? "" : submitted.trim();
+        if (candidate.isEmpty()) return "";
+        for (String known : societyDirectory.findAllSocieties()) {
+            if (known.equalsIgnoreCase(candidate)) return known;
+        }
+        String current = buyer.getSociety() == null ? "" : buyer.getSociety().trim();
+        if (!current.isEmpty() && current.equalsIgnoreCase(candidate)) return current;
+        throw new IllegalArgumentException("Please choose your community from the list.");
+    }
+
     @Transactional
     public BuyerProfileDto updateProfile(BuyerProfileDto profileDto, HttpSession session) {
         User buyer = requireCurrentBuyer(session);
@@ -119,7 +159,11 @@ public class BuyerService {
             buyer.setFlatHouseNumber(profileDto.getFlatHouseNumber());
         }
         if (profileDto.getSociety() != null) {
-            buyer.setSociety(profileDto.getSociety());
+            // Validate server-side against the authoritative society records so a
+            // buyer cannot store an arbitrary free-text community, which would
+            // silently break service-area eligibility at order time. A blank value
+            // keeps the existing "no society set" behaviour.
+            buyer.setSociety(canonicalizeBuyerSociety(profileDto.getSociety(), buyer));
         }
         if (profileDto.getBuilding() != null) {
             buyer.setBuilding(profileDto.getBuilding());

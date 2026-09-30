@@ -26,6 +26,8 @@ public class SellerDashboardDto {
     // Kitchen info
     private Long kitchenId;
     private String kitchenName;
+    /** The authenticated seller's own name, shown beside the kitchen name. */
+    private String sellerName;
 
     public SellerDashboardDto() {}
 
@@ -50,5 +52,7 @@ public class SellerDashboardDto {
     public void setKitchenId(Long kitchenId) { this.kitchenId = kitchenId; }
     public String getKitchenName() { return kitchenName; }
     public void setKitchenName(String kitchenName) { this.kitchenName = kitchenName; }
+    public String getSellerName() { return sellerName; }
+    public void setSellerName(String sellerName) { this.sellerName = sellerName; }
 }
 

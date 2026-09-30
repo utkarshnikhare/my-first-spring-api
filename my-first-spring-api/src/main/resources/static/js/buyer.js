@@ -101,7 +101,6 @@ function kitchenCardHtml(k) {
         '<p class="kc-desc">' + esc(k.shortDescription || '') + '</p>' +
         '<div class="kc-meta">' + statusPill(k.status) +
         '<span class="pill pill-grey">' + (k.orderableItemCount || 0) + ' item' + ((k.orderableItemCount || 0) === 1 ? '' : 's') + ' today</span>' +
-        (k.rating ? '<span class="pill-gold">★ ' + esc(String(k.rating)) + '</span>' : '') +
         (k.previouslyOrdered ? '<span class="trust-badge">↩ Previously ordered</span>' : '') +
         '</div></div></div>' +
         (preview ? '<p class="kc-items">' + preview + more + '</p>' : '') +
@@ -476,7 +475,6 @@ async function kitchenPageView(hash) {
             khAvatar +
             '<div><div class="kh-name">' + esc(k.displayName) + '</div>' +
             '<div class="kh-loc">📍 ' + esc((k.society || LOCATION) + (k.building ? ', ' + k.building : '')) + '</div>' +
-            (k.rating ? '<div class="kh-loc"><span class="pill-gold">★ ' + esc(String(k.rating)) + '</span> <span class="tiny muted">home kitchen rating</span></div>' : '') +
             '</div></div>' +
             '<div class="kh-tags">' +
             '<span class="kh-tag">Homemade</span><span class="kh-tag">Fresh</span><span class="kh-tag">Daily</span></div>' +
@@ -547,20 +545,43 @@ function quickPostsHtml(posts) {
     return h + '</div>';
 }
 
+/**
+ * Buyer-facing availability hint.
+ *
+ * Buyers must never see how many items other buyers have already taken, so the
+ * only number shown is the authoritative REMAINING quantity, and only when it is
+ * genuinely scarce:
+ *   remaining > 5  -> no message at all
+ *   remaining 1..5 -> "Only N left"
+ *   remaining 0    -> sold out (handled by the card footer)
+ *   unlimited (remaining === null) -> never "Sold Out", never a made-up number
+ */
+function buyerScarcityLabel(p) {
+    if (!p) return '';
+    // A null remaining quantity means an unlimited offering.
+    if (p.remainingQuantity === null || p.remainingQuantity === undefined) return '';
+    var remaining = Number(p.remainingQuantity);
+    if (!isFinite(remaining) || remaining <= 0) return '';
+    if (remaining > 5) return '';
+    return '<div class="oc-scarcity">Only ' + remaining + ' left</div>';
+}
+
 function offeringCardHtml(p, kitchen, isPreorderSection) {
     var soldOut = p.soldOut || (p.remainingQuantity != null && p.remainingQuantity <= 0);
     var paused = !!p.ordersPaused;
     var ordersClosed = !!p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED';
-    var max = p.maxQuantity || ((p.bookedQuantity || 0) + (p.remainingQuantity || 0)) || 50;
-    var booked = p.bookedQuantity || 0;
-    var pct = max > 0 ? Math.min(100, Math.round(booked / max * 100)) : 0;
     var isPre = !!p.isPreorder || !!isPreorderSection;
     var kitchenJson = encodeURIComponent(JSON.stringify({ id: kitchen.id, displayName: kitchen.displayName }));
     var timingHtml;
     if (isPre) {
-        var cut = p.cutoffTime ? prettyTime(p.cutoffTime) : '—';
-        timingHtml = '<span class="oc-cutoff">⏰ Order cutoff: ' + esc(cut) + '</span>' +
-            '<div class="oc-delivers">📅 ' + esc(prettyDate(p.availableDate)) + '</div>';
+        // "Order by" / "Delivery by" read from the same persisted cutoff and
+        // delivery data the seller configured - only the Buyer-facing wording changed.
+        var orderBy = p.availableDate ? prettyDate(p.availableDate) : '';
+        if (p.cutoffTime) orderBy = (orderBy ? orderBy + ', ' : '') + prettyTime(p.cutoffTime);
+        var deliverBy = p.availableDate ? prettyDate(p.availableDate) : '';
+        if (p.readyByTime) deliverBy = (deliverBy ? deliverBy + ', ' : '') + p.readyByTime;
+        timingHtml = '<p class="oc-timing">⏰ <strong>Order by:</strong> ' + esc(orderBy || '—') + '</p>' +
+            '<p class="oc-timing">📅 <strong>Delivery by:</strong> ' + esc(deliverBy || '—') + '</p>';
     } else {
         var t1 = p.cutoffTime ? ('Order by ' + prettyTime(p.cutoffTime)) : '';
         var t2 = p.readyByTime ? (' · Ready ' + p.readyByTime) : '';
@@ -575,8 +596,7 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
         ((p.description || '').length > 70 ? '… <button class="oc-more" type="button" data-action="read-more" data-full="' + encodeURIComponent(p.description) + '">More →</button>' : '') + '</p>' +
         '<div class="oc-price">' + money(p.price) + ' <span class="unit">/ ' + esc(p.priceUnit || 'serving') + '</span></div>' +
         timingHtml +
-        '<div class="demand-bar"><div class="demand-track"><div class="demand-fill" style="width:' + pct + '%"></div></div>' +
-        '<div class="demand-label">' + booked + ' / ' + max + ' booked</div></div>' +
+        buyerScarcityLabel(p) +
         (soldOut
             ? '<div class="oc-footer"><span class="pill pill-red">🔴 Sold out</span>' +
               '<button class="btn btn-outline btn-sm" disabled>Sold out</button></div>'
@@ -623,7 +643,7 @@ function openOrderSheet(productJson, kitchenJson) {
         h += '<div class="card pad card-mt card-purple">' +
             '<span class="pill pill-purple">🔮 ' + esc(prettyDate(p.availableDate)) + '</span>' +
             '<p class="small mt-1">For <strong>' + esc(prettyDate(p.availableDate)) + '</strong>' +
-            (p.cutoffTime ? ', cutoff ' + prettyTime(p.cutoffTime) : '') + '</p></div>';
+            (p.cutoffTime ? ' · <strong>Order by:</strong> ' + esc(prettyDate(p.availableDate)) + ', ' + esc(prettyTime(p.cutoffTime)) : '') + '</p></div>';
     }
 
     // Type 3: flexible date selector (invalid dates beyond window are not listed)
@@ -1442,6 +1462,21 @@ async function profileView() {
 
     // Logged-in state
     var u = state.user;
+    // Community is chosen from the authoritative society directory instead of
+    // being typed, so a buyer cannot store free text that would silently break
+    // service-area eligibility. The backend also returns the buyer's current
+    // society as an option, so an existing profile stays editable.
+    var societies = [];
+    var societyLoadFailed = false;
+    try { societies = await api('/api/buyer/profile/societies') || []; } catch (e) { societyLoadFailed = true; }
+    if (societies.length && !societies.some(function (s) { return u.society && s.toLowerCase() === String(u.society).toLowerCase(); }) && u.society) {
+        societies.push(u.society);
+    }
+    var societyOptions = '<option value="">Select your community</option>' + societies.map(function (s) {
+        var sel = (u.society && s.toLowerCase() === String(u.society).toLowerCase()) ? ' selected' : '';
+        return '<option value="' + esc(s) + '"' + sel + '>' + esc(s) + '</option>';
+    }).join('');
+
     h += '<div class="card pad card-mb">' +
         '<div class="flex items-center gap-3">' +
         '<div class="kc-avatar kc-avatar-sm">' + esc((u.name || '?').charAt(0).toUpperCase()) + '</div>' +
@@ -1451,11 +1486,14 @@ async function profileView() {
     h += '<form data-form="profile-edit"><div class="card pad card-mb">' +
         '<div class="profile-row"><span class="pr-label">Name</span>' +
         '<input class="form-input form-input-sm" name="name" value="' + esc(u.name || '') + '"></div>' +
-        // Never fall back to a placeholder here: the form value is saved straight
-        // back to the buyer's profile, so a fake default would overwrite the real
-        // persisted society and break service-area eligibility at order time.
+        // Never fall back to a placeholder that is then saved back: the form value
+        // goes straight to the buyer's profile, so a fake default would overwrite
+        // the real persisted society and break service-area eligibility at order
+        // time. The dropdown only offers societies the backend vouched for.
         '<div class="profile-row"><span class="pr-label">Community / Society</span>' +
-        '<input class="form-input form-input-sm" name="society" value="' + esc(u.society || '') + '" placeholder="e.g. Sunshine Society"></div>' +
+        (societyLoadFailed
+            ? '<span class="muted small">Could not load the community list. Please retry.</span>'
+            : '<select class="form-input form-input-sm" name="society" aria-label="Community / Society">' + societyOptions + '</select>') + '</div>' +
         '<div class="profile-row"><span class="pr-label">Building</span>' +
         '<input class="form-input form-input-sm" name="building" value="' + esc(u.building || '') + '" placeholder="e.g. A Wing"></div>' +
         '<div class="profile-row"><span class="pr-label">Flat #</span>' +

@@ -1233,6 +1233,16 @@
 
 /* ---------- Kitchen ---------- */
 
+/* Kitchen identity block: the kitchen name stays the primary heading, with the
+   seller's own name directly beneath it. */
+.kitchen-identity { margin: 0 0 12px; }
+.kitchen-identity .ki-name {
+    font-size: 1.1rem; font-weight: 800; margin: 0;
+    overflow-wrap: break-word; word-break: normal;
+}
+.kitchen-identity .ki-seller { margin: 2px 0 0; }
+.ki-seller { font-size: .8rem; }
+
 .kitchen-status-badge {
     display: inline-flex;
     align-items: center;
