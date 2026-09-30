@@ -3,6 +3,13 @@
  * Screens: Dashboard, Buyers, Sellers, Kitchens, Offerings, Orders, Enquiries, Pending Approvals
  */
 var A = { me: null, role: null, loginMobile: null, trafficPeriod: 'today', kitchenFilter: '' };
+// Resolved BEFORE the route table below. `adminAnalyticsView` used to be assigned
+// further down the file with `var`, and a `var` is not initialised until execution
+// reaches it - so while the route table was being built the '#/analytics' entry
+// captured `undefined`, and clicking Analytics fell through to Home.
+// adminTrafficView is a hoisted function declaration, and calling it only returns
+// its inner view function, so this is safe to do here.
+var adminAnalyticsView = adminTrafficView();
 var adminRoutes = {
     '#/home': adminHomeView,
     '#/pending': adminPendingView,
@@ -172,8 +179,12 @@ async function adminAction(action, t) {
             }
             case 'admin-order-detail': {
                 var oid = t.dataset.id;
-                var detail = await api('/api/admin/orders/' + oid);
-                viewEl().innerHTML = await adminOrderDetailView(detail);
+                // Pass the ID, not the record. This handler used to fetch the order
+                // and then hand the resulting OBJECT to adminOrderDetailView(id),
+                // which fetched '/api/admin/orders/' + id a second time - producing
+                // /api/admin/orders/[object Object] (HTTP 400) and leaving the list
+                // on screen. The view does its own fetch.
+                viewEl().innerHTML = await adminOrderDetailView(oid);
                 break;
             }
             case 'admin-back-orders': {
@@ -540,14 +551,17 @@ function adminPlaceholderView(title, copy, icon) {
 // adminSellersView is the real registry backed by GET /api/admin/sellers —
 // it was previously shadowed by a placeholder, dead-ending the Sellers tab
 // despite a fully working backend. The real view is defined above.
-var adminAnalyticsView = adminTrafficView;
+// adminAnalyticsView is initialised before the route table (see the top of this
+// file) so that '#/analytics' resolves to a real view function.
 var adminConsoleView = adminPlaceholderView('Platform Console', 'Super Admin: accounts, features, grants, settings', '⚙️');
 
 function adminTrafficView() {
     return async function () {
         var period = A.trafficPeriod || 'today';
-        var view = viewEl();
-        view.innerHTML = '<div class="view-enter"><div class="section-head admin-section-head"><div><h1>Traffic Analytics</h1><p class="muted small">Active Buyers and Sellers based on real order activity</p></div></div>' +
+        // Every other admin view RETURNS its markup, which adminRender assigns.
+        // This one used to assign view.innerHTML itself and return undefined, so
+        // adminRender immediately overwrote it with '' and Analytics rendered blank.
+        var h = '<div class="view-enter"><div class="section-head admin-section-head"><div><h1>Traffic Analytics</h1><p class="muted small">Active Buyers and Sellers based on real order activity</p></div></div>' +
             '<div class="admin-filters">' +
             '<button class="btn btn-sm ' + (period === 'today' ? 'btn-primary' : 'btn-secondary') + '" data-action="admin-traffic-period" data-period="today">Today</button>' +
             '<button class="btn btn-sm ' + (period === 'week' ? 'btn-primary' : 'btn-secondary') + '" data-action="admin-traffic-period" data-period="week">This Week</button>' +
@@ -556,10 +570,15 @@ function adminTrafficView() {
             '<div id="trafficContent"><div class="page-loading"><div class="spinner"></div></div></div>';
         try {
             var data = await api('/api/admin/traffic?period=' + encodeURIComponent(period));
-            renderTrafficContent(data, period);
+            // Fill the container after adminRender has placed this markup.
+            setTimeout(function () { renderTrafficContent(data, period); }, 0);
         } catch (err) {
-            document.getElementById('trafficContent').innerHTML = '<div class="admin-empty">Failed to load traffic analytics: ' + esc(err.message) + '</div>';
+            setTimeout(function () {
+                var c = document.getElementById('trafficContent');
+                if (c) c.innerHTML = '<div class="admin-empty">Failed to load traffic analytics: ' + esc(err.message) + '</div>';
+            }, 0);
         }
+        return h;
     };
 }
 
