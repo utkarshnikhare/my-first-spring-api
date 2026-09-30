@@ -561,22 +561,20 @@ async function adminBuyersView() {
 }
 
 async function adminSellersView() {
-    // The backend already supported ?status= but the console never sent it, so the
-    // capability was dead. Filtering now uses it rather than a second data source.
+    // One request per render. An earlier version also called /api/admin/sellers a
+    // second time to build the status counts, which doubled the request and made
+    // the tab fail when the second call raced. Counts now come from the same array,
+    // matching every other list screen.
+    var list = await api('/api/admin/sellers');
     var status = A.sellerStatus || '';
-    var url = '/api/admin/sellers' + (status ? '?status=' + encodeURIComponent(status) : '');
-    var list = await api(url);
     var term = adminSearchTerm('sellers');
-    var rows = (list || []).filter(function (s) {
-        return adminMatches(term, [s.name, s.mobileNumber, s.kitchenName, s.area, s.sellerApprovalStatus]);
-    });
-    var all = await api('/api/admin/sellers');
-    var counts = {
-        '': (all || []).length,
-        PENDING: 0, APPROVED: 0, REJECTED: 0, SUSPENDED: 0
-    };
-    (all || []).forEach(function (s) {
+    var counts = { '': (list || []).length, PENDING: 0, APPROVED: 0, REJECTED: 0, SUSPENDED: 0 };
+    (list || []).forEach(function (s) {
         if (counts[s.sellerApprovalStatus] !== undefined) counts[s.sellerApprovalStatus]++;
+    });
+    var rows = (list || []).filter(function (s) {
+        if (status && (s.sellerApprovalStatus || '') !== status) return false;
+        return adminMatches(term, [s.name, s.mobileNumber, s.kitchenName, s.area, s.sellerApprovalStatus]);
     });
     var h = '<div class="view-enter">';
     h += '<div class="section-head admin-section-head"><div><h1>Sellers</h1><p class="muted small">' +
