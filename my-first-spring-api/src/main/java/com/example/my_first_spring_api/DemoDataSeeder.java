@@ -58,6 +58,21 @@ public class DemoDataSeeder {
     private static final String DEMO_AREA_NAME = "Charholi / Lohegaon";
     /** The only society approved to live inside that area. */
     private static final String DEMO_AREA_SOCIETY = "Pride World City";
+
+    /**
+     * Sellers whose kitchens ALSO deliver to the approved Area's society.
+     *
+     * <p>Explicit and deliberately small. This widens delivery for these sellers
+     * only, so the approved mapping works without making every seller eligible
+     * for every society, and without rewriting anyone else's configuration.
+     */
+    private static final String[] DEMO_AREA_DELIVERY_SELLER_MOBILES = {
+            "9100000016", // Meena's Cakes  - based in Lohegaon, the approved area's locality
+            "9100000001"  // Aarti Kitchen   - a regular home kitchen with live offerings
+    };
+
+    /** Demo buyer created for the approved Area's society, if that society has none. */
+    private static final String DEMO_AREA_BUYER_MOBILE = "9876500016";
     private int orderCounter = 0;
 
     private final UserRepository userRepository;
@@ -98,6 +113,76 @@ public class DemoDataSeeder {
         seedFavouritesIfEmpty();
         seedSellerArchiveIfEmpty();
         seedAreasIfEmpty();
+        seedAreaSocietyDeliveryIfNeeded();
+    }
+
+    // ==================== APPROVED AREA SERVICE COVERAGE ====================
+
+    /**
+     * Makes the approved Area -> Society mapping actually usable by buyers.
+     *
+     * <p>Root cause this fixes: "Pride World City" was seeded as the society inside
+     * the "Charholi / Lohegaon" Area, so it appeared in the Buyer society dropdown
+     * and in the Seller service-area dropdown, and sellers could already select
+     * and persist it. But NO kitchen listed it. {@code
+     * KitchenVisibility.isServiceAreaVisible} matches a buyer's society against the
+     * kitchen's service areas (falling back to the kitchen's own society when no
+     * areas are set), so every kitchen was hidden from a buyer in that society:
+     * the marketplace came back empty and order placement failed with
+     * "This kitchen is not currently accepting orders in your area."
+     *
+     * <p>This ADDS the society to the designated sellers' kitchens. It never
+     * removes or rewrites an existing selection, never touches orders, products,
+     * prices or inventory, and never creates a privileged or seller account.
+     * It is idempotent: a kitchen that already serves the society (in any
+     * casing) is left exactly as it is, so repeated boots change nothing.
+     */
+    @Transactional
+    public void seedAreaSocietyDeliveryIfNeeded() {
+        for (String mobile : DEMO_AREA_DELIVERY_SELLER_MOBILES) {
+            User seller = userRepository.findByMobileNumber(mobile).orElse(null);
+            // Never invent an account here; skip a seller that does not exist.
+            if (seller == null) continue;
+            for (Kitchen kitchen : kitchenRepository.findBySeller(seller)) {
+                if (kitchen == null) continue;
+                String existing = kitchen.getServiceAreas();
+                if (serviceAreaListContains(existing, DEMO_AREA_SOCIETY)) continue;
+                kitchen.setServiceAreas(appendServiceArea(existing, DEMO_AREA_SOCIETY));
+                kitchenRepository.save(kitchen);
+            }
+        }
+        seedBuyerInAreaSocietyIfNeeded();
+    }
+
+    /**
+     * Gives the approved Area's society a demo buyer so the mapping is testable.
+     * Never overwrites an existing profile: it does nothing when the mobile is
+     * already taken or when any buyer already lives in that society.
+     */
+    private void seedBuyerInAreaSocietyIfNeeded() {
+        if (userRepository.findByMobileNumber(DEMO_AREA_BUYER_MOBILE).isPresent()) return;
+        boolean alreadyInSociety = userRepository.findAll().stream()
+                .anyMatch(u -> serviceAreaListContains(u.getSociety(), DEMO_AREA_SOCIETY));
+        if (alreadyInSociety) return;
+        seedBuyer("Rohan Kulkarni", DEMO_AREA_BUYER_MOBILE, "P-101", DEMO_AREA_SOCIETY, "Pride Towers");
+    }
+
+    /** Case-insensitive membership test over a comma-separated list (or a single value). */
+    private static boolean serviceAreaListContains(String list, String value) {
+        if (list == null || list.isBlank() || value == null) return false;
+        for (String part : list.split(",")) {
+            if (part.trim().equalsIgnoreCase(value.trim())) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Appends one society to an existing comma-separated service-area list,
+     * preserving every entry already stored. Blank input yields just the new value.
+     */
+    private static String appendServiceArea(String existing, String society) {
+        if (existing == null || existing.isBlank()) return society;
+        return existing.trim() + "," + society;
     }
 
     // ==================== DEMO AREAS ====================
