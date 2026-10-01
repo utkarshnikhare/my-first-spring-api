@@ -4,11 +4,13 @@ import com.example.my_first_spring_api.DemoDataSeeder;
 import com.example.my_first_spring_api.dto.AreaDto;
 import com.example.my_first_spring_api.dto.BuyerProfileDto;
 import com.example.my_first_spring_api.model.Area;
+import com.example.my_first_spring_api.model.Society;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.model.UserRole;
 import com.example.my_first_spring_api.repository.AreaRepository;
 import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.ProductRepository;
+import com.example.my_first_spring_api.repository.SocietyRepository;
 import com.example.my_first_spring_api.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +46,7 @@ class BuyerAreaSocietySeedTest {
     @Autowired DemoDataSeeder seeder;
     @Autowired BuyerService buyerService;
     @Autowired AreaRepository areas;
+    @Autowired SocietyRepository societies;
     @Autowired UserRepository users;
     @Autowired KitchenRepository kitchens;
     @Autowired ProductRepository products;
@@ -51,6 +54,19 @@ class BuyerAreaSocietySeedTest {
     @BeforeEach
     void seed() {
         seeder.seedAll();
+    }
+
+    /**
+     * The society NAMES recorded under an area.
+     *
+     * <p>Societies are their own ID-backed records now rather than a name list on
+     * the Area, so the assertions read them from the master.</p>
+     */
+    private List<String> societyNames(String areaName) {
+        Area area = areas.findByNameIgnoreCase(areaName).orElseThrow();
+        return societies.findByAreaIdOrderByNameAsc(area.getId()).stream()
+                .map(Society::getName)
+                .collect(java.util.stream.Collectors.toList());
     }
 
     private MockHttpSession buyerSession() {
@@ -66,7 +82,7 @@ class BuyerAreaSocietySeedTest {
     void seedsTheApprovedAreaWithItsApprovedSociety() {
         Area area = areas.findByNameIgnoreCase(AREA).orElseThrow();
         assertThat(area.getName()).isEqualTo(AREA);
-        assertThat(area.getSocieties()).contains(SOCIETY);
+        assertThat(societyNames(AREA)).contains(SOCIETY);
     }
 
     @Test
@@ -77,7 +93,7 @@ class BuyerAreaSocietySeedTest {
         seeder.seedAreasIfEmpty();
 
         assertThat(areas.count()).as("no duplicate area rows").isEqualTo(before);
-        assertThat(areas.findByNameIgnoreCase(AREA).orElseThrow().getSocieties())
+        assertThat(societyNames(AREA))
                 .as("society listed once, however often we seed")
                 .containsOnlyOnce(SOCIETY);
     }
@@ -85,14 +101,13 @@ class BuyerAreaSocietySeedTest {
     @Test
     void reseedingPreservesExistingAreaSocietiesAndDemoData() {
         Area area = areas.findByNameIgnoreCase(AREA).orElseThrow();
-        area.getSocieties().add("Some Existing Society");
-        areas.save(area);
+        societies.save(new Society(area, "Some Existing Society"));
         long kitchensBefore = kitchens.count();
         long productsBefore = products.count();
 
         seeder.seedAreasIfEmpty();
 
-        assertThat(areas.findByNameIgnoreCase(AREA).orElseThrow().getSocieties())
+        assertThat(societyNames(AREA))
                 .as("seeding is additive - it does not wipe existing relationships")
                 .contains("Some Existing Society", SOCIETY);
         assertThat(kitchens.count()).isEqualTo(kitchensBefore);
@@ -102,15 +117,18 @@ class BuyerAreaSocietySeedTest {
     @Test
     void aCaseVariantOfTheSocietyIsNotAddedAsADuplicate() {
         Area area = areas.findByNameIgnoreCase(AREA).orElseThrow();
-        area.getSocieties().clear();
-        area.getSocieties().add("pride world city"); // same society, different case
-        areas.save(area);
+        Society existing = societies
+                .findByAreaIdAndNameKey(area.getId(), Society.deriveNameKey(SOCIETY)).orElseThrow();
+        existing.setName("pride world city"); // same society, different case
+        societies.save(existing);
+        long before = societies.count();
 
         seeder.seedAreasIfEmpty();
 
-        assertThat(areas.findByNameIgnoreCase(AREA).orElseThrow().getSocieties())
+        assertThat(societies.count())
                 .as("a formatting variant is the same society, not a new one")
-                .containsExactly("pride world city");
+                .isEqualTo(before);
+        assertThat(societies.findByAreaIdAndNameKey(area.getId(), "pride world city")).isPresent();
     }
 
     // ---------- dropdown data ----------

@@ -32,6 +32,26 @@ public class User {
     @Column(name = "building")
     private String building;
 
+    /**
+     * The buyer's saved location as stable IDs.
+     *
+     * <p>{@link #society} and {@link #area} above remain the display/denormalised
+     * strings that historical orders, admin lists and the UI already read, so no
+     * existing consumer changes. These two references are the authoritative
+     * identity used for eligibility: the backend resolves the buyer's location by
+     * {@code societyRef}, never by comparing free text.</p>
+     *
+     * <p>Nullable because legacy profiles (and sellers, who have no buyer
+     * location) legitimately have no resolved location record yet.</p>
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "society_id")
+    private Society societyRef;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "area_id")
+    private Area areaRef;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UserRole role;
@@ -87,6 +107,13 @@ public class User {
     public void setArea(String area) { this.area = area; }
     public String getBuilding() { return building; }
     public void setBuilding(String building) { this.building = building; }
+
+    public Society getSocietyRef() { return societyRef; }
+    public void setSocietyRef(Society societyRef) { this.societyRef = societyRef; }
+
+    public Area getAreaRef() { return areaRef; }
+    public void setAreaRef(Area areaRef) { this.areaRef = areaRef; }
+
     public UserRole getRole() { return role; }
     public void setRole(UserRole role) { this.role = role; }
     public SellerApprovalStatus getSellerApprovalStatus() { return sellerApprovalStatus; }

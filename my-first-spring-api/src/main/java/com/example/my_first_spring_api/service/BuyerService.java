@@ -29,15 +29,18 @@ public class BuyerService {
     private final AnalyticsService analyticsService;
     private final SocietyDirectory societyDirectory;
     private final com.example.my_first_spring_api.repository.AreaRepository areaRepository;
+    private final LocationService locationService;
 
     @Autowired
     public BuyerService(UserRepository userRepository, AnalyticsService analyticsService,
                         SocietyDirectory societyDirectory,
-                        com.example.my_first_spring_api.repository.AreaRepository areaRepository) {
+                        com.example.my_first_spring_api.repository.AreaRepository areaRepository,
+                        LocationService locationService) {
         this.userRepository = userRepository;
         this.analyticsService = analyticsService;
         this.societyDirectory = societyDirectory;
         this.areaRepository = areaRepository;
+        this.locationService = locationService;
     }
 
     /**
@@ -122,15 +125,20 @@ public class BuyerService {
     }
 
     /**
-     * The approved areas, each with the societies that belong to it. Buyers choose
+     * The active areas, each with the societies that belong to it. Buyers choose
      * an Area first, then a Society from that Area only.
+     *
+     * <p>Read from the Admin-controlled master via {@link LocationService}, so a
+     * record an Admin creates appears here with no code change or redeployment,
+     * and a disabled record disappears from the dropdown.</p>
      */
     @Transactional(readOnly = true)
     public List<AreaDto> getAreas(HttpSession session) {
         requireCurrentBuyer(session);
-        return areaRepository.findAll().stream()
-                .sorted(Comparator.comparing(a -> a.getName(), String.CASE_INSENSITIVE_ORDER))
-                .map(a -> new AreaDto(a.getName(), new ArrayList<>(a.getSocieties())))
+        return locationService.findActiveAreas().stream()
+                .map(a -> new AreaDto(a.getName(), locationService.findActiveSocieties(a.getId()).stream()
+                        .map(com.example.my_first_spring_api.model.Society::getName)
+                        .collect(Collectors.toList())))
                 .collect(Collectors.toList());
     }
 
@@ -172,7 +180,10 @@ public class BuyerService {
     /** The canonical names of the societies inside an area (blank when unknown). */
     private List<String> societiesInArea(String areaName) {
         return areaRepository.findByNameIgnoreCase(areaName)
-                .map(a -> a.getSocieties().stream().map(String::trim).collect(Collectors.toList()))
+                .map(a -> locationService.findActiveSocieties(a.getId()).stream()
+                        .map(com.example.my_first_spring_api.model.Society::getName)
+                        .map(String::trim)
+                        .collect(Collectors.toList()))
                 .orElse(List.of());
     }
 
@@ -185,6 +196,51 @@ public class BuyerService {
                 .orElseThrow(() -> new IllegalArgumentException("Please choose an area from the list."));
     }
 
+    /**
+     * Maps the buyer's saved display strings onto their stable ID references.
+     *
+     * <p>Called on every profile save so the stored location is authoritative for
+     * eligibility. It only ever sets references - it never writes the area or
+     * society display strings, so clearing a field keeps it cleared and a profile
+     * that never chose an area is never given one.</p>
+     *
+     * <p>A legacy society that has no master record - or whose name exists under
+     * more than one Area - is deliberately left unresolved rather than assigned
+     * to an Area we would only be guessing about; it keeps working through the
+     * existing string path.</p>
+     */
+    private void resolveAndStoreLocationRefs(User buyer) {
+        String societyName = buyer.getSociety();
+        if (societyName == null || societyName.isBlank()) {
+            buyer.setSocietyRef(null);
+            buyer.setAreaRef(null);
+            return;
+        }
+        java.util.Optional<com.example.my_first_spring_api.model.Society> resolved =
+                locationService.resolveLegacySociety(societyName);
+        if (resolved.isEmpty()) {
+            // Unknown or ambiguous - keep the legacy string, resolve nothing.
+            buyer.setSocietyRef(null);
+            buyer.setAreaRef(resolveAreaOnly(buyer.getArea()));
+            return;
+        }
+        com.example.my_first_spring_api.model.Society society = resolved.get();
+        buyer.setSocietyRef(society);
+        // The Area reference is derived only from an area the buyer actually has,
+        // and only when it is the society's own parent. A mismatch leaves it null
+        // instead of silently relocating the buyer.
+        String areaName = buyer.getArea();
+        buyer.setAreaRef(areaName != null && !areaName.isBlank()
+                && society.getArea().getName().equalsIgnoreCase(areaName.trim())
+                ? society.getArea() : null);
+    }
+
+    /** Resolves an area name to its record, or null when blank/unknown. */
+    private com.example.my_first_spring_api.model.Area resolveAreaOnly(String areaName) {
+        if (areaName == null || areaName.isBlank()) return null;
+        return areaRepository.findByNameIgnoreCase(areaName).orElse(null);
+    }
+
     @Transactional
     public BuyerProfileDto updateProfile(BuyerProfileDto profileDto, HttpSession session) {
         User buyer = requireCurrentBuyer(session);
@@ -194,12 +250,20 @@ public class BuyerService {
         if (profileDto.getFlatHouseNumber() != null) {
             buyer.setFlatHouseNumber(profileDto.getFlatHouseNumber());
         }
-        if (profileDto.getSociety() != null) {
+        if (profileDto.getSociety() != null && !profileDto.getSociety().isBlank()) {
             // Validate server-side against the authoritative society records so a
             // buyer cannot store an arbitrary free-text community, which would
             // silently break service-area eligibility at order time. A blank value
             // keeps the existing "no society set" behaviour.
-            buyer.setSociety(canonicalizeBuyerSociety(profileDto.getSociety(), buyer));
+            String chosen = canonicalizeBuyerSociety(profileDto.getSociety(), buyer);
+            // A disabled community may never become a NEW saved location.
+            locationService.resolveLegacySociety(chosen).ifPresent(s -> {
+                if (!s.isActive()) {
+                    throw new IllegalArgumentException(
+                            "The selected community is no longer available. Please choose another.");
+                }
+            });
+            buyer.setSociety(chosen);
         }
         // Area is validated independently, then the society is re-checked against
         // the EFFECTIVE area so a client cannot pair a real society with an area
@@ -216,6 +280,11 @@ public class BuyerService {
         if (profileDto.getBuilding() != null) {
             buyer.setBuilding(profileDto.getBuilding());
         }
+        // Resolve the final pair to stable IDs so eligibility compares records,
+        // never free text. A legacy society with no (or an ambiguous) master
+        // record keeps its string and is deliberately left unresolved rather than
+        // assigned to an Area we would be guessing about.
+        resolveAndStoreLocationRefs(buyer);
         buyer = userRepository.save(buyer);
         BuyerProfileDto dto = new BuyerProfileDto(
                 buyer.getId(),

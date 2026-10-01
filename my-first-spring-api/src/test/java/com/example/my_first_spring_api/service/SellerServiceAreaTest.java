@@ -39,6 +39,7 @@ class SellerServiceAreaTest {
     @Mock private FeatureService featureService;
     @Mock private UserRepository userRepository;
     @Mock private AreaRepository areaRepository;
+    @Mock private com.example.my_first_spring_api.repository.SocietyRepository societyRepository;
 
     private SellerService sellerService;
 
@@ -46,7 +47,8 @@ class SellerServiceAreaTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         sellerService = new SellerService(kitchenRepository, productRepository, orderItemRepository,
-                orderService, featureService, new SocietyDirectory(userRepository, kitchenRepository, areaRepository));
+                orderService, featureService,
+                new SocietyDirectory(userRepository, kitchenRepository, areaRepository, societyRepository));
         when(userRepository.findAll()).thenReturn(List.of(
                 user("Buyer A", "9876500001", "Alpha Society"),
                 user("Buyer B", "9876500002", "Beta Society")));

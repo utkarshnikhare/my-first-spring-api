@@ -4,6 +4,7 @@ import com.example.my_first_spring_api.model.Enquiry;
 import com.example.my_first_spring_api.model.EnquiryStatus;
 import com.example.my_first_spring_api.model.SellerTemplate;
 import com.example.my_first_spring_api.model.Area;
+import com.example.my_first_spring_api.model.Society;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Order;
 import com.example.my_first_spring_api.model.OrderItem;
@@ -84,6 +85,7 @@ public class DemoDataSeeder {
     private final FavouriteRepository favouriteRepository;
     private final SellerTemplateRepository sellerTemplateRepository;
     private final com.example.my_first_spring_api.repository.AreaRepository areaRepository;
+    private final com.example.my_first_spring_api.repository.SocietyRepository societyRepository;
 
     @Autowired
     public DemoDataSeeder(UserRepository userRepository, KitchenRepository kitchenRepository,
@@ -91,7 +93,8 @@ public class DemoDataSeeder {
                            com.example.my_first_spring_api.repository.OrderRepository orderRepository,
                            EnquiryRepository enquiryRepository, FavouriteRepository favouriteRepository,
                            SellerTemplateRepository sellerTemplateRepository,
-                           com.example.my_first_spring_api.repository.AreaRepository areaRepository) {
+                           com.example.my_first_spring_api.repository.AreaRepository areaRepository,
+                           com.example.my_first_spring_api.repository.SocietyRepository societyRepository) {
         this.userRepository = userRepository;
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
@@ -101,6 +104,7 @@ public class DemoDataSeeder {
         this.favouriteRepository = favouriteRepository;
         this.sellerTemplateRepository = sellerTemplateRepository;
         this.areaRepository = areaRepository;
+        this.societyRepository = societyRepository;
     }
 
     /** Idempotent entry point called from DataInitializer on every startup. */
@@ -114,6 +118,96 @@ public class DemoDataSeeder {
         seedSellerArchiveIfEmpty();
         seedAreasIfEmpty();
         seedAreaSocietyDeliveryIfNeeded();
+        migrateLocationRefsIfNeeded();
+    }
+
+    // ==================== LOCATION MIGRATION ====================
+
+    /**
+     * Maps legacy location STRINGS onto the ID-backed Area/Society master.
+     *
+     * <p>Runs on every boot and is safe to repeat. The rules are deliberately
+     * conservative so no existing relationship, coverage or order is ever
+     * changed:</p>
+     * <ul>
+     *   <li><b>Never overwrite seller coverage.</b> A kitchen that already has
+     *       explicit Society IDs (whatever the seller selected) is skipped.</li>
+     *   <li><b>Never guess.</b> A kitchen is only switched onto the ID path when
+     *       EVERY society in its {@code serviceAreas} string resolves to exactly
+     *       one master record. One unresolvable entry and the kitchen stays on
+     *       the original string comparison, so coverage can never silently
+     *       narrow. A name that exists under two different Areas is ambiguous and
+     *       is never auto-assigned.</li>
+     *   <li><b>Never widen.</b> Only the societies already listed are resolved, so
+     *       a society an Admin adds later is never adopted by this method.</li>
+     *   <li><b>Never touch orders.</b> Order-time location snapshots are read-only
+     *       and are not rewritten here.</li>
+     *   <li><b>Never create records.</b> This resolves existing strings against
+     *       master rows that already exist; it does not invent Areas or
+     *       Societies, so a genuinely empty master stays empty.</li>
+     * </ul>
+     */
+    @Transactional
+    public void migrateLocationRefsIfNeeded() {
+        migrateKitchenCoverageToIds();
+        migrateBuyerLocationsToIds();
+    }
+
+    /** Resolves a kitchen's service-area string to explicit Society IDs. */
+    private void migrateKitchenCoverageToIds() {
+        for (Kitchen kitchen : kitchenRepository.findAll()) {
+            if (kitchen == null) continue;
+            // The seller has an explicit selection already - never overwrite it.
+            if (!kitchen.getServedSocieties().isEmpty()) continue;
+            String raw = kitchen.getServiceAreas();
+            if (raw == null || raw.isBlank()) continue; // no coverage -> string path stays
+
+            java.util.LinkedHashSet<Society> resolved = new java.util.LinkedHashSet<>();
+            boolean unresolvable = false;
+            for (String part : raw.split(",")) {
+                String name = part.trim();
+                if (name.isEmpty()) continue;
+                java.util.Optional<Society> match = resolveUniqueSociety(name);
+                if (match.isEmpty()) {
+                    unresolvable = true; // unknown OR ambiguous - do not guess
+                    break;
+                }
+                resolved.add(match.get());
+            }
+            // All-or-nothing: partial resolution would silently narrow coverage.
+            if (unresolvable || resolved.isEmpty()) continue;
+
+            kitchen.setServedSocieties(resolved);
+            kitchenRepository.save(kitchen);
+        }
+    }
+
+    /** Resolves a buyer's society string to its Society/Area IDs. */
+    private void migrateBuyerLocationsToIds() {
+        for (User user : userRepository.findAll()) {
+            if (user == null || user.getSocietyRef() != null) continue; // already resolved
+            String name = user.getSociety();
+            if (name == null || name.isBlank()) continue;
+            java.util.Optional<Society> match = resolveUniqueSociety(name);
+            if (match.isEmpty()) continue; // unknown or ambiguous - keep the legacy string
+            Society society = match.get();
+            user.setSocietyRef(society);
+            if (user.getAreaRef() == null) user.setAreaRef(society.getArea());
+            // Display strings are left exactly as they were: historical orders and
+            // admin lists keep reading what they have always read.
+            userRepository.save(user);
+        }
+    }
+
+    /**
+     * Resolves a society name to exactly one record. Returns empty when the name
+     * is unknown or when it exists under more than one Area (ambiguous), because
+     * choosing one of several candidates would be a guess.
+     */
+    private java.util.Optional<Society> resolveUniqueSociety(String name) {
+        if (name == null || name.isBlank()) return java.util.Optional.empty();
+        java.util.List<Society> matches = societyRepository.findByNameKey(Society.deriveNameKey(name));
+        return matches.size() == 1 ? java.util.Optional.of(matches.get(0)) : java.util.Optional.empty();
     }
 
     // ==================== APPROVED AREA SERVICE COVERAGE ====================
@@ -188,33 +282,38 @@ public class DemoDataSeeder {
     // ==================== DEMO AREAS ====================
 
     /**
-     * Seeds the single approved Area -> Society mapping.
+     * Seeds the single approved Area -&gt; Society mapping as ID-backed records.
      *
-     * <p>Idempotent: matched by name (case-insensitively), so repeated boots reuse
-     * the existing row instead of duplicating it. Additive: only the missing
-     * society is attached - an area that already exists with other societies keeps
+     * <p>Idempotent: the Area is matched by name (case-insensitively) and the
+     * Society by (area, case-insensitive name), so repeated boots reuse the
+     * existing rows instead of duplicating them. Additive: only the missing
+     * society is created - an area that already exists with other societies keeps
      * them, and no buyer, kitchen, offering or order row is touched. Safe for an
      * environment that already holds demo data: this creates no user and rewrites
-     * no existing profile selection.
+     * no existing profile selection.</p>
+     *
+     * <p>This is the ONLY location seed in the application: a fresh deployment
+     * whose Area master is empty starts empty, and everything else is created by
+     * an Admin through the Manage Areas &amp; Societies screen.</p>
      */
     @Transactional
     public void seedAreasIfEmpty() {
         Area area = areaRepository.findByNameIgnoreCase(DEMO_AREA_NAME).orElse(null);
-        boolean created = false;
         if (area == null) {
-            area = new Area(DEMO_AREA_NAME);
-            created = true;
+            area = areaRepository.save(new Area(DEMO_AREA_NAME));
+        }
+        if (!area.isActive()) {
+            area.setActive(Boolean.TRUE);
+            area = areaRepository.save(area);
         }
         // Attach the approved society only if it is not already linked. A duplicate
         // differing only in case/formatting is the SAME society, so it is skipped.
-        boolean changed = created;
-        boolean linked = area.getSocieties().stream()
-                .anyMatch(s -> s != null && s.trim().equalsIgnoreCase(DEMO_AREA_SOCIETY));
-        if (!linked) {
-            area.getSocieties().add(DEMO_AREA_SOCIETY);
-            changed = true;
+        String key = Society.deriveNameKey(DEMO_AREA_SOCIETY);
+        if (societyRepository.findByAreaIdAndNameKey(area.getId(), key).isEmpty()) {
+            Society society = new Society(area, DEMO_AREA_SOCIETY);
+            society.setActive(Boolean.TRUE);
+            societyRepository.save(society);
         }
-        if (changed) areaRepository.save(area);
     }
 
     @Transactional

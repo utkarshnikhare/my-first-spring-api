@@ -56,6 +56,7 @@ class AreaSocietyDeliverySeedTest {
     @Mock private FavouriteRepository favouriteRepository;
     @Mock private SellerTemplateRepository sellerTemplateRepository;
     @Mock private AreaRepository areaRepository;
+    @Mock private com.example.my_first_spring_api.repository.SocietyRepository societyRepository;
 
     private DemoDataSeeder seeder;
 
@@ -64,7 +65,7 @@ class AreaSocietyDeliverySeedTest {
         MockitoAnnotations.openMocks(this);
         seeder = new DemoDataSeeder(userRepository, kitchenRepository, productRepository,
                 platformSettingRepository, orderRepository, enquiryRepository,
-                favouriteRepository, sellerTemplateRepository, areaRepository);
+                favouriteRepository, sellerTemplateRepository, areaRepository, societyRepository);
     }
 
     private User seller(String mobile) {

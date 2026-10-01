@@ -2,6 +2,8 @@ package com.example.my_first_spring_api.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "kitchens")
@@ -30,6 +32,24 @@ public class Kitchen {
 
     @Column(name = "service_areas", columnDefinition = "TEXT")
     private String serviceAreas;
+
+    /**
+     * The seller's EXPLICIT service coverage: the societies this kitchen is
+     * authorised to serve, by stable ID.
+     *
+     * <p>This is the only authoritative coverage. The Area the seller ticks in
+     * Manage Kitchen is purely a convenience for bulk-selecting that Area's
+     * currently-active societies - it is never stored as an Area-wide wildcard,
+     * so a society Admin later adds under an already-selected Area does NOT
+     * silently join this set. {@link #serviceAreas} above survives as the
+     * denormalised display/legacy string that the UI and older records read.</p>
+     */
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(name = "kitchen_served_societies",
+            joinColumns = @JoinColumn(name = "kitchen_id"),
+            inverseJoinColumns = @JoinColumn(name = "society_id"))
+    private Set<Society> servedSocieties = new LinkedHashSet<>();
+
 
     @Column(name = "building")
     private String building;
@@ -106,6 +126,20 @@ public class Kitchen {
     public void setSociety(String society) { this.society = society; }
     public String getServiceAreas() { return serviceAreas; }
     public void setServiceAreas(String serviceAreas) { this.serviceAreas = serviceAreas; }
+
+    public Set<Society> getServedSocieties() {
+        return servedSocieties == null ? java.util.Collections.emptySet() : servedSocieties;
+    }
+
+    /**
+     * Replaces the whole coverage set. Callers must pass the COMPLETE final
+     * selection - the service computes the difference so that unrelated profile
+     * edits can never quietly widen a seller's coverage.
+     */
+    public void setServedSocieties(Set<Society> servedSocieties) {
+        this.servedSocieties = servedSocieties == null ? new LinkedHashSet<>() : servedSocieties;
+    }
+
     public String getBuilding() { return building; }
     public void setBuilding(String building) { this.building = building; }
     public String getWhatsappLink() { return whatsappLink; }

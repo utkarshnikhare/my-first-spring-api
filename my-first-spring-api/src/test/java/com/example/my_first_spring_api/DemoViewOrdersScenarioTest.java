@@ -73,6 +73,7 @@ class DemoViewOrdersScenarioTest {
     @Autowired FavouriteRepository favourites;
     @Autowired SellerTemplateRepository templates;
     @Autowired AreaRepository areas;
+    @Autowired com.example.my_first_spring_api.repository.SocietyRepository societies;
     @Autowired SellerAppService sellerApp;
 
     private DemoDataSeeder seeder;
@@ -82,7 +83,7 @@ class DemoViewOrdersScenarioTest {
 
     @BeforeAll
     void seedOnce() {
-        seeder = new DemoDataSeeder(users, kitchens, products, settings, orders, enquiries, favourites, templates, areas);
+        seeder = new DemoDataSeeder(users, kitchens, products, settings, orders, enquiries, favourites, templates, areas, societies);
         seeder.seedAll();
         aarti = users.findByMobileNumber("9100000001").orElseThrow();
         kitchen = kitchens.findBySeller(aarti).get(0);

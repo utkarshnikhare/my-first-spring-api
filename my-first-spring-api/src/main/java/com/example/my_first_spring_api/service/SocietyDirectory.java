@@ -33,13 +33,16 @@ public class SocietyDirectory {
     private final UserRepository userRepository;
     private final KitchenRepository kitchenRepository;
     private final AreaRepository areaRepository;
+    private final com.example.my_first_spring_api.repository.SocietyRepository societyRepository;
 
     @Autowired
     public SocietyDirectory(UserRepository userRepository, KitchenRepository kitchenRepository,
-                            AreaRepository areaRepository) {
+                            AreaRepository areaRepository,
+                            com.example.my_first_spring_api.repository.SocietyRepository societyRepository) {
         this.userRepository = userRepository;
         this.kitchenRepository = kitchenRepository;
         this.areaRepository = areaRepository;
+        this.societyRepository = societyRepository;
     }
 
     /**
@@ -96,7 +99,9 @@ public class SocietyDirectory {
      *
      * <p>Area societies are folded into this ONE directory rather than a second
      * catalogue, so a society declared by an Area is the same society the seller
-     * service-area and buyer validation paths already know about.
+     * service-area and buyer validation paths already know about. They are read
+     * from the ID-backed {@code Society} master (one row per society) rather than
+     * from a name list held on the Area, so the two can never diverge.
      */
     private Map<String, String> knownSocieties() {
         Map<String, String> known = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
@@ -107,10 +112,12 @@ public class SocietyDirectory {
             if (kitchen == null) continue;
             addSociety(known, kitchen.getSociety());
             addServiceAreaEntries(known, kitchen.getServiceAreas());
+            for (com.example.my_first_spring_api.model.Society served : kitchen.getServedSocieties()) {
+                addSociety(known, served == null ? null : served.getName());
+            }
         }
-        for (com.example.my_first_spring_api.model.Area area : areaRepository.findAll()) {
-            if (area == null) continue;
-            for (String society : area.getSocieties()) addSociety(known, society);
+        for (com.example.my_first_spring_api.model.Society society : societyRepository.findAll()) {
+            addSociety(known, society == null ? null : society.getName());
         }
         return known;
     }

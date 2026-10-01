@@ -26,6 +26,7 @@ class SocietyDirectoryTest {
     @Mock private UserRepository userRepository;
     @Mock private KitchenRepository kitchenRepository;
     @Mock private com.example.my_first_spring_api.repository.AreaRepository areaRepository;
+    @Mock private com.example.my_first_spring_api.repository.SocietyRepository societyRepository;
 
     @InjectMocks private SocietyDirectory societyDirectory;
 
