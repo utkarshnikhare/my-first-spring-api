@@ -54,9 +54,9 @@ Review seller applications, approve or reject sellers, and monitor platform acti
 
 | Role | Access |
 |------|--------|
-| **Buyer** | Open the app — no login required to browse. Place orders as a guest. |
+| **Buyer** | Open the app — no login required to browse. Sign in with a mobile number before you can place an order; the backend requires an authenticated buyer. |
 | **Seller** | The seller dashboard pre-loads the demo kitchen. |
-| **Admin** | Open `admin.html` — admin functions are accessible without authentication in demo mode. |
+| **Admin** | Open `admin.html` — admin functions are role-protected on the server and require sign-in: `/api/admin/**` accepts `ADMIN` or `SUPER_ADMIN`, and `/api/superadmin/**` accepts `SUPER_ADMIN` only. Sign in with `9000000002` (Admin) or `9000000001` (Super Admin). |
 
 > No real passwords, API keys, or secrets are embedded in the application.
 
