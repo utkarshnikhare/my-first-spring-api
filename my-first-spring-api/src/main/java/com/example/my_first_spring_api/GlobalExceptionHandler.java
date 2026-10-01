@@ -4,6 +4,7 @@ import com.example.my_first_spring_api.dto.ApiErrorDto;
 import com.example.my_first_spring_api.exception.BuyerNotAuthenticatedException;
 import com.example.my_first_spring_api.exception.BuyerProfileIncompleteException;
 import com.example.my_first_spring_api.exception.InvalidKitchenSelectionException;
+import com.example.my_first_spring_api.exception.KitchenNotEligibleException;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.exception.OrderNotFoundException;
 import com.example.my_first_spring_api.exception.ProductNotFoundException;
@@ -59,6 +60,18 @@ public class GlobalExceptionHandler {
             KitchenNotFoundException.class, TemplateNotFoundException.class})
     public ResponseEntity<ApiErrorDto> handleNotFound(RuntimeException ex) {
         return new ResponseEntity<>(new ApiErrorDto("NOT_FOUND", ex.getMessage(), 404), HttpStatus.NOT_FOUND);
+    }
+
+    /**
+     * An ineligible kitchen keeps the same 404 as a missing one — concealment is
+     * intentional — but carries its own code and the exact user-facing wording,
+     * so the kitchen page can explain the reason and offer "Explore kitchens"
+     * instead of implying the kitchen simply does not exist.
+     */
+    @ExceptionHandler(KitchenNotEligibleException.class)
+    public ResponseEntity<ApiErrorDto> handleKitchenNotEligible(KitchenNotEligibleException ex) {
+        return new ResponseEntity<>(new ApiErrorDto(KitchenNotEligibleException.CODE, ex.getMessage(), 404),
+                HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler(BuyerNotAuthenticatedException.class)

@@ -438,13 +438,36 @@ async function homemadeStoreView(hash) {
         h += '</div>';
         h += '<div class="section-gap"><button class="btn btn-secondary btn-block" data-action="open-enquiry" data-kid="' + k.id + '" data-kname="' + esc(k.displayName) + '">📩 Send Enquiry</button></div>';
     } catch (err) {
-        h += emptyHtml('⚠️', 'Something went wrong', err.message);
+        // Same endpoint as the kitchen page: an out-of-area store must explain
+        // itself and offer the same way back into the marketplace. The existing
+        // "Back to Homemade" actions on the success/empty paths are untouched.
+        h += ineligibleKitchenHtml(err);
     }
     h += '</div>';
     return h;
 }
 
 // ==================== Screen 4: Public kitchen page ====================
+
+/**
+ * The one place that decides what an ineligible kitchen looks like, shared by
+ * the kitchen page and the homemade-store page so the two can never drift.
+ *
+ * <p>Only the dedicated KITCHEN_NOT_ELIGIBLE code triggers the explanation and
+ * the "Explore kitchens" route out. A kitchen that genuinely does not exist
+ * keeps its plain not-found wording, so a missing kitchen is never presented as
+ * a confirmed service-area restriction. The backend still answers 404 in both
+ * cases — concealment is unchanged.</p>
+ */
+function ineligibleKitchenHtml(e) {
+    var code = e && e.data ? e.data.error : null;
+    if (code === 'KITCHEN_NOT_ELIGIBLE') {
+        return emptyHtml('🚫', 'Kitchen not available',
+            "This kitchen doesn't currently serve your society.",
+            '<a class="btn btn-primary" href="#/kitchens">Explore kitchens</a>');
+    }
+    return emptyHtml('⚠️', 'Kitchen not available', e.message);
+}
 
 async function kitchenPageView(hash) {
     var id = hash.split('/')[2];
@@ -529,7 +552,7 @@ async function kitchenPageView(hash) {
                 }).join('') + '</div>';
         }
     } catch (e) {
-        h += emptyHtml('⚠️', 'Kitchen not available', e.message);
+        h += ineligibleKitchenHtml(e);
     }
     h += '</div>';
     return h;

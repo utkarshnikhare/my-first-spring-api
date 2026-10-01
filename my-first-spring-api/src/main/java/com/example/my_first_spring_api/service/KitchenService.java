@@ -5,6 +5,7 @@ import com.example.my_first_spring_api.dto.KitchenDto;
 import com.example.my_first_spring_api.dto.ProductDto;
 import com.example.my_first_spring_api.dto.QuickPostDto;
 import com.example.my_first_spring_api.dto.SearchResultDto;
+import com.example.my_first_spring_api.exception.KitchenNotEligibleException;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Product;
@@ -84,7 +85,10 @@ public class KitchenService {
             return closedDetail(kitchen);
         }
         if (!KitchenVisibility.isPubliclyVisible(kitchen) || !KitchenVisibility.isServiceAreaVisible(kitchen, buyer)) {
-            throw new KitchenNotFoundException(id);
+            // Deliberately a KitchenNotEligibleException (a KitchenNotFoundException):
+            // the 404 concealment is preserved, but the buyer now gets the reason and
+            // an "Explore kitchens" route out instead of a bare "not found".
+            throw new KitchenNotEligibleException(id);
         }
         KitchenDto kitchenDto = toKitchenDto(kitchen);
         List<ProductDto> all = productRepository.findByKitchen(kitchen).stream()
