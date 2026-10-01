@@ -27,6 +27,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
 
     List<Order> findByBuyerOrderByCreatedAtDesc(User buyer);
+    /**
+     * Existence check used by order-number generation.
+     *
+     * <p>{@code orders.order_number} already carries a UNIQUE constraint, which is
+     * the authoritative backstop. This lets the service avoid a collision in the
+     * normal case instead of failing the insert and rolling the order back.
+     */
+    boolean existsByOrderNumber(String orderNumber);
     List<Order> findByKitchenOrderByCreatedAtDesc(Kitchen kitchen);
     List<Order> findByKitchenAndOrderStatusNotInOrderByCreatedAtDesc(Kitchen kitchen, List<OrderStatus> statuses);
     List<Order> findByKitchenAndCreatedAtBetweenOrderByCreatedAtDesc(Kitchen kitchen, LocalDateTime start, LocalDateTime end);

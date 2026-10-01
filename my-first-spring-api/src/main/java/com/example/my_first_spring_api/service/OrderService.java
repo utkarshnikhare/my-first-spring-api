@@ -30,6 +30,8 @@ public class OrderService {
 
     public static final String DRAFT_ORDER_SESSION_KEY = "DRAFT_ORDER_ID";
     private static final String BUYER_SESSION_KEY = "BUYER_USER";
+    /** Bounded retries when an order-number candidate is already taken. */
+    private static final int MAX_ORDER_NUMBER_ATTEMPTS = 5;
 
     @Autowired
     public OrderService(OrderRepository orderRepository, KitchenRepository kitchenRepository,
@@ -618,8 +620,37 @@ public class OrderService {
         return dto;
     }
 
+    /**
+     * Generates an order number for a newly created order.
+     *
+     * <p>Format: {@code SM-} + uppercase hex, matching the convention already used
+     * by the seeded demo orders ({@code SM-5050}) and the existing test fixtures
+     * ({@code SM-DRAFT-1}, {@code SM-PAID-001}). Order numbers are display- and
+     * search-only in this application - nothing parses them - so historical values
+     * are never rewritten and both existing shapes keep working.
+     *
+     * <p>Uniqueness. This previously returned {@code "SM" + System.nanoTime() %
+     * 10000000000L}. That modulus makes the value <em>cycle every 10 seconds</em>,
+     * so two orders created ten seconds apart were assigned the same number; with
+     * the UNIQUE constraint on {@code order_number} the second insert failed and
+     * order creation broke. A timestamp is therefore not a uniqueness guarantee.
+     *
+     * <p>Now a high-entropy candidate is generated and checked against the
+     * repository, retrying on the (astronomically unlikely) collision. The database
+     * UNIQUE constraint remains the final backstop.
+     */
     private String generateOrderNumber() {
-        return "SM" + (System.nanoTime() % 10000000000L);
+        for (int attempt = 0; attempt < MAX_ORDER_NUMBER_ATTEMPTS; attempt++) {
+            String candidate = "SM-" + UUID.randomUUID().toString()
+                    .replace("-", "")
+                    .substring(0, 12)
+                    .toUpperCase(Locale.ROOT);
+            if (!orderRepository.existsByOrderNumber(candidate)) return candidate;
+        }
+        // Exhausted the retries: fall back to a timestamp-qualified value so the
+        // order can still be created. The UNIQUE constraint remains authoritative.
+        return "SM-" + System.nanoTime() + "-" + UUID.randomUUID().toString()
+                .replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
     }
 
     private void validateOrderItemsForPlacement(Order order) {
