@@ -46,9 +46,17 @@ class SellerServiceAreaTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        // The REAL LocationService over the mocked repositories: the seller save
+        // path now keeps the display string and the ID coverage in step through
+        // it, and these societies have no Society master record here, so the
+        // selection stays on the legacy string path - exactly the unmigrated
+        // behaviour these cases describe.
+        LocationService locationService =
+                new LocationService(areaRepository, societyRepository, kitchenRepository);
         sellerService = new SellerService(kitchenRepository, productRepository, orderItemRepository,
                 orderService, featureService,
-                new SocietyDirectory(userRepository, kitchenRepository, areaRepository, societyRepository));
+                new SocietyDirectory(userRepository, kitchenRepository, areaRepository, societyRepository),
+                locationService);
         when(userRepository.findAll()).thenReturn(List.of(
                 user("Buyer A", "9876500001", "Alpha Society"),
                 user("Buyer B", "9876500002", "Beta Society")));

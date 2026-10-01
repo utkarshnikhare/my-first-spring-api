@@ -29,12 +29,14 @@ public class AdminService {
     private final FavouriteRepository favouriteRepository;
     private final AnalyticsService analyticsService;
     private final SocietyDirectory societyDirectory;
+    private final LocationService locationService;
 
     @Autowired
     public AdminService(UserRepository userRepository, AnalyticsService analyticsService,
                         OrderRepository orderRepository, ProductRepository productRepository,
                         KitchenRepository kitchenRepository, EnquiryRepository enquiryRepository,
-                        FavouriteRepository favouriteRepository, SocietyDirectory societyDirectory) {
+                        FavouriteRepository favouriteRepository, SocietyDirectory societyDirectory,
+                        LocationService locationService) {
         this.userRepository = userRepository;
         this.analyticsService = analyticsService;
         this.orderRepository = orderRepository;
@@ -43,6 +45,7 @@ public class AdminService {
         this.enquiryRepository = enquiryRepository;
         this.favouriteRepository = favouriteRepository;
         this.societyDirectory = societyDirectory;
+        this.locationService = locationService;
     }
 
     // ==================== Dashboard ====================
@@ -301,6 +304,7 @@ public class AdminService {
         Kitchen kitchen = kitchenRepository.findById(kitchenId)
                 .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
         kitchen.setServiceAreas(societyDirectory.validateAndNormalize(serviceAreas));
+        locationService.applyCoverageFromNames(kitchen, kitchen.getServiceAreas());
         kitchenRepository.save(kitchen);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", kitchen.getId());
@@ -731,5 +735,95 @@ public class AdminService {
         out.put("activeSellers", activeSellers);
         out.put("series", series);
         return out;
+    }
+
+    // ==================== Manage Areas & Societies ====================
+
+    /**
+     * The full Area -&gt; Society tree for the Manage Areas &amp; Societies screen.
+     *
+     * <p>Inactive records are included so the Admin can see and re-enable them;
+     * the buyer and seller dropdowns only ever receive the active ones.</p>
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> locations() {
+        List<Map<String, Object>> areaRows = new ArrayList<>();
+        long activeAreas = 0;
+        long activeSocieties = 0;
+        for (Area area : locationService.findAllAreas()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", area.getId());
+            row.put("name", area.getName());
+            row.put("active", area.isActive());
+            row.put("createdAt", area.getCreatedAt());
+            List<Map<String, Object>> societyRows = new ArrayList<>();
+            for (Society society : locationService.findAllSocieties(area.getId())) {
+                societyRows.add(societyRow(society));
+                if (society.isActive()) activeSocieties++;
+            }
+            row.put("societyCount", societyRows.size());
+            row.put("societies", societyRows);
+            if (area.isActive()) activeAreas++;
+            areaRows.add(row);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("areas", areaRows);
+        out.put("areaCount", areaRows.size());
+        out.put("societyCount", areaRows.stream()
+                .mapToLong(r -> ((Number) r.get("societyCount")).longValue()).sum());
+        out.put("activeAreaCount", activeAreas);
+        out.put("activeSocietyCount", activeSocieties);
+        return out;
+    }
+
+    @Transactional
+    public Map<String, Object> createArea(String name) {
+        return areaRow(locationService.createArea(name));
+    }
+
+    /** Rename and/or enable-disable an Area. Only supplied fields are applied. */
+    @Transactional
+    public Map<String, Object> updateArea(Long areaId, String name, Boolean active) {
+        if (name != null && !name.isBlank()) locationService.renameArea(areaId, name);
+        if (active != null) locationService.setAreaActive(areaId, active);
+        return areaRow(locationService.findArea(areaId)
+                .orElseThrow(() -> new IllegalArgumentException("Area not found.")));
+    }
+
+    @Transactional
+    public Map<String, Object> createSociety(Long areaId, String name) {
+        return societyRow(locationService.createSociety(areaId, name));
+    }
+
+    /** Rename and/or enable-disable a Society. Only supplied fields are applied. */
+    @Transactional
+    public Map<String, Object> updateSociety(Long societyId, String name, Boolean active) {
+        if (name != null && !name.isBlank()) locationService.renameSociety(societyId, name);
+        if (active != null) locationService.setSocietyActive(societyId, active);
+        return societyRow(locationService.findSociety(societyId)
+                .orElseThrow(() -> new IllegalArgumentException("Community not found.")));
+    }
+
+    private Map<String, Object> areaRow(Area area) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", area.getId());
+        m.put("name", area.getName());
+        m.put("active", area.isActive());
+        m.put("createdAt", area.getCreatedAt());
+        m.put("updatedAt", area.getUpdatedAt());
+        m.put("societyCount", locationService.findAllSocieties(area.getId()).size());
+        return m;
+    }
+
+    private Map<String, Object> societyRow(Society society) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", society.getId());
+        m.put("name", society.getName());
+        m.put("active", society.isActive());
+        m.put("areaId", society.getArea().getId());
+        m.put("areaName", society.getArea().getName());
+        m.put("createdAt", society.getCreatedAt());
+        m.put("updatedAt", society.getUpdatedAt());
+        return m;
     }
 }

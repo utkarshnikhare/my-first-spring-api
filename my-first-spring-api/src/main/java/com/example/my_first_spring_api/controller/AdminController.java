@@ -61,6 +61,70 @@ public class AdminController {
         return ResponseEntity.ok(adminService.societies());
     }
 
+    // ==================== Manage Areas & Societies ====================
+
+    /**
+     * The full Area -&gt; Society master, including inactive records so the Admin
+     * screen can re-enable them. The buyer and seller dropdowns read only the
+     * active subset through their own endpoints.
+     */
+    @GetMapping("/locations")
+    public ResponseEntity<Map<String, Object>> locations() {
+        return ResponseEntity.ok(adminService.locations());
+    }
+
+    @PostMapping("/areas")
+    public ResponseEntity<Map<String, Object>> createArea(
+            @RequestBody(required = false) Map<String, Object> body) {
+        return ResponseEntity.ok(adminService.createArea(bodyStr(body, "name")));
+    }
+
+    /** Rename and/or enable-disable an Area. Absent fields are left untouched. */
+    @PatchMapping("/areas/{areaId}")
+    public ResponseEntity<Map<String, Object>> updateArea(@PathVariable Long areaId,
+                                                          @RequestBody(required = false) Map<String, Object> body) {
+        return ResponseEntity.ok(adminService.updateArea(areaId, bodyStr(body, "name"), bodyBool(body, "active")));
+    }
+
+    @PostMapping("/societies")
+    public ResponseEntity<Map<String, Object>> createSociety(
+            @RequestBody(required = false) Map<String, Object> body) {
+        return ResponseEntity.ok(adminService.createSociety(bodyLong(body, "areaId"), bodyStr(body, "name")));
+    }
+
+    /** Rename and/or enable-disable a Society. Absent fields are left untouched. */
+    @PatchMapping("/societies/{societyId}")
+    public ResponseEntity<Map<String, Object>> updateSociety(@PathVariable Long societyId,
+                                                             @RequestBody(required = false) Map<String, Object> body) {
+        return ResponseEntity.ok(adminService.updateSociety(societyId, bodyStr(body, "name"),
+                bodyBool(body, "active")));
+    }
+
+    private static String bodyStr(Map<String, Object> body, String key) {
+        Object value = body == null ? null : body.get(key);
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private static Long bodyLong(Map<String, Object> body, String key) {
+        Object value = body == null ? null : body.get(key);
+        if (value == null) return null;
+        if (value instanceof Number) return ((Number) value).longValue();
+        String text = String.valueOf(value).trim();
+        if (text.isEmpty()) return null;
+        try {
+            return Long.valueOf(text);
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException("Invalid id supplied for " + key + ".");
+        }
+    }
+
+    private static Boolean bodyBool(Map<String, Object> body, String key) {
+        Object value = body == null ? null : body.get(key);
+        if (value == null) return null;
+        if (value instanceof Boolean) return (Boolean) value;
+        return Boolean.parseBoolean(String.valueOf(value));
+    }
+
     @GetMapping("/offerings")
     public ResponseEntity<List<Map<String, Object>>> offerings() {
         return ResponseEntity.ok(adminService.offerings());

@@ -40,6 +40,7 @@ public class SellerService {
     private final OrderService orderService;
     private final FeatureService featureService;
     private final SocietyDirectory societyDirectory;
+    private final LocationService locationService;
 
     @Autowired
     public SellerService(KitchenRepository kitchenRepository,
@@ -47,13 +48,15 @@ public class SellerService {
                          OrderItemRepository orderItemRepository,
                          OrderService orderService,
                          FeatureService featureService,
-                         SocietyDirectory societyDirectory) {
+                         SocietyDirectory societyDirectory,
+                         LocationService locationService) {
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
         this.orderItemRepository = orderItemRepository;
         this.orderService = orderService;
         this.featureService = featureService;
         this.societyDirectory = societyDirectory;
+        this.locationService = locationService;
     }
 
     public KitchenDto createKitchen(KitchenCreateDto dto, User seller) {
@@ -64,7 +67,9 @@ public class SellerService {
         Kitchen kitchen = new Kitchen(slug, dto.getDisplayName(), dto.getDescription(), dto.getImageUrl(), seller);
         kitchen.setShortDescription(dto.getShortDescription());
         kitchen.setSociety(dto.getSociety());
-        kitchen.setServiceAreas(societyDirectory.validateAndNormalize(dto.getServiceAreas()));
+        // Validation first (unchanged), then the ID-backed coverage is kept in step.
+        locationService.applyCoverageFromNames(kitchen,
+                societyDirectory.validateAndNormalize(dto.getServiceAreas()));
         kitchen.setBuilding(dto.getBuilding());
         kitchen.setWhatsappLink(dto.getWhatsappLink());
         kitchen.setInstagramLink(dto.getInstagramLink());
@@ -87,7 +92,10 @@ public class SellerService {
         if (dto.getShortDescription() != null) kitchen.setShortDescription(dto.getShortDescription());
         if (dto.getImageUrl() != null) kitchen.setImageUrl(dto.getImageUrl());
         if (dto.getServiceAreas() != null) {
-            kitchen.setServiceAreas(societyDirectory.validateAndNormalize(dto.getServiceAreas()));
+            // Coverage is authoritative by ID, so the ID set must follow this edit -
+            // otherwise a change made here is silently ignored at checkout.
+            locationService.applyCoverageFromNames(kitchen,
+                    societyDirectory.validateAndNormalize(dto.getServiceAreas()));
         }
         if (dto.getWhatsappLink() != null) kitchen.setWhatsappLink(dto.getWhatsappLink());
         if (dto.getInstagramLink() != null) kitchen.setInstagramLink(dto.getInstagramLink());

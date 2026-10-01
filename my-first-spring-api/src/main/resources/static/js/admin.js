@@ -20,6 +20,7 @@ var adminRoutes = {
     '#/orders': adminOrdersView,
     '#/enquiries': adminEnquiriesView,
     '#/analytics': adminAnalyticsView,
+    '#/locations': adminLocationsView,
     '#/console': adminConsoleView
 };
 function adminResolveRoute(hash) {
@@ -470,6 +471,79 @@ async function adminAction(action, t) {
                 await adminRender();
                 break;
             }
+            // ---- Manage Areas & Societies ----
+            case 'loc-add-area': {
+                var areaNameInput = $('#locNewAreaName');
+                var areaName = areaNameInput && areaNameInput.value ? areaNameInput.value.trim() : '';
+                if (!areaName) { toast('Enter an area name', 'error'); break; }
+                // Guard against a double submit while the request is in flight.
+                if (t.disabled) break;
+                t.disabled = true;
+                try {
+                    await api('/api/admin/areas', { method: 'POST', body: { name: areaName } });
+                    toast('Area added', 'success');
+                    await adminRender();
+                } finally { t.disabled = false; }
+                break;
+            }
+            case 'loc-rename-begin': {
+                A.locRenaming = { type: t.dataset.type, id: Number(t.dataset.id) };
+                await adminRender();
+                break;
+            }
+            case 'loc-rename-cancel': {
+                A.locRenaming = null;
+                await adminRender();
+                break;
+            }
+            case 'loc-rename-save': {
+                var field = $('#' + (t.dataset.field || ''));
+                var newName = field && field.value ? field.value.trim() : '';
+                if (!newName) { toast('Enter a name', 'error'); break; }
+                if (t.disabled) break;
+                t.disabled = true;
+                try {
+                    var rtype = t.dataset.type, rid = Number(t.dataset.id);
+                    var url = rtype === 'area' ? '/api/admin/areas/' + rid : '/api/admin/societies/' + rid;
+                    await api(url, { method: 'PATCH', body: { name: newName } });
+                    A.locRenaming = null;
+                    toast('Renamed', 'success');
+                    await adminRender();
+                } finally { t.disabled = false; }
+                break;
+            }
+            case 'loc-toggle': {
+                var ttype = t.dataset.type, tid = Number(t.dataset.id);
+                var tname = t.dataset.label || '';
+                var activate = t.dataset.active === 'true';
+                var prompt = activate
+                    ? 'Re-enable "' + tname + '"?\n\nIt becomes selectable again for new buyer and seller choices.'
+                    : 'Disable "' + tname + '"?\n\nExisting records that reference it are kept - only NEW selections are blocked.';
+                if (!window.confirm(prompt)) break;
+                if (t.disabled) break;
+                t.disabled = true;
+                try {
+                    var turl = ttype === 'area' ? '/api/admin/areas/' + tid : '/api/admin/societies/' + tid;
+                    await api(turl, { method: 'PATCH', body: { active: !activate } });
+                    toast(activate ? 'Re-enabled' : 'Disabled', 'success');
+                    await adminRender();
+                } finally { t.disabled = false; }
+                break;
+            }
+            case 'loc-add-society': {
+                var aid = Number(t.dataset.aid);
+                var socField = $('#locNewSociety_' + aid);
+                var socName = socField && socField.value ? socField.value.trim() : '';
+                if (!socName) { toast('Enter a society name', 'error'); break; }
+                if (t.disabled) break;
+                t.disabled = true;
+                try {
+                    await api('/api/admin/societies', { method: 'POST', body: { areaId: aid, name: socName } });
+                    toast('Society added', 'success');
+                    await adminRender();
+                } finally { t.disabled = false; }
+                break;
+            }
         }
     } catch (err) { toast(err.message, 'error'); }
 }
@@ -886,6 +960,121 @@ async function adminEnquiriesView() {
             '<div class="sr-meta eq-message">“' + esc(e.message || '') + '”</div>' +
             '</div></div>';
     });
+    h += '</div>';
+    return h;
+}
+
+/**
+ * Manage Areas & Societies — the Admin-owned location master.
+ *
+ * <p>Reads GET /api/admin/locations (the full tree, inactive records included so
+ * they can be re-enabled) and drives the add / rename / enable-disable actions
+ * against /api/admin/areas and /api/admin/societies. Disabling is a soft flag:
+ * master records are never deleted, so buyers, sellers and historical orders
+ * keep resolving. The buyer and seller dropdowns only ever receive the active
+ * subset through their own endpoints.</p>
+ */
+async function adminLocationsView() {
+    var data = await api('/api/admin/locations') || {};
+    var areas = data.areas || [];
+    var renaming = A.locRenaming || null;
+
+    var h = '<div class="view-enter">';
+    h += '<div class="section-head admin-section-head"><div><h1>Manage Areas &amp; Societies</h1>' +
+        '<p class="muted small">' +
+        (data.activeAreaCount || 0) + ' active of ' + (data.areaCount || 0) + ' areas · ' +
+        (data.activeSocietyCount || 0) + ' active of ' + (data.societyCount || 0) + ' societies' +
+        '</p></div></div>';
+
+    // ---- Add a new Area ----
+    h += '<div class="card pad card-mb">' +
+        '<div class="form-group" style="margin-bottom:0">' +
+        '<label class="form-label" for="locNewAreaName">New area</label>' +
+        '<div class="form-row-2">' +
+        '<input class="form-input" id="locNewAreaName" maxlength="160" placeholder="e.g. Charholi">' +
+        '<button class="btn btn-primary" type="button" data-action="loc-add-area">Add Area</button>' +
+        '</div></div></div>';
+
+    if (!areas.length) {
+        h += '<div class="admin-empty">No areas yet. Add the first area above — new buyer and seller choices' +
+            ' only appear once an area (and a society under it) exists.</div></div>';
+        return h;
+    }
+
+    areas.forEach(function (area) {
+        var renamingArea = renaming && renaming.type === 'area' && renaming.id === area.id;
+        h += '<div class="card pad card-mb">';
+
+        // ---- Area header row ----
+        if (renamingArea) {
+            h += '<div class="sr-name">📍 Rename area</div>' +
+                '<div class="form-row-2" style="margin-top:8px">' +
+                '<input class="form-input" id="locRenameArea_' + area.id + '" maxlength="160" value="' + esc(area.name) + '">' +
+                '<div class="admin-actions" style="display:flex;gap:8px">' +
+                '<button class="btn btn-primary btn-sm" type="button" data-action="loc-rename-save" ' +
+                'data-type="area" data-id="' + area.id + '" data-field="locRenameArea_' + area.id + '">Save</button>' +
+                '<button class="btn btn-secondary btn-sm" type="button" data-action="loc-rename-cancel">Cancel</button>' +
+                '</div></div>';
+        } else {
+            h += '<div class="seller-row" style="border:none;padding-bottom:4px">' +
+                '<div class="sr-avatar">📍</div>' +
+                '<div class="sr-body">' +
+                '<div class="sr-name">' + esc(area.name) +
+                (area.active ? '' : ' <span class="pill pill-grey">Disabled</span>') + '</div>' +
+                '<div class="sr-meta">' + (area.societyCount || 0) + ' societies · added ' + adminDate(area.createdAt) + '</div>' +
+                '</div>' +
+                '<div class="admin-actions" style="display:flex;gap:8px;flex-wrap:wrap">' +
+                '<button class="btn btn-secondary btn-sm" type="button" data-action="loc-rename-begin" ' +
+                'data-type="area" data-id="' + area.id + '">Rename</button>' +
+                '<button class="btn btn-secondary btn-sm" type="button" data-action="loc-toggle" ' +
+                'data-type="area" data-id="' + area.id + '" data-label="' + esc(area.name) + '" ' +
+                'data-active="' + (area.active ? 'true' : 'false') + '">' +
+                (area.active ? 'Disable' : 'Re-enable') + '</button>' +
+                '</div></div>';
+        }
+        // ---- Societies under this Area ----
+        var societies = area.societies || [];
+        if (!societies.length) {
+            h += '<div class="muted small" style="padding:8px 0">No societies yet in this area.</div>';
+        }
+        societies.forEach(function (soc) {
+            var renamingSoc = renaming && renaming.type === 'society' && renaming.id === soc.id;
+            if (renamingSoc) {
+                h += '<div class="form-row-2" style="margin-top:8px">' +
+                    '<input class="form-input" id="locRenameSociety_' + soc.id + '" maxlength="160" value="' + esc(soc.name) + '">' +
+                    '<div class="admin-actions" style="display:flex;gap:8px">' +
+                    '<button class="btn btn-primary btn-sm" type="button" data-action="loc-rename-save" ' +
+                    'data-type="society" data-id="' + soc.id + '" data-field="locRenameSociety_' + soc.id + '">Save</button>' +
+                    '<button class="btn btn-secondary btn-sm" type="button" data-action="loc-rename-cancel">Cancel</button>' +
+                    '</div></div>';
+                return;
+            }
+            h += '<div class="seller-row" style="border:none;padding-bottom:4px">' +
+                '<div class="sr-avatar">🏠</div>' +
+                '<div class="sr-body">' +
+                '<div class="sr-name">' + esc(soc.name) +
+                (soc.active ? '' : ' <span class="pill pill-grey">Disabled</span>') + '</div>' +
+                '<div class="sr-meta">added ' + adminDate(soc.createdAt) + '</div>' +
+                '</div>' +
+                '<div class="admin-actions" style="display:flex;gap:8px;flex-wrap:wrap">' +
+                '<button class="btn btn-secondary btn-sm" type="button" data-action="loc-rename-begin" ' +
+                'data-type="society" data-id="' + soc.id + '">Rename</button>' +
+                '<button class="btn btn-secondary btn-sm" type="button" data-action="loc-toggle" ' +
+                'data-type="society" data-id="' + soc.id + '" data-label="' + esc(soc.name) + '" ' +
+                'data-active="' + (soc.active ? 'true' : 'false') + '">' +
+                (soc.active ? 'Disable' : 'Re-enable') + '</button>' +
+                '</div></div>';
+        });
+
+        // ---- Add a Society to this Area ----
+        h += '<div class="form-row-2" style="margin-top:8px">' +
+            '<input class="form-input" id="locNewSociety_' + area.id + '" maxlength="160" placeholder="New society name">' +
+            '<button class="btn btn-secondary" type="button" data-action="loc-add-society" data-aid="' + area.id + '">' +
+            'Add Society</button></div>';
+
+        h += '</div>';
+    });
+
     h += '</div>';
     return h;
 }

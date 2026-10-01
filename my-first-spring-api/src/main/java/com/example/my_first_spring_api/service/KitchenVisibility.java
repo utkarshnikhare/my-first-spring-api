@@ -55,6 +55,16 @@ public final class KitchenVisibility {
      *       comparison is kept so existing, already-working configurations behave
      *       exactly as before instead of disappearing.</li>
      * </ul>
+     *
+     * <p><b>Why a buyer with no society is refused on the string path.</b> A save
+     * that cannot be resolved to IDs (unknown or ambiguous name) keeps the kitchen
+     * on the string path, so this method runs for records whose coverage was never
+     * authoritative. Returning {@code true} there granted eligibility to a buyer who
+     * has saved no society at all, which meant clearing a migrated kitchen's
+     * coverage could make it orderable by buyers in societies the seller never
+     * selected. The ID path already refused such a buyer; the string path now
+     * agrees with it. A buyer with a society string that does not match any
+     * configured area was already refused and is unaffected.</p>
      */
     public static boolean isServiceAreaVisible(Kitchen kitchen, User buyer) {
         if (kitchen == null) return true;
@@ -80,7 +90,7 @@ public final class KitchenVisibility {
             if (buyer.getSociety() == null) return true;
             return society.equalsIgnoreCase(buyer.getSociety());
         }
-        if (buyer.getSociety() == null) return true;
+        if (buyer.getSociety() == null) return false;
         String[] parts = areas.split(",");
         for (String part : parts) {
             if (part.trim().equalsIgnoreCase(buyer.getSociety())) return true;

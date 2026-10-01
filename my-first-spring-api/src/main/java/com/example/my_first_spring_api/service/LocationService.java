@@ -279,6 +279,62 @@ public class LocationService {
         kitchenRepository.save(kitchen);
     }
 
+    /**
+     * Applies a NAME-based service-area selection to a kitchen's authoritative
+     * ID coverage.
+     *
+     * <p>The seller (Manage Kitchen) and the Admin (kitchen service areas) both
+     * submit a comma-separated list of society NAMES, because that is what the
+     * directory has always offered. {@link KitchenVisibility} however decides on
+     * {@code servedSocieties} whenever that set is populated, so a save that only
+     * rewrote the display string would leave the authoritative coverage stale:
+     * a seller who later narrows or widens their coverage would see no change at
+     * all. Every write path must therefore go through here, so the two
+     * representations can never drift.</p>
+     *
+     * <p>The "never guess" rule of the boot-time migration carries over:</p>
+     * <ul>
+     *   <li><b>every</b> name resolves to exactly one Society record - the
+     *       coverage is replaced by those IDs and the display string is rebuilt
+     *       from the persisted records;</li>
+     *   <li>a name that is unknown, or that exists under more than one Area,
+     *       makes the WHOLE selection unresolvable: the coverage is cleared and
+     *       the selection is kept on the original string path, exactly as an
+     *       unmigrated record behaves. Partially mapping it would silently
+     *       narrow what the seller may serve;</li>
+     *   <li>a blank selection clears the explicit coverage; the pre-existing
+     *       blank semantics (fall back to the kitchen's primary society) then
+     *       apply as before.</li>
+     * </ul>
+     *
+     * <p>Mutates the given kitchen; the caller persists it.</p>
+     */
+    @Transactional
+    public void applyCoverageFromNames(Kitchen kitchen, String serviceAreas) {
+        if (kitchen == null) throw new IllegalArgumentException("Kitchen not found.");
+        String selection = serviceAreas == null ? "" : serviceAreas.trim();
+        if (selection.isEmpty()) {
+            kitchen.setServedSocieties(new LinkedHashSet<>());
+            kitchen.setServiceAreas("");
+            return;
+        }
+        Set<Society> resolved = new LinkedHashSet<>();
+        for (String part : selection.split(",")) {
+            String name = part.trim();
+            if (name.isEmpty()) continue;
+            Optional<Society> match = resolveLegacySociety(name);
+            if (match.isEmpty()) {
+                // Unknown OR ambiguous name: refuse to map any of it.
+                kitchen.setServedSocieties(new LinkedHashSet<>());
+                kitchen.setServiceAreas(selection);
+                return;
+            }
+            resolved.add(match.get());
+        }
+        kitchen.setServedSocieties(resolved);
+        kitchen.setServiceAreas(toServiceAreaString(resolved));
+    }
+
     /** The display string for a coverage set: names, de-duplicated, sorted. */
     public static String toServiceAreaString(Collection<Society> societies) {
         if (societies == null || societies.isEmpty()) return "";
