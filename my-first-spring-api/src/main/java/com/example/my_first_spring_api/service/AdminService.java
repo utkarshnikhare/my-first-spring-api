@@ -549,13 +549,32 @@ public class AdminService {
         return admins;
     }
 
+    /**
+     * Promotes or creates an ADMIN account.
+     *
+     * <p>Validation added because the Super Admin console now drives this endpoint:
+     * {@code users.mobile_number} is UNIQUE but nullable, so a missing mobile
+     * previously produced an unusable admin and a duplicate request produced a
+     * constraint-violation 500. The mobile is now checked against the same format
+     * the rest of the application uses.
+     */
     @Transactional
     public User createAdmin(String name, String mobileNumber) {
+        if (mobileNumber == null || !mobileNumber.trim().matches("[6-9]\\d{9}")) {
+            throw new IllegalArgumentException("Enter a valid 10-digit mobile number.");
+        }
+        mobileNumber = mobileNumber.trim();
         User user = userRepository.findByMobileNumber(mobileNumber).orElse(null);
         if (user == null) {
             user = new User(name == null || name.isBlank() ? "Admin" : name, mobileNumber, null, UserRole.ADMIN);
         } else if (user.getRole() == UserRole.SUPER_ADMIN) {
             throw new IllegalArgumentException("This account is already a Super Admin.");
+        } else if (user.getRole() == UserRole.SELLER) {
+            // Changing the role would orphan the seller's kitchen and every
+            // offering under it. That is a product decision, not an admin action.
+            throw new IllegalArgumentException(
+                    "That mobile number belongs to a Seller. Promoting it would detach their kitchen "
+                            + "and offerings. Convert the seller account first.");
         } else {
             user.setRole(UserRole.ADMIN);
             if (name != null && !name.isBlank()) user.setName(name);
@@ -563,6 +582,13 @@ public class AdminService {
         return userRepository.save(user);
     }
 
+    /**
+     * Demotes an ADMIN back to BUYER.
+     *
+     * <p>Super Admin accounts can never be demoted. The last remaining ADMIN is
+     * also protected so the platform can never be left without an administrative
+     * account by a single mis-click; Super Admin must first create a replacement.
+     */
     @Transactional
     public User demoteAdmin(Long userId) {
         User user = userRepository.findById(userId)
@@ -572,6 +598,10 @@ public class AdminService {
         }
         if (user.getRole() != UserRole.ADMIN) {
             throw new IllegalArgumentException("User " + userId + " is not an admin.");
+        }
+        if (userRepository.countByRole(UserRole.ADMIN) <= 1) {
+            throw new IllegalArgumentException(
+                    "This is the last Admin account. Create another Admin before demoting this one.");
         }
         user.setRole(UserRole.BUYER);
         return userRepository.save(user);

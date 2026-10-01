@@ -325,6 +325,53 @@ async function adminAction(action, t) {
                 await adminRender();
                 break;
             }
+            case 'console-create-admin': {
+                var nameEl = $('#consoleAdminName');
+                var mobEl = $('#consoleAdminMobile');
+                var name = nameEl ? nameEl.value.trim() : '';
+                var mobile = mobEl ? mobEl.value.trim() : '';
+                var errBox = $('#consoleAdminError');
+                function showErr(msg) {
+                    if (!errBox) return;
+                    errBox.hidden = false;
+                    errBox.textContent = msg;
+                }
+                // Client-side check first so the obvious mistake never round-trips;
+                // the server validates independently and stays authoritative.
+                if (!/^[6-9]\d{9}$/.test(mobile)) {
+                    showErr('Enter a valid 10-digit mobile number.');
+                    if (mobEl) mobEl.focus();
+                    break;
+                }
+                if (errBox) errBox.hidden = true;
+                // Creating an admin can change an existing account's role - confirm first.
+                var okCreate = window.confirm('Create an Admin account for ' + mobile + '?'
+                    + (name ? '\n\nName: ' + name : '')
+                    + '\n\nIf this mobile already belongs to a Buyer, that account becomes an Admin.');
+                if (!okCreate) break;
+                await adminRunOnce(t, async function () {
+                    var created = await api('/api/superadmin/admins', {
+                        method: 'POST',
+                        body: { name: name || null, mobileNumber: mobile }
+                    });
+                    toast('Admin ' + (created && created.name ? created.name : mobile) + ' created', 'success');
+                });
+                await adminRender();
+                break;
+            }
+            case 'console-demote-admin': {
+                var did = Number(t.dataset.id);
+                var dname = t.dataset.name || 'this admin';
+                var okDemote = window.confirm('Demote ' + dname + ' back to a Buyer?\n\n'
+                    + 'They lose all Admin console access immediately. Their account is kept.');
+                if (!okDemote) break;
+                await adminRunOnce(t, async function () {
+                    await api('/api/superadmin/admins/' + did, { method: 'DELETE' });
+                    toast(dname + ' demoted to Buyer', 'success');
+                });
+                await adminRender();
+                break;
+            }
             case 'admin-retry': {
                 await adminRender();
                 break;
@@ -604,6 +651,12 @@ async function adminSellersView() {
             '<div class="sr-name">' + esc(s.name || 'Unknown') + ' <span class="pill pill-' + (st === 'APPROVED' ? 'green' : st === 'PENDING' ? 'amber' : 'grey') + '">' + esc(st || '') + '</span></div>' +
             '<div class="sr-meta">📱 ' + esc(s.mobileNumber || '—') + ' · ' + esc(s.kitchenName || 'No kitchen') + ' · ' + esc(s.area || '') + '</div>' +
             '<div class="sr-meta">Live: ' + (s.liveOfferings || 0) + '/' + (s.totalOfferings || 0) + ' offerings · Registered ' + adminDate(s.createdAt) + '</div>' +
+            // A seller's statusReason is persisted and returned by /api/admin/sellers,
+            // but nothing in the Admin UI rendered them - so the reason a seller was
+            // rejected or suspended could not be audited anywhere. Surface it inline.
+            (s.statusReason ? '<div class="sr-meta sr-reason">⚠ ' + esc(s.statusReason) + '</div>' : '') +
+            // The row only ever describes the first kitchen; say so when there are more.
+            (s.kitchenCount > 1 ? '<div class="sr-meta">🍳 ' + s.kitchenCount + ' kitchens (showing the first)</div>' : '') +
             '</div>' +
             (needsAction
                 ? '<div class="sr-actions">' +
@@ -695,8 +748,10 @@ async function adminOfferingsView() {
             '<div class="sr-avatar">🍽️</div>' +
             '<div class="sr-body">' +
             '<div class="sr-name">' + esc(p.name || '') + ' <span class="pill pill-' + (p.status === 'LIVE' ? 'green' : p.status === 'PRE_ORDER' ? 'blue' : p.status === 'SOLD_OUT' ? 'grey' : 'grey') + '">' + esc(p.status || '') + '</span></div>' +
-            '<div class="sr-meta">' + esc(p.kitchenName || '') + ' · ' + money(p.price || 0) + (p.priceUnit ? ' / ' + esc(p.priceUnit) : '') + '</div>' +
-            '<div class="sr-meta">' + (p.availableDate ? '📅 ' + esc(p.availableDate) + ' ' : '') + (p.cutoffTime ? '⏰ ' + esc(p.cutoffTime) + ' ' : '') + 'Qty: ' + (p.remainingQuantity != null ? p.remainingQuantity : '∞') + '</div>' +
+            '<div class="sr-meta">' + esc(p.kitchenName || '') + (p.sellerName ? ' · ' + esc(p.sellerName) : '') + ' · ' + money(p.price || 0) + (p.priceUnit ? ' / ' + esc(p.priceUnit) : '') + (p.category ? ' · ' + esc(p.category) : '') + '</div>' +
+            // maxQuantity/bookedQuantity are returned by /api/admin/offerings but were never
+            // rendered, so an admin could see only the remainder and not how much was booked.
+            '<div class="sr-meta">' + (p.availableDate ? '📅 ' + esc(p.availableDate) + ' ' : '') + (p.cutoffTime ? '⏰ ' + esc(p.cutoffTime) + ' ' : '') + 'Qty: ' + (p.remainingQuantity != null ? p.remainingQuantity : '∞') + (p.maxQuantity != null ? ' (booked ' + (p.bookedQuantity || 0) + ' of ' + p.maxQuantity + ')' : '') + '</div>' +
             '</div></div>';
     });
     h += '</div>';
@@ -848,7 +903,9 @@ function adminPlaceholderView(title, copy, icon) {
 // despite a fully working backend. The real view is defined above.
 // adminAnalyticsView is initialised before the route table (see the top of this
 // file) so that '#/analytics' resolves to a real view function.
-var adminConsoleView = adminPlaceholderView('Platform Console', 'Super Admin: accounts, features, grants, settings', '⚙️');
+// adminConsoleView is the real Super Admin console (admin accounts) defined above.
+// Feature flags, seller grants and platform settings are intentionally NOT exposed
+// there: the backend endpoints exist but the business rules do not.
 
 function adminTrafficView() {
     return async function () {
@@ -875,6 +932,98 @@ function adminTrafficView() {
         }
         return h;
     };
+}
+
+/**
+ * Platform Console — Super Admin only.
+ *
+ * <p>Scope is deliberately limited to the administrator-account workflows the
+ * backend genuinely supports: list, create and demote, all through the existing
+ * /api/superadmin/admins endpoints. Server-side authorization stays the authority
+ * (the route is hidden for ordinary Admins, and /api/superadmin/** rejects them
+ * regardless).
+ *
+ * <p>Feature flags, seller grants and platform settings are NOT exposed here.
+ * Those endpoints exist, but what a valid limit or price is, and who may change
+ * it, are undefined product rules - so they stay unavailable rather than being
+ * guessed at.
+ */
+async function adminConsoleView() {
+    if (A.role !== 'SUPER_ADMIN') {
+        return '<div class="view-enter"><div class="section-head admin-section-head">' +
+            '<div><h1>Platform Console</h1>' +
+            '<p class="muted small">Restricted to Super Admin accounts.</p></div></div>' +
+            '<div class="card pad"><div class="admin-empty admin-empty-inline">🚫 ' +
+            'You are signed in as an Admin, which cannot manage administrator accounts. ' +
+            'Server-side authorization blocks these operations regardless of this screen.</div></div></div>';
+    }
+
+    var admins = await api('/api/superadmin/admins');
+    var adminCount = 0, superCount = 0;
+    (admins || []).forEach(function (a) {
+        if (a.role === 'SUPER_ADMIN') superCount++; else adminCount++;
+    });
+
+    var h = '<div class="view-enter">';
+    h += '<div class="section-head admin-section-head"><div><h1>Platform Console</h1>' +
+        '<p class="muted small">Administrator accounts — ' + superCount + ' Super Admin, ' + adminCount + ' Admin</p></div></div>';
+
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Administrator Accounts</h3>';
+    h += '<p class="muted tiny" style="margin:0 0 12px">Read-only list of every account with platform access.</p>';
+    if (!admins || !admins.length) {
+        h += '<div class="admin-empty">No administrator accounts yet.</div>';
+    } else {
+        h += '<div class="seller-row"><div class="sr-avatar">🛡️</div><div class="sr-body">';
+        admins.forEach(function (a) {
+            var isSuper = a.role === 'SUPER_ADMIN';
+            // The backend refuses to demote a Super Admin, or the last Admin.
+            var canDemote = !isSuper && adminCount > 1;
+            var why = isSuper ? 'Super Admin accounts cannot be demoted'
+                : (adminCount > 1 ? '' : 'This is the last Admin account');
+            h += '<div class="console-admin-row">';
+            h += '<div class="ca-main">';
+            h += '<div class="ca-name">' + esc(a.name || 'Unnamed') +
+                ' <span class="pill ' + (isSuper ? 'pill-blue' : 'pill-green') + '">' + esc(a.role) + '</span></div>';
+            h += '<div class="muted small">📱 ' + esc(a.mobileNumber || '—') + '</div>';
+            h += '</div>';
+            if (isSuper) {
+                h += '<div class="sr-actions"><button class="btn btn-sm btn-secondary" type="button" disabled ' +
+                    'title="' + esc(why) + '">Not demotable</button></div>';
+            } else if (!canDemote) {
+                h += '<div class="sr-actions"><button class="btn btn-sm btn-secondary" type="button" disabled ' +
+                    'title="' + esc(why) + '">Last Admin</button></div>';
+            } else {
+                h += '<div class="sr-actions"><button class="btn btn-sm btn-outline" type="button" ' +
+                    'data-action="console-demote-admin" data-id="' + a.id + '" data-name="' + esc(a.name || 'Admin') +
+                    '" data-mobile="' + esc(a.mobileNumber || '') + '">Demote</button></div>';
+            }
+            h += '</div>';
+        });
+        h += '</div></div>';
+    }
+    h += '</div>';
+
+    // ---- create administrator ----
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Add Administrator</h3>';
+    h += '<p class="muted tiny" style="margin:0 0 12px">Creates an Admin account, or promotes an existing Buyer account. ' +
+        'It cannot promote a Seller — that would detach their kitchen and offerings.</p>';
+    h += '<div class="form-group"><label class="form-label" for="consoleAdminName">Name</label>' +
+        '<input class="form-input" id="consoleAdminName" type="text" maxlength="60" autocomplete="off" placeholder="Admin name"></div>';
+    h += '<div class="form-group"><label class="form-label" for="consoleAdminMobile">Mobile number</label>' +
+        '<input class="form-input" id="consoleAdminMobile" type="tel" inputmode="numeric" maxlength="10" autocomplete="off" placeholder="10-digit mobile"></div>';
+    h += '<div id="consoleAdminError" class="admin-error-msg" hidden></div>';
+    h += '<div class="admin-actions"><button class="btn btn-primary btn-block" type="button" ' +
+        'data-action="console-create-admin">Create Admin</button></div>';
+    h += '</div>';
+
+    // ---- deliberately not exposed ----
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Not available in this console</h3>';
+    h += '<p class="muted small" style="margin:0">Feature flags, seller feature grants and platform settings have backend ' +
+        'endpoints but no agreed business rules (valid limits, pricing, and who may change them). They stay closed ' +
+        'rather than being exposed without a defined policy.</p></div>';
+
+    h += '</div>';
+    return h;
 }
 
 function renderTrafficContent(data, period) {

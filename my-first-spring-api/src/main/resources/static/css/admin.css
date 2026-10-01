@@ -297,6 +297,7 @@ a.dash-card:hover { border-color: var(--brand); box-shadow: 0 4px 14px rgba(0,0,
 }
 @media (min-width: 1280px) {
     .admin-view { max-width: 1000px; }
+}
 
 /* ============================================================
    Admin UX additions — search bar, attention list, error state.
@@ -380,6 +381,29 @@ a.dash-card:hover { border-color: var(--brand); box-shadow: 0 4px 14px rgba(0,0,
     text-decoration: none;
     min-width: 0;
 }
+
+/* Platform Console — administrator account rows */
+.console-admin-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border, #eee);
+    min-width: 0;
+}
+.console-admin-row:last-child { border-bottom: 0; }
+.console-admin-row .ca-main { flex: 1 1 auto; min-width: 0; }
+.console-admin-row .ca-name { font-weight: 700; font-size: 0.9rem; overflow-wrap: anywhere; }
+.console-admin-row .sr-actions { flex: 0 0 auto; }
+.console-admin-row .sr-actions .btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+@media (max-width: 420px) {
+    .console-admin-row { flex-wrap: wrap; }
+    .console-admin-row .sr-actions { width: 100%; }
+}
+
+/* Why a seller was rejected or suspended (surfaced on the Sellers list). */
+.sr-reason { color: #b45309; font-weight: 600; }
+html[data-theme="dark"] .sr-reason { color: #fbbf24; }
 .attention-row:hover { background: var(--surface-2, rgba(79, 70, 229, 0.06)); }
 .attention-row:focus-visible { outline: 2px solid var(--primary, #4F46E5); outline-offset: 2px; }
 .attention-row .att-icon { flex: 0 0 auto; }
@@ -417,6 +441,4 @@ a.dash-card:hover { border-color: var(--brand); box-shadow: 0 4px 14px rgba(0,0,
     .admin-searchbar .capsule { flex: 1 1 auto; }
     .admin-search { flex: 1 1 100%; }
     .attention-row .att-label { font-size: 0.82rem; }
-}
-
 }
