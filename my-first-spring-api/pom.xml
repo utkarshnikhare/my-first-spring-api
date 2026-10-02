@@ -66,6 +66,15 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Test-only. Supplies SecurityMockMvcConfigurers / csrf() so the HTTP
+             security layer (role rules + CSRF) can be regression-tested. Without
+             it every test in this project is service-level only and the Spring
+             Security filter chain is never exercised. -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

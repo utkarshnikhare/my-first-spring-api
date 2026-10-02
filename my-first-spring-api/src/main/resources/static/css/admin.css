@@ -203,6 +203,23 @@ html[data-theme="dark"] .seller-row .sr-avatar { border: 1px solid var(--border)
 .seller-row { min-width: 0; }
 .sr-name, .sr-meta { overflow-wrap: anywhere; }
 .seller-row .sr-actions { flex-shrink: 0; }
+
+/* Manage Areas & Societies rows.
+   On a phone the 46px avatar plus two action buttons sat on the same flex line as
+   the name and the "N societies - added <date>" meta line, squeezing the text
+   column to a few characters and breaking every word onto its own line. Letting the
+   actions drop onto their own full-width row gives the text the whole card width.
+   Desktop is untouched. */
+.seller-row.loc-row { align-items: flex-start; }
+.seller-row.loc-row .sr-avatar { align-self: center; }
+@media (max-width: 640px) {
+    .seller-row.loc-row { flex-wrap: wrap; row-gap: 10px; }
+    .seller-row.loc-row .sr-body { flex: 1 1 auto; min-width: 0; }
+    .seller-row.loc-row .sr-name,
+    .seller-row.loc-row .sr-meta { overflow-wrap: break-word; }
+    .seller-row.loc-row .admin-actions { flex: 1 1 100%; margin-top: 2px; }
+    .seller-row.loc-row .admin-actions .btn { flex: 1 1 0; min-width: 0; }
+}
 .admin-section-head { gap: 10px; }
 /* Brand must never wrap mid-word (topbar is a compact identity row) */
 .admin-brand { white-space: nowrap; flex-shrink: 0; }

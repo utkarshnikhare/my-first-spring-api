@@ -1050,7 +1050,7 @@ async function adminLocationsView() {
                 '<button class="btn btn-secondary btn-sm" type="button" data-action="loc-rename-cancel">Cancel</button>' +
                 '</div></div>';
         } else {
-            h += '<div class="seller-row" style="border:none;padding-bottom:4px">' +
+            h += '<div class="seller-row loc-row" style="border:none;padding-bottom:4px">' +
                 '<div class="sr-avatar">📍</div>' +
                 '<div class="sr-body">' +
                 '<div class="sr-name">' + esc(area.name) +
@@ -1083,7 +1083,7 @@ async function adminLocationsView() {
                     '</div></div>';
                 return;
             }
-            h += '<div class="seller-row" style="border:none;padding-bottom:4px">' +
+            h += '<div class="seller-row loc-row" style="border:none;padding-bottom:4px">' +
                 '<div class="sr-avatar">🏠</div>' +
                 '<div class="sr-body">' +
                 '<div class="sr-name">' + esc(soc.name) +

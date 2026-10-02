@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -28,8 +29,26 @@ public class SecurityConfig {
         boolean demo = isDemoEnvironment(environment);
         return http
                 .csrf(csrf -> {
-                    if (demo) csrf.disable();
-                    else csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse());
+                    if (demo) {
+                        csrf.disable();
+                    } else {
+                        // The CSRF token is published as a JS-readable cookie and the
+                        // frontend echoes it back in the X-XSRF-TOKEN header (see
+                        // api() in common.js). CookieCsrfTokenRepository only WRITES
+                        // that cookie once the CsrfToken is resolved, and Spring
+                        // defers that resolution by default - which would leave the
+                        // browser with no cookie and make every unsafe request fail
+                        // with 403 Forbidden. Clearing the request attribute name
+                        // opts out of the deferral so the cookie is always issued.
+                        CookieCsrfTokenRepository tokenRepository =
+                                CookieCsrfTokenRepository.withHttpOnlyFalse();
+                        tokenRepository.setCookiePath("/");
+                        CsrfTokenRequestAttributeHandler tokenHandler =
+                                new CsrfTokenRequestAttributeHandler();
+                        tokenHandler.setCsrfRequestAttributeName(null);
+                        csrf.csrfTokenRepository(tokenRepository)
+                             .csrfTokenRequestHandler(tokenHandler);
+                    }
                 })
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .addFilterBefore(userSessionAuthorizationFilter, UsernamePasswordAuthenticationFilter.class)

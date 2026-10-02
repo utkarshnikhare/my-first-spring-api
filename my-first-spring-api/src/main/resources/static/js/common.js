@@ -107,6 +107,33 @@ function emptyHtml(icon, title, message, actionHtml) {
         '<p>' + esc(message) + '</p>' + (actionHtml || '') + '</div>';
 }
 
+// ==================== CSRF ====================
+
+/**
+ * Read the CSRF token the server published in the XSRF-TOKEN cookie.
+ *
+ * The backend uses Spring Security's CookieCsrfTokenRepository (see
+ * SecurityConfig). For any profile where CSRF is enabled the server rejects
+ * every unsafe request (POST/PUT/PATCH/DELETE) that does not echo the cookie
+ * back in the X-XSRF-TOKEN header - it answers 403 Forbidden, which is what
+ * used to break "Add Area" and every other state-changing Admin action.
+ * When CSRF is disabled (the demo profile) no cookie is set and this returns
+ * null, which is harmless: the extra header is simply ignored.
+ */
+function csrfTokenFromCookie() {
+    var name = 'XSRF-TOKEN';
+    var parts = (document.cookie || '').split(';');
+    for (var i = 0; i < parts.length; i++) {
+        var part = parts[i].trim();
+        if (part.indexOf(name + '=') === 0) {
+            return decodeURIComponent(part.substring(name.length + 1));
+        }
+    }
+    return null;
+}
+
+/** Header name the backend reads the token from. */
+var CSRF_HEADER_NAME = 'X-XSRF-TOKEN';
 // ==================== API Fetcher ====================
 
 async function api(path, opts) {
@@ -114,7 +141,9 @@ async function api(path, opts) {
     path = path.replace(/\/+$/, '');
     if (!path) path = '/';
     var url = (path.startsWith('/api') || path.startsWith('/h2-console')) ? CONFIG.API_BASE_URL + path : path;
-    var init = { method: opts.method || 'GET', credentials: 'same-origin', headers: {} };
+    var init = { method: (opts.method || 'GET'), credentials: 'same-origin', headers: {} };
+    var csrf = csrfTokenFromCookie();
+    if (csrf) init.headers[CSRF_HEADER_NAME] = csrf;
     if (opts.body !== undefined) {
         init.headers['Content-Type'] = 'application/json';
         init.body = JSON.stringify(opts.body);
@@ -136,6 +165,9 @@ async function api(path, opts) {
     }
     if (!res.ok) {
         var msg = (data && data.message) || (data && data.error) || ('HTTP ' + res.status);
+        if (res.status === 403 && (msg === 'Forbidden' || msg === 'Access Denied')) {
+            msg = 'Your session is missing a security token. Please reload the page and sign in again.';
+        }
         if (CONFIG.DEBUG) console.warn('API error:', path, msg);
         throw new ApiError(msg, res.status, data);
     }
