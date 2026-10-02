@@ -21,12 +21,13 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Build (clean compile, zero warnings tolerated on errors)
+      - name: Build and test gate (compile, run all tests, package)
         working-directory: my-first-spring-api
-        run: mvn -B -DskipTests clean compile
+        run: mvn -B clean verify
 
-      - name: Verify build artifact
+      - name: Verify build artifacts (classes and packaged jar)
         working-directory: my-first-spring-api
         run: |
           if [ ! -d target/classes ]; then echo "Build produced no classes" && exit 1; fi
-          echo "Build OK: classes compiled"
+          if ! ls target/*.jar >/dev/null 2>&1; then echo "Packaging produced no jar" && exit 1; fi
+          echo "Build OK: classes compiled, tests passed, jar packaged"
