@@ -18,6 +18,9 @@ import static org.mockito.Mockito.*;
 
 class FavouriteServiceLimitTest {
 
+    /** Shared by the buyer and the kitchens so the favourite stays inside the area. */
+    private static final String SOCIETY = "Favourite Test Society";
+
     @Mock FavouriteRepository favouriteRepository;
     @Mock KitchenRepository kitchenRepository;
 
@@ -30,6 +33,17 @@ class FavouriteServiceLimitTest {
         MockitoAnnotations.openMocks(this);
         buyer = new User("Test Buyer", "9999999999", "A-101", UserRole.BUYER);
         buyer.setId(1L);
+        // The buyer must belong to a service area, otherwise the favourite is refused
+        // as out-of-area before the limit under test is ever reached.
+        buyer.setSociety(SOCIETY);
+    }
+
+    /** A kitchen inside the buyer's service area. */
+    private Kitchen kitchen(long id) {
+        Kitchen k = new Kitchen("k" + id, "Kitchen " + id, "d", null, seller());
+        k.setId(id);
+        k.setSociety(SOCIETY);
+        return k;
     }
 
     private User seller() {
@@ -40,8 +54,7 @@ class FavouriteServiceLimitTest {
 
     @Test
     void addThreeKitchenFavouritesSucceeds() {
-        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller());
-        kitchen.setId(1L);
+        Kitchen kitchen = kitchen(1L);
         when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
         when(favouriteRepository.findByUserIdAndKitchenId(1L, 1L)).thenReturn(Optional.empty());
         when(favouriteRepository.countByUserId(1L)).thenReturn(0L, 1L, 2L);
@@ -54,8 +67,7 @@ class FavouriteServiceLimitTest {
 
     @Test
     void addFourthKitchenFavouriteRejected() {
-        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller());
-        kitchen.setId(1L);
+        Kitchen kitchen = kitchen(1L);
         when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
         when(favouriteRepository.findByUserIdAndKitchenId(1L, 1L)).thenReturn(Optional.empty());
         when(favouriteRepository.countByUserId(1L)).thenReturn(3L);
@@ -65,8 +77,7 @@ class FavouriteServiceLimitTest {
 
     @Test
     void removeKitchenFavouriteThenAddNewSucceeds() {
-        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller());
-        kitchen.setId(1L);
+        Kitchen kitchen = kitchen(1L);
         Favourite existing = new Favourite();
         existing.setId(10L);
         existing.setUser(buyer);
@@ -82,8 +93,7 @@ class FavouriteServiceLimitTest {
 
     @Test
     void getFavouriteKitchensReturnsOnlyKitchens() {
-        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller());
-        kitchen.setId(1L);
+        Kitchen kitchen = kitchen(1L);
         Favourite f = new Favourite();
         f.setId(1L);
         f.setUser(buyer);

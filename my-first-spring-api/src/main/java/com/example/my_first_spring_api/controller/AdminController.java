@@ -38,6 +38,24 @@ public class AdminController {
         return ResponseEntity.ok(adminService.buyers());
     }
 
+    /**
+     * "Why can't this buyer see this kitchen?" - derived from the existing
+     * KitchenVisibility predicates. Read-only; it never mutates buyer or kitchen data
+     * and never changes normal discovery.
+     */
+    @GetMapping("/diagnostics/visibility")
+    public ResponseEntity<Map<String, Object>> visibilityDiagnostic(
+            @RequestParam Long buyerId,
+            @RequestParam(required = false) Long kitchenId) {
+        return ResponseEntity.ok(adminService.visibilityDiagnostic(buyerId, kitchenId));
+    }
+
+    /** Lightweight factual runtime status. No monitoring platform, no invented metrics. */
+    @GetMapping("/system-health")
+    public ResponseEntity<Map<String, Object>> systemHealth() {
+        return ResponseEntity.ok(adminService.systemHealth());
+    }
+
     @GetMapping("/sellers")
     public ResponseEntity<List<Map<String, Object>>> sellers(
             @RequestParam(value = "status", required = false) SellerApprovalStatus status) {

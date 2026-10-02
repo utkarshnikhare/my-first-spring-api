@@ -20,6 +20,9 @@ import static org.mockito.Mockito.*;
 
 class EnquiryServiceNotificationTest {
 
+    /** Shared by the kitchen and the buyer so the enquiry is inside the service area. */
+    private static final String SOCIETY = "Enquiry Test Society";
+
     @Mock EnquiryRepository enquiryRepository;
     @Mock KitchenRepository kitchenRepository;
     @Mock NotificationService notificationService;
@@ -41,10 +44,13 @@ class EnquiryServiceNotificationTest {
         seller.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
         Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller);
         kitchen.setId(1L);
+        // Same service area for kitchen and buyer - see the other test.
+        kitchen.setSociety(SOCIETY);
         when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
 
         User buyer = new User("Buyer", "9876500001", "A-101", UserRole.BUYER);
         buyer.setId(20L);
+        buyer.setSociety(SOCIETY);
 
         when(enquiryRepository.save(any(Enquiry.class))).thenAnswer(inv -> {
             Enquiry e = inv.getArgument(0);
@@ -74,6 +80,11 @@ class EnquiryServiceNotificationTest {
 
         User buyer = new User("Buyer", "9876500001", "A-101", UserRole.BUYER);
         buyer.setId(20L);
+        buyer.setSociety(SOCIETY);
+
+        // The kitchen and the buyer must actually share a service area; otherwise the
+        // enquiry is refused as out-of-area, which is a different test entirely.
+        kitchen.setSociety(SOCIETY);
 
         when(enquiryRepository.save(any(Enquiry.class))).thenAnswer(inv -> {
             Enquiry e = inv.getArgument(0);

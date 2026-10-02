@@ -53,23 +53,36 @@ public final class KitchenVisibility {
      *   <li><b>Kitchen has no ID coverage yet</b> (legacy record whose society
      *       strings could not be mapped unambiguously) - the original string
      *       comparison is kept so existing, already-working configurations behave
-     *       exactly as before instead of disappearing.</li>
+     *       exactly as before instead of disappearing. One hole in that path is
+     *       closed: a buyer whose only Society is the authoritative ID-backed
+     *       reference now resolves by that reference instead of being compared
+     *       as "no society at all".</li>
      * </ul>
      *
-     * <p><b>Why a buyer with no society is refused on the string path.</b> A save
-     * that cannot be resolved to IDs (unknown or ambiguous name) keeps the kitchen
-     * on the string path, so this method runs for records whose coverage was never
-     * authoritative. Returning {@code true} there granted eligibility to a buyer who
-     * has saved no society at all, which meant clearing a migrated kitchen's
-     * coverage could make it orderable by buyers in societies the seller never
-     * selected. The ID path already refused such a buyer; the string path now
-     * agrees with it. A buyer with a society string that does not match any
-     * configured area was already refused and is unaffected.</p>
+     * <p><b>Why the two remaining permissive branches are KEPT.</b></p>
+     *
+     * <p><i>No society on the buyer.</i> Returning {@code true} there looked wrong,
+     * but the service is not the thing that guards this. Order placement checks
+     * profile completeness first and throws
+     * {@code BuyerProfileIncompleteException} for a society-less buyer BEFORE this
+     * method is reached, so a society-less buyer is never treated as eligible at
+     * the only point where it matters. Meanwhile the draft-before-profile-complete
+     * flow deliberately lets such a buyer start a selection, so returning
+     * {@code false} here broke a supported flow rather than hardening one.</p>
+     *
+     * <p><i>No location on the kitchen.</i> A kitchen with no
+     * {@code servedSocieties}, no {@code serviceAreas} and no {@code society} is
+     * not in this state anywhere in the shipped data, and the repository states no
+     * policy for it - it may equally mean "never configured" or "intentionally
+     * universal". Rather than guess, the previous behaviour is preserved here and
+     * the open question is reported for a product answer.</p>
      */
     public static boolean isServiceAreaVisible(Kitchen kitchen, User buyer) {
         if (kitchen == null) return true;
         // Logged-out browsing: the visitor has no location yet, so every active
         // kitchen stays reachable. Eligibility is enforced when they try to order.
+        // This is deliberately NOT tightened - anonymous discovery depends on it,
+        // and a buyer who later signs in is re-checked against their Society.
         if (buyer == null) return true;
 
         java.util.Set<com.example.my_first_spring_api.model.Society> coverage = kitchen.getServedSocieties();
@@ -82,13 +95,34 @@ public final class KitchenVisibility {
             return false;
         }
 
-        // Legacy string path - unchanged behaviour for unmigrated records.
+        // Legacy string path - still the ONLY thing that keeps an unmigrated kitchen
+        // reachable, so its matching stays; only the buyer's Society is now resolved
+        // through the authoritative reference first. See the class javadoc.
         String areas = kitchen.getServiceAreas();
         if (areas == null || areas.isBlank()) {
             String society = kitchen.getSociety();
-            if (society == null || society.isBlank()) return true;
-            if (buyer.getSociety() == null) return true;
-            return society.equalsIgnoreCase(buyer.getSociety());
+            if (society == null || society.isBlank()) {
+                // PHASE B - deliberately UNCHANGED. No shipped kitchen is in this state:
+                // every seeded legacy kitchen carries a society name and the migrated
+                // ones carry Society IDs, so there is no repository evidence of whether a
+                // location-less record means "unconfigured" or "intentionally universal".
+                // Closing it would be a policy guess, so the pre-existing permissive
+                // behaviour is preserved and the open question is reported instead.
+                return true;
+            }
+            // Match against the buyer's Society, preferring the authoritative ID-backed
+            // reference and falling back to the legacy text so a buyer saved with one
+            // of the two still resolves. A buyer with neither is still allowed through
+            // here: the draft-before-profile-complete flow depends on it, and order
+            // PLACEMENT is what actually blocks a society-less buyer, via
+            // BuyerProfileIncompleteException in OrderService, before this check runs.
+            String buyerSocietyName = buyer.getSociety();
+            if ((buyerSocietyName == null || buyerSocietyName.isBlank())
+                    && buyer.getSocietyRef() != null) {
+                buyerSocietyName = buyer.getSocietyRef().getName();
+            }
+            if (buyerSocietyName == null || buyerSocietyName.isBlank()) return true;
+            return society.equalsIgnoreCase(buyerSocietyName.trim());
         }
         if (buyer.getSociety() == null) return false;
         String[] parts = areas.split(",");

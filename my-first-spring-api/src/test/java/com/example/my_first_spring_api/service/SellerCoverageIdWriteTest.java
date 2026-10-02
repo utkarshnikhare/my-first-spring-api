@@ -309,6 +309,46 @@ class SellerCoverageIdWriteTest {
 
     // ---------------- compatibility + no-op semantics ----------------
 
+    /**
+     * Admin editor regression: when the coverage editor is opened for a kitchen that
+     * already has ID-backed coverage but no Area is available in the active coverage
+     * options (so the restored Area selector is empty), the UI submits no coverage
+     * fields at all. That request must be a strict no-op. It used to fall into the
+     * legacy name-string branch, normalise null to "" and wipe both servedSocieties
+     * and serviceAreas - silently destroying the kitchen's coverage.
+     */
+    @Test
+    void anAdminSaveThatSendsNoCoverageFieldsLeavesCoverageUntouched() {
+        adminService.updateKitchenServiceAreas(kitchen.getId(), null,
+                area.getId(), List.of(alpha.getId(), gamma.getId()));
+        assertThat(coveredIds()).containsExactlyInAnyOrder(alpha.getId(), gamma.getId());
+
+        // Exactly what the Admin UI sends when no Area is selected.
+        Map<String, Object> out = adminService.updateKitchenServiceAreas(kitchen.getId(), null, null, null);
+
+        assertThat(coveredIds())
+                .as("an empty Admin payload must not clear existing ID coverage")
+                .containsExactlyInAnyOrder(alpha.getId(), gamma.getId());
+        assertThat(reload().getServiceAreas())
+                .as("the denormalised display string must survive too")
+                .isNotBlank();
+        assertThat((List<Long>) out.get("servedSocietyIds"))
+                .containsExactlyInAnyOrder(alpha.getId(), gamma.getId());
+    }
+
+    /** Coverage can still be cleared - but only when the caller says so explicitly. */
+    @Test
+    void anAdminSaveCanStillClearCoverageWithAnExplicitEmptySelection() {
+        adminService.updateKitchenServiceAreas(kitchen.getId(), null,
+                area.getId(), List.of(alpha.getId()));
+        assertThat(coveredIds()).containsExactly(alpha.getId());
+
+        adminService.updateKitchenServiceAreas(kitchen.getId(), null, area.getId(), List.of());
+
+        assertThat(coveredIds()).isEmpty();
+        assertThat(reload().getServiceAreas()).isEmpty();
+    }
+
     @Test
     void anEditThatSendsNoCoverageFieldsLeavesCoverageUntouched() {
         sellerService.updateKitchen(kitchen.getId(), idDto(area.getId(), List.of(alpha.getId(), beta.getId())), seller);

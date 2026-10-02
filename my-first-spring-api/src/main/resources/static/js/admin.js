@@ -21,6 +21,8 @@ var adminRoutes = {
     '#/enquiries': adminEnquiriesView,
     '#/analytics': adminAnalyticsView,
     '#/locations': adminLocationsView,
+    '#/diagnostics': adminDiagnosticsView,
+    '#/health': adminHealthView,
     '#/console': adminConsoleView
 };
 function adminResolveRoute(hash) {
@@ -469,6 +471,18 @@ async function adminAction(action, t) {
                 await adminRender();
                 break;
             }
+            // ---- Visibility diagnostic (read-only) ----
+            case 'admin-diag-focus': {
+                A.diagKitchenId = t.dataset.kitchenId ? String(t.dataset.kitchenId) : '';
+                adminNavigate('#/diagnostics');
+                break;
+            }
+            case 'admin-diag-buyer-open': {
+                A.diagBuyerId = t.dataset.id ? String(t.dataset.id) : '';
+                A.diagKitchenId = '';
+                adminNavigate('#/diagnostics');
+                break;
+            }
             // ---- Manage Areas & Societies ----
             case 'loc-add-area': {
                 var areaNameInput = $('#locNewAreaName');
@@ -574,6 +588,19 @@ async function adminHomeView() {
     h += dashCard('❤️', data.totalFavourites || 0, 'Favourites', 'kitchens saved by buyers', '');
     h += '</div>';
 
+    // Area / Society master counts. Reused from the existing /api/admin/locations
+    // endpoint (which already reports these) rather than a second source, and never
+    // invented: if the call fails the dashboard simply omits the cards.
+    try {
+        var loc = await api('/api/admin/locations') || {};
+        h += '<div class="dash-grid mt-1">';
+        h += dashCard('📍', loc.areaCount || 0, 'Areas', (loc.activeAreaCount || 0) + ' active', '#/locations');
+        h += dashCard('🏘️', loc.societyCount || 0, 'Societies', (loc.activeSocietyCount || 0) + ' active', '#/locations');
+        h += '</div>';
+    } catch (eLoc) {
+        // Master data unavailable - omit rather than show a fabricated number.
+    }
+
     h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Order Value</h3>' +
         '<p class="muted tiny" style="margin:0 0 8px">Total value of orders placed on the marketplace (not platform revenue).</p>';
     h += '<div class="flex gap-2 wrap"><div class="flex-1 min-140"><div class="muted small">Total</div><div class="font-700 font-size-2">' + money(data.totalOrderValue || 0) + '</div></div>';
@@ -673,7 +700,12 @@ async function adminBuyersView() {
             '<div class="sr-name">' + esc(b.name || 'Unknown') + '</div>' +
             '<div class="sr-meta">📱 ' + esc(b.mobileNumber || '—') + ' · ' + esc(b.society || '') + (b.building ? ', ' + esc(b.building) : '') + '</div>' +
             '<div class="sr-meta">Orders: ' + (b.orderCount || 0) + ' · Value: ' + money(b.totalOrderValue || 0) + ' · Favourites: ' + (b.favouriteKitchens || 0) + '</div>' +
-            '</div></div>';
+            '</div>' +
+            // Observation only: opens the read-only visibility diagnostic. Buyers are
+            // deliberately not editable from Admin.
+            '<div class="sr-actions"><button class="btn btn-secondary btn-sm" type="button" ' +
+            'data-action="admin-diag-buyer-open" data-id="' + b.id + '">Check visibility</button></div>' +
+            '</div>';
     });
     h += '</div>';
     return h;
@@ -778,7 +810,11 @@ async function adminKitchensView() {
             '<div class="sr-meta">Seller: ' + esc(k.sellerName || '—') + ' · ' + esc(k.area || '') + '</div>' +
             '<div class="sr-meta">Offerings: ' + (k.liveOfferings || 0) + ' live / ' + (k.totalOfferings || 0) + ' total</div>' +
             (areaText ? '<div class="sr-meta">Service Areas: ' + esc(areaText) + '</div>' : '<div class="sr-meta muted small">No service areas configured</div>') +
-            '<button class="btn btn-secondary btn-sm" type="button" data-action="admin-edit-service-areas" data-kid="' + k.id + '">Manage Service Areas</button>' +
+            // Availability is a real operational fact; coverage is the Admin control.
+            '<div class="sr-meta">' + (k.availableToday ? '🟢 Available today' : '⚪ Not available today') +
+            ' · ' + (k.hasLiveOfferings ? 'has live items' : 'no live items') + '</div>' +
+            '<div class="mt-1"><button class="btn btn-secondary btn-sm" type="button" data-action="admin-edit-service-areas" data-kid="' + k.id + '">Manage Service Areas</button> ' +
+            '<button class="btn btn-secondary btn-sm" type="button" data-action="admin-diag-focus" data-kitchen-id="' + k.id + '">Diagnose</button></div>' +
             '</div></div>';
     });
     h += '</div>';
@@ -1274,6 +1310,163 @@ function renderAdminCoverageSocieties() {
     list.innerHTML = html;
 }
 
+// ==================== Buyer <-> Kitchen visibility diagnostic ====================
+
+/**
+ * "Why can't this buyer see this kitchen?"
+ *
+ * The verdict and the reasons come straight from the backend, which calls the SAME
+ * KitchenVisibility predicates the buyer-facing endpoints use. This screen only
+ * renders that answer - it holds no eligibility logic of its own and never changes
+ * buyer, kitchen or coverage data.
+ */
+async function adminDiagnosticsView() {
+    var buyers, kitchens;
+    try {
+        buyers = await api('/api/admin/buyers');
+        kitchens = await api('/api/admin/kitchens');
+    } catch (e) {
+        return adminErrorView(e);
+    }
+    if (!A.diagBuyerId) A.diagBuyerId = (buyers && buyers[0]) ? String(buyers[0].id) : '';
+
+    var h = '<div class="view-enter">';
+    h += '<div class="section-head admin-section-head"><div><h1>Visibility Diagnostic</h1>' +
+        '<p class="muted small">Pick a buyer to see which kitchens they can see, and exactly why. ' +
+        'Read-only — nothing here changes any record.</p></div></div>';
+
+    h += '<div class="card pad card-mb"><div class="form-group" style="margin-bottom:0">' +
+        '<label class="form-label" for="diagBuyerSelect">Buyer</label>' +
+        '<select class="form-input" id="diagBuyerSelect" data-action="admin-diag-buyer">' +
+        (buyers || []).map(function (b) {
+            var id = String(b.id);
+            return '<option value="' + esc(id) + '"' + (id === String(A.diagBuyerId) ? ' selected' : '') + '>' +
+                esc((b.name || 'Unknown') + ' · ' + (b.mobileNumber || '—') +
+                    (b.society ? ' · ' + b.society : '')) + '</option>';
+        }).join('') + '</select></div>';
+
+    if (kitchens && kitchens.length) {
+        h += '<div class="form-group" style="margin-top:10px;margin-bottom:0">' +
+            '<label class="form-label" for="diagKitchenSelect">Focus one kitchen (optional)</label>' +
+            '<select class="form-input" id="diagKitchenSelect" data-action="admin-diag-kitchen">' +
+            '<option value="">All kitchens</option>' +
+            kitchens.map(function (k) {
+                var id = String(k.id);
+                return '<option value="' + esc(id) + '"' +
+                    (id === String(A.diagKitchenId) ? ' selected' : '') + '>' +
+                    esc(k.displayName || k.name) + '</option>';
+            }).join('') + '</select></div>';
+    }
+    h += '</div>';
+
+    if (!A.diagBuyerId) {
+        h += '<div class="admin-empty">No buyers are registered yet.</div></div>';
+        return h;
+    }
+
+    var qs = '?buyerId=' + encodeURIComponent(A.diagBuyerId);
+    if (A.diagKitchenId) qs += '&kitchenId=' + encodeURIComponent(A.diagKitchenId);
+
+    var data;
+    try {
+        data = await api('/api/admin/diagnostics/visibility' + qs);
+    } catch (e) {
+        h += '<div class="card pad"><p class="admin-error-msg">' +
+            esc(e.message || 'Could not run the diagnostic.') + '</p></div></div>';
+        return h;
+    }
+
+    var buyer = data.buyer || {};
+    var sum = data.summary || {};
+    h += '<div class="card pad card-mb">' +
+        '<div class="sr-name" style="margin-bottom:6px">' + esc(buyer.name || 'Buyer') +
+        ' <span class="muted small">· ' + esc(buyer.mobileNumber || '—') + '</span></div>' +
+        '<div class="sr-meta">Society: ' + (buyer.society ? esc(buyer.society) : '<span class="pill pill-grey">not set</span>') +
+        (buyer.area ? ' · Area: ' + esc(buyer.area) : '') + '</div>' +
+        (buyer.profileComplete
+            ? '<div class="sr-meta">Profile complete — can place orders</div>'
+            : '<div class="sr-meta">Profile incomplete — missing: ' +
+              esc((buyer.profileMissing || []).join(', ')) + '</div>') +
+        '<div class="sr-meta mt-1"><strong>' + (sum.visible || 0) + '</strong> of ' +
+        (sum.totalKitchens || 0) + ' kitchens visible · <strong>' + (sum.blocked || 0) + '</strong> blocked</div>' +
+        '</div>';
+
+    var results = data.results || [];
+    if (!results.length) {
+        h += '<div class="admin-empty">No kitchens to evaluate.</div></div>';
+        return h;
+    }
+
+    h += '<div class="card pad">';
+    results.forEach(function (r) {
+        var ok = !!r.visible;
+        h += '<div class="seller-row" style="border:none;padding:10px 0">' +
+            '<div class="sr-avatar">' + (ok ? '✅' : '⛔') + '</div>' +
+            '<div class="sr-body">' +
+            '<div class="sr-name">' + esc(r.kitchenName || ('Kitchen ' + r.kitchenId)) +
+            ' <span class="pill pill-' + (ok ? 'green' : 'grey') + '">' + (ok ? 'Visible' : 'Blocked') + '</span></div>' +
+            '<div class="sr-meta">' + esc(r.sellerName || '—') + ' · coverage: ' + esc(r.coverageMode || '—') +
+            ((r.kitchenCoverage && r.kitchenCoverage.length)
+                ? ' (' + esc(r.kitchenCoverage.join(', ')) + ')' : '') + '</div>' +
+            '<div class="sr-meta muted small">publiclyVisible=' + !!r.publiclyVisible +
+            ' · paused=' + !!r.paused + ' · serviceAreaVisible=' + !!r.serviceAreaVisible + '</div>' +
+            '<ul class="muted small" style="margin:6px 0 0 16px;padding:0">' +
+            (r.reasons || []).map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') +
+            '</ul>' +
+            '<button class="btn btn-secondary btn-sm" type="button" style="margin-top:6px" ' +
+            'data-action="admin-diag-focus" data-kitchen-id="' + esc(r.kitchenId) + '">Focus this kitchen</button>' +
+            '</div></div>';
+    });
+    h += '</div></div>';
+    return h;
+}
+// ==================== System health ====================
+
+/**
+ * Lightweight, factual runtime status. Every value is reported by
+ * GET /api/admin/system-health, which reads the real Spring profile, the real demo
+ * gate and a real JPA round trip. Nothing here is simulated or estimated.
+ */
+async function adminHealthView() {
+    var data;
+    try {
+        data = await api('/api/admin/system-health');
+    } catch (e) {
+        return adminErrorView(e);
+    }
+    var db = data.database || {};
+    var master = data.locationMaster || {};
+    var h = '<div class="view-enter">';
+    h += '<div class="section-head admin-section-head"><div><h1>System Health</h1>' +
+        '<p class="muted small">Live facts reported by the running application. Read-only.</p></div></div>';
+
+    h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Application</h3>' +
+        '<div class="sr-meta">Name: ' + esc(data.application || '—') + '</div>' +
+        '<div class="sr-meta">Active profiles: ' + esc((data.activeProfiles || []).join(', ') || 'default') + '</div>' +
+        '<div class="sr-meta">Demo login enabled: ' + (data.demoLoginEnabled ? 'yes' : 'no') + '</div>' +
+        '</div>';
+
+    h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Database</h3>' +
+        (db.reachable
+            ? '<div class="sr-meta">Status: <span class="pill pill-green">reachable</span></div>' +
+              '<div class="sr-meta">Users: ' + (db.users || 0) + ' · Kitchens: ' + (db.kitchens || 0) +
+              ' · Orders: ' + (db.orders || 0) + '</div>'
+            : '<div class="sr-meta">Status: <span class="pill pill-red">unreachable</span></div>' +
+              '<div class="sr-meta">' + esc(db.error || '') + '</div>') +
+        '</div>';
+
+    h += '<div class="card pad"><h3 class="font-700 mb-2">Location master</h3>' +
+        '<div class="sr-meta">Areas: ' + (master.areas || 0) + ' · Societies: ' + (master.societies || 0) + '</div>' +
+        '<div class="mt-1"><a class="btn btn-secondary btn-sm" href="#/locations" data-action="go-tab" ' +
+        'data-hash="#/locations">Manage Areas &amp; Societies</a></div>' +
+        '</div>';
+
+    h += '</div>';
+    return h;
+}
+
+// ANCHOR-VIEWS
+
 function periodLabel(period) {
     if (period === 'today') return 'Today';
     if (period === 'week') return 'This Week';
@@ -1387,6 +1580,19 @@ document.addEventListener('change', function (ev) {
         var idx = (A.adminCoverageIds || []).indexOf(sid);
         if (socBox.checked && idx === -1) A.adminCoverageIds = (A.adminCoverageIds || []).concat([sid]);
         if (!socBox.checked && idx !== -1) A.adminCoverageIds = A.adminCoverageIds.filter(function (id) { return id !== sid; });
+        return;
+    }
+    var diagBuyer = ev.target.closest('[data-action="admin-diag-buyer"]');
+    if (diagBuyer) {
+        A.diagBuyerId = diagBuyer.value;
+        A.diagKitchenId = '';
+        adminRender();
+        return;
+    }
+    var diagKitchen = ev.target.closest('[data-action="admin-diag-kitchen"]');
+    if (diagKitchen) {
+        A.diagKitchenId = diagKitchen.value;
+        adminRender();
         return;
     }
 });

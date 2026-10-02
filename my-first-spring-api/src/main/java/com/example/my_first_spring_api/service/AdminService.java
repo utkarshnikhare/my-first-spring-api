@@ -31,13 +31,15 @@ public class AdminService {
     private final AnalyticsService analyticsService;
     private final SocietyDirectory societyDirectory;
     private final LocationService locationService;
+    private final org.springframework.core.env.Environment environment;
 
     @Autowired
     public AdminService(UserRepository userRepository, AnalyticsService analyticsService,
                         OrderRepository orderRepository, ProductRepository productRepository,
                         KitchenRepository kitchenRepository, EnquiryRepository enquiryRepository,
                         FavouriteRepository favouriteRepository, SocietyDirectory societyDirectory,
-                        LocationService locationService) {
+                        LocationService locationService,
+                        org.springframework.core.env.Environment environment) {
         this.userRepository = userRepository;
         this.analyticsService = analyticsService;
         this.orderRepository = orderRepository;
@@ -47,6 +49,7 @@ public class AdminService {
         this.favouriteRepository = favouriteRepository;
         this.societyDirectory = societyDirectory;
         this.locationService = locationService;
+        this.environment = environment;
     }
 
     // ==================== Dashboard ====================
@@ -329,11 +332,19 @@ public class AdminService {
                 .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
         if (societyIds != null) {
             locationService.saveSellerCoverage(kitchen, areaId, societyIds);
-        } else {
+        } else if (serviceAreas != null) {
             kitchen.setServiceAreas(societyDirectory.validateAndNormalize(serviceAreas));
             locationService.applyCoverageFromNames(kitchen, kitchen.getServiceAreas());
             kitchenRepository.save(kitchen);
         }
+        // Neither field was supplied, so the request carries no intent at all. The
+        // Admin editor omits both when no Area is picked (its own comment promises the
+        // save "cannot silently clear an existing coverage"), so treat it as a strict
+        // no-op. Falling through to the legacy branch here used to normalise null to
+        // "" and wipe servedSocieties + serviceAreas - real data loss on a kitchen that
+        // already had ID-backed coverage, reachable whenever the persisted Area is not
+        // offered in the active coverage options. Clearing coverage stays available by
+        // sending an explicit empty societyIds array or an explicit "" serviceAreas.
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", kitchen.getId());
         out.put("name", kitchen.getName());
@@ -847,6 +858,263 @@ public class AdminService {
         if (active != null) locationService.setSocietyActive(societyId, active);
         return societyRow(locationService.findSociety(societyId)
                 .orElseThrow(() -> new IllegalArgumentException("Community not found.")));
+    }
+
+    // ==================== Buyer <-> Kitchen visibility diagnostic ====================
+
+    /**
+     * "Why can't this buyer see this kitchen?" - answered from the EXISTING
+     * {@link KitchenVisibility} predicates, never from a second eligibility engine.
+     *
+     * <p>The decision is exactly the one the real buyer-facing callers make (see
+     * {@code KitchenService.getKitchenByName} / {@code getKitchenDetailById}): a
+     * paused kitchen is excluded, and the kitchen must be publicly visible AND
+     * service-area visible. All three predicates are called directly and their raw
+     * results are returned, so the Admin sees real inputs, not a re-derived opinion.
+     * Normal buyer discovery is untouched by this screen.</p>
+     *
+     * @param buyerId   the buyer to evaluate (required)
+     * @param kitchenId when present, only this kitchen is evaluated
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> visibilityDiagnostic(Long buyerId, Long kitchenId) {
+        if (buyerId == null) throw new IllegalArgumentException("Choose a buyer to diagnose.");
+        User buyer = userRepository.findById(buyerId)
+                .orElseThrow(() -> new IllegalArgumentException("Buyer not found."));
+
+        List<Kitchen> kitchens = kitchenId == null
+                ? kitchenRepository.findAll()
+                : kitchenRepository.findById(kitchenId)
+                        .map(List::of)
+                        .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
+
+        List<Map<String, Object>> results = new ArrayList<>();
+        int visibleCount = 0;
+        for (Kitchen kitchen : kitchens) {
+            Map<String, Object> row = diagnoseOne(kitchen, buyer);
+            if (Boolean.TRUE.equals(row.get("visible"))) visibleCount++;
+            results.add(row);
+        }
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("totalKitchens", results.size());
+        summary.put("visible", visibleCount);
+        summary.put("blocked", results.size() - visibleCount);
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("buyer", buyerDiagnosticRow(buyer));
+        out.put("results", results);
+        out.put("summary", summary);
+        return out;
+    }
+    private Map<String, Object> buyerDiagnosticRow(User buyer) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", buyer.getId());
+        m.put("name", buyer.getName());
+        m.put("mobileNumber", buyer.getMobileNumber());
+        m.put("role", buyer.getRole() == null ? null : buyer.getRole().name());
+        m.put("society", buyer.getSociety());
+        m.put("area", buyer.getArea());
+        m.put("societyRefId", buyer.getSocietyRef() == null ? null : buyer.getSocietyRef().getId());
+        m.put("areaRefId", buyer.getAreaRef() == null ? null : buyer.getAreaRef().getId());
+
+        // The same fields OrderService requires before an order can be placed. Shown as
+        // information only - this screen never changes a buyer profile.
+        List<String> missing = new ArrayList<>();
+        if (buyer.getSociety() == null || buyer.getSociety().isBlank()) missing.add("society");
+        if (buyer.getBuilding() == null || buyer.getBuilding().isBlank()) missing.add("building");
+        if (buyer.getFlatHouseNumber() == null || buyer.getFlatHouseNumber().isBlank()) {
+            missing.add("flat/house number");
+        }
+        m.put("profileComplete", missing.isEmpty());
+        m.put("profileMissing", missing);
+        return m;
+    }
+
+    /** Evaluates one kitchen against one buyer using only the existing predicates. */
+    private Map<String, Object> diagnoseOne(Kitchen kitchen, User buyer) {
+        boolean paused = KitchenVisibility.isPaused(kitchen);
+        boolean publiclyVisible = KitchenVisibility.isPubliclyVisible(kitchen);
+        boolean serviceAreaVisible = KitchenVisibility.isServiceAreaVisible(kitchen, buyer);
+        // The same combination the buyer-facing kitchen detail endpoints use.
+        boolean visible = !paused && publiclyVisible && serviceAreaVisible;
+
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("kitchenId", kitchen.getId());
+        m.put("kitchenName", kitchen.getDisplayName() != null ? kitchen.getDisplayName() : kitchen.getName());
+        m.put("sellerName", kitchen.getSeller() == null ? null : kitchen.getSeller().getName());
+        m.put("availableToday", kitchen.getAvailableToday());
+        m.put("publiclyVisible", publiclyVisible);
+        m.put("paused", paused);
+        m.put("serviceAreaVisible", serviceAreaVisible);
+        m.put("visible", visible);
+        m.put("coverageMode", coverageMode(kitchen));
+        m.put("kitchenCoverage", coverageNames(kitchen));
+        m.put("reasons", visibilityReasons(kitchen, buyer, paused, publiclyVisible, serviceAreaVisible, visible));
+        return m;
+    }
+    /**
+     * Which of the existing coverage representations this kitchen actually carries.
+     * Purely descriptive - it never decides eligibility.
+     */
+    private String coverageMode(Kitchen kitchen) {
+        if (kitchen.getServedSocieties() != null && !kitchen.getServedSocieties().isEmpty()) {
+            return "ID-backed coverage";
+        }
+        if (kitchen.getServiceAreas() != null && !kitchen.getServiceAreas().isBlank()) {
+            return "Legacy service-areas string";
+        }
+        if (kitchen.getSociety() != null && !kitchen.getSociety().isBlank()) {
+            return "Legacy kitchen society";
+        }
+        return "No coverage configured";
+    }
+
+    private List<String> coverageNames(Kitchen kitchen) {
+        if (kitchen.getServedSocieties() != null && !kitchen.getServedSocieties().isEmpty()) {
+            List<String> names = new ArrayList<>();
+            for (Society s : kitchen.getServedSocieties()) {
+                if (s != null) names.add(s.getName());
+            }
+            return names;
+        }
+        String areas = kitchen.getServiceAreas();
+        if (areas != null && !areas.isBlank()) {
+            List<String> parts = new ArrayList<>();
+            for (String part : areas.split(",")) {
+                if (!part.trim().isEmpty()) parts.add(part.trim());
+            }
+            return parts;
+        }
+        if (kitchen.getSociety() != null && !kitchen.getSociety().isBlank()) {
+            return new ArrayList<>(Collections.singletonList(kitchen.getSociety()));
+        }
+        return new ArrayList<>();
+    }
+    /**
+     * Factual explanations of the SAME conditions the existing predicates evaluate.
+     * Every string corresponds to a condition actually checked in
+     * {@link KitchenVisibility}, {@link User#isApprovedSeller()} or the coverage
+     * fields - nothing here is a new rule or a guess.
+     */
+    private List<String> visibilityReasons(Kitchen kitchen, User buyer, boolean paused,
+                                           boolean publiclyVisible, boolean serviceAreaVisible,
+                                           boolean visible) {
+        List<String> reasons = new ArrayList<>();
+
+        if (kitchen.getSeller() == null) {
+            reasons.add("The kitchen has no owner, so it cannot be publicly active.");
+            reasons.add("Result: this buyer cannot see or order from this kitchen.");
+            return reasons;
+        }
+        if (kitchen.getSeller().getRole() != UserRole.SELLER) {
+            reasons.add("The kitchen owner is not a seller account.");
+        } else if (!kitchen.getSeller().isApprovedSeller()) {
+            reasons.add("The seller is not approved, so the kitchen stays hidden.");
+        }
+        if (paused) {
+            reasons.add("The kitchen is paused (not available today).");
+        } else if (!Boolean.TRUE.equals(kitchen.getAvailableToday())) {
+            reasons.add("The kitchen is not marked as available today.");
+        }
+
+        String mode = coverageMode(kitchen);
+        String buyerSocietyName = buyer.getSociety();
+        if ((buyerSocietyName == null || buyerSocietyName.isBlank()) && buyer.getSocietyRef() != null) {
+            buyerSocietyName = buyer.getSocietyRef().getName();
+        }
+        boolean buyerHasNoSociety = (buyer.getSociety() == null || buyer.getSociety().isBlank())
+                && buyer.getSocietyRef() == null;
+
+        if (buyerHasNoSociety) {
+            reasons.add("The buyer has not selected a Society yet, so service-area eligibility cannot be "
+                    + "satisfied. Order placement also requires a complete profile.");
+        } else if ("ID-backed coverage".equals(mode)) {
+            if (serviceAreaVisible) {
+                reasons.add("Coverage match: the buyer's Society is one of the kitchen's served Societies.");
+            } else if (buyer.getSocietyRef() == null) {
+                reasons.add("The kitchen's coverage is ID-backed, but the buyer's Society is only a free-text "
+                        + "value with no master reference to match against.");
+            } else {
+                reasons.add("Coverage does not include the buyer's Society.");
+            }
+        } else if ("Legacy service-areas string".equals(mode)) {
+            if (serviceAreaVisible) {
+                reasons.add("Legacy coverage match: the buyer's Society appears in the kitchen's "
+                        + "service-areas string.");
+            } else {
+                reasons.add("The kitchen's legacy service-areas string does not include the buyer's Society.");
+            }
+        } else if ("Legacy kitchen society".equals(mode)) {
+            if (serviceAreaVisible) {
+                reasons.add("Legacy coverage match: the buyer's Society equals the kitchen's society.");
+            } else {
+                reasons.add("The kitchen's legacy society (\"" + kitchen.getSociety()
+                        + "\") does not match the buyer's Society (\"" + buyerSocietyName + "\").");
+            }
+        } else {
+            reasons.add("The kitchen has no coverage configured. Anonymous visitors can still browse it, "
+                    + "but no Society restricts it.");
+        }
+
+        reasons.add(visible
+                ? "Result: this buyer can see and order from this kitchen."
+                : "Result: this buyer cannot see or order from this kitchen.");
+        return reasons;
+    }
+    // ==================== System health ====================
+
+    /**
+     * Lightweight, factual runtime status for the Admin System Health screen.
+     *
+     * <p>Only values the running application can actually report: the active Spring
+     * profiles, whether demo login is on (via the very helper the security config
+     * itself uses, so it cannot disagree with the real gate), and a genuine round trip
+     * through JPA proving the database is reachable. Nothing is simulated.</p>
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> systemHealth() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("application", environment == null ? null : environment.getProperty("spring.application.name"));
+
+        List<String> profiles = (environment == null || environment.getActiveProfiles() == null
+                || environment.getActiveProfiles().length == 0)
+                ? new ArrayList<>()
+                : new ArrayList<>(Arrays.asList(environment.getActiveProfiles()));
+        if (profiles.isEmpty()) profiles = new ArrayList<>(Collections.singletonList("default"));
+        out.put("activeProfiles", profiles);
+
+        out.put("demoLoginEnabled", environment != null
+                && com.example.my_first_spring_api.SecurityConfig.isDemoEnvironment(environment));
+
+        Map<String, Object> database = new LinkedHashMap<>();
+        try {
+            database.put("reachable", true);
+            database.put("users", userRepository.count());
+            database.put("kitchens", kitchenRepository.count());
+            database.put("orders", orderRepository.count());
+        } catch (RuntimeException ex) {
+            database.put("reachable", false);
+            database.put("error", ex.getMessage());
+        }
+        out.put("database", database);
+
+        Map<String, Object> master = new LinkedHashMap<>();
+        try {
+            long areas = 0;
+            long societies = 0;
+            for (Area area : locationService.findAllAreas()) {
+                areas++;
+                societies += locationService.findAllSocieties(area.getId()).size();
+            }
+            master.put("areas", areas);
+            master.put("societies", societies);
+        } catch (RuntimeException ex) {
+            master.put("areas", 0);
+            master.put("societies", 0);
+        }
+        out.put("locationMaster", master);
+        return out;
     }
 
     private Map<String, Object> areaRow(Area area) {

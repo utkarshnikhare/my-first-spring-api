@@ -71,6 +71,9 @@ class OrderNumberUniquenessTest {
             users.save(buyer);
 
             Kitchen kitchen = kitchens.save(new Kitchen("k" + s, "Kitchen " + s, "", null, seller));
+        // The kitchen must be inside the buyer's service area ("Test Society"), otherwise
+        // the order is refused as out-of-area before the order-number format is reached.
+        kitchen.setSociety("Test Society");
             kitchen.setAvailableToday(true);
             kitchens.save(kitchen);
 
