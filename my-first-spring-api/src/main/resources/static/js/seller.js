@@ -116,7 +116,7 @@ async function sellerRender() {
         view.innerHTML = sellerAuthErrorHtml();
         return;
     }
-    try { view.innerHTML = await route.fn(route.arg) || ''; sellerUpdateNav(hash); await loadUnreadNotifications(); if (typeof applyThemeUiState === 'function') applyThemeUiState(); window.scrollTo(0, 0); var saInput = $('#serviceAreasInput'); if (saInput) renderServiceAreas(saInput.value); }
+    try { view.innerHTML = await route.fn(route.arg) || ''; sellerUpdateNav(hash); await loadUnreadNotifications(); if (typeof applyThemeUiState === 'function') applyThemeUiState(); window.scrollTo(0, 0); var saInput = $('#coverageSocietyIdsInput'); if (saInput) renderCoverageSocieties(); }
     catch (err) { view.innerHTML = '<div class="view-enter">' + emptyHtml('⚠️', 'Something went wrong', err.message) + '</div>'; }
 }
 function sellerUpdateNav(hash) {
@@ -126,33 +126,53 @@ function sellerUpdateNav(hash) {
     if (el) el.classList.add('active');
 }
 
-function renderServiceAreas(serviceAreas) {
-    var list = $('#serviceAreaList');
+/**
+ * Renders the society checkboxes for the currently selected Area.
+ *
+ * <p>Choosing an Area preselects every active society inside it (the "initially
+ * selected" rule); the seller then unticks individual ones. A society the Admin
+ * adds later is only picked up the next time the seller visits this screen and
+ * re-submits - it is never silently adopted into existing coverage.</p>
+ */
+function renderCoverageSocieties() {
+    var list = $('#coverageSocietyList');
     if (!list) return;
+    var areaId = S.coverageAreaId || '';
+    var area = null;
+    (S.coverageOptions || []).forEach(function (a) { if (String(a.id) === String(areaId)) area = a; });
     list.innerHTML = '';
-    if (!serviceAreas) return;
-    serviceAreas.split(',').forEach(function (area) {
-        area = area.trim();
-        if (!area) return;
-        var pill = document.createElement('span');
-        pill.className = 'sa-pill';
-        pill.dataset.name = area;
-        pill.innerHTML = esc(area) + ' <button type="button" data-action="remove-service-area" data-name="' + esc(area) + '" aria-label="Remove">×</button>';
-        list.appendChild(pill);
+    if (!areaId || !area) {
+        list.innerHTML = '<div class="muted small">Select an area to choose its societies.</div>';
+        return;
+    }
+    var societies = area.societies || [];
+    if (!societies.length) {
+        list.innerHTML = '<div class="muted small">This area has no active societies yet.</div>';
+        return;
+    }
+    // Selecting a different Area starts from that area's full active set.
+    if (String(S.coverageLoadedAreaId || '') !== String(areaId)) {
+        S.coverageIds = societies.map(function (s) { return Number(s.id); });
+        S.coverageLoadedAreaId = String(areaId);
+    } else {
+        S.coverageIds = (S.coverageIds || []).filter(function (id) {
+            return societies.some(function (s) { return Number(s.id) === Number(id); });
+        });
+    }
+    var html = '';
+    societies.forEach(function (s) {
+        var on = S.coverageIds.indexOf(Number(s.id)) !== -1;
+        html += '<label class="sa-pill" style="display:inline-flex;align-items:center;gap:6px;margin:0 6px 6px 0;cursor:pointer">'
+            + '<input type="checkbox" data-action="toggle-coverage-society" data-id="' + esc(s.id) + '"' + (on ? ' checked' : '') + '>'
+            + '<span>' + esc(s.name) + '</span></label>';
     });
+    list.innerHTML = html;
+    updateCoverageIdsInput();
 }
 
-function updateServiceAreasInput() {
-    var list = $('#serviceAreaList');
-    var input = $('#serviceAreasInput');
-    if (!list || !input) return;
-    var pills = list.querySelectorAll('.sa-pill');
-    var areas = [];
-    pills.forEach(function (pill) {
-        var name = pill.dataset.name;
-        if (name) areas.push(name);
-    });
-    input.value = areas.join(',');
+function updateCoverageIdsInput() {
+    var input = $('#coverageSocietyIdsInput');
+    if (input) input.value = (S.coverageIds || []).join(',');
 }
 
 function parseServiceAreas(val) {
@@ -558,9 +578,34 @@ async function sellerOrdersView() {
 async function sellerKitchenView() {
     var kitchen = null;
     try { kitchen = await sellerApi('/api/seller/kitchen'); S.myKitchen = kitchen; S.kitchen = kitchen; } catch (e) { }
-    var societies = [];
-    try { societies = await sellerApi('/api/seller/societies') || []; } catch (e) { }
-    var societyOptions = societies.map(function (s) { return '<option value="' + esc(s) + '">' + esc(s) + '</option>'; }).join('');
+    // Service-area coverage is chosen from the Admin-owned Area/Society master and
+    // submitted as Society IDs. Only active records are offered, and the previous
+    // coverage is restored from the kitchen's authoritative ID set - never re-derived
+    // from the display string.
+    var coverageOptions = [];
+    var coverageError = false;
+    try { coverageOptions = await sellerApi('/api/seller/coverage-options') || []; } catch (e) { coverageError = true; }
+    var coveredIds = (kitchen && kitchen.servedSocietyIds) ? kitchen.servedSocietyIds.map(Number) : [];
+    // Preselect the Area that owns the current coverage so an edit does not silently
+    // move the kitchen to a different area.
+    var preselectedAreaId = '';
+    coverageOptions.forEach(function (a) {
+        (a.societies || []).forEach(function (s) {
+            if (coveredIds.indexOf(Number(s.id)) !== -1 && !preselectedAreaId) preselectedAreaId = String(a.id);
+        });
+    });
+    S.coverageOptions = coverageOptions;
+    S.coverageAreaId = preselectedAreaId;
+    S.coverageIds = coveredIds;
+    // The restored Area is also the "already loaded" Area, so the first render takes
+    // the restore branch and keeps the persisted IDs. Without this the initial render
+    // looks like an Area change and would preselect every active Society - silently
+    // covering one the Admin added after this kitchen was saved. Preselect-all is
+    // reserved for a real Area change (see the change handler, which clears this).
+    S.coverageLoadedAreaId = preselectedAreaId;
+    var areaOptions = coverageOptions.map(function (a) {
+        return '<option value="' + esc(a.id) + '"' + (String(a.id) === preselectedAreaId ? ' selected' : '') + '>' + esc(a.name) + '</option>';
+    }).join('');
     var paused = !!(kitchen && kitchen.paused);
     // Kitchen Name remains the primary heading; the owner name is shown beneath it,
     // sourced from the seller's own profile and omitted when absent.
@@ -576,10 +621,16 @@ async function sellerKitchenView() {
     h += '<div class="kitchen-avatar-upload"><div class="kitchen-avatar" data-action="upload-avatar" role="button" tabindex="0" aria-label="Upload kitchen photo">' + (kitchen && sellerImg(kitchen.imageUrl) ? '<img src="' + esc(sellerImg(kitchen.imageUrl)) + '" class="avatar-img" alt="Kitchen photo" onerror="imgFallback(this)">' : '📷') + '</div></div>';
     h += '<div class="form-group"><label class="form-label">Kitchen Name</label><input class="form-input" name="displayName" value="' + esc(kitchen && kitchen.displayName ? kitchen.displayName : 'Aarti Kitchen') + '"></div>';
     h += '<div class="form-group"><label class="form-label">Who can order from me? (Service Areas)</label>';
-    h += '<div class="muted small" style="margin-bottom:6px">Select the societies you deliver to. Buyers outside these societies cannot discover or order from your kitchen.</div>';
-    h += '<div id="serviceAreaList"></div>';
-    h += '<div class="form-row-2" style="margin-top:8px"><select class="form-input" id="newServiceArea"><option value="">Select society</option>' + societyOptions + '</select><button class="btn btn-secondary btn-sm" type="button" data-action="add-service-area">Add</button></div>';
-    h += '<input type="hidden" name="serviceAreas" id="serviceAreasInput" value="' + esc(kitchen && kitchen.serviceAreas ? kitchen.serviceAreas : '') + '">';
+    h += '<div class="muted small" style="margin-bottom:6px">Select the area you deliver to, then tick the societies inside it. Buyers outside your selected societies cannot discover or order from your kitchen.</div>';
+    if (coverageError) {
+        h += '<div class="muted small" style="margin-bottom:6px">Could not load the area list. Please retry.</div>';
+    } else if (!coverageOptions.length) {
+        h += '<div class="muted small" style="margin-bottom:6px">No areas are available yet. Ask an Admin to add an area and its societies.</div>';
+    }
+    h += '<div class="form-row-2" style="margin-top:8px"><select class="form-input" id="coverageAreaSelect" data-action="select-coverage-area" aria-label="Service area"' + (coverageOptions.length ? '' : ' disabled') + '><option value="">Select area</option>' + areaOptions + '</select></div>';
+    h += '<div id="coverageSocietyList" style="margin-top:8px"></div>';
+    h += '<input type="hidden" name="areaId" id="coverageAreaIdInput" value="' + esc(preselectedAreaId) + '">';
+    h += '<input type="hidden" name="societyIds" id="coverageSocietyIdsInput" value="' + esc(coveredIds.join(',')) + '">';
     h += '</div>';
     h += '<div class="form-group"><label class="form-label">Speciality</label><input class="form-input" name="shortDescription" value="' + esc(kitchen && kitchen.shortDescription ? kitchen.shortDescription : 'Homemade Maharashtrian Food') + '"></div>';
     h += '<div class="form-group"><label class="form-label">Full Description</label><textarea class="form-textarea" name="description">' + esc(kitchen && kitchen.description ? kitchen.description : 'Fresh homemade breakfast and traditional snacks') + '</textarea></div>';
@@ -1025,7 +1076,19 @@ document.addEventListener('submit', async function (e) {
                 kid = k.id;
                 S.myKitchen = k;
             }
-            await sellerApi('/api/seller/kitchen/' + kid, { method: 'PUT', body: formVals(form) });
+            var kitchenPayload = formVals(form);
+            // Coverage is submitted as Society IDs, never as free-text names.
+            // When no Area is chosen the fields are omitted entirely so an
+            // unrelated profile edit cannot silently wipe existing coverage.
+            delete kitchenPayload.serviceAreas;
+            if (S.coverageAreaId) {
+                kitchenPayload.areaId = Number(S.coverageAreaId);
+                kitchenPayload.societyIds = (S.coverageIds || []).map(Number);
+            } else {
+                delete kitchenPayload.areaId;
+                delete kitchenPayload.societyIds;
+            }
+            await sellerApi('/api/seller/kitchen/' + kid, { method: 'PUT', body: kitchenPayload });
             toast('All changes saved', 'success');
         }
     } catch (err) { toast(err.message, 'error'); }
@@ -1236,29 +1299,11 @@ document.addEventListener('click', async function (e) {
                 break;
             }
             case 'add-service-area': {
-                var input = $('#newServiceArea');
-                var val = input && input.value ? input.value.trim() : '';
-                if (!val) return;
-                var list = $('#serviceAreaList');
-                var existing = list ? list.querySelectorAll('.sa-pill') : [];
-                var found = false;
-                existing.forEach(function (el) { if (el.dataset.name && el.dataset.name.toLowerCase() === val.toLowerCase()) found = true; });
-                if (found) { toast('Society already added', 'error'); return; }
-                if (!list) break;
-                var pill = document.createElement('span');
-                pill.className = 'sa-pill';
-                pill.dataset.name = val;
-                pill.innerHTML = esc(val) + ' <button type="button" data-action="remove-service-area" data-name="' + esc(val) + '" aria-label="Remove">×</button>';
-                list.appendChild(pill);
-                input.value = '';
-                updateServiceAreasInput();
+                // Replaced by the Area + society-checkbox picker; the old
+                // name-string pill editor no longer writes coverage.
                 break;
             }
             case 'remove-service-area': {
-                var name = t.dataset.name;
-                var pill = t.closest('.sa-pill');
-                if (pill) pill.remove();
-                updateServiceAreasInput();
                 break;
             }
             case 'preview-offering': toast('Preview mode', 'info'); break;
@@ -1322,6 +1367,27 @@ document.addEventListener('change', function (e) {
     if (statusFilter) { S.offeringFilterStatus = statusFilter.value; sellerRender(); return; }
     var dateInput = e.target.closest('[data-action="set-date-calendar"]');
     if (dateInput) { S.selectedDate = dateInput.value; sellerRender(); return; }
+    // The service-area <select> also reports through 'change'. Choosing an Area
+    // resets the selection to that area's full active set, which is what makes a
+    // newly added society appear - and what stops one from being adopted silently.
+    var coverageArea = e.target.closest('[data-action="select-coverage-area"]');
+    if (coverageArea) {
+        S.coverageAreaId = coverageArea.value;
+        S.coverageLoadedAreaId = '';
+        var areaInput = $('#coverageAreaIdInput');
+        if (areaInput) areaInput.value = coverageArea.value;
+        renderCoverageSocieties();
+        return;
+    }
+    var coverageSociety = e.target.closest('[data-action="toggle-coverage-society"]');
+    if (coverageSociety) {
+        var sid = Number(coverageSociety.dataset.id);
+        var idx = (S.coverageIds || []).indexOf(sid);
+        if (coverageSociety.checked && idx === -1) S.coverageIds = (S.coverageIds || []).concat([sid]);
+        if (!coverageSociety.checked && idx !== -1) S.coverageIds = S.coverageIds.filter(function (id) { return id !== sid; });
+        updateCoverageIdsInput();
+        return;
+    }
 });
 
 // BOOT - never leaves the page on an infinite spinner

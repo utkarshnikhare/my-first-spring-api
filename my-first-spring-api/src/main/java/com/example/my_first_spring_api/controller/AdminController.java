@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.controller;
 
+import com.example.my_first_spring_api.dto.CoverageOptionDto;
 import com.example.my_first_spring_api.model.SellerApprovalStatus;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.service.AdminService;
@@ -50,15 +51,41 @@ public class AdminController {
 
     @PatchMapping("/kitchens/{kitchenId}/service-areas")
     public ResponseEntity<Map<String, Object>> updateKitchenServiceAreas(@PathVariable Long kitchenId,
-                                                                        @RequestBody Map<String, String> body) {
-        String serviceAreas = body != null ? body.get("serviceAreas") : null;
-        return ResponseEntity.ok(adminService.updateKitchenServiceAreas(kitchenId, serviceAreas));
+                                                                        @RequestBody Map<String, Object> body) {
+        // The ID payload is authoritative when present. The legacy "serviceAreas"
+        // string is still accepted for older callers and is funnelled through the
+        // same service, so coverage is never persisted by two different mechanisms.
+        String serviceAreas = body != null && body.get("serviceAreas") != null
+                ? String.valueOf(body.get("serviceAreas")) : null;
+        Long areaId = body != null && body.get("areaId") != null
+                ? Long.valueOf(String.valueOf(body.get("areaId"))) : null;
+        List<Long> societyIds = null;
+        if (body != null && body.get("societyIds") != null) {
+            Object raw = body.get("societyIds");
+            societyIds = new java.util.ArrayList<>();
+            if (raw instanceof Iterable<?> iter) {
+                for (Object o : iter) {
+                    if (o != null) societyIds.add(Long.valueOf(String.valueOf(o)));
+                }
+            }
+        }
+        return ResponseEntity.ok(adminService.updateKitchenServiceAreas(kitchenId, serviceAreas, areaId, societyIds));
     }
 
     /** Existing societies assignable as service areas — same source sellers use. */
     @GetMapping("/societies")
     public ResponseEntity<List<String>> societies() {
         return ResponseEntity.ok(adminService.societies());
+    }
+
+    /**
+     * Active Areas, each with its active societies, carrying the IDs the coverage
+     * editor submits. Read from the same {@code LocationService} the seller picker
+     * uses, so there is exactly one source of coverage choices.
+     */
+    @GetMapping("/coverage-options")
+    public ResponseEntity<List<CoverageOptionDto>> coverageOptions() {
+        return ResponseEntity.ok(adminService.coverageOptions());
     }
 
     // ==================== Manage Areas & Societies ====================

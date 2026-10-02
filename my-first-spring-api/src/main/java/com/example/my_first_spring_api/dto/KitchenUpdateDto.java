@@ -8,6 +8,16 @@ public class KitchenUpdateDto {
     private String imageUrl;
     private String society;
     private String serviceAreas;
+    /**
+     * Authoritative service-area coverage as Society IDs. When non-null this
+     * REPLACES {@link #serviceAreas} as the write source for this update and is
+     * applied through
+     * {@code LocationService.saveSellerCoverage(kitchen, areaId, societyIds)}, so
+     * the kitchen's ID coverage always follows the edit. The legacy string field is
+     * kept only for older callers; the current Seller/Admin UIs send IDs.
+     */
+    private Long areaId;
+    private java.util.List<Long> societyIds;
     private String building;
     private String whatsappLink;
     private String instagramLink;
@@ -30,6 +40,10 @@ public class KitchenUpdateDto {
     public void setSociety(String society) { this.society = society; }
     public String getServiceAreas() { return serviceAreas; }
     public void setServiceAreas(String serviceAreas) { this.serviceAreas = serviceAreas; }
+    public Long getAreaId() { return areaId; }
+    public void setAreaId(Long areaId) { this.areaId = areaId; }
+    public java.util.List<Long> getSocietyIds() { return societyIds; }
+    public void setSocietyIds(java.util.List<Long> societyIds) { this.societyIds = societyIds; }
     public String getBuilding() { return building; }
     public void setBuilding(String building) { this.building = building; }
     public String getWhatsappLink() { return whatsappLink; }

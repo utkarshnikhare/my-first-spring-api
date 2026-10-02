@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.controller;
 
+import com.example.my_first_spring_api.dto.CoverageOptionDto;
 import com.example.my_first_spring_api.dto.KitchenCreateDto;
 import com.example.my_first_spring_api.dto.KitchenDto;
 import com.example.my_first_spring_api.dto.KitchenUpdateDto;
@@ -56,6 +57,18 @@ public class SellerController {
     public ResponseEntity<List<String>> getKnownSocieties(HttpSession session) {
         requireSeller(session);
         return ResponseEntity.ok(sellerService.getKnownSocieties());
+    }
+
+    /**
+     * Area/Society choices for the service-area coverage picker: ACTIVE areas, each
+     * with its ACTIVE societies and the IDs the write path requires. Read from the
+     * Admin-owned master, so a newly created area/society is offered immediately
+     * without a redeployment.
+     */
+    @GetMapping("/coverage-options")
+    public ResponseEntity<List<CoverageOptionDto>> getCoverageOptions(HttpSession session) {
+        requireSeller(session);
+        return ResponseEntity.ok(sellerService.getCoverageOptions());
     }
 
     @PostMapping("/kitchen")

@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.dto.CoverageOptionDto;
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
@@ -287,6 +288,12 @@ public class AdminService {
                 m.put("building", k.getBuilding());
                 m.put("area", k.getSociety());
                 m.put("serviceAreas", k.getServiceAreas());
+                m.put("servedSocietyIds", k.getServedSocieties() == null
+                        ? new java.util.ArrayList<>()
+                        : k.getServedSocieties().stream()
+                                .map(com.example.my_first_spring_api.model.Society::getId)
+                                .filter(java.util.Objects::nonNull)
+                                .collect(Collectors.toList()));
                 m.put("availableToday", k.getAvailableToday());
                 m.put("imageUrl", k.getImageUrl());
                 m.put("instagramLink", k.getInstagramLink());
@@ -301,17 +308,44 @@ public class AdminService {
 
     @Transactional
     public Map<String, Object> updateKitchenServiceAreas(Long kitchenId, String serviceAreas) {
+        return updateKitchenServiceAreas(kitchenId, serviceAreas, null, null);
+    }
+
+    /**
+     * ID-based coverage update, used by the Admin kitchen coverage editor.
+     *
+     * <p>When {@code societyIds} is supplied it is the authoritative write: the
+     * kitchen's COMPLETE coverage is replaced by those Society records (validated as
+     * existing, active, and inside the selected Area) and the denormalised display
+     * string is rebuilt from them, so the two representations cannot drift. The
+     * legacy name-string argument is still honoured when no IDs are supplied, and
+     * both routes funnel through the same {@code LocationService} methods — there is
+     * only one persistence path for coverage.</p>
+     */
+    @Transactional
+    public Map<String, Object> updateKitchenServiceAreas(Long kitchenId, String serviceAreas,
+                                                         Long areaId, List<Long> societyIds) {
         Kitchen kitchen = kitchenRepository.findById(kitchenId)
                 .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
-        kitchen.setServiceAreas(societyDirectory.validateAndNormalize(serviceAreas));
-        locationService.applyCoverageFromNames(kitchen, kitchen.getServiceAreas());
-        kitchenRepository.save(kitchen);
+        if (societyIds != null) {
+            locationService.saveSellerCoverage(kitchen, areaId, societyIds);
+        } else {
+            kitchen.setServiceAreas(societyDirectory.validateAndNormalize(serviceAreas));
+            locationService.applyCoverageFromNames(kitchen, kitchen.getServiceAreas());
+            kitchenRepository.save(kitchen);
+        }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", kitchen.getId());
         out.put("name", kitchen.getName());
         out.put("displayName", kitchen.getDisplayName());
         out.put("serviceAreas", kitchen.getServiceAreas());
         out.put("society", kitchen.getSociety());
+        out.put("servedSocietyIds", kitchen.getServedSocieties() == null
+                ? new java.util.ArrayList<>()
+                : kitchen.getServedSocieties().stream()
+                        .map(com.example.my_first_spring_api.model.Society::getId)
+                        .filter(java.util.Objects::nonNull)
+                        .collect(Collectors.toList()));
         return out;
     }
 
@@ -322,6 +356,17 @@ public class AdminService {
     @Transactional(readOnly = true)
     public List<String> societies() {
         return societyDirectory.findAllSocieties();
+    }
+
+    /**
+     * The Area/Society choices for the coverage editor: ACTIVE areas with their
+     * ACTIVE societies and the IDs the write path needs. Delegates to the shared
+     * {@link LocationService} so the Admin editor and the seller picker are driven
+     * by one identical source.
+     */
+    @Transactional(readOnly = true)
+    public List<CoverageOptionDto> coverageOptions() {
+        return locationService.getCoverageOptions();
     }
 
     // ==================== Offerings ====================

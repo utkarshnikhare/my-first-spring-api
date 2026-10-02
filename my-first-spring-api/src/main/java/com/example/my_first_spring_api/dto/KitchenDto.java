@@ -1,5 +1,7 @@
 package com.example.my_first_spring_api.dto;
 
+import java.util.List;
+
 public class KitchenDto {
     private Long id;
     private String name;
@@ -9,6 +11,12 @@ public class KitchenDto {
     private String imageUrl;
     private String society;
     private String serviceAreas;
+    /**
+     * The authoritative coverage as Society IDs. Exposed so the Seller/Admin pickers
+     * can show what is currently covered and re-send the complete selection; the
+     * denormalised {@link #serviceAreas} string stays as the human-readable mirror.
+     */
+    private List<Long> servedSocietyIds;
     private String building;
     private String whatsappLink;
     private String instagramLink;
@@ -53,6 +61,8 @@ public class KitchenDto {
     public void setSociety(String society) { this.society = society; }
     public String getServiceAreas() { return serviceAreas; }
     public void setServiceAreas(String serviceAreas) { this.serviceAreas = serviceAreas; }
+    public List<Long> getServedSocietyIds() { return servedSocietyIds; }
+    public void setServedSocietyIds(List<Long> servedSocietyIds) { this.servedSocietyIds = servedSocietyIds; }
     public String getBuilding() { return building; }
     public void setBuilding(String building) { this.building = building; }
     public String getWhatsappLink() { return whatsappLink; }

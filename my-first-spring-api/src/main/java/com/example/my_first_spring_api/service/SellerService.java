@@ -12,6 +12,7 @@ import com.example.my_first_spring_api.dto.SellerOfferingEditDto;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
+import com.example.my_first_spring_api.dto.CoverageOptionDto;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.OrderItem;
 import com.example.my_first_spring_api.model.OrderStatus;
@@ -67,9 +68,17 @@ public class SellerService {
         Kitchen kitchen = new Kitchen(slug, dto.getDisplayName(), dto.getDescription(), dto.getImageUrl(), seller);
         kitchen.setShortDescription(dto.getShortDescription());
         kitchen.setSociety(dto.getSociety());
-        // Validation first (unchanged), then the ID-backed coverage is kept in step.
-        locationService.applyCoverageFromNames(kitchen,
-                societyDirectory.validateAndNormalize(dto.getServiceAreas()));
+        // The ID payload is authoritative when present: it replaces the kitchen's
+        // COMPLETE coverage and rebuilds the display string from the saved records,
+        // so the seller cannot accidentally cover a society they did not tick.
+        // Legacy callers that send only the name string keep the name-based path.
+        if (dto.getSocietyIds() != null) {
+            locationService.saveSellerCoverage(kitchen, dto.getAreaId(), dto.getSocietyIds());
+        } else {
+            // Validation first (unchanged), then the ID-backed coverage is kept in step.
+            locationService.applyCoverageFromNames(kitchen,
+                    societyDirectory.validateAndNormalize(dto.getServiceAreas()));
+        }
         kitchen.setBuilding(dto.getBuilding());
         kitchen.setWhatsappLink(dto.getWhatsappLink());
         kitchen.setInstagramLink(dto.getInstagramLink());
@@ -91,9 +100,13 @@ public class SellerService {
         if (dto.getDescription() != null) kitchen.setDescription(dto.getDescription());
         if (dto.getShortDescription() != null) kitchen.setShortDescription(dto.getShortDescription());
         if (dto.getImageUrl() != null) kitchen.setImageUrl(dto.getImageUrl());
-        if (dto.getServiceAreas() != null) {
+        if (dto.getSocietyIds() != null) {
             // Coverage is authoritative by ID, so the ID set must follow this edit -
             // otherwise a change made here is silently ignored at checkout.
+            locationService.saveSellerCoverage(kitchen, dto.getAreaId(), dto.getSocietyIds());
+        } else if (dto.getServiceAreas() != null) {
+            // Legacy name-string callers: still funnelled through the same shared
+            // method so the two representations cannot drift.
             locationService.applyCoverageFromNames(kitchen,
                     societyDirectory.validateAndNormalize(dto.getServiceAreas()));
         }
@@ -140,6 +153,16 @@ public class SellerService {
     @Transactional(readOnly = true)
     public List<String> getKnownSocieties() {
         return societyDirectory.findAllSocieties();
+    }
+
+    /**
+     * The Area/Society choices for the coverage picker: ACTIVE areas, each with its
+     * ACTIVE societies, carrying the IDs the write path requires. Read from the
+     * Admin-owned master via {@link LocationService}, so no location name is ever
+     * hardcoded here and a newly created society is offered without a redeploy.
+     */
+    public java.util.List<CoverageOptionDto> getCoverageOptions() {
+        return locationService.getCoverageOptions();
     }
 
     public ProductDto createProduct(Long kitchenId, ProductCreateDto dto, User seller) {
@@ -440,6 +463,14 @@ public class SellerService {
         dto.setShortDescription(kitchen.getShortDescription());
         dto.setSociety(kitchen.getSociety());
         dto.setServiceAreas(kitchen.getServiceAreas());
+        // Expose the authoritative ID coverage so the picker can restore the exact
+        // current selection instead of re-deriving it from the display string.
+        dto.setServedSocietyIds(kitchen.getServedSocieties() == null
+                ? new java.util.ArrayList<>()
+                : kitchen.getServedSocieties().stream()
+                        .map(com.example.my_first_spring_api.model.Society::getId)
+                        .filter(java.util.Objects::nonNull)
+                        .collect(java.util.stream.Collectors.toList()));
         dto.setBuilding(kitchen.getBuilding());
         dto.setWhatsappLink(kitchen.getWhatsappLink());
         dto.setInstagramLink(kitchen.getInstagramLink());

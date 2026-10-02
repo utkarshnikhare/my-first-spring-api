@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.dto.CoverageOptionDto;
 import com.example.my_first_spring_api.model.Area;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Society;
@@ -277,6 +278,66 @@ public class LocationService {
         kitchen.setServedSocieties(resolved);
         kitchen.setServiceAreas(toServiceAreaString(resolved));
         kitchenRepository.save(kitchen);
+    }
+
+    /**
+     * Area-scoped variant used by the Seller "Who can order from me?" picker and the
+     * Admin kitchen coverage editor.
+     *
+     * <p>The UI offers exactly one Area at a time and only that Area's active
+     * societies, so a payload naming a society from elsewhere is a client error and is
+     * rejected before anything is written. Delegating to
+     * {@link #saveSellerCoverage(Kitchen, Collection)} keeps the exists/active checks
+     * and the denormalised display-string rebuild in one place, so the ID set and
+     * the string can never drift.</p>
+     *
+     * @param kitchen   the kitchen whose COMPLETE final coverage is being replaced
+     * @param areaId    the selected Area; every {@code societyIds} entry must live in it
+     * @param societyIds the seller's complete selection of Society IDs
+     */
+    @Transactional
+    public void saveSellerCoverage(Kitchen kitchen, Long areaId, Collection<Long> societyIds) {
+        if (kitchen == null) throw new IllegalArgumentException("Kitchen not found.");
+        if (areaId == null) throw new IllegalArgumentException("Select an area for your service areas.");
+        Area area = findArea(areaId)
+                .orElseThrow(() -> new IllegalArgumentException("Unknown area selected."));
+
+        // De-duplicate before validating so a repeated ID is harmless rather than an error.
+        List<Long> unique = new ArrayList<>();
+        if (societyIds != null) {
+            for (Long id : societyIds) {
+                if (id != null && !unique.contains(id)) unique.add(id);
+            }
+        }
+
+        for (Long id : unique) {
+            Society society = societyRepository.findById(id)
+                    .orElseThrow(() -> new IllegalArgumentException("Unknown community selected."));
+            if (society.getArea() == null || !area.getId().equals(society.getArea().getId())) {
+                throw new IllegalArgumentException(
+                        "Community \"" + society.getName() + "\" is not in the selected area.");
+            }
+        }
+
+        saveSellerCoverage(kitchen, unique);
+    }
+
+    /**
+     * The Area/Society choices offered for a new coverage selection: active Areas,
+     * each with its active societies, carrying the IDs the write path needs.
+     * Never returns an inactive record, and never hardcodes a location name.
+     */
+    @Transactional(readOnly = true)
+    public List<CoverageOptionDto> getCoverageOptions() {
+        List<CoverageOptionDto> out = new ArrayList<>();
+        for (Area area : findActiveAreas()) {
+            CoverageOptionDto row = new CoverageOptionDto(area.getId(), area.getName());
+            for (Society society : findActiveSocieties(area.getId())) {
+                row.getSocieties().add(new CoverageOptionDto.SocietyOptionDto(society.getId(), society.getName()));
+            }
+            out.add(row);
+        }
+        return out;
     }
 
     /**

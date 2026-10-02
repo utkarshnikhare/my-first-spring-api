@@ -413,56 +413,54 @@ async function adminAction(action, t) {
                 var kitchen = await api('/api/admin/kitchens');
                 var k = kitchen.find(function (x) { return x.id === kid; });
                 if (!k) { toast('Kitchen not found', 'error'); break; }
-                var currentAreas = (k.serviceAreas || k.area || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
-                var societies = [];
-                try { societies = await api('/api/admin/societies') || []; } catch (eSoc) { societies = []; }
-                var societyOpts = societies.map(function (s) { return '<option value="' + esc(s) + '">' + esc(s) + '</option>'; }).join('');
+                // Coverage is edited from the Admin-owned Area/Society master and
+                // submitted as Society IDs. Only active records are selectable.
+                var adminAreas = [];
+                try { adminAreas = await api('/api/admin/coverage-options') || []; } catch (eSoc) { adminAreas = []; }
+                var coveredIds = (k.servedSocietyIds || []).map(Number);
+                var preselectArea = '';
+                adminAreas.forEach(function (a) {
+                    (a.societies || []).forEach(function (s) {
+                        if (coveredIds.indexOf(Number(s.id)) !== -1 && !preselectArea) preselectArea = String(a.id);
+                    });
+                });
+                A.adminAreas = adminAreas;
+                A.adminCoverageAreaId = preselectArea;
+                A.adminCoverageIds = coveredIds;
+                // Same restore rule as the seller picker: the restored Area counts as
+                // already loaded so the first render keeps the persisted IDs instead of
+                // preselecting every active Society in that Area.
+                A.adminCoverageLoadedAreaId = preselectArea;
+                var adminAreaOpts = adminAreas.map(function (a) {
+                    return '<option value="' + esc(a.id) + '"' + (String(a.id) === preselectArea ? ' selected' : '') + '>' + esc(a.name) + '</option>';
+                }).join('');
                 var h = '<div class="view-enter"><div class="page-head"><h1>Service Areas</h1></div>' +
                     '<p class="muted small">Manage delivery societies for <strong>' + esc(k.displayName || k.name) + '</strong>.</p>' +
-                    '<div class="form-group"><label class="form-label">Who can order from me? — select existing societies</label>' +
-                    '<div id="adminServiceAreaList"></div>' +
-                    '<div class="form-row-2" style="margin-top:8px"><select class="form-input" id="adminNewServiceArea"><option value="">Select society</option>' + societyOpts + '</select><button class="btn btn-secondary btn-sm" type="button" data-action="admin-add-service-area">Add</button></div>' +
-                    '<input type="hidden" id="adminServiceAreasInput" value="' + esc(k.serviceAreas || k.area || '') + '">' +
+                    '<div class="form-group"><label class="form-label">Select an area, then tick its societies</label>' +
+                    (adminAreas.length ? '' : '<div class="muted small" style="margin-bottom:6px">No active areas exist yet. Add one under Manage Areas &amp; Societies first.</div>') +
+                    '<div class="form-row-2" style="margin-top:8px"><select class="form-input" id="adminCoverageAreaSelect" data-action="admin-select-coverage-area" aria-label="Area"' + (adminAreas.length ? '' : ' disabled') + '><option value="">Select area</option>' + adminAreaOpts + '</select></div>' +
+                    '<div id="adminCoverageSocietyList" style="margin-top:8px"></div>' +
                     '</div>' +
                     '<div class="admin-actions">' +
                     '<button class="btn btn-primary btn-block" type="button" data-action="admin-save-service-areas" data-kid="' + kid + '">Save Changes</button>' +
                     '<button class="btn btn-secondary btn-block" type="button" data-action="admin-cancel-edit-service-areas">Cancel</button>' +
                     '</div></div>';
                 viewEl().innerHTML = h;
-                renderAdminServiceAreas(currentAreas);
+                renderAdminCoverageSocieties();
                 break;
             }
-            case 'admin-add-service-area': {
-                var input = $('#adminNewServiceArea');
-                var val = input && input.value ? input.value.trim() : '';
-                if (!val) return;
-                var list = $('#adminServiceAreaList');
-                var existing = list ? list.querySelectorAll('.sa-pill') : [];
-                var found = false;
-                existing.forEach(function (el) { if (el.dataset.name && el.dataset.name.toLowerCase() === val.toLowerCase()) found = true; });
-                if (found) { toast('Society already added', 'error'); return; }
-                if (!list) break;
-                var pill = document.createElement('span');
-                pill.className = 'sa-pill';
-                pill.dataset.name = val;
-                pill.innerHTML = esc(val) + ' <button type="button" data-action="admin-remove-service-area" data-name="' + esc(val) + '" aria-label="Remove">×</button>';
-                list.appendChild(pill);
-                input.value = '';
-                updateAdminServiceAreasInput();
-                break;
-            }
-            case 'admin-remove-service-area': {
-                var name = t.dataset.name;
-                var pill = t.closest('.sa-pill');
-                if (pill) pill.remove();
-                updateAdminServiceAreasInput();
-                break;
-            }
+            case 'admin-add-service-area': { break; }
+            case 'admin-remove-service-area': { break; }
             case 'admin-save-service-areas': {
                 var kid2 = Number(t.dataset.kid);
-                var input2 = $('#adminServiceAreasInput');
-                var areas = input2 ? input2.value : '';
-                await api('/api/admin/kitchens/' + kid2 + '/service-areas', { method: 'PATCH', body: { serviceAreas: areas } });
+                // Society IDs are authoritative. When no area is chosen the fields are
+                // omitted so the save cannot silently clear an existing coverage.
+                var body = {};
+                if (A.adminCoverageAreaId) {
+                    body.areaId = Number(A.adminCoverageAreaId);
+                    body.societyIds = (A.adminCoverageIds || []).map(Number);
+                }
+                await api('/api/admin/kitchens/' + kid2 + '/service-areas', { method: 'PATCH', body: body });
                 toast('Service areas saved', 'success');
                 await adminRender();
                 break;
@@ -1237,31 +1235,43 @@ function renderTrafficContent(data, period) {
     container.innerHTML = h;
 }
 
-function renderAdminServiceAreas(areas) {
-    var list = $('#adminServiceAreaList');
+/**
+ * Renders the society checkboxes for the Admin-selected Area. Choosing an Area
+ * preselects that area's full active set, so an admin sees the same default the
+ * seller gets; unticking narrows coverage. Nothing is persisted until Save.
+ */
+function renderAdminCoverageSocieties() {
+    var list = $('#adminCoverageSocietyList');
     if (!list) return;
+    var areaId = A.adminCoverageAreaId || '';
+    var area = null;
+    (A.adminAreas || []).forEach(function (a) { if (String(a.id) === String(areaId)) area = a; });
     list.innerHTML = '';
-    if (!areas || !areas.length) return;
-    areas.forEach(function (area) {
-        var pill = document.createElement('span');
-        pill.className = 'sa-pill';
-        pill.dataset.name = area;
-        pill.innerHTML = esc(area) + ' <button type="button" data-action="admin-remove-service-area" data-name="' + esc(area) + '" aria-label="Remove">×</button>';
-        list.appendChild(pill);
+    if (!areaId || !area) {
+        list.innerHTML = '<div class="muted small">Select an area to choose its societies.</div>';
+        return;
+    }
+    var societies = area.societies || [];
+    if (!societies.length) {
+        list.innerHTML = '<div class="muted small">This area has no active societies yet.</div>';
+        return;
+    }
+    if (String(A.adminCoverageLoadedAreaId || '') !== String(areaId)) {
+        A.adminCoverageIds = societies.map(function (s) { return Number(s.id); });
+        A.adminCoverageLoadedAreaId = String(areaId);
+    } else {
+        A.adminCoverageIds = (A.adminCoverageIds || []).filter(function (id) {
+            return societies.some(function (s) { return Number(s.id) === Number(id); });
+        });
+    }
+    var html = '';
+    societies.forEach(function (s) {
+        var on = A.adminCoverageIds.indexOf(Number(s.id)) !== -1;
+        html += '<label class="sa-pill" style="display:inline-flex;align-items:center;gap:6px;margin:0 6px 6px 0;cursor:pointer">'
+            + '<input type="checkbox" data-action="admin-toggle-coverage-society" data-id="' + esc(s.id) + '"' + (on ? ' checked' : '') + '>'
+            + '<span>' + esc(s.name) + '</span></label>';
     });
-}
-
-function updateAdminServiceAreasInput() {
-    var list = $('#adminServiceAreaList');
-    var input = $('#adminServiceAreasInput');
-    if (!list || !input) return;
-    var pills = list.querySelectorAll('.sa-pill');
-    var areas = [];
-    pills.forEach(function (pill) {
-        var name = pill.dataset.name;
-        if (name) areas.push(name);
-    });
-    input.value = areas.join(',');
+    list.innerHTML = html;
 }
 
 function periodLabel(period) {
@@ -1361,4 +1371,22 @@ document.addEventListener('input', function (ev) {
 document.addEventListener('keyup', function (ev) {
     var el = ev.target;
     if (el && el.id && el.id.indexOf('adminSearch_') === 0) A._caretPos = el.selectionStart;
+});
+// <select> and checkbox interactions report through 'change', not 'click'.
+document.addEventListener('change', function (ev) {
+    var areaSel = ev.target.closest('[data-action="admin-select-coverage-area"]');
+    if (areaSel) {
+        A.adminCoverageAreaId = areaSel.value;
+        A.adminCoverageLoadedAreaId = '';   // fresh full-area preselect
+        renderAdminCoverageSocieties();
+        return;
+    }
+    var socBox = ev.target.closest('[data-action="admin-toggle-coverage-society"]');
+    if (socBox) {
+        var sid = Number(socBox.dataset.id);
+        var idx = (A.adminCoverageIds || []).indexOf(sid);
+        if (socBox.checked && idx === -1) A.adminCoverageIds = (A.adminCoverageIds || []).concat([sid]);
+        if (!socBox.checked && idx !== -1) A.adminCoverageIds = A.adminCoverageIds.filter(function (id) { return id !== sid; });
+        return;
+    }
 });
