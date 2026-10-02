@@ -15,7 +15,17 @@ services:
     dockerfilePath: ./Dockerfile
     plan: free
     healthCheckPath: /api/kitchens
-    autoDeploy: true
+    # Deployment gate: Render must NOT react to pushes to main on its own.
+    # GitHub Actions (workflow "CI Build Verification", job "build") is the
+    # authoritative gate - it runs the full Maven test suite via
+    # "mvn -B clean verify". With autoDeploy enabled, Render deployed every
+    # pushed commit regardless of that result, so a failing test could still
+    # reach production. Disabled so a deploy is an explicit action taken
+    # AFTER CI has passed, not a side effect of a push.
+    #
+    # NOTE: changing this file does not alter the currently running
+    # deployment; it only governs future deploys.
+    autoDeploy: false
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: demo
