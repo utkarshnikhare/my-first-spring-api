@@ -1355,6 +1355,12 @@ async function ordersView() {
                         var paymentBadge = payStatus === 'PAID'
                             ? '<span class="pill pill-green">Payment: PAID</span>'
                             : '<span class="pill pill-amber">Payment: ' + esc(payStatus || 'PENDING') + '</span>';
+                        // Seller-recorded delivery completion, read from the SAME order
+                        // row the seller wrote. It is a separate axis from payment and
+                        // from order status, so all combinations are legal.
+                        var deliveredBadge = o.deliveryStatus === 'DELIVERED'
+                            ? '<span class="pill pill-grey">✅ Delivered</span>'
+                            : '';
                         var badgeClass = cancelled ? 'cancelled' : (payStatus === 'PAID' ? 'paid' : 'pending');
                         var itemLines = (o.items || []).map(function (it) {
                             return '<div class="odc-buyer-row"><span class="odc-food">' + esc(it.productName) + '</span><span class="odc-qty">×' + it.quantity + ' · ' + money(it.price * it.quantity) + '</span></div>';
@@ -1371,6 +1377,7 @@ async function ordersView() {
                             '<div class="odc-top-row"><span class="odc-order-id">#' + esc(o.orderNumber) + '</span><span class="odc-badge ' + badgeClass + '">' + orderBadge + ' ' + paymentBadge + '</span></div>' +
                             itemLines +
                             grid +
+                            (deliveredBadge ? '<div class="odc-remark">' + deliveredBadge + '</div>' : '') +
                             remark +
                             '<p class="tiny muted mt-1">Tap for details →</p></a>';
                     }).join('');
@@ -1445,6 +1452,14 @@ async function orderDetailView(hash) {
         (paid ? '<span class="pill pill-green">PAID (Demo)</span>' : '<span class="pill pill-amber">PENDING</span>') + '</div>' +
         '<div class="flex justify-between py-1"><span class="cc-label">Order status</span>' +
         '<span class="cc-value">' + esc(o.orderStatus || '') + '</span></div>' +
+        // Delivery is the seller's own record, shown here from the same order row.
+        '<div class="flex justify-between py-1"><span class="cc-label">Delivery</span>' +
+        (o.deliveryStatus === 'DELIVERED'
+            ? '<span class="pill pill-grey">✅ Delivered</span>'
+            : '<span class="pill pill-grey">Not delivered yet</span>') + '</div>' +
+        (o.deliveryStatus === 'DELIVERED' && o.deliveredAt
+            ? '<p class="tiny muted mt-1">✅ Marked delivered on ' + new Date(o.deliveredAt).toLocaleString() + '</p>'
+            : '') +
         (o.buyer ? '<div class="flex justify-between py-1"><span class="cc-label">Deliver to</span>' +
             '<span class="cc-value">' + esc([o.buyer.flatHouseNumber, state.user && state.user.building, state.user && state.user.society].filter(Boolean).join(', ') || '—') + '</span></div>' : '') +
         (o.customInstructions ? '<div class="card-mt"><span class="cc-label">Remarks</span>' +

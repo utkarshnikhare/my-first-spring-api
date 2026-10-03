@@ -6,6 +6,7 @@ import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.exception.TemplateNotFoundException;
 import com.example.my_first_spring_api.model.Category;
+import com.example.my_first_spring_api.model.DeliveryStatus;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Order;
 import com.example.my_first_spring_api.model.OrderItem;
@@ -58,6 +59,12 @@ public class SellerAppService {
     private final FavouriteRepository favouriteRepository;
     private final AnalyticsEventRepository analyticsEventRepository;
     private final FeatureService featureService;
+    /**
+     * Delivery completion is a property of the shared Order aggregate, so its
+     * rules live in OrderService and are reused here rather than duplicated. The
+     * Seller app only decides WHERE the numbers are shown.
+     */
+    private final OrderService orderService;
 
     @Autowired
     public SellerAppService(KitchenRepository kitchenRepository,
@@ -68,7 +75,8 @@ public class SellerAppService {
                             UserRepository userRepository,
                             FavouriteRepository favouriteRepository,
                             AnalyticsEventRepository analyticsEventRepository,
-                            FeatureService featureService) {
+                            FeatureService featureService,
+                            OrderService orderService) {
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
         this.orderRepository = orderRepository;
@@ -78,6 +86,7 @@ public class SellerAppService {
         this.favouriteRepository = favouriteRepository;
         this.analyticsEventRepository = analyticsEventRepository;
         this.featureService = featureService;
+        this.orderService = orderService;
     }
 
     // ==================== INVENTORY CONTROL ====================
@@ -552,6 +561,24 @@ public class SellerAppService {
     @Transactional(readOnly = true)
     public OrderItemDetailDto getOrderItemDetail(User seller, Long productId, LocalDate date,
                                                     String society, String status) {
+        return getOrderItemDetail(seller, productId, date, society, status, null);
+    }
+
+    /**
+     * Offering drill-down payload.
+     *
+     * <p>The three filters (society, payment, delivery) are independent and
+     * combine: a row is shown only when it satisfies ALL of them. Filtering only
+     * changes the rendered subset - it never touches persisted delivery state.</p>
+     *
+     * <p>Delivery progress is computed here from ACTIVE (non-draft,
+     * non-cancelled) orders, unfiltered, and shipped alongside the rows so the
+     * progress line, the Mark All Delivered button and its confirmation count all
+     * come from one server calculation.</p>
+     */
+    @Transactional(readOnly = true)
+    public OrderItemDetailDto getOrderItemDetail(User seller, Long productId, LocalDate date,
+                                                    String society, String status, String delivery) {
         Kitchen kitchen = getOwnedKitchen(seller);
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
@@ -626,7 +653,7 @@ public class SellerAppService {
                     totalPlates += qtyForProduct;
                     totalRevenue = totalRevenue.add(itemRevenue);
                 }
-                if (matchesFilters(order, society, status)) {
+                if (matchesFilters(order, society, status, delivery)) {
                     filteredTotalOrders++;
                     if (cancelled) {
                         filteredCancelledCount++;
@@ -656,10 +683,14 @@ public class SellerAppService {
         dto.setFilteredCancelledCount(filteredCancelledCount);
         dto.setFilteredTotalRevenue(filteredTotalRevenue);
         dto.setAvailableSocieties(new ArrayList<>(availableSocieties));
+        // Delivery progress + the server-calculated bulk scope, from the SAME
+        // OrderService counter the bulk write uses. Unfiltered by design: the
+        // progress must describe the whole offering, not the visible subset.
+        dto.setDeliveryProgress(orderService.getDeliveryProgress(productId, date, seller));
         return dto;
     }
 
-    private boolean matchesFilters(Order order, String society, String status) {
+    private boolean matchesFilters(Order order, String society, String status, String delivery) {
         if (society != null && !society.isBlank()) {
             // Match on the persisted buyer society, normalised (trim + case) so
             // legacy casing still matches while a partial value can never pull in
@@ -679,9 +710,27 @@ public class SellerAppService {
             // exclusive: a cancelled order is never "paid" or "pending" here.
             boolean pending = order.getPaymentStatus() == PaymentStatus.PENDING
                     || order.getPaymentStatus() == PaymentStatus.WILL_PAY_LATER;
-            if (s.equals("cancelled")) return cancelled;
-            if (s.equals("paid")) return paid && !cancelled;
-            if (s.equals("pending")) return pending && !cancelled;
+            // Evaluated as a constraint, NOT as an early return: an unrecognised
+            // value simply imposes no constraint, so the delivery filter below
+            // (or any filter added later) is still applied. Returning here would
+            // silently drop the other axes and make the filters look combined
+            // when they are not.
+            boolean matches;
+            if (s.equals("cancelled")) matches = cancelled;
+            else if (s.equals("paid")) matches = paid && !cancelled;
+            else if (s.equals("pending")) matches = pending && !cancelled;
+            else matches = true;
+            if (!matches) return false;
+        }
+        if (delivery != null && !delivery.isBlank()) {
+            String d = delivery.trim();
+            // Cancelled orders are not deliveries at all, so they match neither
+            // delivery bucket. Payment and delivery stay independent axes: an
+            // unpaid order that WAS delivered is still "Delivered".
+            if (order.getOrderStatus() == OrderStatus.CANCELLED) return false;
+            boolean delivered = order.isDelivered();
+            if (d.equals("delivered") && !delivered) return false;
+            if ((d.equals("not_delivered") || d.equals("not-delivered")) && delivered) return false;
         }
         return true;
     }
@@ -718,7 +767,40 @@ public class SellerAppService {
         row.setOrderStatus(order.getOrderStatus() != null ? order.getOrderStatus().name() : null);
         row.setRemark(order.getCustomInstructions());
         row.setPlacedAt(order.getOrderTime() != null ? order.getOrderTime() : order.getCreatedAt());
+        // Delivery lives on the shared Order row, so Kitchen and Homemade Product
+        // rows get it identically. A cancelled/draft row is not editable.
+        row.setDeliveryStatus(order.getEffectiveDeliveryStatus().name());
+        row.setDelivered(order.isDelivered());
+        row.setDeliveredAt(order.getDeliveredAt());
+        row.setDeliveryEditable(order.isActiveForDelivery());
         return row;
+    }
+
+    // ==================== DELIVERY COMPLETION (SCREEN 7B) ====================
+
+    /**
+     * Records the Delivered flag for ONE order of the signed-in seller's kitchen.
+     *
+     * <p>Authorization, idempotency and the backend clock all belong to
+     * {@link OrderService#updateDeliveryStatus(Long, DeliveryStatus, User)}; the
+     * seller identity passed in is the AUTHENTICATED one, never a request field,
+     * so a tampered order id from another kitchen is refused.</p>
+     */
+    @Transactional
+    public OrderDto updateDeliveryStatus(User seller, Long orderId, DeliveryStatus target) {
+        return orderService.updateDeliveryStatus(orderId, target, seller);
+    }
+
+    /**
+     * Bulk "Mark All Delivered" for one offering on one date.
+     *
+     * <p>The scope is the offering + date and is calculated server-side, so the
+     * count returned is exactly the number of rows the batch changed - the
+     * seller's current UI filters never widen or narrow it.</p>
+     */
+    @Transactional
+    public DeliveryProgressDto markAllOfferingOrdersDelivered(User seller, Long productId, LocalDate date) {
+        return orderService.markAllOfferingOrdersDelivered(productId, date, seller);
     }
 
     // ==================== EARNINGS (SCREEN 8) ====================

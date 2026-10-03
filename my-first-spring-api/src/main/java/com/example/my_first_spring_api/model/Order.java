@@ -35,6 +35,41 @@ public class Order {
     @Column(name = "order_status", nullable = false)
     private OrderStatus orderStatus = OrderStatus.DRAFT;
 
+    /**
+     * Seller-recorded delivery completion (V1 tracker). Deliberately independent
+     * of {@link #orderStatus} and {@link #paymentStatus}: marking an order
+     * delivered never marks it paid and never marks it paid to deliver it.
+     *
+     * <p>Nullable on purpose. Orders that existed before this feature have no
+     * delivery history, and {@code ddl-auto=update} leaves the column NULL for
+     * them. Every read goes through {@link #getEffectiveDeliveryStatus()} or
+     * {@link #isDelivered()}, so a NULL legacy row behaves exactly like
+     * NOT_DELIVERED without needing data repair, and {@link #deliveredAt} is
+     * never fabricated for it.</p>
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "delivery_status")
+    private DeliveryStatus deliveryStatus = DeliveryStatus.NOT_DELIVERED;
+
+    /**
+     * Backend clock time of the NOT_DELIVERED -> DELIVERED transition.
+     *
+     * <p>Written once, on the real transition only. Re-running "Mark All
+     * Delivered" must not overwrite it, so the original hand-off time survives
+     * repeated bulk runs. Cleared when the seller unchecks the box.</p>
+     */
+    @Column(name = "delivered_at")
+    private LocalDateTime deliveredAt;
+
+    /**
+     * Who last changed the delivery flag. Reuses the existing User-backed audit
+     * convention ({@link #acknowledgedBy}) rather than introducing a new audit
+     * framework for one feature.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "delivery_updated_by")
+    private User deliveryUpdatedBy;
+
     @Column(name = "custom_instructions", columnDefinition = "TEXT")
     private String customInstructions;
 
@@ -109,6 +144,59 @@ public class Order {
         totalAmount = sum;
     }
 
+    // ==================== DELIVERY COMPLETION (V1) ====================
+
+    /**
+     * The delivery state to treat this order as having, normalising a legacy
+     * NULL column to NOT_DELIVERED. Every delivery read must go through this,
+     * so pre-feature orders need no data repair and are never counted as
+     * delivered.
+     */
+    public DeliveryStatus getEffectiveDeliveryStatus() {
+        return deliveryStatus == null ? DeliveryStatus.NOT_DELIVERED : deliveryStatus;
+    }
+
+    /** True only for a genuinely DELIVERED order (NULL legacy -> false). */
+    public boolean isDelivered() {
+        return getEffectiveDeliveryStatus() == DeliveryStatus.DELIVERED;
+    }
+
+    /**
+     * Whether this order takes part in delivery tracking at all.
+     *
+     * <p>DRAFT is an unplaced basket and CANCELLED is a terminal state, so
+     * neither is a pending delivery. This is the single definition used by the
+     * progress counters AND the bulk update, so the number the seller is asked
+     * to confirm is exactly the number of rows the backend will change.</p>
+     */
+    public boolean isActiveForDelivery() {
+        return orderStatus != OrderStatus.DRAFT && orderStatus != OrderStatus.CANCELLED;
+    }
+
+    /**
+     * Records the seller's delivery flag on the common Order row.
+     *
+     * <p>Idempotent by construction: re-delivering an already-delivered order is
+     * a no-op, so a duplicate request or a repeated "Mark All Delivered" can
+     * never rewrite {@link #deliveredAt} or create a second record. Un-delivering
+     * clears the timestamp so the row never claims a hand-off that did not
+     * happen. Payment status, order status and totals are never touched here -
+     * delivery and payment stay independent axes.</p>
+     *
+     * @param target    the state the seller asked for
+     * @param actor     the acting seller, recorded for audit
+     * @param timestamp the backend clock time of the transition
+     * @return true when the persisted state actually changed
+     */
+    public boolean applyDeliveryStatus(DeliveryStatus target, User actor, LocalDateTime timestamp) {
+        DeliveryStatus desired = target == null ? DeliveryStatus.NOT_DELIVERED : target;
+        if (getEffectiveDeliveryStatus() == desired) return false; // no duplicate record, no clock rewrite
+        deliveryStatus = desired;
+        deliveryUpdatedBy = actor;
+        deliveredAt = desired == DeliveryStatus.DELIVERED ? timestamp : null;
+        return true;
+    }
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public String getOrderNumber() { return orderNumber; }
@@ -141,4 +229,10 @@ public class Order {
     public void setOrderTime(LocalDateTime orderTime) { this.orderTime = orderTime; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public DeliveryStatus getDeliveryStatus() { return deliveryStatus; }
+    public void setDeliveryStatus(DeliveryStatus deliveryStatus) { this.deliveryStatus = deliveryStatus; }
+    public LocalDateTime getDeliveredAt() { return deliveredAt; }
+    public void setDeliveredAt(LocalDateTime deliveredAt) { this.deliveredAt = deliveredAt; }
+    public User getDeliveryUpdatedBy() { return deliveryUpdatedBy; }
+    public void setDeliveryUpdatedBy(User deliveryUpdatedBy) { this.deliveryUpdatedBy = deliveryUpdatedBy; }
 }

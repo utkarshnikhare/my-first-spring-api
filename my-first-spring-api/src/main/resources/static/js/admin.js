@@ -1,6 +1,12 @@
 /**
- * SocioMart Admin App v1.0 — Complete admin console
- * Screens: Dashboard, Buyers, Sellers, Kitchens, Offerings, Orders, Enquiries, Pending Approvals
+ * SocioMart Admin App V1 — operational console.
+ *
+ * The eight primary sections are the product. Kitchens, Items/Offerings and
+ * Enquiries still have working views because the Sellers, Buyers and Orders
+ * screens link into them, but they are no longer top-level navigation. The
+ * Diagnose / Health / Console routes are retained so an existing bookmark or a
+ * developer link still resolves — they are simply not reachable from the normal
+ * Admin navigation, which is the point of V1.
  */
 var A = { me: null, role: null, loginMobile: null, trafficPeriod: 'today', kitchenFilter: '' };
 // Resolved BEFORE the route table below. `adminAnalyticsView` used to be assigned
@@ -11,23 +17,29 @@ var A = { me: null, role: null, loginMobile: null, trafficPeriod: 'today', kitch
 // its inner view function, so this is safe to do here.
 var adminAnalyticsView = adminTrafficView();
 var adminRoutes = {
-    '#/home': adminHomeView,
-    '#/pending': adminPendingView,
+    // ---- Admin V1 primary sections ----
+    '#/dashboard': adminHomeView,
+    '#/approvals': adminPendingView,
     '#/sellers': adminSellersView,
     '#/buyers': adminBuyersView,
-    '#/kitchens': adminKitchensView,
-    '#/offerings': adminOfferingsView,
     '#/orders': adminOrdersView,
-    '#/enquiries': adminEnquiriesView,
     '#/analytics': adminAnalyticsView,
     '#/locations': adminLocationsView,
+    '#/exports': adminExportsView,
+    // ---- Retained, no longer primary navigation ----
+    '#/kitchens': adminKitchensView,
+    '#/offerings': adminOfferingsView,
+    '#/enquiries': adminEnquiriesView,
     '#/diagnostics': adminDiagnosticsView,
     '#/health': adminHealthView,
-    '#/console': adminConsoleView
+    '#/console': adminConsoleView,
+    // ---- Legacy aliases: old bookmarks resolve instead of dead-ending ----
+    '#/home': adminHomeView,
+    '#/pending': adminPendingView
 };
 function adminResolveRoute(hash) {
     if (adminRoutes[hash]) return { fn: adminRoutes[hash], arg: hash };
-    return { fn: adminHomeView, arg: '#/home' };
+    return { fn: adminHomeView, arg: '#/dashboard' };
 }
 /**
  * Normalise the address bar to a real route.
@@ -79,10 +91,13 @@ function adminErrorView(err) {
 function adminUpdateNav(hash) {
     $all('.nav-item').forEach(function (el) { el.classList.remove('active'); });
     var key = hash.replace(/^#\//, '').split('/')[0];
+    // Admin V1 renamed two sections, so a legacy bookmark (#/home, #/pending) must
+    // still light up the tab that now owns it rather than leaving no nav item
+    // highlighted and making the console look broken.
+    if (key === 'home') key = 'dashboard';
+    if (key === 'pending') key = 'approvals';
     var el = document.querySelector('[data-nav="' + key + '"]');
     if (el) el.classList.add('active');
-    var consoleTab = document.querySelector('[data-nav="console"]');
-    if (consoleTab) consoleTab.style.display = (A.role === 'SUPER_ADMIN') ? '' : 'none';
 }
 function adminNavigate(hash) { if (location.hash === hash) adminRender(); else location.hash = hash; }
 // ==================== SEARCH ====================
@@ -192,7 +207,7 @@ function showAdminApp() {
     if (top) top.classList.remove('hidden');
     if (nav) nav.classList.remove('hidden');
     document.body.classList.add('admin-authed');
-    adminUpdateNav(location.hash || '#/home');
+    adminUpdateNav(location.hash || '#/dashboard');
     var badge = $('#adminRoleBadge'), nm = $('#adminName');
     if (badge) { badge.textContent = A.role; badge.classList.toggle('super', A.role === 'SUPER_ADMIN'); }
     if (nm) nm.textContent = A.me ? (A.me.name || A.me.mobileNumber || 'Admin') : 'Admin';
@@ -265,7 +280,27 @@ async function adminAction(action, t) {
                 location.href = '/index.html';
                 break;
             case 'open-buyer': location.href = '/index.html'; break;
+            case 'admin-order-axis-clear': {
+                // Clearing resets every axis at once, so a filter can never be
+                // stranded in a state the operator cannot see.
+                A.orderFilters = {};
+                await adminRender();
+                break;
+            }
             case 'go-tab': adminNavigate(t.dataset.hash); break;
+            case 'admin-export': {
+                // A real browser download, not an API call into JS: the CSV is a
+                // file, and letting the browser save it keeps the generated-at
+                // banner and the attachment filename intact.
+                var url = adminExportUrl(t.dataset.domain);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = '';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                break;
+            }
             case 'approve-seller': {
                 var id = Number(t.dataset.id);
                 await adminRunOnce(t, async function () {
@@ -578,30 +613,22 @@ async function adminHomeView() {
             (sub ? '<div class="dc-sub">' + sub + '</div>' : '') +
             close;
     }
-    h += dashCard('🛒', data.totalBuyers || 0, 'Buyers', 'registered accounts', '#/buyers');
-    h += dashCard('👥', data.totalSellers || 0, 'Sellers', (data.approvedSellers || 0) + ' approved · ' + (data.pendingSellers || 0) + ' pending', '#/sellers');
-    h += dashCard('⏳', data.pendingSellers || 0, 'Pending Approvals', 'awaiting review', '#/pending');
-    h += dashCard('🏪', data.totalKitchens || 0, 'Kitchens', (data.liveKitchens || 0) + ' live · ' + (data.kitchensWithZeroLiveOfferings || 0) + ' with no live items', '#/kitchens');
-    h += dashCard('🍽️', data.totalOfferings || 0, 'Offerings', (data.liveOfferings || 0) + ' live · ' + (data.preorderOfferings || 0) + ' pre-order · ' + (data.soldOutOfferings || 0) + ' sold out', '#/offerings');
-    h += dashCard('📦', data.totalOrders || 0, 'Orders', 'today: ' + (data.ordersToday || 0) + ' · this month: ' + (data.ordersThisMonth || 0), '#/orders');
-    h += dashCard('✉️', data.totalEnquiries || 0, 'Enquiries', (data.openEnquiries || 0) + ' awaiting response · ' + (data.resolvedEnquiries || 0) + ' responded', '#/enquiries');
-    h += dashCard('❤️', data.totalFavourites || 0, 'Favourites', 'kitchens saved by buyers', '');
+    // Traffic: real active users measured from recorded orders, not a guess.
+    h += dashCard('&#128200;', (data.activeBuyersToday || 0) + ' / ' + (data.activeSellersToday || 0),
+        'Active Users Today', 'buyers / sellers placing orders', '#/analytics');
+    h += dashCard('&#128230;', data.totalOrders || 0, 'Orders',
+        'today: ' + (data.ordersToday || 0) + ' · this month: ' + (data.ordersThisMonth || 0), '#/orders');
+    // Deliberately NOT "Revenue": SocioMart does not process buyer payments, so
+    // this is the value of orders recorded on the marketplace and nothing more.
+    h += dashCard('&#128202;', money(data.totalOrderValue || 0), 'Recorded Order Value',
+        'today: ' + money(data.todayOrderValue || 0), '#/orders');
+    h += dashCard('&#128101;', (data.totalBuyers || 0) + ' / ' + (data.totalSellers || 0),
+        'Buyers / Sellers', (data.approvedSellers || 0) + ' sellers approved', '#/buyers');
+    h += dashCard('&#9203;', data.pendingSellers || 0, 'Pending Approvals',
+        'seller applications awaiting review', '#/approvals');
     h += '</div>';
 
-    // Area / Society master counts. Reused from the existing /api/admin/locations
-    // endpoint (which already reports these) rather than a second source, and never
-    // invented: if the call fails the dashboard simply omits the cards.
-    try {
-        var loc = await api('/api/admin/locations') || {};
-        h += '<div class="dash-grid mt-1">';
-        h += dashCard('📍', loc.areaCount || 0, 'Areas', (loc.activeAreaCount || 0) + ' active', '#/locations');
-        h += dashCard('🏘️', loc.societyCount || 0, 'Societies', (loc.activeSocietyCount || 0) + ' active', '#/locations');
-        h += '</div>';
-    } catch (eLoc) {
-        // Master data unavailable - omit rather than show a fabricated number.
-    }
-
-    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Order Value</h3>' +
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Recorded Order Value</h3>' +
         '<p class="muted tiny" style="margin:0 0 8px">Total value of orders placed on the marketplace (not platform revenue).</p>';
     h += '<div class="flex gap-2 wrap"><div class="flex-1 min-140"><div class="muted small">Total</div><div class="font-700 font-size-2">' + money(data.totalOrderValue || 0) + '</div></div>';
     h += '<div class="flex-1 min-140"><div class="muted small">Today</div><div class="font-700 font-size-2">' + money(data.todayOrderValue || 0) + '</div></div>';
@@ -623,31 +650,51 @@ async function adminHomeView() {
         '<div class="flex-1 min-140"><span class="pill pill-red">Cancelled</span><div class="font-700 red mt-1">' + (data.ordersCancelled || 0) + ' orders</div><div class="muted small">inventory restored</div></div>' +
         '</div></div>';
 
-    // Operational attention — routes into the existing screens, no new statuses.
+    // Recent Orders: the newest recorded orders, straight from the Admin orders
+    // endpoint so the dashboard and the Orders screen can never disagree.
+    try {
+        var recent = await api('/api/admin/orders') || [];
+        h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Recent Orders</h3>';
+        if (!recent.length) {
+            h += '<div class="admin-empty admin-empty-inline">No orders recorded yet.</div>';
+        } else {
+            h += '<ul class="attention-list">';
+            recent.slice(0, 8).forEach(function (o) {
+                h += '<li><a class="attention-row" href="#/orders" data-action="go-tab" data-hash="#/orders">' +
+                    '<span class="att-label">' + esc(o.orderNumber || ('Order ' + o.id)) + '</span>' +
+                    '<span class="att-count">' + money(o.totalAmount || 0) + '</span>' +
+                    '<span class="att-go" aria-hidden="true">&rsaquo;</span></a></li>';
+            });
+            h += '</ul>';
+        }
+        h += '</div>';
+    } catch (eRec) {
+        // Recent orders are supporting detail; omit the card rather than fail the
+        // whole dashboard.
+    }
+
+    // Pending Actions: ONE compact panel, served by /api/admin/attention so the
+    // dashboard does not re-derive these counts from four different payloads.
     var attention = [];
-    if (data.pendingSellers > 0) {
-        attention.push({ icon: '⏳', label: 'Seller applications awaiting approval', n: data.pendingSellers, hash: '#/pending' });
+    try {
+        attention = await api('/api/admin/attention') || [];
+    } catch (eAtt) {
+        // Attention is a convenience panel; if it cannot load we say so rather
+        // than rendering an empty list that reads as "nothing needs attention".
+        attention = null;
     }
-    if (data.ordersAwaitingSellerConfirmation > 0) {
-        attention.push({ icon: '📦', label: 'Orders not yet confirmed by sellers', n: data.ordersAwaitingSellerConfirmation, hash: '#/orders' });
-    }
-    if (data.openEnquiries > 0) {
-        attention.push({ icon: '✉️', label: 'Enquiries awaiting a seller response', n: data.openEnquiries, hash: '#/enquiries' });
-    }
-    if (data.pendingPaymentCount > 0) {
-        attention.push({ icon: '💳', label: 'Orders with payment still pending', n: data.pendingPaymentCount, hash: '#/orders' });
-    }
-    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Needs Attention</h3>';
-    if (!attention.length) {
-        h += '<div class="admin-empty admin-empty-inline">🎉 Nothing is waiting on the Admin team right now.</div>';
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Pending Actions</h3>';
+    if (attention === null) {
+        h += '<div class="admin-empty admin-empty-inline">Pending actions could not be loaded.</div>';
+    } else if (!attention.length) {
+        h += '<div class="admin-empty admin-empty-inline">&#127881; Nothing is waiting on the Admin team right now.</div>';
     } else {
         h += '<ul class="attention-list">';
         attention.forEach(function (a) {
             h += '<li><a class="attention-row" href="' + a.hash + '" data-action="go-tab" data-hash="' + a.hash + '">' +
-                '<span class="att-icon" aria-hidden="true">' + a.icon + '</span>' +
                 '<span class="att-label">' + esc(a.label) + '</span>' +
-                '<span class="att-count">' + a.n + '</span>' +
-                '<span class="att-go" aria-hidden="true">→</span></a></li>';
+                '<span class="att-count">' + a.count + '</span>' +
+                '<span class="att-go" aria-hidden="true">&rsaquo;</span></a></li>';
         });
         h += '</ul>';
     }
@@ -655,6 +702,65 @@ async function adminHomeView() {
 
     h += '</div>';
     return h;
+}
+
+/**
+ * Admin V1 Exports.
+ *
+ * <p>A manual Download screen - no scheduled jobs, no reporting framework. Each
+ * export hits the existing {@code /api/admin/exports/<domain>.csv} endpoint,
+ * which applies the SAME filters the Orders screen uses, so a downloaded file
+ * can never contain more rows than the operator is looking at.</p>
+ *
+ * <p>The Orders export carries the filter controls inline; Sellers, Buyers and
+ * Analytics are whole-of-platform snapshots.</p>
+ */
+async function adminExportsView() {
+    var h = '<div class="view-enter">';
+    h += '<div class="section-head admin-section-head"><div><h1>Exports</h1>' +
+        '<p class="muted small">Download operational data as CSV. Every file is generated now and carries its own timestamp.</p>' +
+        '</div></div>';
+
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Orders export</h3>' +
+        '<p class="muted tiny" style="margin:0 0 10px">Apply filters here and the downloaded file contains exactly the matching orders.</p>' +
+        '<div class="flex gap-2 wrap">' +
+        '<input class="form-input" type="date" id="expDate" aria-label="Order date" style="max-width:180px">' +
+        '<select class="form-input" id="expCategory" aria-label="Category" style="max-width:180px">' +
+        '<option value="">All categories</option><option value="KITCHEN">Kitchen</option>' +
+        '<option value="HOMEMADE_PRODUCTS">Homemade Products</option></select>' +
+        '<select class="form-input" id="expPayment" aria-label="Payment" style="max-width:180px">' +
+        '<option value="">All payments</option><option value="PAID">Paid</option>' +
+        '<option value="PENDING">Pending</option><option value="WILL_PAY_LATER">Will pay later</option></select>' +
+        '<select class="form-input" id="expDelivery" aria-label="Delivery" style="max-width:180px">' +
+        '<option value="">All delivery</option><option value="delivered">Delivered</option>' +
+        '<option value="not_delivered">Not delivered</option></select>' +
+        '</div>' +
+        '<div class="admin-actions"><button class="btn btn-primary" type="button" data-action="admin-export" data-domain="orders">Download Orders CSV</button></div>' +
+        '</div>';
+
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Platform snapshots</h3>' +
+        '<p class="muted tiny" style="margin:0 0 10px">Whole-of-platform figures, exported as they stand right now.</p>' +
+        '<div class="admin-actions">' +
+        '<button class="btn" type="button" data-action="admin-export" data-domain="sellers">Sellers CSV</button>' +
+        '<button class="btn" type="button" data-action="admin-export" data-domain="buyers">Buyers CSV</button>' +
+        '<button class="btn" type="button" data-action="admin-export" data-domain="analytics">Analytics CSV</button>' +
+        '</div></div>';
+
+    h += '</div>';
+    return h;
+}
+
+/** Builds the export URL, carrying only the filters the operator actually set. */
+function adminExportUrl(domain) {
+    var url = '/api/admin/exports/' + encodeURIComponent(domain) + '.csv';
+    if (domain !== 'orders') return url;
+    var q = [];
+    var date = $('#expDate'), cat = $('#expCategory'), pay = $('#expPayment'), del = $('#expDelivery');
+    if (date && date.value) q.push('date=' + encodeURIComponent(date.value));
+    if (cat && cat.value) q.push('category=' + encodeURIComponent(cat.value));
+    if (pay && pay.value) q.push('payment=' + encodeURIComponent(pay.value));
+    if (del && del.value) q.push('delivery=' + encodeURIComponent(del.value));
+    return q.length ? url + '?' + q.join('&') : url;
 }
 
 async function adminPendingView() {
@@ -870,7 +976,18 @@ async function adminOrdersView() {
     var filter = A.orderFilter || 'all';
     var search = adminSearchTerm('orders');
     A.orderSearch = search; // keep the server-side search param in step
+    // Admin V1: the monitoring axes are held in one place and sent as independent
+    // query parameters. The backend composes them with AND, so clearing one never
+    // silently drops another.
+    var f = A.orderFilters || {};
     var qs = '?filter=' + encodeURIComponent(filter) + '&search=' + encodeURIComponent(search);
+    if (f.date) qs += '&date=' + encodeURIComponent(f.date);
+    if (f.category) qs += '&category=' + encodeURIComponent(f.category);
+    if (f.payment) qs += '&payment=' + encodeURIComponent(f.payment);
+    if (f.delivery) qs += '&delivery=' + encodeURIComponent(f.delivery);
+    if (f.status) qs += '&status=' + encodeURIComponent(f.status);
+    if (f.societyId) qs += '&societyId=' + encodeURIComponent(f.societyId);
+    if (f.areaId) qs += '&areaId=' + encodeURIComponent(f.areaId);
     var list = await api('/api/admin/orders' + qs);
     var h = '<div class="view-enter">';
     h += '<div class="section-head admin-section-head"><div><h1>Orders</h1><p class="muted small">' + (list ? list.length : 0) + ' orders</p></div></div>';
@@ -884,6 +1001,29 @@ async function adminOrdersView() {
             { label: 'Last 3 Days', value: 'last3days', active: filter === 'last3days' },
         ],
     });
+
+    // Admin V1 monitoring filters. Each <select>/<input> is independent; the
+    // backend ANDs them, so any combination is meaningful.
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Filters</h3>' +
+        '<div class="flex gap-2 wrap">' +
+        '<input class="form-input" type="date" id="ordDate" data-action="admin-order-axis" data-axis="date" aria-label="Order date" style="max-width:170px">' +
+        '<select class="form-input" id="ordCategory" data-action="admin-order-axis" data-axis="category" aria-label="Category" style="max-width:170px">' +
+        '<option value="">All categories</option><option value="KITCHEN">Kitchen</option>' +
+        '<option value="HOMEMADE_PRODUCTS">Homemade Products</option></select>' +
+        '<select class="form-input" id="ordPayment" data-action="admin-order-axis" data-axis="payment" aria-label="Payment" style="max-width:170px">' +
+        '<option value="">All payments</option><option value="PAID">Paid</option>' +
+        '<option value="PENDING">Pending</option><option value="WILL_PAY_LATER">Will pay later</option></select>' +
+        '<select class="form-input" id="ordDelivery" data-action="admin-order-axis" data-axis="delivery" aria-label="Delivery" style="max-width:170px">' +
+        '<option value="">All delivery</option><option value="delivered">Delivered</option>' +
+        '<option value="not_delivered">Not delivered</option></select>' +
+        '<select class="form-input" id="ordStatus" data-action="admin-order-axis" data-axis="status" aria-label="Order status" style="max-width:170px">' +
+        '<option value="">All statuses</option><option value="ORDERED">Ordered</option>' +
+        '<option value="CONFIRMED">Confirmed</option><option value="READY">Ready</option>' +
+        '<option value="DELIVERED">Delivered</option><option value="COMPLETED">Completed</option>' +
+        '<option value="CANCELLED">Cancelled</option><option value="DRAFT">Draft</option></select>' +
+        '<button class="btn" type="button" data-action="admin-order-axis-clear">Clear filters</button>' +
+        '</div></div>';
+
     if (!list || !list.length) {
         return h + adminEmptyState(search, 'orders') + '</div>';
     }
@@ -901,12 +1041,21 @@ async function adminOrdersView() {
             : ps === 'WILL_PAY_LATER' ? '<span class="pill pill-amber">● Will Pay Later</span>'
             : ps === 'PENDING' ? '<span class="pill pill-grey">● Pending</span>'
             : (ps ? '<span class="pill pill-grey">' + esc(ps) + '</span>' : '');
+        // Delivery is the SELLER's own record on the shared Order row. Admin only
+        // displays it - there is deliberately no Admin-side delivery control, so
+        // the console can never become a second delivery system.
+        var dsPill = o.deliveryStatus === 'DELIVERED'
+            ? '<span class="pill pill-grey">✓ Delivered</span>'
+            : '<span class="pill pill-amber">Not delivered</span>';
+        var catLabel = o.category === 'HOMEMADE_PRODUCTS' ? 'Homemade' : 'Kitchen';
         h += '<div class="seller-row" data-action="admin-order-detail" data-id="' + o.id + '">' +
             '<div class="sr-avatar">📦</div>' +
             '<div class="sr-body">' +
             '<div class="sr-name">#' + esc(o.orderNumber || String(o.id)) + ' · ' + esc(o.kitchenName || '') + '</div>' +
             '<div class="sr-meta">Buyer: ' + esc(o.buyerName || '—') + ' · ' + esc(o.buyerMobile || '') + '</div>' +
-            '<div class="sr-meta os-badges">' + osPill + ' ' + psPill + ' <strong>' + money(o.totalAmount || 0) + '</strong></div>' +
+            '<div class="sr-meta os-badges">' + osPill + ' ' + psPill + ' ' + dsPill +
+                ' <span class="pill pill-grey">' + esc(catLabel) + '</span>' +
+                ' <strong>' + money(o.totalAmount || 0) + '</strong></div>' +
             '<div class="sr-meta">' + adminDate(o.orderTime || o.createdAt) + (o.society ? ' · ' + esc(o.society) : '') + '</div>' +
             '</div></div>';
     });
@@ -1567,6 +1716,19 @@ document.addEventListener('keyup', function (ev) {
 });
 // <select> and checkbox interactions report through 'change', not 'click'.
 document.addEventListener('change', function (ev) {
+    // Admin V1 Orders monitoring axes. 'change' is the only correct source: a
+    // 'click' on a <select> reports the PREVIOUS selection and would re-render
+    // over the freshly chosen value.
+    var axis = ev.target.closest('[data-action="admin-order-axis"]');
+    if (axis) {
+        var axisKey = axis.dataset.axis;
+        A.orderFilters = A.orderFilters || {};
+        // A blank control means "no constraint on this axis", never "match nothing".
+        if (axis.value) A.orderFilters[axisKey] = axis.value;
+        else delete A.orderFilters[axisKey];
+        adminRender();
+        return;
+    }
     var areaSel = ev.target.closest('[data-action="admin-select-coverage-area"]');
     if (areaSel) {
         A.adminCoverageAreaId = areaSel.value;

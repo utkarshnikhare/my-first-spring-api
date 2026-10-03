@@ -12,6 +12,14 @@ public class OrderDto {
     private BigDecimal totalAmount;
     private PaymentStatus paymentStatus;
     private OrderStatus orderStatus;
+    /**
+     * Seller-recorded delivery completion. Always emitted, and emitted for the
+     * BUYER from the SAME persisted Order row the seller wrote - there is no
+     * buyer-specific delivery copy. A legacy order with no delivery history
+     * reads back as NOT_DELIVERED.
+     */
+    private String deliveryStatus;
+    private LocalDateTime deliveredAt;
     private LocalDateTime createdAt;
     private LocalDateTime orderTime;
     private LocalDateTime updatedAt;
@@ -76,6 +84,10 @@ public class OrderDto {
     public void setPaymentStatus(PaymentStatus paymentStatus) { this.paymentStatus = paymentStatus; }
     public OrderStatus getOrderStatus() { return orderStatus; }
     public void setOrderStatus(OrderStatus orderStatus) { this.orderStatus = orderStatus; }
+    public String getDeliveryStatus() { return deliveryStatus; }
+    public void setDeliveryStatus(String deliveryStatus) { this.deliveryStatus = deliveryStatus; }
+    public LocalDateTime getDeliveredAt() { return deliveredAt; }
+    public void setDeliveredAt(LocalDateTime deliveredAt) { this.deliveredAt = deliveredAt; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getOrderTime() { return orderTime; }

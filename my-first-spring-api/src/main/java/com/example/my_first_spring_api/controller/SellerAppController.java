@@ -181,14 +181,54 @@ public class SellerAppController {
         return ResponseEntity.ok(sellerAppService.getOrderSummary(requireSeller(session), d));
     }
 
+    /**
+     * Offering drill-down payload.
+     *
+     * <p>{@code delivery} is the third, independent filter
+     * ({@code delivered} / {@code not_delivered}) that combines with the society
+     * and payment filters. It only changes the rendered subset - it never
+     * writes.</p>
+     */
     @GetMapping("/orders/product/{productId}")
     public ResponseEntity<OrderItemDetailDto> getOrderItemDetail(@PathVariable Long productId,
                                                                    @RequestParam(required = false) String date,
                                                                    @RequestParam(required = false) String society,
                                                                    @RequestParam(required = false) String status,
+                                                                   @RequestParam(required = false) String delivery,
                                                                    HttpSession session) {
         LocalDate d = parseDate(date);
-        return ResponseEntity.ok(sellerAppService.getOrderItemDetail(requireSeller(session), productId, d, society, status));
+        return ResponseEntity.ok(sellerAppService.getOrderItemDetail(
+                requireSeller(session), productId, d, society, status, delivery));
+    }
+
+    /**
+     * Records ONE order's Delivered checkbox.
+     *
+     * <p>The seller is taken from the session, so the order id in the path can
+     * only ever address an order of the caller's own kitchen.</p>
+     */
+    @PatchMapping("/orders/{orderId}/delivery-status")
+    public ResponseEntity<OrderDto> updateDeliveryStatus(@PathVariable Long orderId,
+                                                          @Valid @RequestBody UpdateDeliveryStatusRequest request,
+                                                          HttpSession session) {
+        return ResponseEntity.ok(sellerAppService.updateDeliveryStatus(
+                requireSeller(session), orderId, request.getDeliveryStatus()));
+    }
+
+    /**
+     * Bulk "Mark All Delivered" for one offering on one date.
+     *
+     * <p>The returned counts come from the backend's own scope calculation, so
+     * the client can display the true result even when its view was filtered or
+     * stale.</p>
+     */
+    @PostMapping("/orders/product/{productId}/mark-all-delivered")
+    public ResponseEntity<DeliveryProgressDto> markAllOfferingOrdersDelivered(@PathVariable Long productId,
+                                                                              @RequestParam(required = false) String date,
+                                                                              HttpSession session) {
+        LocalDate d = parseDate(date);
+        return ResponseEntity.ok(sellerAppService.markAllOfferingOrdersDelivered(
+                requireSeller(session), productId, d));
     }
 
     @GetMapping("/earnings")
