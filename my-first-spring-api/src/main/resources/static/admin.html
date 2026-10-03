@@ -32,59 +32,48 @@
         </div>
     </header>
 
-    <!-- Persistent bottom navigation (Super Admin-only tab hides in JS) -->
+    <!--
+        Admin V1 primary navigation.
+
+        Exactly the eight approved operational sections. Kitchens, Items/Offerings,
+        Enquiries, Diagnose, Health and Console are deliberately NOT here:
+        Diagnose / Health / Console are developer diagnostics, and the others are
+        reachable through the Sellers, Buyers and Orders screens that actually
+        need them. Their backend endpoints are untouched - only the product
+        navigation was simplified.
+    -->
     <nav class="bottom-nav admin-nav hidden" id="adminNav" aria-label="Admin navigation">
-        <a href="#/home" data-nav="home" class="nav-item active">
-            <span class="nav-icon" aria-hidden="true">🏠</span>
-            <span class="nav-label">Home</span>
+        <a href="#/dashboard" data-nav="dashboard" class="nav-item active">
+            <span class="nav-icon" aria-hidden="true">&#127968;</span>
+            <span class="nav-label">Dashboard</span>
         </a>
-        <a href="#/pending" data-nav="pending" class="nav-item">
-            <span class="nav-icon" aria-hidden="true">⏳</span>
-            <span class="nav-label">Pending</span>
+        <a href="#/approvals" data-nav="approvals" class="nav-item">
+            <span class="nav-icon" aria-hidden="true">&#9203;</span>
+            <span class="nav-label">Approvals</span>
         </a>
         <a href="#/sellers" data-nav="sellers" class="nav-item">
-            <span class="nav-icon" aria-hidden="true">👥</span>
+            <span class="nav-icon" aria-hidden="true">&#128101;</span>
             <span class="nav-label">Sellers</span>
         </a>
-        <a href="#/kitchens" data-nav="kitchens" class="nav-item">
-            <span class="nav-icon" aria-hidden="true">🏪</span>
-            <span class="nav-label">Kitchens</span>
-        </a>
-        <a href="#/orders" data-nav="orders" class="nav-item">
-            <span class="nav-icon" aria-hidden="true">📦</span>
-            <span class="nav-label">Orders</span>
-        </a>
         <a href="#/buyers" data-nav="buyers" class="nav-item">
-            <span class="nav-icon" aria-hidden="true">👤</span>
+            <span class="nav-icon" aria-hidden="true">&#128100;</span>
             <span class="nav-label">Buyers</span>
         </a>
-        <a href="#/offerings" data-nav="offerings" class="nav-item">
-            <span class="nav-icon" aria-hidden="true">🍽️</span>
-            <span class="nav-label">Items</span>
-        </a>
-        <a href="#/enquiries" data-nav="enquiries" class="nav-item">
-            <span class="nav-icon" aria-hidden="true">✉️</span>
-            <span class="nav-label">Enquiries</span>
+        <a href="#/orders" data-nav="orders" class="nav-item">
+            <span class="nav-icon" aria-hidden="true">&#128230;</span>
+            <span class="nav-label">Orders</span>
         </a>
         <a href="#/analytics" data-nav="analytics" class="nav-item">
-            <span class="nav-icon" aria-hidden="true">📊</span>
+            <span class="nav-icon" aria-hidden="true">&#128202;</span>
             <span class="nav-label">Analytics</span>
         </a>
         <a href="#/locations" data-nav="locations" class="nav-item">
-            <span class="nav-icon" aria-hidden="true">📍</span>
-            <span class="nav-label">Areas</span>
+            <span class="nav-icon" aria-hidden="true">&#127961;</span>
+            <span class="nav-label">Areas &amp; Societies</span>
         </a>
-        <a href="#/diagnostics" data-nav="diagnostics" class="nav-item">
-            <span class="nav-icon" aria-hidden="true">&#128269;</span>
-            <span class="nav-label">Diagnose</span>
-        </a>
-        <a href="#/health" data-nav="health" class="nav-item">
-            <span class="nav-icon" aria-hidden="true">&#10084;</span>
-            <span class="nav-label">Health</span>
-        </a>
-        <a href="#/console" data-nav="console" class="nav-item">
-            <span class="nav-icon" aria-hidden="true">⚙️</span>
-            <span class="nav-label">Console</span>
+        <a href="#/exports" data-nav="exports" class="nav-item">
+            <span class="nav-icon" aria-hidden="true">&#128229;</span>
+            <span class="nav-label">Exports</span>
         </a>
     </nav>
 

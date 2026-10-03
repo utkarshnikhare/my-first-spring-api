@@ -7,6 +7,8 @@ import com.example.my_first_spring_api.service.AdminService;
 import com.example.my_first_spring_api.service.BuyerService;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -175,11 +177,91 @@ public class AdminController {
         return ResponseEntity.ok(adminService.offerings());
     }
 
+    /**
+     * Admin V1 Orders monitoring list.
+     *
+     * <p>All filters are optional and compose with AND. The delivery axis reads
+     * the SAME shared Order delivery state the Seller tracker writes, so this
+     * endpoint is read-only monitoring and cannot become a second delivery
+     * system.</p>
+     */
     @GetMapping("/orders")
     public ResponseEntity<List<Map<String, Object>>> orders(
             @RequestParam(value = "filter", required = false) String filter,
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "date", required = false) String date,
+            @RequestParam(value = "areaId", required = false) Long areaId,
+            @RequestParam(value = "societyId", required = false) Long societyId,
+            @RequestParam(value = "sellerId", required = false) Long sellerId,
+            @RequestParam(value = "buyerId", required = false) Long buyerId,
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "payment", required = false) String payment,
+            @RequestParam(value = "delivery", required = false) String delivery,
+            @RequestParam(value = "status", required = false) String status) {
+        AdminService.OrderFilter f = new AdminService.OrderFilter();
+        f.legacyFilter = filter;
+        f.search = search;
+        f.date = date;
+        f.areaId = areaId;
+        f.societyId = societyId;
+        f.sellerId = sellerId;
+        f.buyerId = buyerId;
+        f.category = category;
+        f.payment = payment;
+        f.delivery = delivery;
+        f.status = status;
+        return ResponseEntity.ok(adminService.orders(f));
+    }
+
+    /**
+     * Admin V1 CSV export.
+     *
+     * <p>Honours the SAME filter parameters as {@link #orders} so a downloaded
+     * file can never contain more rows than the operator is looking at. Served as
+     * an attachment; the Admin-only rule on {@code /api/admin/**} still applies,
+     * so no authorization is bypassed by downloading.</p>
+     */
+    @GetMapping("/exports/{domain}.csv")
+    public ResponseEntity<String> export(
+            @PathVariable String domain,
+            @RequestParam(value = "date", required = false) String date,
+            @RequestParam(value = "areaId", required = false) Long areaId,
+            @RequestParam(value = "societyId", required = false) Long societyId,
+            @RequestParam(value = "sellerId", required = false) Long sellerId,
+            @RequestParam(value = "buyerId", required = false) Long buyerId,
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "payment", required = false) String payment,
+            @RequestParam(value = "delivery", required = false) String delivery,
+            @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "search", required = false) String search) {
-        return ResponseEntity.ok(adminService.orders(filter, search));
+        AdminService.OrderFilter f = new AdminService.OrderFilter();
+        f.date = date;
+        f.areaId = areaId;
+        f.societyId = societyId;
+        f.sellerId = sellerId;
+        f.buyerId = buyerId;
+        f.category = category;
+        f.payment = payment;
+        f.delivery = delivery;
+        f.status = status;
+        f.search = search;
+        String csv = adminService.exportCsv(domain, f);
+        String safe = domain.replaceAll("[^A-Za-z]", "").toLowerCase();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=sociomart-admin-" + safe + ".csv")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csv);
+    }
+
+    /**
+     * The single Admin V1 "Needs Attention" panel.
+     *
+     * <p>One compact endpoint so the dashboard does not have to re-derive the
+     * same counts from four different payloads.</p>
+     */
+    @GetMapping("/attention")
+    public ResponseEntity<List<Map<String, Object>>> attention() {
+        return ResponseEntity.ok(adminService.attentionItems());
     }
 
     @GetMapping("/orders/{id}")

@@ -176,6 +176,16 @@ public class AdminService {
         out.put("preorderOfferings", preorderOfferings);
         out.put("soldOutOfferings", soldOutOfferings);
         out.put("totalOrders", totalOrders);
+        // Admin V1 "Active Users Today": distinct buyers/sellers that actually
+        // placed an order today. Measured from real orders, so it is never a guess.
+        out.put("activeBuyersToday", allOrders.stream()
+                .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startOfToday))
+                .filter(o -> o.getBuyer() != null)
+                .map(o -> o.getBuyer().getId()).distinct().count());
+        out.put("activeSellersToday", allOrders.stream()
+                .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startOfToday))
+                .filter(o -> o.getKitchen() != null && o.getKitchen().getSeller() != null)
+                .map(o -> o.getKitchen().getSeller().getId()).distinct().count());
         out.put("ordersToday", ordersToday);
         out.put("ordersThisMonth", ordersThisMonth);
         out.put("ordersLast3Days", ordersLast3Days);
@@ -210,6 +220,15 @@ public class AdminService {
 
     // ==================== Buyers ====================
 
+    /**
+     * Admin V1 buyer list: inspection and support only.
+     *
+     * <p>Adds the location IDs, the buyer's own delivery picture and an honest
+     * account status. {@code accountStatus} is derived from real columns - it is
+     * NOT a block flag, because the {@link User} model has no blocked/suspended
+     * state for buyers. It reports profile completeness, which is genuinely
+     * knowable today, rather than inventing a status the domain cannot store.</p>
+     */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> buyers() {
         List<User> buyers = userRepository.findByRole(UserRole.BUYER);
@@ -219,6 +238,9 @@ public class AdminService {
             m.put("name", b.getName());
             m.put("mobileNumber", b.getMobileNumber());
             m.put("society", b.getSociety());
+            m.put("societyId", b.getSocietyRef() != null ? b.getSocietyRef().getId() : null);
+            m.put("area", b.getArea());
+            m.put("areaId", resolveBuyerAreaId(b));
             m.put("building", b.getBuilding());
             m.put("flatHouseNumber", b.getFlatHouseNumber());
             List<Order> orders = orderRepository.findByBuyerOrderByCreatedAtDesc(b);
@@ -228,6 +250,12 @@ public class AdminService {
                     .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
             m.put("totalOrderValue", total);
+            // Support picture: payment and delivery split, read from the same
+            // shared Order fields the seller and buyer screens use.
+            m.put("deliveredCount", orders.stream().filter(Order::isDelivered).count());
+            m.put("activeOrderCount", orders.stream().filter(Order::isActiveForDelivery).count());
+            m.put("paidCount", orders.stream().filter(o -> o.getPaymentStatus() == PaymentStatus.PAID).count());
+            m.put("accountStatus", b.getSocietyRef() != null ? "PROFILE_COMPLETE" : "PROFILE_INCOMPLETE");
             m.put("favouriteKitchens", favouriteRepository.countByUser(b));
             m.put("createdAt", b.getCreatedAt());
             return m;
@@ -419,20 +447,29 @@ public class AdminService {
     // ==================== Orders ====================
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> orders(String filter, String search) {
+    public List<Map<String, Object>> orders(OrderFilter requested) {
         List<Order> all = orderRepository.findAll();
         LocalDateTime threeDaysAgo = LocalDateTime.now().minusDays(3);
-        
+        final OrderFilter f = requested != null ? requested : new OrderFilter();
         return all.stream()
                 .filter(o -> {
-                    if ("last3days".equals(filter)) {
+                    if ("last3days".equals(f.legacyFilter)) {
                         return o.getCreatedAt() != null && o.getCreatedAt().isAfter(threeDaysAgo);
                     }
                     return true;
                 })
+                .filter(o -> matchesOrderDate(o, f.date))
+                .filter(o -> matchesBuyerLocation(o, f.areaId, f.societyId))
+                .filter(o -> f.sellerId == null || (o.getKitchen() != null && o.getKitchen().getSeller() != null
+                        && f.sellerId.equals(o.getKitchen().getSeller().getId())))
+                .filter(o -> f.buyerId == null || (o.getBuyer() != null && f.buyerId.equals(o.getBuyer().getId())))
+                .filter(o -> matchesCategory(o, f.category))
+                .filter(o -> matchesPayment(o, f.payment))
+                .filter(o -> matchesDelivery(o, f.delivery))
+                .filter(o -> matchesOrderStatus(o, f.status))
                 .filter(o -> {
-                    if (search == null || search.isBlank()) return true;
-                    String s = search.toLowerCase();
+                    if (f.search == null || f.search.isBlank()) return true;
+                    String s = f.search.toLowerCase();
                     String orderNum = o.getOrderNumber() != null ? o.getOrderNumber().toLowerCase() : "";
                     String buyerName = o.getBuyer() != null && o.getBuyer().getName() != null ? o.getBuyer().getName().toLowerCase() : "";
                     String buyerMobile = o.getBuyer() != null && o.getBuyer().getMobileNumber() != null ? o.getBuyer().getMobileNumber().toLowerCase() : "";
@@ -446,38 +483,414 @@ public class AdminService {
                     if (b.getCreatedAt() == null) return -1;
                     return b.getCreatedAt().compareTo(a.getCreatedAt());
                 })
-                .map(o -> {
-                    Map<String, Object> m = new LinkedHashMap<>();
-                    m.put("id", o.getId());
-                    m.put("orderNumber", o.getOrderNumber());
-                    m.put("buyerId", o.getBuyer() != null ? o.getBuyer().getId() : null);
-                    m.put("buyerName", o.getBuyer() != null ? o.getBuyer().getName() : null);
-                    m.put("buyerMobile", o.getBuyer() != null ? o.getBuyer().getMobileNumber() : null);
-                    m.put("sellerId", o.getKitchen() != null && o.getKitchen().getSeller() != null ? o.getKitchen().getSeller().getId() : null);
-                    m.put("sellerName", o.getKitchen() != null && o.getKitchen().getSeller() != null ? o.getKitchen().getSeller().getName() : null);
-                    m.put("kitchenId", o.getKitchen() != null ? o.getKitchen().getId() : null);
-                    m.put("kitchenName", o.getKitchen() != null ? o.getKitchen().getDisplayName() : null);
-                    m.put("totalAmount", o.getTotalAmount());
-                    m.put("paymentStatus", o.getPaymentStatus() != null ? o.getPaymentStatus().name() : null);
-                    m.put("orderStatus", o.getOrderStatus() != null ? o.getOrderStatus().name() : null);
-                    m.put("customInstructions", o.getCustomInstructions());
-                    m.put("createdAt", o.getCreatedAt());
-                    m.put("orderTime", o.getOrderTime());
-                    m.put("society", o.getBuyer() != null ? o.getBuyer().getSociety() : null);
-                    m.put("building", o.getBuyer() != null ? o.getBuyer().getBuilding() : null);
-                    m.put("flatHouseNumber", o.getBuyer() != null ? o.getBuyer().getFlatHouseNumber() : null);
-                    List<Map<String, Object>> items = o.getItems().stream().map(it -> {
-                        Map<String, Object> im = new LinkedHashMap<>();
-                        im.put("productId", it.getProduct() != null ? it.getProduct().getId() : null);
-                        im.put("productName", it.getProduct() != null ? it.getProduct().getName() : null);
-                        im.put("quantity", it.getQuantity());
-                        im.put("price", it.getPrice());
-                        im.put("total", it.getPrice() != null && it.getQuantity() != null ? it.getPrice().multiply(BigDecimal.valueOf(it.getQuantity())) : BigDecimal.ZERO);
-                        return im;
-                    }).collect(Collectors.toList());
-                    m.put("items", items);
-                    return m;
-                }).collect(Collectors.toList());
+                .map(this::adminOrderRow)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Back-compatible overload for the pre-V1 caller.
+     *
+     * <p>The two-argument signature is kept so nothing else that reads Admin orders
+     * has to change; it simply builds a filter with no axis set.</p>
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> orders(String legacyFilter, String search) {
+        OrderFilter f = new OrderFilter();
+        f.legacyFilter = legacyFilter;
+        f.search = search;
+        return orders(f);
+    }
+
+    // ==================== Admin V1 Exports ====================
+
+    /**
+     * Builds a CSV document for the Admin V1 Exports screen.
+     *
+     * <p>Deliberately the smallest useful V1 export: plain RFC-4180 CSV built by
+     * hand from data the Admin list endpoints already return. No new dependency,
+     * no reporting framework, no scheduled job - the operator presses Download
+     * and the current, filtered rows are serialised.</p>
+     *
+     * <p>Every document carries a generated-at timestamp and a header row, and it
+     * respects the same {@link OrderFilter} the Orders screen uses, so an export
+     * can never quietly contain more than the operator is looking at.</p>
+     *
+     * @param domain one of orders | sellers | buyers | analytics
+     * @return the CSV text; never null
+     */
+    @Transactional(readOnly = true)
+    public String exportCsv(String domain, OrderFilter filter) {
+        String safeDomain = domain == null ? "orders" : domain.trim().toLowerCase();
+        StringBuilder out = new StringBuilder();
+        switch (safeDomain) {
+            case "sellers" -> sellersCsv(out);
+            case "buyers" -> buyersCsv(out);
+            case "analytics" -> analyticsCsv(out);
+            default -> ordersCsv(out, filter);
+        }
+        return out.toString();
+    }
+
+    /** Prepends the generated-at banner every Admin export carries. */
+    private void csvBanner(StringBuilder out, String title, OrderFilter filter) {
+        out.append("# ").append(title).append('\n');
+        out.append("# Generated at ").append(LocalDateTime.now()).append('\n');
+        if (filter != null) {
+            // Echo the active filters so a downloaded file is self-describing and
+            // can never be mistaken for "all rows" when a filter was applied.
+            out.append("# Filters applied:");
+            if (notBlank(filter.date)) out.append(" date=").append(filter.date);
+            if (notBlank(filter.category)) out.append(" category=").append(filter.category);
+            if (notBlank(filter.payment)) out.append(" payment=").append(filter.payment);
+            if (notBlank(filter.delivery)) out.append(" delivery=").append(filter.delivery);
+            if (notBlank(filter.status)) out.append(" status=").append(filter.status);
+            if (filter.areaId != null) out.append(" areaId=").append(filter.areaId);
+            if (filter.societyId != null) out.append(" societyId=").append(filter.societyId);
+            if (filter.sellerId != null) out.append(" sellerId=").append(filter.sellerId);
+            if (filter.buyerId != null) out.append(" buyerId=").append(filter.buyerId);
+            if (notBlank(filter.search)) out.append(" search=").append(filter.search);
+            out.append('\n');
+        }
+        out.append('\n');
+    }
+
+    /** RFC-4180 escaping: quote when the value contains a comma, quote or newline. */
+    private static String csv(Object value) {
+        if (value == null) return "";
+        String s = String.valueOf(value);
+        if (s.contains(",") || s.contains("\"") || s.contains("\n") || s.contains("\r")) {
+            return '"' + s.replace("\"", "\"\"") + '"';
+        }
+        return s;
+    }
+
+    private static boolean notBlank(String s) { return s != null && !s.isBlank(); }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> castList(Object o) {
+        return o instanceof List ? (List<Map<String, Object>>) o : List.of();
+    }
+
+    private void ordersCsv(StringBuilder out, OrderFilter filter) {
+        csvBanner(out, "SocioMart Admin V1 - Orders export", filter);
+        out.append("Order ID,Order Number,Placed At,Buyer,Buyer Mobile,Seller,Storefront,Category,Area,Society,Building,Flat,Items,Quantity,Recorded Order Value,Payment,Delivery,Delivered At,Order Status\n");
+        for (Map<String, Object> row : orders(filter)) {
+            StringBuilder names = new StringBuilder();
+            for (Map<String, Object> it : castList(row.get("items"))) {
+                if (names.length() > 0) names.append("; ");
+                names.append(it.get("productName")).append(" x").append(it.get("quantity"));
+            }
+            out.append(csv(row.get("id"))).append(',').append(csv(row.get("orderNumber"))).append(',')
+               .append(csv(row.get("orderTime"))).append(',').append(csv(row.get("buyerName"))).append(',')
+               .append(csv(row.get("buyerMobile"))).append(',').append(csv(row.get("sellerName"))).append(',')
+               .append(csv(row.get("kitchenName"))).append(',').append(csv(row.get("category"))).append(',')
+               .append(csv(row.get("area"))).append(',').append(csv(row.get("society"))).append(',')
+               .append(csv(row.get("building"))).append(',').append(csv(row.get("flatHouseNumber"))).append(',')
+               .append(csv(names.toString())).append(',').append(csv(row.get("totalQuantity"))).append(',')
+               .append(csv(row.get("totalAmount"))).append(',').append(csv(row.get("paymentStatus"))).append(',')
+               .append(csv(row.get("deliveryStatus"))).append(',').append(csv(row.get("deliveredAt"))).append(',')
+               .append(csv(row.get("orderStatus"))).append('\n');
+        }
+    }
+
+    private void sellersCsv(StringBuilder out) {
+        csvBanner(out, "SocioMart Admin V1 - Sellers export", null);
+        out.append("Seller ID,Name,Mobile,Approval Status,Status Reason,Approved At,Registered At,Storefronts,Recorded Order Value\n");
+        for (User s : userRepository.findByRole(UserRole.SELLER)) {
+            out.append(csv(s.getId())).append(',').append(csv(s.getName())).append(',')
+               .append(csv(s.getMobileNumber())).append(',').append(csv(s.getSellerApprovalStatus())).append(',')
+               .append(csv(s.getSellerStatusReason())).append(',').append(csv(s.getApprovedAt())).append(',')
+               .append(csv(s.getCreatedAt())).append(',').append(csv(kitchenRepository.findBySeller(s).size())).append(',')
+               .append(csv(sellerOrderValue(s))).append('\n');
+        }
+    }
+
+    /** Sum of non-draft, non-cancelled order totals for one seller's kitchens. */
+    private BigDecimal sellerOrderValue(User seller) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (Kitchen k : kitchenRepository.findBySeller(seller)) {
+            for (Order o : orderRepository.findByKitchenOrderByCreatedAtDesc(k)) {
+                if (o.getOrderStatus() == OrderStatus.DRAFT || o.getOrderStatus() == OrderStatus.CANCELLED) continue;
+                if (o.getTotalAmount() != null) total = total.add(o.getTotalAmount());
+            }
+        }
+        return total;
+    }
+
+    private void buyersCsv(StringBuilder out) {
+        csvBanner(out, "SocioMart Admin V1 - Buyers export", null);
+        out.append("Buyer ID,Name,Mobile,Area,Society,Building,Flat,Orders,Recorded Order Value\n");
+        for (Map<String, Object> b : buyers()) {
+            out.append(csv(b.get("id"))).append(',').append(csv(b.get("name"))).append(',')
+               .append(csv(b.get("mobileNumber"))).append(',').append(csv(b.get("area"))).append(',')
+               .append(csv(b.get("society"))).append(',').append(csv(b.get("building"))).append(',')
+               .append(csv(b.get("flatHouseNumber"))).append(',').append(csv(b.get("orderCount"))).append(',')
+               .append(csv(b.get("totalOrderValue"))).append('\n');
+        }
+    }
+
+    /** Aggregate marketplace figures - the same counters the dashboard shows. */
+    private void analyticsCsv(StringBuilder out) {
+        csvBanner(out, "SocioMart Admin V1 - Analytics export", null);
+        Map<String, Object> d = dashboard();
+        out.append("Metric,Value\n");
+        for (String key : List.of("totalBuyers", "totalSellers", "approvedSellers", "pendingSellers",
+                "suspendedSellers", "totalOrders", "ordersToday", "ordersThisMonth",
+                "totalOrderValue", "todayOrderValue", "monthOrderValue",
+                "paidCount", "pendingPaymentCount", "willPayLaterCount",
+                "ordersAwaitingSellerConfirmation", "ordersInFulfilment", "ordersFulfilled",
+                "ordersCancelled", "ordersDraft")) {
+            out.append(csv(key)).append(',').append(csv(d.get(key))).append('\n');
+        }
+    }
+
+    // ==================== Attention / Pending actions ====================
+
+    /**
+     * ONE compact operational panel for the Admin V1 dashboard.
+     *
+     * <p>Every item is derived from state that genuinely exists in the database and
+     * links to the Admin screen that resolves it. Nothing invents a new status:
+     * pending approvals, suspended sellers and unpaid orders are read from the
+     * same fields the rest of the Admin already reads.</p>
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> attentionItems() {
+        List<Map<String, Object>> items = new ArrayList<>();
+        long pending = userRepository.countByRoleAndSellerApprovalStatus(UserRole.SELLER, SellerApprovalStatus.PENDING);
+        if (pending > 0) items.add(attention("Seller applications awaiting approval", pending, "#/approvals"));
+        long suspended = userRepository.countByRoleAndSellerApprovalStatus(UserRole.SELLER, SellerApprovalStatus.SUSPENDED);
+        if (suspended > 0) items.add(attention("Suspended sellers", suspended, "#/sellers"));
+        long awaiting = countOrders(OrderStatus.ORDERED);
+        if (awaiting > 0) items.add(attention("Orders not yet confirmed by sellers", awaiting, "#/orders"));
+        long unpaid = countOrders(PaymentStatus.PENDING) + countOrders(PaymentStatus.WILL_PAY_LATER);
+        if (unpaid > 0) items.add(attention("Orders with payment still pending", unpaid, "#/orders"));
+        return items;
+    }
+
+    /**
+     * Counts orders by one status or payment state.
+     *
+     * <p>Derived from the same {@code findAll()} the rest of the Admin console
+     * already uses, so this adds no new repository query and no new persistence
+     * surface. {@code status} and {@code payment} are alternative ways of asking
+     * the same question, so exactly one is supplied.</p>
+     */
+    private long countOrders(OrderStatus status) {
+        return orderRepository.findAll().stream()
+                .filter(o -> o.getOrderStatus() == status)
+                .count();
+    }
+
+    private long countOrders(PaymentStatus payment) {
+        return orderRepository.findAll().stream()
+                .filter(o -> o.getPaymentStatus() == payment)
+                .count();
+    }
+
+    private static Map<String, Object> attention(String label, long count, String hash) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("label", label);
+        m.put("count", count);
+        m.put("hash", hash);
+        return m;
+    }
+
+    /**
+     * Admin V1 order monitoring filters.
+     *
+     * <p>Every axis is optional and they compose with AND. Blank / null means
+     * "no constraint", so an absent filter never narrows the result set. These
+     * filters are strictly read-only: none of them can mutate an order, its
+     * delivery state or its payment state.</p>
+     */
+    public static class OrderFilter {
+        public String date;         // yyyy-MM-dd, matched on the order's own day
+        public Long areaId;         // stable Area id
+        public Long societyId;      // stable Society id
+        public Long sellerId;
+        public Long buyerId;
+        public String category;     // KITCHEN | HOMEMADE_PRODUCTS
+        public String payment;      // PAID | PENDING | WILL_PAY_LATER
+        public String delivery;     // delivered | not_delivered
+        public String status;       // OrderStatus name
+        public String search;
+        public String legacyFilter; // "last3days", kept for the pre-V1 caller
+    }
+
+    private boolean matchesOrderDate(Order o, String date) {
+        if (date == null || date.isBlank()) return true;
+        LocalDate day;
+        try {
+            day = LocalDate.parse(date.trim());
+        } catch (RuntimeException ex) {
+            // An unparseable date imposes no constraint rather than hiding every row.
+            return true;
+        }
+        LocalDateTime stamp = o.getOrderTime() != null ? o.getOrderTime() : o.getCreatedAt();
+        return stamp != null && stamp.toLocalDate().equals(day);
+    }
+
+    /**
+     * Area/Society match on the buyer's STABLE references, never on free text.
+     *
+     * <p>The denormalised {@code User.society} / {@code User.area} strings remain
+     * the display value, but identity is resolved through {@code societyRef} /
+     * {@code areaRef} - the same rule seller coverage and buyer eligibility
+     * already use. A legacy profile that only ever had the free-text string
+     * therefore never matches an id filter, which is the honest answer: there is
+     * no master record to compare against.</p>
+     */
+    private boolean matchesBuyerLocation(Order o, Long areaId, Long societyId) {
+        if (areaId == null && societyId == null) return true;
+        User buyer = o.getBuyer();
+        if (buyer == null) return false;
+        if (societyId != null) {
+            if (buyer.getSocietyRef() == null || !societyId.equals(buyer.getSocietyRef().getId())) return false;
+        }
+        if (areaId != null) {
+            if (buyer.getAreaRef() != null) {
+                if (!areaId.equals(buyer.getAreaRef().getId())) return false;
+            } else if (buyer.getSocietyRef() != null && buyer.getSocietyRef().getArea() != null) {
+                if (!areaId.equals(buyer.getSocietyRef().getArea().getId())) return false;
+            } else {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Category is the SELLER TYPE of the storefront that owns the order's kitchen
+     * - the same KITCHEN / HOMEMADE_PRODUCTS distinction the marketplace already
+     * uses. No new category concept is introduced.
+     */
+    private boolean matchesCategory(Order o, String category) {
+        if (category == null || category.isBlank()) return true;
+        String wanted = category.trim().toUpperCase();
+        if ("ALL".equals(wanted)) return true;
+        SellerType type = o.getKitchen() != null ? o.getKitchen().getSellerType() : null;
+        if (type == null) return false;
+        // An unrecognised value imposes NO constraint rather than hiding every row.
+        return switch (wanted) {
+            case "KITCHEN", "HOMEMADE_PRODUCTS" -> type.name().equals(wanted);
+            default -> true;
+        };
+    }
+
+    private boolean matchesPayment(Order o, String payment) {
+        if (payment == null || payment.isBlank()) return true;
+        String wanted = payment.trim().toUpperCase();
+        if ("ALL".equals(wanted)) return true;
+        PaymentStatus ps = o.getPaymentStatus();
+        if (ps == null) return false;
+        return switch (wanted) {
+            case "PAID", "PENDING", "WILL_PAY_LATER" -> ps.name().equals(wanted);
+            default -> true; // unknown value: no constraint
+        };
+    }
+
+    /**
+     * Delivery filter. Reads the shared Order flag only - it never derives delivery
+     * from payment or order status, and it never writes.
+     *
+     * <p>Cancelled orders match NEITHER bucket: the Seller drill-down and the
+     * Seller progress counters both exclude them, and the Admin view must agree,
+     * or the same order would appear in the seller's "remaining" count and the
+     * Admin "Delivered" list at the same time.</p>
+     */
+    private boolean matchesDelivery(Order o, String delivery) {
+        if (delivery == null || delivery.isBlank()) return true;
+        String d = delivery.trim().toUpperCase();
+        if ("ALL".equals(d)) return true;
+        if (!o.isActiveForDelivery()) return false;
+        boolean delivered = o.isDelivered();
+        if ("DELIVERED".equals(d)) return delivered;
+        if ("NOT_DELIVERED".equals(d) || "NOT-DELIVERED".equals(d)) return !delivered;
+        return true; // unknown value: no constraint
+    }
+
+    private boolean matchesOrderStatus(Order o, String status) {
+        if (status == null || status.isBlank()) return true;
+        String wanted = status.trim().toUpperCase();
+        if ("ALL".equals(wanted)) return true;
+        OrderStatus os = o.getOrderStatus();
+        if (os == null) return false;
+        return switch (wanted) {
+            case "DRAFT", "ORDERED", "CONFIRMED", "READY", "DELIVERED", "COMPLETED", "CANCELLED"
+                    -> os.name().equals(wanted);
+            default -> true; // unknown value: no constraint
+        };
+    }
+
+    /**
+     * One Admin Orders row.
+     *
+     * <p>{@code deliveryStatus} / {@code deliveredAt} / {@code deliveryEditable}
+     * are read from the shared Order row through the SAME {@link DeliveryStatus}
+     * the Seller tracker writes, so the Admin console can never disagree with the
+     * seller's checkbox or the buyer's badge. {@code category} is the storefront's
+     * existing seller type, not a new classification.</p>
+     */
+    private Map<String, Object> adminOrderRow(Order o) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", o.getId());
+        m.put("orderNumber", o.getOrderNumber());
+        m.put("buyerId", o.getBuyer() != null ? o.getBuyer().getId() : null);
+        m.put("buyerName", o.getBuyer() != null ? o.getBuyer().getName() : null);
+        m.put("buyerMobile", o.getBuyer() != null ? o.getBuyer().getMobileNumber() : null);
+        m.put("sellerId", o.getKitchen() != null && o.getKitchen().getSeller() != null ? o.getKitchen().getSeller().getId() : null);
+        m.put("sellerName", o.getKitchen() != null && o.getKitchen().getSeller() != null ? o.getKitchen().getSeller().getName() : null);
+        m.put("kitchenId", o.getKitchen() != null ? o.getKitchen().getId() : null);
+        m.put("kitchenName", o.getKitchen() != null ? o.getKitchen().getDisplayName() : null);
+        m.put("totalAmount", o.getTotalAmount());
+        m.put("paymentStatus", o.getPaymentStatus() != null ? o.getPaymentStatus().name() : null);
+        m.put("orderStatus", o.getOrderStatus() != null ? o.getOrderStatus().name() : null);
+        // Admin V1 monitoring: the seller's own delivery record, read-only.
+        m.put("deliveryStatus", o.getEffectiveDeliveryStatus().name());
+        m.put("delivered", o.isDelivered());
+        m.put("deliveredAt", o.getDeliveredAt());
+        m.put("deliveryEditable", o.isActiveForDelivery());
+        m.put("category", o.getKitchen() != null && o.getKitchen().getSellerType() != null
+                ? o.getKitchen().getSellerType().name() : null);
+        m.put("customInstructions", o.getCustomInstructions());
+        m.put("createdAt", o.getCreatedAt());
+        m.put("orderTime", o.getOrderTime());
+        m.put("society", o.getBuyer() != null ? o.getBuyer().getSociety() : null);
+        m.put("societyId", o.getBuyer() != null && o.getBuyer().getSocietyRef() != null
+                ? o.getBuyer().getSocietyRef().getId() : null);
+        m.put("area", o.getBuyer() != null ? o.getBuyer().getArea() : null);
+        m.put("areaId", resolveBuyerAreaId(o.getBuyer()));
+        m.put("building", o.getBuyer() != null ? o.getBuyer().getBuilding() : null);
+        m.put("flatHouseNumber", o.getBuyer() != null ? o.getBuyer().getFlatHouseNumber() : null);
+        List<Map<String, Object>> items = o.getItems().stream().map(it -> {
+            Map<String, Object> im = new LinkedHashMap<>();
+            im.put("productId", it.getProduct() != null ? it.getProduct().getId() : null);
+            im.put("productName", it.getProduct() != null ? it.getProduct().getName() : null);
+            im.put("quantity", it.getQuantity());
+            im.put("price", it.getPrice());
+            im.put("total", it.getPrice() != null && it.getQuantity() != null ? it.getPrice().multiply(BigDecimal.valueOf(it.getQuantity())) : BigDecimal.ZERO);
+            return im;
+        }).collect(Collectors.toList());
+        m.put("items", items);
+        m.put("itemCount", o.getItems().size());
+        m.put("totalQuantity", o.getItems().stream()
+                .map(it -> it.getQuantity() == null ? 0 : it.getQuantity())
+                .mapToInt(Integer::intValue).sum());
+        return m;
+    }
+
+    /**
+     * The buyer's area, resolved through their own reference or - for a profile
+     * that only ever set the society - through that society's parent area.
+     */
+    private Long resolveBuyerAreaId(User buyer) {
+        if (buyer == null) return null;
+        if (buyer.getAreaRef() != null) return buyer.getAreaRef().getId();
+        if (buyer.getSocietyRef() != null && buyer.getSocietyRef().getArea() != null) {
+            return buyer.getSocietyRef().getArea().getId();
+        }
+        return null;
     }
 
     @Transactional(readOnly = true)
