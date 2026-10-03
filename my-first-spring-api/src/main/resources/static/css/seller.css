@@ -1708,3 +1708,125 @@
     .oc-filters { flex-direction: column; }
     .oc-filter-select { flex: 1 1 auto; width: 100%; }
 }
+
+/* =====================================================================
+   Delivery Completion Tracker (V1)
+   Per-order Delivered checkbox on the offering drill-down, its progress
+   block, and the "Mark All Delivered" batch button. Delivery is a THIRD
+   axis beside society and payment, so nothing here reuses or overrides the
+   status colours used for payment.
+   ===================================================================== */
+
+/* ---- Per-order Delivered control inside a clickable customer row ---- */
+
+/* Sits under the quantity/status line so the row keeps its existing shape. */
+.oc-row-delivery {
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+}
+
+/* The chip is a <label>, so the whole pill — not just the native box — is a
+   tap target. It is scoped inside a clickable row, so the click is routed to
+   the 'change' listener and never to the row's navigation. */
+.oc-delivered {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    font-size: .75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+    user-select: none;
+    transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.oc-delivered:hover { border-color: var(--accent); }
+.oc-delivered input[type="checkbox"] {
+    /* Kept visible and native: the box itself communicates the state, the pill
+       only adds a comfortable tap target around it. */
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+.oc-delivered input[type="checkbox"]:disabled { cursor: default; }
+.oc-delivered.on {
+    color: var(--green);
+    background: var(--green-soft);
+    border-color: var(--green);
+}
+.oc-delivered.on .oc-delivered-text::after { content: " ✓"; }
+
+/* A cancelled/draft order takes no part in delivery tracking, but a row that
+   was delivered BEFORE it was cancelled still shows that fact (read-only). */
+.oc-delivered-static {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    font-size: .75rem;
+    font-weight: 700;
+    color: var(--muted);
+    background: var(--border);
+    border-radius: 999px;
+}
+
+/* ---- Delivery progress block (above the rows, unfiltered) ---- */
+
+.del-progress {
+    margin: 12px 0;
+    padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+}
+.del-progress-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.del-progress-title { font-weight: 800; font-size: .9rem; }
+.del-progress-count { font-size: .8rem; font-weight: 700; color: var(--accent); }
+
+/* A 0-100% bar with an explicit aria-valuenow, so progress is never conveyed
+   by the bar's width alone. */
+.del-bar {
+    margin-top: 8px;
+    height: 8px;
+    background: var(--border);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.del-bar-fill {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    border-radius: 999px;
+    transition: width .2s ease;
+}
+
+.del-done-note {
+    margin-top: 8px;
+    font-size: .78rem;
+    font-weight: 700;
+    color: var(--green);
+}
+
+.del-mark-all {
+    margin-top: 10px;
+    width: 100%;
+    justify-content: center;
+}
+.del-mark-all:disabled { opacity: .5; cursor: not-allowed; }
+
+@media (max-width: 400px) {
+    .del-progress-top { flex-direction: column; align-items: flex-start; }
+}

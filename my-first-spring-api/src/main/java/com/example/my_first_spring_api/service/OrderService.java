@@ -497,6 +497,158 @@ public class OrderService {
         return toOrderDto(order);
     }
 
+    // ==================== DELIVERY COMPLETION (V1) ====================
+
+    /**
+     * Records the seller's delivery flag for ONE order.
+     *
+     * <p>Authorization is derived from the AUTHENTICATED seller, never from
+     * anything in the request: the order's own kitchen must belong to
+     * {@code seller}. That is what stops a tampered orderId from reaching
+     * another seller's order.</p>
+     *
+     * <p>Payment status, order status, quantities and totals are never touched,
+     * so marking an unpaid order Delivered (and vice versa) stays legal.</p>
+     *
+     * <p>Idempotent: repeating the same request returns the unchanged order and
+     * leaves {@code deliveredAt} exactly as it was.</p>
+     */
+    public OrderDto updateDeliveryStatus(Long orderId, DeliveryStatus target, User seller) {
+        if (target == null) throw new IllegalArgumentException("Delivery status is required.");
+        if (seller == null) throw new SellerNotAuthorizedException("Not authorized");
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        if (!isOwnedBySeller(order.getKitchen(), seller)) throw new SellerNotAuthorizedException("Not authorized");
+        if (!order.isActiveForDelivery()) {
+            throw new IllegalArgumentException(
+                    order.getOrderStatus() == OrderStatus.CANCELLED
+                            ? "A cancelled order cannot be marked as delivered."
+                            : "This order is not an active customer order yet.");
+        }
+        // Backend clock only: the browser's clock is never authoritative.
+        order.applyDeliveryStatus(target, seller, LocalDateTime.now());
+        orderRepository.save(order);
+        return toOrderDto(order);
+    }
+
+    /**
+     * Bulk "Mark All Delivered" for every active order of ONE offering on ONE
+     * date.
+     *
+     * <p>Runs in the caller's transaction (the class is {@code @Transactional}),
+     * so the whole batch commits or rolls back together and a partial success is
+     * never reported as a success.</p>
+     *
+     * <p>Scope is the offering + date, NOT the seller's current UI filters - the
+     * UI says so explicitly, so a filtered view can never be mistaken for the
+     * action's scope. Cancelled and draft orders are skipped, and orders already
+     * DELIVERED are left untouched so their original {@code delivered_at} is not
+     * rewritten and no duplicate record is created. Orders of other offerings
+     * and of other kitchens are never loaded.</p>
+     */
+    public DeliveryProgressDto markAllOfferingOrdersDelivered(Long productId, LocalDate date, User seller) {
+        requireOwnedProduct(productId, seller);
+        Kitchen kitchen = requireOwnedKitchen(seller);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime start = date.atStartOfDay();
+        LocalDateTime end = date.plusDays(1).atStartOfDay();
+
+        // The scope is measured BEFORE any write: this is the exact set the seller
+        // confirmed, and the same set the rows below are drawn from.
+        DeliveryProgressDto before = computeDeliveryProgress(productId, date, kitchen, start, end);
+        int confirmedScope = before.getBulkScopeOrderCount();
+
+        int updated = 0;
+        for (Order order : orderRepository.findOfferingOrdersOnDateWithItems(kitchen, start, end)) {
+            if (!orderContainsProduct(order, productId)) continue;
+            if (!order.isActiveForDelivery()) continue;
+            if (order.isDelivered()) continue; // stays Delivered, original timestamp kept
+            if (order.applyDeliveryStatus(DeliveryStatus.DELIVERED, seller, now)) {
+                orderRepository.save(order);
+                updated++;
+            }
+        }
+        // Progress is recomputed from the SAME rows just written, so the numbers
+        // the caller receives always describe committed server state.
+        DeliveryProgressDto progress = computeDeliveryProgress(productId, date, kitchen, start, end);
+        if (updated != confirmedScope) {
+            // Defensive: the scope measured BEFORE the write and the rows actually
+            // changed must agree. A mismatch would mean the batch was only
+            // partially applied, which must never be reported as a clean success -
+            // the transaction rolls back, so the seller's view stays unchanged.
+            throw new IllegalStateException("Delivery update was only partially applied. Please retry.");
+        }
+        progress.setAppliedCount(updated);
+        return progress;
+    }
+
+    /**
+     * Delivery progress + bulk scope for one offering on one date, computed from
+     * ACTIVE (non-draft, non-cancelled) orders only. This is the single source of
+     * the numbers the offering screen shows and the count its confirmation dialog
+     * quotes.
+     */
+    @Transactional(readOnly = true)
+    public DeliveryProgressDto getDeliveryProgress(Long productId, LocalDate date, User seller) {
+        requireOwnedProduct(productId, seller);
+        Kitchen kitchen = requireOwnedKitchen(seller);
+        return computeDeliveryProgress(productId, date, kitchen, date.atStartOfDay(), date.plusDays(1).atStartOfDay());
+    }
+
+    /** Shared counter used by the progress read AND the bulk write. */
+    private DeliveryProgressDto computeDeliveryProgress(Long productId, LocalDate date,
+                                                        Kitchen kitchen, LocalDateTime start, LocalDateTime end) {
+        DeliveryProgressDto dto = new DeliveryProgressDto();
+        dto.setProductId(productId);
+        dto.setDate(date);
+        int active = 0, delivered = 0;
+        for (Order order : orderRepository.findOfferingOrdersOnDateWithItems(kitchen, start, end)) {
+            if (!orderContainsProduct(order, productId)) continue;
+            if (!order.isActiveForDelivery()) continue;
+            active++;
+            if (order.isDelivered()) delivered++;
+        }
+        dto.setActiveOrderCount(active);
+        dto.setDeliveredCount(delivered);
+        dto.setRemainingCount(active - delivered);
+        dto.setBulkAlreadyDeliveredCount(delivered);
+        // Only active-and-not-yet-delivered rows will actually change.
+        dto.setBulkScopeOrderCount(active - delivered);
+        return dto;
+    }
+
+    /** Loads the offering and proves the AUTHENTICATED seller owns it. */
+    private Product requireOwnedProduct(Long productId, User seller) {
+        if (seller == null) throw new SellerNotAuthorizedException("Not authorized");
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ProductNotFoundException(productId));
+        if (!isOwnedBySeller(product.getKitchen(), seller)) {
+            throw new SellerNotAuthorizedException("Not your product");
+        }
+        return product;
+    }
+
+    private boolean orderContainsProduct(Order order, Long productId) {
+        if (order.getItems() == null) return false;
+        for (OrderItem item : order.getItems()) {
+            if (item.getProduct() != null && productId.equals(item.getProduct().getId())) return true;
+        }
+        return false;
+    }
+
+    /** True when {@code seller} owns {@code kitchen}; a null kitchen is never owned. */
+    private boolean isOwnedBySeller(Kitchen kitchen, User seller) {
+        return kitchen != null && kitchen.getSeller() != null
+                && kitchen.getSeller().getId() != null
+                && kitchen.getSeller().getId().equals(seller.getId());
+    }
+
+    private Kitchen requireOwnedKitchen(User seller) {
+        List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
+        if (kitchens.isEmpty()) throw new KitchenNotFoundException((Long) null);
+        return kitchens.get(0);
+    }
+
     @Transactional(readOnly = true)
     public List<SellerOrderSummaryRowDto> getSellerOrders(User seller) {
         List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
@@ -584,6 +736,12 @@ public class OrderService {
         dto.setTotalAmount(order.getTotalAmount());
         dto.setPaymentStatus(order.getPaymentStatus());
         dto.setOrderStatus(order.getOrderStatus());
+        // Delivery is read from the SAME Order row for every audience (seller
+        // drill-down, seller order detail and the buyer's Orders page). There is
+        // no buyer-specific delivery state to fall out of sync, and a legacy
+        // order with no delivery history reports NOT_DELIVERED.
+        dto.setDeliveryStatus(order.getEffectiveDeliveryStatus().name());
+        dto.setDeliveredAt(order.getDeliveredAt());
         dto.setCreatedAt(order.getCreatedAt());
         dto.setOrderTime(order.getOrderTime());
         dto.setUpdatedAt(order.getUpdatedAt());

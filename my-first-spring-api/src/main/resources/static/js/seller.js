@@ -1,7 +1,7 @@
 /**
  * SocioMart Seller App v1.0 - 5-tab SPA
  */
-var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFor: 'today', quickPostRequestId: null, editOffering: null };
+var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFilterDelivery: '', offeringProductId: '', deliverySaving: {}, deliveryBlockRequestId: 0, bulkDelivering: false, offeringFor: 'today', quickPostRequestId: null, editOffering: null };
 var sellerRoutes = {
     '#/home': sellerHomeView, '#/add': sellerAddView, '#/create': sellerCreateView,
     '#/edit-offering': sellerEditOfferingView,
@@ -700,12 +700,33 @@ async function sellerEnquiriesView() {
 // DOM: an earlier version did (it set #offeringName and called
 // renderOfferingCustomers on an element that did not exist yet), which left the
 // customer list permanently empty. Everything is now built into the string.
+
+/**
+ * Drill-down URL for ONE offering: date plus the three independent filters
+ * (society, payment, delivery).
+ *
+ * <p>Kept in one place so the initial render and the delivery block's later
+ * refresh read exactly the same subset - otherwise the progress line could
+ * describe a different view than the rows under it.</p>
+ */
+function offeringDetailUrl(productId) {
+    return '/api/seller-app/orders/product/' + productId +
+        '?date=' + sellerDate(S.selectedDate) +
+        (S.offeringFilterSociety ? '&society=' + encodeURIComponent(S.offeringFilterSociety) : '') +
+        (S.offeringFilterStatus ? '&status=' + encodeURIComponent(S.offeringFilterStatus) : '') +
+        (S.offeringFilterDelivery ? '&delivery=' + encodeURIComponent(S.offeringFilterDelivery) : '');
+}
+
 async function sellerOrderDetailView(productId) {
     S.offeringFilterSociety = S.offeringFilterSociety || '';
     S.offeringFilterStatus = S.offeringFilterStatus || '';
+    S.offeringFilterDelivery = S.offeringFilterDelivery || '';
+    // Remembered so the delivery block can repaint ITSELF from the server after a
+    // checkbox toggle without re-rendering (and possibly disturbing) the rows.
+    S.offeringProductId = productId;
     var h = '<div class="view-enter">';
     try {
-        var detail = await sellerApi('/api/seller-app/orders/product/' + productId + '?date=' + sellerDate(S.selectedDate) + (S.offeringFilterSociety ? '&society=' + encodeURIComponent(S.offeringFilterSociety) : '') + (S.offeringFilterStatus ? '&status=' + encodeURIComponent(S.offeringFilterStatus) : ''));
+        var detail = await sellerApi(offeringDetailUrl(productId));
         // Options come from the UNFILTERED society list for this offering/date, so
         // the dropdown can never collapse to the currently selected society and
         // switching between societies works repeatedly (also for status = non-All).
@@ -765,11 +786,23 @@ async function sellerOrderDetailView(productId) {
         [['paid', 'Paid'], ['pending', 'Pending'], ['cancelled', 'Cancelled']].forEach(function (pair) {
             h += '<option value="' + pair[0] + '"' + (S.offeringFilterStatus === pair[0] ? ' selected' : '') + '>' + pair[1] + '</option>';
         });
+        h += '</select>';
+        // Third, INDEPENDENT filter: delivery. Handled by the 'change' listener
+        // alone, exactly like the other two selects - a 'click' would report the
+        // previously selected option and re-render over the new choice.
+        h += '<select class="oc-filter-select" data-action="set-offering-delivery" aria-label="Filter by delivery"><option value="">All Delivery</option>';
+        [['delivered', 'Delivered'], ['not_delivered', 'Not delivered']].forEach(function (pair) {
+            h += '<option value="' + pair[0] + '"' + (S.offeringFilterDelivery === pair[0] ? ' selected' : '') + '>' + pair[1] + '</option>';
+        });
         h += '</select></div>';
 
-        if (S.offeringFilterSociety || S.offeringFilterStatus) {
+        if (S.offeringFilterSociety || S.offeringFilterStatus || S.offeringFilterDelivery) {
             h += '<div class="tiny muted mt-1">Showing ' + (detail.filteredTotalOrders || 0) + ' of ' + orderCount + ' orders</div>';
         }
+        // Delivery progress sits ABOVE the rows and is deliberately unfiltered: it
+        // describes the whole offering for this date, which is also the scope of
+        // its Mark All Delivered action.
+        h += deliveryProgressHtml(detail);
         h += '<div id="offeringCustomers">' + offeringCustomersHtml(detail) + '</div>';
     } catch (e) {
         h += '<div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button>' +
@@ -801,12 +834,30 @@ function offeringCustomersHtml(detail) {
         var remark = c.remark
             ? '<button type="button" class="remark-icon" data-action="show-remark" data-remark="' + esc(c.remark) + '" aria-label="View customer remark">💬</button>'
             : '';
+        // Delivered control. The checkbox is rendered ONLY for rows delivery
+        // tracking applies to (the server marks cancelled/draft rows
+        // non-editable), and it carries the last SERVER-confirmed value in
+        // data-delivered so a failed save can be rolled back to it.
+        // Both the label and the input carry the action so a tap anywhere on the
+        // control is routed to 'change' and never to the row's navigation.
+        var delivered = !!c.delivered;
+        var deliveryCtrl = '';
+        if (c.deliveryEditable) {
+            deliveryCtrl = '<label class="oc-delivered' + (delivered ? ' on' : '') + '" data-action="set-delivered">' +
+                '<input type="checkbox" data-action="set-delivered" data-oid="' + esc(c.orderId) + '"' +
+                ' data-delivered="' + (delivered ? 'true' : 'false') + '"' + (delivered ? ' checked' : '') +
+                ' aria-label="Mark this order delivered">' +
+                '<span class="oc-delivered-text">Delivered</span></label>';
+        } else if (delivered) {
+            deliveryCtrl = '<span class="oc-delivered-static">Delivered</span>';
+        }
         out += '<div class="customer-row compact oc-row" role="button" tabindex="0" data-action="open-order" data-order="' + esc(c.orderId) + '">';
         out += '<span class="status-dot ' + bucket + '" aria-hidden="true"></span>';
         out += '<div class="oc-row-main">';
         out += '<div class="oc-row-top"><span class="cr-qty">' + qtyLabel + '</span>' +
             '<span class="cr-status ' + bucket + '">' + label + '</span></div>';
         if (addr.length) out += '<div class="cr-loc">' + esc(addr.join(' • ')) + '</div>';
+        if (deliveryCtrl) out += '<div class="oc-row-delivery">' + deliveryCtrl + '</div>';
         out += '</div>';
         out += remark;
         out += '<span class="oc-row-chevron" aria-hidden="true">›</span>';
@@ -815,6 +866,113 @@ function offeringCustomersHtml(detail) {
     return out;
 }
 
+/**
+ * Delivery progress block for ONE offering on ONE date.
+ *
+ * <p>Every figure is the SERVER's: "x of y delivered", the number on the bulk
+ * button and the number its confirmation quotes all come from the same
+ * unfiltered calculation, so a filtered row list can never make the action look
+ * like it covers only the visible subset. The block carries the offering id so
+ * it can repaint itself from the server after a toggle.</p>
+ */
+function deliveryProgressHtml(detail) {
+    var p = detail.deliveryProgress || null;
+    var active = p ? (p.activeOrderCount || 0) : 0;
+    var done = p ? (p.deliveredCount || 0) : 0;
+    var remaining = p ? (p.remainingCount || 0) : 0;
+    var scope = p ? (p.bulkScopeOrderCount || 0) : 0;
+    var pct = active > 0 ? Math.round((done / active) * 100) : 0;
+    var h = '<div class="del-progress" id="deliveryBlock">';
+    h += '<div class="del-progress-top"><span class="del-progress-title">🚚 Deliveries</span>' +
+        '<span class="del-progress-count">' + done + ' of ' + active + ' delivered</span></div>';
+    h += '<div class="del-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '">' +
+        '<span class="del-bar-fill" style="width:' + pct + '%"></span></div>';
+    if (active === 0) {
+        h += '<div class="tiny muted mt-1">No deliverable orders for this offering on this date.</div>';
+    } else if (remaining === 0) {
+        h += '<div class="del-done-note">✓ All deliveries complete for this date</div>';
+    } else {
+        h += '<button class="btn btn-primary btn-sm del-mark-all" type="button" data-action="mark-all-delivered">' +
+            'Mark All Delivered (' + scope + ')</button>';
+        h += '<div class="tiny muted mt-1">Applies to every active order of this offering on ' +
+            esc(prettyDate(sellerDate(S.selectedDate))) + ' — not just the rows below.</div>';
+    }
+    h += '</div>';
+    return h;
+}
+
+/**
+ * Repaints ONLY the delivery block from the server.
+ *
+ * <p>After an individual toggle the checkbox itself is trusted from the PATCH
+ * response, but the "x of y delivered" line and the bulk button's count must
+ * stay the server's numbers, so they are re-read instead of adjusted in the
+ * browser. Overlapping toggles issue overlapping reads, so only the newest
+ * response may paint: an older reply describes an earlier state and would
+ * visibly roll the numbers back.</p>
+ */
+async function refreshDeliveryBlock() {
+    var productId = S.offeringProductId;
+    if (!productId || !$('#deliveryBlock')) return;
+    var seq = ++S.deliveryBlockRequestId;
+    try {
+        var detail = await sellerApi(offeringDetailUrl(productId));
+        if (seq !== S.deliveryBlockRequestId) return;
+        var current = $('#deliveryBlock');
+        if (current) current.outerHTML = deliveryProgressHtml(detail);
+    } catch (e) {
+        // Keep the last confirmed numbers: a failed refresh must not turn a save
+        // that already succeeded into an error message.
+    }
+}
+
+/**
+ * Auto-saves ONE order's Delivered flag from a row checkbox.
+ *
+ * <p>Owns its own errors because it is called from the 'change' listener
+ * without being awaited: a failed save must roll the checkbox back to the last
+ * SERVER-confirmed value and say why, never leave a row looking saved.</p>
+ */
+async function saveDeliveryToggle(input) {
+    var oid = input.dataset.oid;
+    if (!oid) return;
+    var wasDelivered = input.dataset.delivered === 'true';
+    var wantDelivered = !!input.checked;
+    if (wantDelivered === wasDelivered) return;
+    // Rapid-click guard: a second change for the same row while its request is
+    // still in flight would send a duplicate write. The endpoint is idempotent,
+    // but the UI must not queue overlapping PATCHes for one row.
+    S.deliverySaving = S.deliverySaving || {};
+    if (S.deliverySaving[oid]) { input.checked = wasDelivered; return; }
+    S.deliverySaving[oid] = true;
+    input.disabled = true;
+    try {
+        var updated = await sellerApi('/api/seller-app/orders/' + encodeURIComponent(oid) + '/delivery-status', {
+            method: 'PATCH',
+            body: { deliveryStatus: wantDelivered ? 'DELIVERED' : 'NOT_DELIVERED' }
+        });
+        // The SERVER's answer wins: another tab may have changed this order since
+        // this screen was rendered.
+        var serverDelivered = updated && updated.deliveryStatus === 'DELIVERED';
+        input.checked = serverDelivered;
+        input.dataset.delivered = serverDelivered ? 'true' : 'false';
+        var chip = input.closest('.oc-delivered');
+        if (chip) chip.classList.toggle('on', serverDelivered);
+        toast(serverDelivered ? 'Order marked delivered' : 'Delivery unmarked', 'success');
+    } catch (err) {
+        input.checked = wasDelivered;
+        input.dataset.delivered = wasDelivered ? 'true' : 'false';
+        toast(err.message, 'error');
+    } finally {
+        input.disabled = false;
+        delete S.deliverySaving[oid];
+    }
+    // The numbers on the screen belong to the server, so they are re-read even
+    // after a failure (where the reload simply confirms nothing changed).
+    refreshDeliveryBlock();
+}
+
+// SCREEN 7C: INDIVIDUAL ORDER DETAIL
 // SCREEN 7C: INDIVIDUAL ORDER DETAIL
 async function sellerOrderDetailByOrderView(orderId) {
     var h = '<div class="view-enter"><div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button><h2 class="flex-1">Order Details</h2></div>';
@@ -1099,6 +1257,11 @@ document.addEventListener('click', async function (e) {
     var t = e.target.closest('[data-action]');
     if (!t) return;
     var a = t.dataset.action;
+    // The Delivered checkbox lives INSIDE a clickable order row. A click on it
+    // (or on its label) must toggle delivery through the 'change' listener and
+    // must NOT also navigate to the order detail screen, so it is deliberately
+    // ignored here - the native label/checkbox behaviour still fires 'change'.
+    if (a === 'set-delivered') return;
     try {
         switch (a) {
             case 'go-back': history.back(); break;
@@ -1202,6 +1365,53 @@ document.addEventListener('click', async function (e) {
             case 'set-sort': S.sortFilter = t.value; break;
             case 'set-detail-sort': S.selectedSort = t.value; await sellerRender(); break;
             case 'open-order': sellerNavigate('#/order-detail/order/' + t.dataset.order); break;
+            case 'mark-all-delivered': {
+                if (S.bulkDelivering) break;
+                var bulkProductId = S.offeringProductId;
+                if (!bulkProductId) { toast('Open an offering to mark its deliveries', 'error'); break; }
+                // The scope is the offering + date and is quoted from the SERVER, so
+                // the dialog states the count the backend will really change even
+                // when the visible rows are filtered or this tab is stale.
+                var scopeCount = null;
+                try {
+                    var fresh = await sellerApi(offeringDetailUrl(bulkProductId));
+                    scopeCount = (fresh.deliveryProgress && fresh.deliveryProgress.bulkScopeOrderCount) || 0;
+                } catch (err) { toast(err.message, 'error'); break; }
+                if (scopeCount === 0) {
+                    toast('Every active order for this offering is already delivered', 'success');
+                    refreshDeliveryBlock();
+                    break;
+                }
+                confirmModal({
+                    icon: '🚚',
+                    title: 'Mark all delivered?',
+                    message: scopeCount + (scopeCount === 1 ? ' order' : ' orders') +
+                        ' for this offering on ' + prettyDate(sellerDate(S.selectedDate)) +
+                        ' will be marked delivered. Cancelled orders are not included.',
+                    okLabel: 'Mark All Delivered',
+                    onOk: async function () {
+                        S.bulkDelivering = true;
+                        try {
+                            var res = await sellerApi('/api/seller-app/orders/product/' + bulkProductId +
+                                '/mark-all-delivered?date=' + sellerDate(S.selectedDate), { method: 'POST' });
+                            // The returned count is what the backend ACTUALLY changed,
+                            // which is not always the count the dialog quoted (another
+                            // tab may have delivered some rows in between).
+                            var applied = (res && res.appliedCount) || 0;
+                            toast(applied === 1 ? '1 order marked delivered' : applied + ' orders marked delivered', 'success');
+                        } catch (err) {
+                            toast(err.message, 'error');
+                        } finally {
+                            S.bulkDelivering = false;
+                        }
+                        // Reload from server truth: every row's checkbox, the progress
+                        // line and the bulk count must agree after a batch - and a
+                        // failed batch (atomic rollback) shows the unchanged state.
+                        await sellerRender();
+                    }
+                });
+                break;
+            }
             case 'show-remark':
                 // Reuse the EXISTING modal helpers (openModal/closeModal) rather
                 // than a raw alert(). No new component and no chat system invented.
@@ -1365,6 +1575,15 @@ document.addEventListener('change', function (e) {
     if (societyFilter) { S.offeringFilterSociety = societyFilter.value; sellerRender(); return; }
     var statusFilter = e.target.closest('[data-action="set-offering-status"]');
     if (statusFilter) { S.offeringFilterStatus = statusFilter.value; sellerRender(); return; }
+    // Third, independent filter. It combines with society + payment instead of
+    // replacing them, and it is read from 'change' for the same reason.
+    var deliveryFilter = e.target.closest('[data-action="set-offering-delivery"]');
+    if (deliveryFilter) { S.offeringFilterDelivery = deliveryFilter.value; sellerRender(); return; }
+    // The row's Delivered checkbox. 'change' (not 'click') is what carries the
+    // NEW state, so the auto-save is driven from here; the click listener
+    // deliberately ignores the control so a tap cannot also open the order.
+    var deliveredToggle = e.target.closest('[data-action="set-delivered"]');
+    if (deliveredToggle && deliveredToggle.type === 'checkbox') { saveDeliveryToggle(deliveredToggle); return; }
     var dateInput = e.target.closest('[data-action="set-date-calendar"]');
     if (dateInput) { S.selectedDate = dateInput.value; sellerRender(); return; }
     // The service-area <select> also reports through 'change'. Choosing an Area

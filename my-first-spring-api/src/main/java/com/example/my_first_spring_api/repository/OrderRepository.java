@@ -84,5 +84,24 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             "AND o.orderStatus IN :statuses AND COALESCE(o.orderTime, o.createdAt) < :before ORDER BY o.id")
     List<Long> findReminderCandidates(@Param("statuses") List<OrderStatus> statuses,
                                       @Param("before") LocalDateTime before, Pageable pageable);
+
+    // ==================== DELIVERY COMPLETION (V1) ====================
+
+    /**
+     * Every order for one offering on one date, with items and products eagerly
+     * fetched so the bulk delivery update can inspect them without N+1 queries.
+     *
+     * <p>DRAFT and CANCELLED are deliberately still returned: the CALLER decides
+     * scope via {@code Order.isActiveForDelivery()}, which is the single shared
+     * definition used by both the progress counters and the bulk write. Keeping
+     * that decision in one place is what guarantees the number the seller is
+     * asked to confirm is exactly the number of rows that get changed.</p>
+     */
+    @Query("SELECT DISTINCT o FROM Order o LEFT JOIN FETCH o.items i LEFT JOIN FETCH i.product " +
+            "WHERE o.kitchen = :kitchen AND o.createdAt >= :start AND o.createdAt < :end " +
+            "ORDER BY o.createdAt DESC")
+    List<Order> findOfferingOrdersOnDateWithItems(@Param("kitchen") Kitchen kitchen,
+                                                  @Param("start") LocalDateTime start,
+                                                  @Param("end") LocalDateTime end);
 }
 

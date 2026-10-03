@@ -38,6 +38,17 @@ public class OrderItemDetailDto {
     /** Price unit of the offering ("plate", "piece", ...) for wording the booked note. */
     private String productUnit;
 
+    /**
+     * Delivery progress for this offering on this date, plus the server-calculated
+     * bulk scope. Null only before it has been computed; the screen reads it as a
+     * single block so the progress line and the Mark All Delivered dialog can
+     * never quote two different numbers.
+     */
+    private DeliveryProgressDto deliveryProgress;
+
+    public DeliveryProgressDto getDeliveryProgress() { return deliveryProgress; }
+    public void setDeliveryProgress(DeliveryProgressDto deliveryProgress) { this.deliveryProgress = deliveryProgress; }
+
     public static class CustomerOrderRow {
         private Long orderId;
         private String orderNumber;
@@ -54,6 +65,15 @@ public class OrderItemDetailDto {
         private String orderStatus;
         private String remark;
         private LocalDateTime placedAt;
+        /**
+         * Delivery state of the shared Order row. Rendered into the row's
+         * Delivered checkbox; never a buyer-specific copy.
+         */
+        private String deliveryStatus;
+        private boolean delivered;
+        private LocalDateTime deliveredAt;
+        /** False for cancelled/draft rows, which take no part in delivery tracking. */
+        private boolean deliveryEditable;
 
         public Long getOrderId() { return orderId; }
         public void setOrderId(Long orderId) { this.orderId = orderId; }
@@ -85,6 +105,14 @@ public class OrderItemDetailDto {
         public void setRemark(String remark) { this.remark = remark; }
         public LocalDateTime getPlacedAt() { return placedAt; }
         public void setPlacedAt(LocalDateTime placedAt) { this.placedAt = placedAt; }
+        public String getDeliveryStatus() { return deliveryStatus; }
+        public void setDeliveryStatus(String deliveryStatus) { this.deliveryStatus = deliveryStatus; }
+        public boolean isDelivered() { return delivered; }
+        public void setDelivered(boolean delivered) { this.delivered = delivered; }
+        public LocalDateTime getDeliveredAt() { return deliveredAt; }
+        public void setDeliveredAt(LocalDateTime deliveredAt) { this.deliveredAt = deliveredAt; }
+        public boolean isDeliveryEditable() { return deliveryEditable; }
+        public void setDeliveryEditable(boolean deliveryEditable) { this.deliveryEditable = deliveryEditable; }
     }
 
     public Long getProductId() { return productId; }
