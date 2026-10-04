@@ -482,6 +482,13 @@ public class OrderService {
         if (order.getPaymentStatus() == PaymentStatus.PAID) return toOrderDto(order);
         order.setPaymentStatus(PaymentStatus.PAID);
         orderRepository.save(order);
+        // Handover 18: payment status is an event worth keeping. Recorded after the
+        // PAID short-circuit above, so it fires on the real transition only.
+        analyticsService.record(AnalyticsService.EV_PAYMENT_STATUS,
+                order.getBuyer() != null ? order.getBuyer().getId() : null,
+                order.getBuyer() != null ? order.getBuyer().getMobileNumber() : null,
+                order.getKitchen() != null ? order.getKitchen().getId() : null,
+                order.getOrderNumber() + " -> PAID");
         if (order.getBuyer() != null) notificationService.sendPaymentReceivedNotification(order.getBuyer(), order.getOrderNumber());
         // Requirement 19: the owning seller is notified on the real transition only.
         // The PAID short-circuit above guarantees repeated Mark as Paid never duplicates.

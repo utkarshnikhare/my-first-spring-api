@@ -36,6 +36,9 @@ class AdminHandoverGapTest {
     @Autowired private KitchenRepository kitchens;
     @Autowired private ProductRepository products;
     @Autowired private OrderRepository orders;
+    @Autowired private AnalyticsService analyticsService;
+    @Autowired private OrderService orderService;
+    @Autowired private AnalyticsEventRepository analyticsEventRepo;
 
     private static int seq = 0;
     private final String sfx = "gap" + (seq++);
@@ -70,10 +73,19 @@ class AdminHandoverGapTest {
     }
 
     private Order place(User b, Kitchen k, Product p, String suffix, int qty) {
+        return place(b, k, p, suffix, qty, PaymentStatus.PAID);
+    }
+
+    /**
+     * Payment is a parameter because a seller-side "Mark as Paid" is a no-op on
+     * an order that is already paid - a test for that transition needs an order
+     * that genuinely starts unpaid.
+     */
+    private Order place(User b, Kitchen k, Product p, String suffix, int qty, PaymentStatus payment) {
         Order o = new Order(b, k);
         o.setOrderNumber("ORD-" + sfx + suffix);
         o.setOrderStatus(OrderStatus.CONFIRMED);
-        o.setPaymentStatus(PaymentStatus.PAID);
+        o.setPaymentStatus(payment);
         o.addItem(new OrderItem(p, qty, BigDecimal.valueOf(40)));
         o.recalculateTotal();
         return orders.save(o);
@@ -271,5 +283,93 @@ class AdminHandoverGapTest {
 
         // An unparseable value degrades to Today rather than blanking the screen.
         assertThat(adminService.dashboard("not-a-date").get("selectedPeriod")).isEqualTo("Today");
+    }
+
+    // ---------- Sections 6 / 18: the analytics the seller table depends on ----------
+
+    @Test
+    @DisplayName("s18: a captured storefront view reaches the seller table as a real number")
+    void sellerAnalyticsUsesActuallyCapturedViews() {
+        Seller s = sellerWithStore("Conv");
+        User b = buyer();
+        users.save(b);
+
+        // Exactly what the buyer app now posts when a storefront/offering is opened.
+        analyticsService.record(AnalyticsService.EV_HOMEMADE_STOREFRONT_VIEW,
+                null, null, s.kitchen().getId(), null);
+        analyticsService.record(AnalyticsService.EV_PRODUCT_VIEW,
+                null, null, s.kitchen().getId(), null);
+        place(b, s.kitchen(), s.product(), "conv", 1);
+
+        Map<String, Object> row = rowForSeller(s);
+
+        assertThat(((Number) row.get("storefrontViews")).longValue())
+                .as("captured storefront views must reach the seller table").isEqualTo(1L);
+        assertThat(((Number) row.get("offeringViews")).longValue()).isEqualTo(1L);
+        assertThat(row.get("conversionRate"))
+                .as("with views captured, conversion becomes measurable").isNotNull();
+    }
+
+    @Test
+    @DisplayName("s6: a storefront view is counted once, not once per order")
+    void viewsAreNotMultipliedByOrderCount() {
+        Seller s = sellerWithStore("Multi");
+        User b = buyer();
+        users.save(b);
+        analyticsService.record(AnalyticsService.EV_HOMEMADE_STOREFRONT_VIEW,
+                null, null, s.kitchen().getId(), null);
+
+        place(b, s.kitchen(), s.product(), "v1", 1);
+        place(b, s.kitchen(), s.product(), "v2", 1);
+        place(b, s.kitchen(), s.product(), "v3", 1);
+
+        Map<String, Object> row = rowForSeller(s);
+
+        assertThat(((Number) row.get("orders")).longValue()).isEqualTo(3L);
+        assertThat(((Number) row.get("storefrontViews")).longValue())
+                .as("one storefront view stays one view however many orders follow")
+                .isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("s6: conversion is omitted rather than faked when no views exist")
+    void conversionIsOmittedRatherThanFaked() {
+        Seller s = sellerWithStore("NoViews");
+        User b = buyer();
+        users.save(b);
+        place(b, s.kitchen(), s.product(), "c1", 1);
+
+        assertThat(rowForSeller(s).get("conversionRate"))
+                .as("no captured views means no conversion figure, never a guess")
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("s18: payment status is captured once per real transition")
+    void paymentStatusIsRecordedOncePerTransition() {
+        Seller s = sellerWithStore("PayEv");
+        User b = buyer();
+        users.save(b);
+        Order placed = place(b, s.kitchen(), s.product(), "p1", 1, PaymentStatus.PENDING);
+        long before = countEvents(AnalyticsService.EV_PAYMENT_STATUS);
+
+        orderService.markOrderAsPaid(placed.getId(), s.user());
+        assertThat(countEvents(AnalyticsService.EV_PAYMENT_STATUS)).isEqualTo(before + 1);
+
+        // Repeating it is a no-op and must not add a second event.
+        orderService.markOrderAsPaid(placed.getId(), s.user());
+        assertThat(countEvents(AnalyticsService.EV_PAYMENT_STATUS)).isEqualTo(before + 1);
+    }
+
+    private Map<String, Object> rowForSeller(Seller s) {
+        return adminService.sellerAnalytics(new AdminService.OrderFilter()).stream()
+                .filter(r -> s.user().getId().equals(r.get("sellerId")))
+                .findFirst().orElseThrow(() -> new AssertionError("no analytics row for this seller"));
+    }
+
+    private long countEvents(String type) {
+        return analyticsEventRepo.findAll().stream()
+                .filter(e -> type.equals(e.getEventType()))
+                .count();
     }
 }

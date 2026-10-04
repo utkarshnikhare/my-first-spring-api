@@ -1333,6 +1333,11 @@ public class AdminService {
         }
 
         Map<Long, Map<String, Object>> bySeller = new LinkedHashMap<>();
+        // The storefronts behind each seller, so view totals can be added ONCE
+        // per storefront. Accumulating them inside the order loop counted a
+        // storefront view once per ORDER the seller received, so a seller with
+        // 5 orders and 10 views reported 50 - which made conversion nonsense.
+        Map<Long, Set<Long>> kitchensBySeller = new HashMap<>();
         for (Order o : matchingOrders(filter)) {
             Kitchen k = o.getKitchen();
             if (k == null || k.getSeller() == null) continue;
@@ -1353,11 +1358,25 @@ public class AdminService {
             row.put("orders", num(row.get("orders")) + 1);
             BigDecimal value = o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO;
             row.put("recordedOrderValue", ((BigDecimal) row.get("recordedOrderValue")).add(value));
+            kitchensBySeller.computeIfAbsent(sellerId, id -> new HashSet<>()).add(k.getId());
+        }
 
-            long[] sv = views.get(String.valueOf(k.getId()));
-            long[] ov = offerings.get(String.valueOf(k.getId()));
-            row.put("storefrontViews", num(row.get("storefrontViews")) + (sv != null ? sv[0] : 0L));
-            row.put("offeringViews", num(row.get("offeringViews")) + (ov != null ? ov[0] : 0L));
+        // Views are per STOREFRONT, not per order: each storefront's totals are
+        // added exactly once, which is what makes "orders / storefront views"
+        // a real conversion rate rather than an artefact of order volume.
+        for (Map.Entry<Long, Set<Long>> entry : kitchensBySeller.entrySet()) {
+            Map<String, Object> row = bySeller.get(entry.getKey());
+            if (row == null) continue;
+            long storefrontViews = 0;
+            long offeringViews = 0;
+            for (Long kitchenId : entry.getValue()) {
+                long[] sv = views.get(String.valueOf(kitchenId));
+                long[] ov = offerings.get(String.valueOf(kitchenId));
+                storefrontViews += sv != null ? sv[0] : 0L;
+                offeringViews += ov != null ? ov[0] : 0L;
+            }
+            row.put("storefrontViews", storefrontViews);
+            row.put("offeringViews", offeringViews);
         }
 
         for (Map<String, Object> row : bySeller.values()) {

@@ -32,6 +32,9 @@ public class AnalyticsService {
     public static final String EV_SELLER_REGISTERED = "SELLER_REGISTERED";
     public static final String EV_SELLER_APPROVED = "SELLER_APPROVED";
     public static final String EV_ORDER_PLACED = "ORDER_PLACED";
+    // Handover 18: "payment status where recorded". Captured on the real
+    // transition only, so a repeated Mark as Paid cannot inflate the count.
+    public static final String EV_PAYMENT_STATUS = "PAYMENT_STATUS";
     // Handover 18: capture "order delivered/cancelled" while the event occurs so
     // aggregate analytics survive the detailed-order retention purge.
     public static final String EV_ORDER_DELIVERED = "ORDER_DELIVERED";
