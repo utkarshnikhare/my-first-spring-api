@@ -19,6 +19,7 @@ class OrderServicePaymentTest {
     @Mock UserRepository userRepository;
     @Mock AnalyticsService analyticsService;
     @Mock NotificationService notificationService;
+    @Mock RetentionService retentionService;
     @InjectMocks OrderService orderService;
     private User buyer;
     private Order order;

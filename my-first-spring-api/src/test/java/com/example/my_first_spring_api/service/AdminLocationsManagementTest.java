@@ -103,7 +103,7 @@ class AdminLocationsManagementTest {
         Map<String, Object> soc = adminService.createSociety(areaId, "Vis Society " + sfx);
         Long socId = (Long) soc.get("id");
 
-        adminService.updateSociety(socId, null, false);
+        adminService.updateSociety(socId, null, false, null);
 
         Map<String, Object> tree = adminService.locations();
         @SuppressWarnings("unchecked")
@@ -157,17 +157,17 @@ class AdminLocationsManagementTest {
         Long areaId = (Long) area.get("id");
         Map<String, Object> other = adminService.createArea("Ren Other " + sfx);
 
-        Map<String, Object> renamed = adminService.updateArea(areaId, "Ren Area Renamed " + sfx, null);
+        Map<String, Object> renamed = adminService.updateArea(areaId, "Ren Area Renamed " + sfx, null, null);
         assertThat(renamed.get("id")).isEqualTo(areaId);
         assertThat(renamed.get("name")).isEqualTo("Ren Area Renamed " + sfx);
         // Absent fields are left alone: renaming with active=null must not disable.
         assertThat(renamed.get("active")).isEqualTo(true);
 
         // No-op update (both fields absent) is safe.
-        Map<String, Object> noop = adminService.updateArea(areaId, null, null);
+        Map<String, Object> noop = adminService.updateArea(areaId, null, null, null);
         assertThat(noop.get("name")).isEqualTo("Ren Area Renamed " + sfx);
 
-        assertThatThrownBy(() -> adminService.updateArea(areaId, "ren other " + sfx, null))
+        assertThatThrownBy(() -> adminService.updateArea(areaId, "ren other " + sfx, null, null))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("already exists");
         assertThat(other.get("id")).isNotEqualTo(areaId);
     }
@@ -179,16 +179,16 @@ class AdminLocationsManagementTest {
         Map<String, Object> soc = adminService.createSociety(areaId, "Gate Society " + sfx);
         Long socId = (Long) soc.get("id");
 
-        assertThatThrownBy(() -> adminService.updateArea(areaId, null, false))
+        assertThatThrownBy(() -> adminService.updateArea(areaId, null, false, null))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("still has active societies");
 
         // The required order: societies off first, then the area.
-        adminService.updateSociety(socId, null, false);
-        Map<String, Object> disabled = adminService.updateArea(areaId, null, false);
+        adminService.updateSociety(socId, null, false, null);
+        Map<String, Object> disabled = adminService.updateArea(areaId, null, false, null);
         assertThat(disabled.get("active")).isEqualTo(false);
 
-        adminService.updateArea(areaId, null, true);
-        adminService.updateSociety(socId, null, true);
+        adminService.updateArea(areaId, null, true, null);
+        adminService.updateSociety(socId, null, true, null);
         assertThat(adminService.locations().get("areas")).isNotNull();
     }
     // ---------------- regression 3: rename/disable keeps references working ----------------
@@ -217,8 +217,8 @@ class AdminLocationsManagementTest {
         Long societyId = society.getId();
 
         // ---- rename both, IDs untouched ----
-        adminService.updateArea(areaId, "Ref Area Renamed " + sfx, null);
-        adminService.updateSociety(societyId, "Ref Society Renamed " + sfx, null);
+        adminService.updateArea(areaId, "Ref Area Renamed " + sfx, null, null);
+        adminService.updateSociety(societyId, "Ref Society Renamed " + sfx, null, null);
 
         User buyerAfterRename = userRepository.findById(buyer.getId()).orElseThrow();
         assertThat(buyerAfterRename.getSocietyRef()).isNotNull();
@@ -231,7 +231,7 @@ class AdminLocationsManagementTest {
                 .isTrue();
 
         // ---- disable: NEW selections blocked, existing references keep working ----
-        adminService.updateSociety(societyId, null, false);
+        adminService.updateSociety(societyId, null, false, null);
         assertThatThrownBy(() -> locationService.requireSelectableLocation(areaId, societyId))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("no longer available");

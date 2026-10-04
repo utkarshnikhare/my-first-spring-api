@@ -191,12 +191,47 @@ class AdminV1ScopeTest {
                 .doesNotContain("'Offerings',")
                 .doesNotContain("'Kitchens',")
                 .doesNotContain("'Enquiries',");
-        assertThat(dashboard).contains("Active Users Today")
+        assertThat(dashboard).contains("Active Users")
                 .contains("Pending Approvals")
                 .contains("Recent Orders")
-                .contains("Pending Actions");
+                .contains("Pending Actions")
+                // Handover 4/17: the dashboard carries a Today / Last 5 Days /
+                // Custom date selector, resolved server-side.
+                .contains("Last 5 Days")
+                .contains("adminDashCustomDate")
+                .contains("/api/admin/dashboard?date=");
         assertThat(adminService.dashboard()).containsKeys("activeBuyersToday",
                 "activeSellersToday", "totalOrderValue", "pendingSellers");
+        // The window figures exist alongside the fixed-semantics headline cards,
+        // so no existing consumer of /dashboard changes meaning.
+        assertThat(adminService.dashboard()).containsKeys("selectedPeriod",
+                "ordersInPeriod", "recordedOrderValueInPeriod", "buyersInPeriod", "sellersInPeriod");
+    }
+
+    @Test
+    @DisplayName("dashboard date selector scopes orders and recorded value to the window")
+    void dashboardWindowScopesTheFigures() {
+        LocalDate today = LocalDate.now();
+        place(buyerInSociety, kitchenItem, 2, PaymentStatus.PAID, OrderStatus.CONFIRMED);
+
+        Map<String, Object> todays = adminService.dashboard("today");
+        assertThat(todays.get("selectedPeriod")).isEqualTo("Today");
+        long todayOrders = ((Number) todays.get("ordersInPeriod")).longValue();
+        assertThat(todayOrders).isGreaterThanOrEqualTo(1L);
+
+        // Last 5 Days is a superset of Today, so its order count can never be
+        // smaller - that is the property that makes the selector trustworthy.
+        Map<String, Object> last5 = adminService.dashboard("last5");
+        assertThat(last5.get("selectedPeriod")).isEqualTo("Last 5 Days");
+        long last5Orders = ((Number) last5.get("ordersInPeriod")).longValue();
+        assertThat(last5Orders).isGreaterThanOrEqualTo(todayOrders);
+
+        // A day before the order was placed must not count it.
+        Map<String, Object> empty = adminService.dashboard(today.minusDays(3).toString());
+        assertThat(((Number) empty.get("ordersInPeriod")).longValue()).isZero();
+
+        // An unparseable value degrades to Today rather than blanking the screen.
+        assertThat(adminService.dashboard("not-a-date").get("selectedPeriod")).isEqualTo("Today");
     }
 
     @Test
@@ -354,14 +389,24 @@ class AdminV1ScopeTest {
     }
 
     @Test
-    @DisplayName("account status is honest about what the User model can actually store")
-    void accountStatusDoesNotInventABlockFlag() {
-        // Buyer block/unblock does not exist in the domain, so the console must not
-        // pretend one does. It reports profile completeness instead.
-        assertThat(buyerRow(buyerElsewhere)).containsEntry("accountStatus", "PROFILE_INCOMPLETE");
-        assertThat(buyerRow(buyerElsewhere).keySet())
-                .as("no block flag is invented where the domain cannot store one")
-                .doesNotContain("blocked", "isBlocked", "BLOCKED");
+    @DisplayName("account status reports the real stored block state, never an invented one")
+    void accountStatusReportsTheStoredBlockFlag() {
+        // Handover 8 added a REAL buyer block to the domain (User.blocked /
+        // blockedReason / blockedAt), so the Buyers row now reports account state
+        // truthfully. Before any block the flag is false - a stored fact, not a
+        // fabricated one - and after an Admin block the row reflects it.
+        assertThat(buyerRow(buyerElsewhere)).containsEntry("accountStatus", "PROFILE_INCOMPLETE")
+                .containsEntry("blocked", false);
+        assertThat(buyerRow(buyerElsewhere).get("blockedReason")).isNull();
+
+        User blocked = buyerElsewhere;
+        blocked.setBlocked(true);
+        blocked.setBlockedReason("Repeated complaints");
+        blocked.setBlockedAt(LocalDateTime.now());
+        users.saveAndFlush(blocked);
+
+        assertThat(buyerRow(blocked)).containsEntry("blocked", true)
+                .containsEntry("blockedReason", "Repeated complaints");
     }
 
 

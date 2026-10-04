@@ -26,6 +26,7 @@ class OrderServiceNotificationTest {
     @Mock UserRepository userRepository;
     @Mock AnalyticsService analyticsService;
     @Mock NotificationService notificationService;
+    @Mock RetentionService retentionService;
     @Mock HttpSession httpSession;
 
     @InjectMocks OrderService orderService;
@@ -97,5 +98,51 @@ class OrderServiceNotificationTest {
         orderService.placeOrder(PaymentStatus.PAID, null, null, httpSession);
 
         verify(notificationService, atLeastOnce()).sendNewOrderNotification(argThat(u -> u != null && u.getId().equals(10L)), any(), any());
+    }
+
+    @Test
+    void placeOrderRollsTheOrderIntoTheDurableDailyAggregate() {
+        User seller = new User("Seller", "9100000002", "A-101", UserRole.SELLER);
+        seller.setId(11L);
+        seller.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
+        Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller);
+        kitchen.setId(2L);
+        kitchen.setAvailableToday(true);
+        when(kitchenRepository.findById(2L)).thenReturn(Optional.of(kitchen));
+
+        Product product = new Product(kitchen, "Upma", "desc", BigDecimal.valueOf(50), null);
+        product.setId(2L);
+        product.setAvailableToday(true);
+        product.setRemainingQuantity(100);
+        product.setMaxQuantity(100);
+        when(productRepository.findById(2L)).thenReturn(Optional.of(product));
+
+        User buyer = new User("Buyer", "9876500002", "A-101", UserRole.BUYER);
+        buyer.setId(21L);
+        buyer.setSociety("Green Park");
+        buyer.setBuilding("Building A");
+        buyer.setFlatHouseNumber("A-101");
+        when(userRepository.findById(21L)).thenReturn(Optional.of(buyer));
+
+        Order savedDraft = new Order();
+        savedDraft.setId(200L);
+        savedDraft.setBuyer(buyer);
+        savedDraft.setKitchen(kitchen);
+        savedDraft.setItems(List.of(new OrderItem(product, 2, BigDecimal.valueOf(50))));
+        savedDraft.recalculateTotal();
+        when(orderRepository.findByIdForUpdate(200L)).thenReturn(Optional.of(savedDraft));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        sessionMap.put(OrderService.DRAFT_ORDER_SESSION_KEY, 200L);
+        sessionMap.put("BUYER_USER", buyer.getId());
+
+        orderService.placeOrder(PaymentStatus.PAID, null, null, httpSession);
+
+        // Handover 12: the rollup is fed at placement so aggregate analytics
+        // outlive any future detailed-order purge. Regression guard - this call
+        // was previously missing, leaving the rollup permanently empty.
+        verify(retentionService, times(1)).recordOrderFact(argThat(o ->
+                o != null && o.getId().equals(200L)
+                        && o.getTotalAmount() != null
+                        && o.getTotalAmount().compareTo(BigDecimal.valueOf(100)) == 0));
     }
 }

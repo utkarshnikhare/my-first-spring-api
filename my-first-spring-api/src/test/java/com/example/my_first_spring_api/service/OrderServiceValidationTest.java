@@ -32,6 +32,7 @@ class OrderServiceValidationTest {
     @Mock UserRepository userRepository;
     @Mock AnalyticsService analyticsService;
     @Mock NotificationService notificationService;
+    @Mock RetentionService retentionService;
     @Mock HttpSession httpSession;
 
     @InjectMocks OrderService orderService;
