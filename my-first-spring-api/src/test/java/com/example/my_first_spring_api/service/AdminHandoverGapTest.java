@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Covers the Admin handover clauses that had no implementation: buyer search by
@@ -527,5 +528,95 @@ class AdminHandoverGapTest {
         assertThat(history).extracting(e -> String.valueOf(e.get("label")))
                 .contains("Order cancelled")
                 .doesNotContain("Marked delivered by seller");
+    }
+
+    // ---------- Section 15: Area Admin scope is enforced on the server ----------
+
+    @Test
+    @DisplayName("s15: an Area Admin only sees buyers from their own Area")
+    void areaAdminCannotSeeBuyersOutsideTheirArea() {
+        Area mine = locationService.createArea("Scope A " + sfx);
+        Area theirs = locationService.createArea("Scope B " + sfx);
+        User myBuyer = buyer();
+        myBuyer.setAreaRef(mine);
+        myBuyer.setSocietyRef(locationService.createSociety(mine.getId(), "ScopeSocA " + sfx));
+        users.save(myBuyer);
+        User theirBuyer = buyer();
+        theirBuyer.setAreaRef(theirs);
+        theirBuyer.setSocietyRef(locationService.createSociety(theirs.getId(), "ScopeSocB " + sfx));
+        users.save(theirBuyer);
+
+        User areaAdmin = areaAdminFor(mine);
+
+        List<Map<String, Object>> visible = adminService.buyers(null, null, null, areaAdmin);
+        assertThat(visible).extracting(m -> m.get("id")).contains(myBuyer.getId());
+        assertThat(visible).extracting(m -> m.get("id"))
+                .as("an Area Admin must not see another Area's buyers").doesNotContain(theirBuyer.getId());
+    }
+
+    @Test
+    @DisplayName("s15: an Area Admin's own Area overrides a request for a different Area")
+    void areaScopeCannotBeWidenedByTheRequest() {
+        Area mine = locationService.createArea("ScopeC " + sfx);
+        Area other = locationService.createArea("ScopeD " + sfx);
+        User myBuyer = buyer();
+        myBuyer.setAreaRef(mine);
+        myBuyer.setSocietyRef(locationService.createSociety(mine.getId(), "ScopeSocC " + sfx));
+        users.save(myBuyer);
+        User otherBuyer = buyer();
+        otherBuyer.setAreaRef(other);
+        otherBuyer.setSocietyRef(locationService.createSociety(other.getId(), "ScopeSocD " + sfx));
+        users.save(otherBuyer);
+
+        User areaAdmin = areaAdminFor(mine);
+
+        // The browser asks for the OTHER Area; the admin's own Area must win.
+        List<Map<String, Object>> visible = adminService.buyers(null, other.getId(), null, areaAdmin);
+        assertThat(visible).extracting(m -> m.get("id"))
+                .contains(myBuyer.getId()).doesNotContain(otherBuyer.getId());
+    }
+
+    @Test
+    @DisplayName("s15: an Area Admin cannot block a buyer outside their Area")
+    void areaAdminCannotActOutsideTheirArea() {
+        Area mine = locationService.createArea("ScopeE " + sfx);
+        Area theirs = locationService.createArea("ScopeF " + sfx);
+        User theirBuyer = buyer();
+        theirBuyer.setAreaRef(theirs);
+        theirBuyer.setSocietyRef(locationService.createSociety(theirs.getId(), "ScopeSocF " + sfx));
+        users.save(theirBuyer);
+        User areaAdmin = areaAdminFor(mine);
+
+        assertThatThrownBy(() -> adminService.blockBuyer(theirBuyer.getId(), "out of scope", areaAdmin))
+                .as("a correct buyer id must not bypass the Area boundary")
+                .isInstanceOf(com.example.my_first_spring_api.exception.SellerNotAuthorizedException.class);
+
+        assertThat(users.findById(theirBuyer.getId()).orElseThrow().isBlocked())
+                .as("the rejected action must not have mutated anything").isFalse();
+    }
+
+    @Test
+    @DisplayName("s15: a Super Admin is never area-restricted")
+    void superAdminIsAlwaysGlobal() {
+        Area a = locationService.createArea("ScopeG " + sfx);
+        User superAdmin = admin();                 // SUPER_ADMIN
+        superAdmin.setAdminAreaId(a.getId());      // even if a value were set
+        users.save(superAdmin);
+
+        assertThat(adminService.adminAreaScope(superAdmin))
+                .as("Super Admin keeps all Areas by definition").isNull();
+
+        User unassignedAdmin = new User("Plain Admin " + sfx, "91" + (8000 + mobileSeq++),
+                "A-1", UserRole.ADMIN);
+        users.save(unassignedAdmin);
+        assertThat(adminService.adminAreaScope(unassignedAdmin))
+                .as("an Admin with no assigned Area keeps today's global access").isNull();
+    }
+
+    private User areaAdminFor(Area area) {
+        User a = new User("Area Admin " + sfx + mobileSeq, "91" + (8000 + mobileSeq++),
+                "A-1", UserRole.ADMIN);
+        a.setAdminAreaId(area.getId());
+        return users.saveAndFlush(a);
     }
 }

@@ -49,8 +49,12 @@ public class AdminController {
     public ResponseEntity<List<Map<String, Object>>> buyers(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Long areaId,
-            @RequestParam(required = false) Long societyId) {
-        return ResponseEntity.ok(adminService.buyers(search, areaId, societyId));
+            @RequestParam(required = false) Long societyId,
+            HttpSession session) {
+        // The acting Admin is resolved server-side from the session - never from a
+        // parameter - so the Area scope in handover 15 cannot be spoofed.
+        return ResponseEntity.ok(adminService.buyers(search, areaId, societyId,
+                buyerService.requireCurrentBuyer(session)));
     }
 
     /**
@@ -386,8 +390,8 @@ public class AdminController {
     }
 
     @GetMapping("/buyers/{id}")
-    public ResponseEntity<Map<String, Object>> buyerDetail(@PathVariable Long id) {
-        return ResponseEntity.ok(adminService.buyerDetail(id));
+    public ResponseEntity<Map<String, Object>> buyerDetail(@PathVariable Long id, HttpSession session) {
+        return ResponseEntity.ok(adminService.buyerDetail(id, buyerService.requireCurrentBuyer(session)));
     }
 
     // ---------- Audit log (handover 14) ----------

@@ -5,6 +5,7 @@ import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.exception.OrderNotFoundException;
+import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -364,10 +365,15 @@ public class AdminService {
      * Orders screen resolves location, never on the free-text strings.</p>
      */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> buyers(String search, Long areaId, Long societyId) {
+    public List<Map<String, Object>> buyers(String search, Long areaId, Long societyId, User actingAdmin) {
         List<User> all = userRepository.findByRole(UserRole.BUYER);
         String term = search == null ? null : search.trim().toLowerCase();
-        boolean filtering = (term != null && !term.isEmpty()) || areaId != null || societyId != null;
+        // Handover 15: an Area Admin's own Area overrides anything the browser sent.
+        Long scope = adminAreaScope(actingAdmin);
+        final Long effectiveArea = scope != null ? scope : areaId;
+        final Long effectiveSociety = societyId;
+        boolean filtering = (term != null && !term.isEmpty())
+                || effectiveArea != null || effectiveSociety != null;
 
         // Order-number matching is only needed when an order-like term was typed.
         // Building the set up front would scan every order for every keystroke
@@ -385,10 +391,13 @@ public class AdminService {
 
         final Set<Long> orderTermMatches = buyersMatchingOrderTerm;
         return all.stream().filter(b -> {
-            if (societyId != null) {
-                if (b.getSocietyRef() == null || !societyId.equals(b.getSocietyRef().getId())) return false;
+            if (effectiveSociety != null) {
+                if (b.getSocietyRef() == null || !effectiveSociety.equals(b.getSocietyRef().getId())) return false;
             }
-            if (areaId != null && !resolveBuyerAreaId(b).equals(areaId)) return false;
+            // Null-safe, and compared the good way round: a buyer with no Area
+            // reference yet must be EXCLUDED by an Area filter, not blow up the
+            // whole search for the operator.
+            if (effectiveArea != null && !effectiveArea.equals(resolveBuyerAreaId(b))) return false;
             if (term == null || term.isEmpty()) return true;
             if (b.getId() != null && orderTermMatches != null && orderTermMatches.contains(b.getId())) return true;
             return textMatches(term, b.getName(), b.getMobileNumber(), b.getSociety(), b.getBuilding());
@@ -396,12 +405,25 @@ public class AdminService {
     }
 
     /**
-     * Unfiltered buyer list. Delegates to {@link #buyers(String, Long, Long)}
+     * Unfiltered buyer list. Delegates to {@link #buyers(String, Long, Long, User)}
      * with no criteria so the two paths can never drift apart.
      */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> buyers() {
-        return buyers(null, null, null);
+        return buyers(null, null, null, null);
+    }
+
+    /**
+     * Unscoped buyer search.
+     *
+     * <p>Present for callers that legitimately have no Admin identity to scope by
+     * (internal services and tests). Anything acting ON BEHALF OF AN ADMIN must use
+     * the four-argument form with the acting Admin, or the handover 15 Area scope
+     * would be silently bypassed.</p>
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> buyers(String search, Long areaId, Long societyId) {
+        return buyers(search, areaId, societyId, null);
     }
 
     private static boolean orderNumberMatches(Order o, String term) {
@@ -912,7 +934,7 @@ public class AdminService {
         // the name/mobile/society/order-id term as well as Area and Society.
         for (Map<String, Object> b : buyers(filter != null ? filter.search : null,
                 filter != null ? filter.areaId : null,
-                filter != null ? filter.societyId : null)) {
+                filter != null ? filter.societyId : null, null)) {
             Long buyerId = (Long) b.get("id");
             List<Order> buyerOrders = matchingOrders(filter).stream()
                     .filter(o -> o.getBuyer() != null && o.getBuyer().getId().equals(buyerId))
@@ -951,6 +973,91 @@ public class AdminService {
                 "ordersCancelled", "ordersDraft")) {
             out.append(csv(key)).append(',').append(csv(d.get(key))).append('\n');
         }
+    }
+
+    // ==================== Admin role scope (handover 15) ====================
+
+    /**
+     * The Area this admin is responsible for, or {@code null} for global scope.
+     *
+     * <p>SUPER_ADMIN is always global: the handover gives them "all Areas". A
+     * plain ADMIN is scoped only when a Super Admin has explicitly assigned one;
+     * an unassigned ADMIN behaves exactly as before, so introducing the concept
+     * can never silently narrow anyone's access.</p>
+     *
+     * <p>Returned as the AUTHORITY's scope and applied on the server, so the
+     * boundary holds no matter what the browser sends.</p>
+     */
+    @Transactional(readOnly = true)
+    public Long adminAreaScope(User actingAdmin) {
+        if (actingAdmin == null) return null;
+        if (actingAdmin.getRole() != UserRole.ADMIN) return null; // SUPER_ADMIN/global
+        return actingAdmin.getAdminAreaId();
+    }
+
+    /**
+     * Pins a read filter to the acting admin's Area.
+     *
+     * <p>An Area Admin's own Area always WINS over a filter the browser sent: a
+     * crafted request for another Area cannot widen the scope, and an explicit
+     * request for a different Area is corrected to the admin's Area rather than
+     * silently returning nothing.</p>
+     */
+    private OrderFilter scoped(OrderFilter filter, User actingAdmin) {
+        Long scope = adminAreaScope(actingAdmin);
+        if (scope == null) return filter;
+        OrderFilter f = filter != null ? filter : new OrderFilter();
+        f.areaId = scope;
+        return f;
+    }
+
+    /** Throws unless this admin may act on a record in {@code areaId}. */
+    private void requireAreaAccess(Long areaId, User actingAdmin) {
+        Long scope = adminAreaScope(actingAdmin);
+        if (scope == null) return; // global
+        if (areaId == null || !scope.equals(areaId)) {
+            throw new SellerNotAuthorizedException("This record is outside your assigned Area.");
+        }
+    }
+
+    /** The Area a seller operates in, or null when it cannot be determined. */
+    private Long sellerAreaId(User seller) {
+        for (Kitchen k : kitchenRepository.findBySeller(seller)) {
+            if (k.getServedSocieties() != null) {
+                for (Society soc : k.getServedSocieties()) {
+                    if (soc.getArea() != null) return soc.getArea().getId();
+                }
+            }
+        }
+        return null;
+    }
+
+    /** An Area Admin may only act on sellers inside their own Area. */
+    private void requireSellerAccess(User seller, User actingAdmin) {
+        Long scope = adminAreaScope(actingAdmin);
+        if (scope == null) return;
+        Long sellerArea = sellerAreaId(seller);
+        if (sellerArea == null || !scope.equals(sellerArea)) {
+            throw new SellerNotAuthorizedException("This seller is outside your assigned Area.");
+        }
+    }
+
+    /** An Area Admin may only act on buyers inside their own Area. */
+    private void requireBuyerAccess(User buyer, User actingAdmin) {
+        Long scope = adminAreaScope(actingAdmin);
+        if (scope == null) return;
+        if (!scope.equals(resolveBuyerAreaId(buyer))) {
+            throw new SellerNotAuthorizedException("This buyer is outside your assigned Area.");
+        }
+    }
+
+    /** The Area a storefront serves, or null when it serves none. */
+    private Long storefrontAreaId(Kitchen k) {
+        if (k == null || k.getServedSocieties() == null) return null;
+        for (Society s : k.getServedSocieties()) {
+            if (s != null && s.getArea() != null) return s.getArea().getId();
+        }
+        return null;
     }
 
     // ==================== Attention / Pending actions ====================
@@ -1355,6 +1462,7 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
 
     @Transactional
     public User approveSeller(Long sellerId, User actingAdmin) {
+        requireSellerAccess(requireSeller(sellerId), actingAdmin); // handover 15
         User seller = requireSeller(sellerId);
         SellerApprovalStatus from = seller.getSellerApprovalStatus();
         seller.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
@@ -1618,6 +1726,8 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
     @Transactional
     public Map<String, Object> pauseStorefront(Long kitchenId, String note, User actingAdmin) {
         Kitchen k = requireKitchen(kitchenId);
+        // Handover 15: a storefront outside the admin's Area is not theirs to stop.
+        requireAreaAccess(storefrontAreaId(k), actingAdmin);
         boolean was = k.isStorefrontPaused();
         k.setStorefrontPaused(true);
         kitchenRepository.save(k);
@@ -1685,6 +1795,9 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException("A reason is required when blocking a buyer.");
         }
+        // Handover 15: scoped before any mutation, so an Area Admin cannot reach
+        // a buyer outside their Area even with a correct buyer id.
+        requireBuyerAccess(requireBuyer(buyerId), actingAdmin);
         User buyer = requireBuyer(buyerId);
         boolean was = buyer.isBlocked();
         buyer.setBlocked(true);
@@ -1752,7 +1865,19 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
      */
     @Transactional(readOnly = true)
     public Map<String, Object> buyerDetail(Long buyerId) {
+        return buyerDetail(buyerId, null);
+    }
+
+    /**
+     * Buyer detail, optionally scoped to an Area Admin (handover 15).
+     *
+     * <p>{@code actingAdmin} null means global scope, which is what every caller
+     * without an Admin identity gets.</p>
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> buyerDetail(Long buyerId, User actingAdmin) {
         User buyer = requireBuyer(buyerId);
+        requireBuyerAccess(buyer, actingAdmin); // handover 15
         List<Order> orders = orderRepository.findByBuyerOrderByCreatedAtDesc(buyer);
 
         Map<String, Object> m = new LinkedHashMap<>();
