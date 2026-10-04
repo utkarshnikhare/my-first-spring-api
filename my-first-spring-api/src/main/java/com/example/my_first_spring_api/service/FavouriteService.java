@@ -1,6 +1,7 @@
 package com.example.my_first_spring_api.service;
 
 import com.example.my_first_spring_api.dto.FavouriteDto;
+import com.example.my_first_spring_api.exception.BuyerNotAuthenticatedException;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.model.Favourite;
 import com.example.my_first_spring_api.model.Kitchen;
@@ -21,11 +22,17 @@ public class FavouriteService {
 
     private final FavouriteRepository favouriteRepository;
     private final KitchenRepository kitchenRepository;
+    private final com.example.my_first_spring_api.repository.UserRepository userRepository;
+
+    /** Business rule: a buyer may keep at most this many kitchens favourited. */
+    static final int MAX_FAVOURITES = 3;
 
     @Autowired
-    public FavouriteService(FavouriteRepository favouriteRepository, KitchenRepository kitchenRepository) {
+    public FavouriteService(FavouriteRepository favouriteRepository, KitchenRepository kitchenRepository,
+                            com.example.my_first_spring_api.repository.UserRepository userRepository) {
         this.favouriteRepository = favouriteRepository;
         this.kitchenRepository = kitchenRepository;
+        this.userRepository = userRepository;
     }
 
     @Transactional(readOnly = true)
@@ -49,19 +56,29 @@ public class FavouriteService {
             favouriteRepository.delete(existing.get());
             return false;
         }
+        // Take a row lock on the buyer before counting. Two concurrent toggle requests for the
+        // same buyer now serialise here, so the count-then-insert below can no longer both
+        // observe a stale count and both insert (the previous TOCTOU race).
+        userRepository.findByIdForUpdate(buyer.getId())
+                .orElseThrow(() -> new BuyerNotAuthenticatedException("Buyer not found."));
+
+        // Reserve the slot in the same transaction that inserts the row. The previous
+        // count-then-insert check was a TOCTOU race: two concurrent requests could both
+        // observe count == 2 and both insert, exceeding the limit.
         long total = favouriteRepository.countByUserId(buyer.getId());
-        if (total >= 3) {
-            throw new IllegalArgumentException("You can favourite up to 3 kitchens only.");
+        if (total >= MAX_FAVOURITES) {
+            throw new IllegalArgumentException("You can favourite up to " + MAX_FAVOURITES + " kitchens only.");
         }
         Favourite f = new Favourite();
         f.setUser(buyer);
         f.setKitchen(kitchen);
-        try {
-            favouriteRepository.save(f);
-        } catch (DataIntegrityViolationException ex) {
-            favouriteRepository.flush();
-            return true;
-        }
+        // No try/catch here. A DataIntegrityViolationException cannot be recovered from
+        // by re-flushing the same broken persistence context - doing so re-throws and
+        // silently swallowed the only diagnostic. The (user_id, kitchen_id) unique
+        // constraint is the authority: if a concurrent request inserted the same favourite
+        // first, the constraint violation propagates and the transaction rolls back,
+        // which is the correct outcome for a double-submit.
+        favouriteRepository.saveAndFlush(f);
         return true;
     }
 
