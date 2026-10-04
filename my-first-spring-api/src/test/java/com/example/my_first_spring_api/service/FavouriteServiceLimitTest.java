@@ -23,6 +23,9 @@ class FavouriteServiceLimitTest {
 
     @Mock FavouriteRepository favouriteRepository;
     @Mock KitchenRepository kitchenRepository;
+    /** Added with the TOCTOU fix: toggleKitchen now takes a PESSIMISTIC_WRITE lock on the
+     *  buyer row before counting, so this repository is part of the collaborator set. */
+    @Mock UserRepository userRepository;
 
     @InjectMocks FavouriteService favouriteService;
 
@@ -36,6 +39,8 @@ class FavouriteServiceLimitTest {
         // The buyer must belong to a service area, otherwise the favourite is refused
         // as out-of-area before the limit under test is ever reached.
         buyer.setSociety(SOCIETY);
+        // The row lock acquired before the count resolves to the buyer under test.
+        when(userRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(buyer));
     }
 
     /** A kitchen inside the buyer's service area. */
@@ -58,7 +63,7 @@ class FavouriteServiceLimitTest {
         when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
         when(favouriteRepository.findByUserIdAndKitchenId(1L, 1L)).thenReturn(Optional.empty());
         when(favouriteRepository.countByUserId(1L)).thenReturn(0L, 1L, 2L);
-        when(favouriteRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(favouriteRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
         assertThat(favouriteService.toggleKitchen(buyer, 1L)).isTrue();
         assertThat(favouriteService.toggleKitchen(buyer, 1L)).isTrue();

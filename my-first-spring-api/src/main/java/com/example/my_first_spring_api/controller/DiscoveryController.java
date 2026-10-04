@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -101,12 +102,25 @@ public class DiscoveryController {
         return ResponseEntity.ok(discoveryService.getHomemadeStores(buyer));
     }
 
+    /**
+     * Parses a category request parameter.
+     *
+     * <p>Previously an unrecognised value was swallowed and turned into {@code null}
+     * (meaning "all categories"), while the response still echoed the raw parameter.
+     * A request for {@code ?category=BOGUS} therefore returned every category's items
+     * labelled {@code "BOGUS"} - a response that misrepresented its own contents.
+     * An invalid enum value is a client error and is now rejected with 400.</p>
+     *
+     * @throws IllegalArgumentException when the value is not a known category.
+     */
     private Category parseCategory(String category) {
         if (category == null || category.isBlank()) return null;
         try {
-            return Category.valueOf(category.trim().toUpperCase());
+            return Category.valueOf(category.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            return null;
+            throw new IllegalArgumentException("Unknown category '" + category.trim()
+                    + "'. Supported: " + java.util.Arrays.stream(Category.values())
+                            .map(Enum::name).collect(java.util.stream.Collectors.joining(", ")) + ".");
         }
     }
 }

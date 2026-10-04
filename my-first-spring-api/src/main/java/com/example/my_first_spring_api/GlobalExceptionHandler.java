@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
+import org.springframework.validation.ObjectError;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -34,15 +35,38 @@ public class GlobalExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /**
+     * Bean-validation failures.
+     *
+     * <p>Two defects fixed here. (1) This handler used to answer with a bare
+     * {@code Map<String,String>} while every other handler answers with
+     * {@link ApiErrorDto}, so clients had to parse two different error shapes from one
+     * service; it now returns the same DTO as everything else. (2) It used to cast every
+     * binding error to {@code FieldError}. {@code getAllErrors()} yields {@code ObjectError},
+     * and a class-level constraint (for example {@code @AssertTrue} on the DTO) produces a
+     * plain {@code ObjectError} - the cast then threw inside the exception handler and turned
+     * a 400 into a 500. The {@code instanceof} guard makes the handler total.</p>
+     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ApiErrorDto> handleValidationExceptions(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getAllErrors().forEach((error) -> {
-            String fieldName = ((FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
-            errors.put(fieldName, errorMessage);
-        });
-        return new ResponseEntity<>(errors, HttpStatus.BAD_REQUEST);
+        String general = null;
+        for (ObjectError error : ex.getBindingResult().getAllErrors()) {
+            String message = error.getDefaultMessage();
+            if (error instanceof FieldError fieldError) {
+                errors.put(fieldError.getField(), message);
+            } else {
+                // Object-level (class-level) constraint: no field name exists.
+                general = message;
+            }
+        }
+        if (!errors.isEmpty()) {
+            return new ResponseEntity<>(new ApiErrorDto("VALIDATION_ERROR",
+                    "Invalid request fields: " + errors, 400), HttpStatus.BAD_REQUEST);
+        }
+        return new ResponseEntity<>(new ApiErrorDto("VALIDATION_ERROR",
+                general != null ? general : "The submitted data is invalid.", 400),
+                HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(HandlerMethodValidationException.class)
