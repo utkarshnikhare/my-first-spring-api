@@ -32,6 +32,10 @@ public class AnalyticsService {
     public static final String EV_SELLER_REGISTERED = "SELLER_REGISTERED";
     public static final String EV_SELLER_APPROVED = "SELLER_APPROVED";
     public static final String EV_ORDER_PLACED = "ORDER_PLACED";
+    // Handover 18: capture "order delivered/cancelled" while the event occurs so
+    // aggregate analytics survive the detailed-order retention purge.
+    public static final String EV_ORDER_DELIVERED = "ORDER_DELIVERED";
+    public static final String EV_ORDER_CANCELLED = "ORDER_CANCELLED";
     public static final String EV_ORDER_NOW_CLICK = "ORDER_NOW_CLICK";
     public static final String EV_ENQUIRY_SUBMITTED = "ENQUIRY_SUBMITTED";
     public static final String EV_ENQUIRY_CLICK = "ENQUIRY_CLICK";
@@ -63,6 +67,11 @@ public class AnalyticsService {
         } catch (RuntimeException ignored) {
             // Analytics must never break a user-facing action.
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<Object[]> trafficByKitchen() {
+        return analyticsEventRepository.countStorefrontAndProductViewsByKitchen();
     }
 
     @Transactional(readOnly = true)
