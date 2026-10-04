@@ -76,6 +76,18 @@ public class Kitchen {
     @Column(name = "seller_type", nullable = false, length = 30)
     private SellerType sellerType = SellerType.KITCHEN;
 
+    /**
+     * Admin storefront pause (handover section 7.3: "Pause storefront -
+     * Temporary operational stop. Existing orders remain; new orders
+     * blocked/hidden as designed.").
+     *
+     * <p>Distinct from {@link #availableToday}, which is the seller's own
+     * daily availability toggle, and from {@code storefrontRemoved}, which is a
+     * soft removal. An Admin pause is an enforcement action and is audited.
+     */
+    @Column(name = "storefront_paused", nullable = false)
+    private boolean storefrontPaused = false;
+
     @Column(name = "order_deadline")
     private String orderDeadline;
 
@@ -155,6 +167,8 @@ public class Kitchen {
     public Boolean getAvailableToday() { return availableToday; }
     public void setAvailableToday(Boolean availableToday) { this.availableToday = availableToday; }
     public SellerType getSellerType() { return sellerType; }
+    public boolean isStorefrontPaused() { return storefrontPaused; }
+    public void setStorefrontPaused(boolean storefrontPaused) { this.storefrontPaused = storefrontPaused; }
     public void setSellerType(SellerType sellerType) { this.sellerType = sellerType; }
     public String getOrderDeadline() { return orderDeadline; }
     public void setOrderDeadline(String orderDeadline) { this.orderDeadline = orderDeadline; }

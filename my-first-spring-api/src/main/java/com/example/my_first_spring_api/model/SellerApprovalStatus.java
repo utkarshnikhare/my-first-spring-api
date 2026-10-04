@@ -9,5 +9,11 @@ public enum SellerApprovalStatus {
     PENDING,
     APPROVED,
     REJECTED,
+    /**
+     * Admin handover section 7.1 requires a third decision besides Approve and
+     * Reject: "Request Changes". The seller stays in the approval queue and is
+     * not yet serving, which is what distinguishes this from REJECTED.
+     */
+    CHANGES_REQUESTED,
     SUSPENDED
 }

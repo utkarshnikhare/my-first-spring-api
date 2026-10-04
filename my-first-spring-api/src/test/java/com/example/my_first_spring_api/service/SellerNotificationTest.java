@@ -30,6 +30,7 @@ class SellerNotificationTest {
     @Mock private UserRepository userRepository;
     @Mock private AnalyticsService analyticsService;
     @Mock private NotificationService notificationService;
+    @Mock private RetentionService retentionService;
 
     @InjectMocks private OrderService orderService;
 

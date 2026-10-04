@@ -30,14 +30,27 @@ public class AdminController {
         this.buyerService = buyerService;
     }
 
+    /**
+     * Dashboard with an optional date selector (handover 4/17: Today /
+     * Last 5 Days / Custom). Omitting {@code date} keeps today's figures.
+     */
     @GetMapping("/dashboard")
-    public ResponseEntity<Map<String, Object>> dashboard() {
-        return ResponseEntity.ok(adminService.dashboard());
+    public ResponseEntity<Map<String, Object>> dashboard(@RequestParam(required = false) String date) {
+        return ResponseEntity.ok(adminService.dashboard(date));
     }
 
+    /**
+     * Buyer list + handover-8 search. All parameters are optional and compose
+     * with AND; omitting every one returns the unfiltered list, so this
+     * replaces the previous single-purpose endpoint rather than adding a
+     * second one.
+     */
     @GetMapping("/buyers")
-    public ResponseEntity<List<Map<String, Object>>> buyers() {
-        return ResponseEntity.ok(adminService.buyers());
+    public ResponseEntity<List<Map<String, Object>>> buyers(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Long areaId,
+            @RequestParam(required = false) Long societyId) {
+        return ResponseEntity.ok(adminService.buyers(search, areaId, societyId));
     }
 
     /**
@@ -129,8 +142,10 @@ public class AdminController {
     /** Rename and/or enable-disable an Area. Absent fields are left untouched. */
     @PatchMapping("/areas/{areaId}")
     public ResponseEntity<Map<String, Object>> updateArea(@PathVariable Long areaId,
-                                                          @RequestBody(required = false) Map<String, Object> body) {
-        return ResponseEntity.ok(adminService.updateArea(areaId, bodyStr(body, "name"), bodyBool(body, "active")));
+                                                          @RequestBody(required = false) Map<String, Object> body,
+                                                          HttpSession session) {
+        return ResponseEntity.ok(adminService.updateArea(areaId, bodyStr(body, "name"),
+                bodyBool(body, "active"), buyerService.requireCurrentBuyer(session)));
     }
 
     @PostMapping("/societies")
@@ -142,9 +157,10 @@ public class AdminController {
     /** Rename and/or enable-disable a Society. Absent fields are left untouched. */
     @PatchMapping("/societies/{societyId}")
     public ResponseEntity<Map<String, Object>> updateSociety(@PathVariable Long societyId,
-                                                             @RequestBody(required = false) Map<String, Object> body) {
+                                                             @RequestBody(required = false) Map<String, Object> body,
+                                                             HttpSession session) {
         return ResponseEntity.ok(adminService.updateSociety(societyId, bodyStr(body, "name"),
-                bodyBool(body, "active")));
+                bodyBool(body, "active"), buyerService.requireCurrentBuyer(session)));
     }
 
     private static String bodyStr(Map<String, Object> body, String key) {
@@ -302,6 +318,138 @@ public class AdminController {
         User admin = buyerService.requireCurrentBuyer(session);
         return ResponseEntity.ok(toSellerSummary(adminService.suspendSeller(id,
                 body != null ? body.get("reason") : null, admin)));
+    }
+
+    @PostMapping("/sellers/{id}/request-changes")
+    public ResponseEntity<Map<String, Object>> requestChanges(@PathVariable Long id,
+                                                              @RequestBody(required = false) Map<String, String> body,
+                                                              HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        return ResponseEntity.ok(toSellerSummary(adminService.requestSellerChanges(id,
+                body != null ? body.get("reason") : null, admin)));
+    }
+
+    @GetMapping("/sellers/{id}/detail")
+    public ResponseEntity<Map<String, Object>> sellerDetail(@PathVariable Long id) {
+        return ResponseEntity.ok(adminService.sellerDetail(id));
+    }
+
+    // ---------- Storefront controls (handover 7.3) ----------
+
+    @PostMapping("/storefronts/{kitchenId}/pause")
+    public ResponseEntity<Map<String, Object>> pauseStorefront(@PathVariable Long kitchenId,
+                                                                @RequestBody(required = false) Map<String, String> body,
+                                                                HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.pauseStorefront(kitchenId,
+                body != null ? body.get("note") : null, admin));
+    }
+
+    @PostMapping("/storefronts/{kitchenId}/resume")
+    public ResponseEntity<Map<String, Object>> resumeStorefront(@PathVariable Long kitchenId, HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.resumeStorefront(kitchenId, admin));
+    }
+
+    @PostMapping("/storefronts/{kitchenId}/remove")
+    public ResponseEntity<Map<String, Object>> removeStorefront(@PathVariable Long kitchenId,
+                                                                @RequestBody(required = false) Map<String, String> body,
+                                                                HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.removeStorefront(kitchenId,
+                body != null ? body.get("reason") : null, admin));
+    }
+    // ---------- Buyer support controls (handover 8) ----------
+
+    @PostMapping("/buyers/{id}/block")
+    public ResponseEntity<Map<String, Object>> blockBuyer(@PathVariable Long id,
+                                                          @RequestBody(required = false) Map<String, String> body,
+                                                          HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.blockBuyer(id, body != null ? body.get("reason") : null, admin));
+    }
+
+    @PostMapping("/buyers/{id}/unblock")
+    public ResponseEntity<Map<String, Object>> unblockBuyer(@PathVariable Long id,
+                                                            @RequestBody(required = false) Map<String, String> body,
+                                                            HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.unblockBuyer(id, body != null ? body.get("note") : null, admin));
+    }
+
+    @PostMapping("/buyers/{id}/support-note")
+    public ResponseEntity<Map<String, Object>> buyerSupportNote(@PathVariable Long id,
+                                                                 @RequestBody(required = false) Map<String, String> body,
+                                                                 HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.saveBuyerSupportNote(id, body != null ? body.get("note") : null, admin));
+    }
+
+    @GetMapping("/buyers/{id}")
+    public ResponseEntity<Map<String, Object>> buyerDetail(@PathVariable Long id) {
+        return ResponseEntity.ok(adminService.buyerDetail(id));
+    }
+
+    // ---------- Audit log (handover 14) ----------
+
+    @GetMapping("/audit-log")
+    public ResponseEntity<List<Map<String, Object>>> auditLog(
+            @RequestParam(required = false, defaultValue = "200") int limit) {
+        return ResponseEntity.ok(adminService.auditLog(limit));
+    }
+
+    @GetMapping("/audit-log/{targetType}/{targetId}")
+    public ResponseEntity<List<Map<String, Object>>> auditForTarget(@PathVariable String targetType,
+                                                                    @PathVariable Long targetId) {
+        return ResponseEntity.ok(adminService.auditForTarget(targetType, targetId));
+    }
+
+    // ---------- Retention (handover 12) ----------
+
+    @GetMapping("/retention")
+    public ResponseEntity<Map<String, Object>> retention() {
+        return ResponseEntity.ok(adminService.retention());
+    }
+
+    @PostMapping("/retention")
+    public ResponseEntity<Map<String, Object>> setRetention(@RequestBody Map<String, Object> body,
+                                                            HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        Object raw = body != null ? body.get("retentionDays") : null;
+        if (raw == null) throw new IllegalArgumentException("retentionDays is required.");
+        int days;
+        try {
+            days = Integer.parseInt(String.valueOf(raw).trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("retentionDays must be a whole number of days.");
+        }
+        return ResponseEntity.ok(adminService.setRetentionDays(days, admin));
+    }
+
+    // ---------- Commercial + seller analytics (handover 6 & 10) ----------
+
+    @GetMapping("/seller-analytics")
+    public ResponseEntity<List<Map<String, Object>>> sellerAnalytics(
+            @RequestParam(required = false) String date,
+            @RequestParam(required = false) Long areaId,
+            @RequestParam(required = false) Long societyId,
+            @RequestParam(required = false) Long sellerId,
+            @RequestParam(required = false) String category) {
+        AdminService.OrderFilter f = new AdminService.OrderFilter();
+        f.date = date; f.areaId = areaId; f.societyId = societyId; f.sellerId = sellerId; f.category = category;
+        return ResponseEntity.ok(adminService.sellerAnalytics(f));
+    }
+
+    @GetMapping("/recorded-order-value")
+    public ResponseEntity<Map<String, Object>> recordedOrderValue(
+            @RequestParam(required = false) String date,
+            @RequestParam(required = false) Long areaId,
+            @RequestParam(required = false) Long societyId,
+            @RequestParam(required = false) Long sellerId,
+            @RequestParam(required = false) String category) {
+        AdminService.OrderFilter f = new AdminService.OrderFilter();
+        f.date = date; f.areaId = areaId; f.societyId = societyId; f.sellerId = sellerId; f.category = category;
+        return ResponseEntity.ok(adminService.recordedOrderValueSummary(f));
     }
 
     @GetMapping("/analytics")

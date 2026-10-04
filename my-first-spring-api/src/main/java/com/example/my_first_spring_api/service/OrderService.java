@@ -27,6 +27,7 @@ public class OrderService {
     private final UserRepository userRepository;
     private final AnalyticsService analyticsService;
     private final NotificationService notificationService;
+    private final RetentionService retentionService;
 
     public static final String DRAFT_ORDER_SESSION_KEY = "DRAFT_ORDER_ID";
     private static final String BUYER_SESSION_KEY = "BUYER_USER";
@@ -36,13 +37,15 @@ public class OrderService {
     @Autowired
     public OrderService(OrderRepository orderRepository, KitchenRepository kitchenRepository,
                         ProductRepository productRepository, UserRepository userRepository,
-                        AnalyticsService analyticsService, NotificationService notificationService) {
+                        AnalyticsService analyticsService, NotificationService notificationService,
+                        RetentionService retentionService) {
         this.orderRepository = orderRepository;
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
         this.analyticsService = analyticsService;
         this.notificationService = notificationService;
+        this.retentionService = retentionService;
     }
 
     public OrderDto createOrUpdateDraftOrder(Long kitchenId, List<OrderItemRequest> items, HttpSession session) {
@@ -305,7 +308,12 @@ public class OrderService {
         session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
         analyticsService.record(AnalyticsService.EV_ORDER_PLACED, buyer.getId(),
                 buyer.getMobileNumber(), order.getKitchen() != null ? order.getKitchen().getId() : null,
-                order.getOrderNumber());
+                orderPlacedDetail(order, buyer));
+        // Handover 12: roll the commercial fact into the durable daily aggregate
+        // at the moment the order is placed - the only point where it is
+        // counted exactly once. Delivery and cancellation deliberately do NOT
+        // call this: the upsert is additive, so a second call would double-count.
+        retentionService.recordOrderFact(order);
         String productSummary = order.getItems() == null ? "items" : order.getItems().stream()
                 .map(item -> item.getProduct() != null ? item.getProduct().getName() : "item")
                 .collect(Collectors.joining(", "));
@@ -450,6 +458,14 @@ public class OrderService {
         }
         order.setOrderStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
+        // Handover 18: capture "order cancelled" while the event occurs, so the
+        // aggregate outlives the detailed-order retention purge. Both the buyer's
+        // cancel and the seller's cancel route through this one method.
+        analyticsService.record(AnalyticsService.EV_ORDER_CANCELLED,
+                order.getBuyer() != null ? order.getBuyer().getId() : null,
+                order.getBuyer() != null ? order.getBuyer().getMobileNumber() : null,
+                order.getKitchen() != null ? order.getKitchen().getId() : null,
+                order.getOrderNumber());
         return order;
     }
 
@@ -526,8 +542,17 @@ public class OrderService {
                             : "This order is not an active customer order yet.");
         }
         // Backend clock only: the browser's clock is never authoritative.
-        order.applyDeliveryStatus(target, seller, LocalDateTime.now());
+        boolean changed = order.applyDeliveryStatus(target, seller, LocalDateTime.now());
         orderRepository.save(order);
+        if (changed && target == DeliveryStatus.DELIVERED) {
+            // Handover 18: capture "order delivered" on the real transition only,
+            // so a repeated Mark Delivered never duplicates the analytics record.
+            analyticsService.record(AnalyticsService.EV_ORDER_DELIVERED,
+                    order.getBuyer() != null ? order.getBuyer().getId() : null,
+                    order.getBuyer() != null ? order.getBuyer().getMobileNumber() : null,
+                    order.getKitchen() != null ? order.getKitchen().getId() : null,
+                    order.getOrderNumber());
+        }
         return toOrderDto(order);
     }
 
@@ -566,6 +591,12 @@ public class OrderService {
             if (order.applyDeliveryStatus(DeliveryStatus.DELIVERED, seller, now)) {
                 orderRepository.save(order);
                 updated++;
+                // Handover 18: one DELIVERED event per order that actually changed.
+                analyticsService.record(AnalyticsService.EV_ORDER_DELIVERED,
+                        order.getBuyer() != null ? order.getBuyer().getId() : null,
+                        order.getBuyer() != null ? order.getBuyer().getMobileNumber() : null,
+                        order.getKitchen() != null ? order.getKitchen().getId() : null,
+                        order.getOrderNumber());
             }
         }
         // Progress is recomputed from the SAME rows just written, so the numbers
@@ -967,6 +998,41 @@ public class OrderService {
             buyer.setBuilding(buyerDetails.getBuilding());
         }
         userRepository.save(buyer);
+    }
+
+    /**
+     * Handover 18: "order_placed with order value, seller/storefront, Area,
+     * Society and category". The detail string is stored ON the event row, so
+     * aggregate analytics stay correct even after the detailed-order retention
+     * purge deletes the order itself.
+     *
+     * <p>Format: {@code ORDER-123;value=250.00;storefront=4;seller=7;category=KITCHEN;societyId=2;society=Green Park;areaId=1;area=HSR;payment=COD}.
+     * Area/society prefer the canonical reference rows and fall back to the
+     * free-text values the buyer typed when no reference is attached.</p>
+     */
+    private static String orderPlacedDetail(Order order, User buyer) {
+        StringBuilder sb = new StringBuilder(order.getOrderNumber() == null ? "ORDER" : order.getOrderNumber());
+        sb.append(";value=").append(order.getTotalAmount() != null ? order.getTotalAmount() : "0");
+        Kitchen kitchen = order.getKitchen();
+        if (kitchen != null) {
+            sb.append(";storefront=").append(kitchen.getId());
+            if (kitchen.getSeller() != null) sb.append(";seller=").append(kitchen.getSeller().getId());
+            sb.append(";category=").append(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : "UNKNOWN");
+        }
+        Society society = buyer.getSocietyRef();
+        if (society != null) {
+            sb.append(";societyId=").append(society.getId()).append(";society=").append(society.getName());
+        } else if (buyer.getSociety() != null && !buyer.getSociety().isBlank()) {
+            sb.append(";society=").append(buyer.getSociety());
+        }
+        Area area = buyer.getAreaRef() != null ? buyer.getAreaRef() : (society != null ? society.getArea() : null);
+        if (area != null) {
+            sb.append(";areaId=").append(area.getId()).append(";area=").append(area.getName());
+        } else if (buyer.getArea() != null && !buyer.getArea().isBlank()) {
+            sb.append(";area=").append(buyer.getArea());
+        }
+        sb.append(";payment=").append(order.getPaymentStatus() != null ? order.getPaymentStatus().name() : "UNKNOWN");
+        return sb.toString();
     }
 }
 

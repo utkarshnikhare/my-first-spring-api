@@ -25,4 +25,23 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEvent, 
 
     @Query("select count(o) from Order o where o.orderStatus <> com.example.my_first_spring_api.model.OrderStatus.DRAFT")
     long countNonDraftOrders();
+
+    /**
+     * Admin handover section 6: storefront views and offering views per
+     * storefront, derived from events the application actually records. Returns
+     * {@code [kitchenId, storefrontViews, offeringViews]}.
+     *
+     * <p>Counted over ALL time, not just today, because the Admin analytics
+     * screen applies its own date filters to the order side and a storefront
+     * that was never opened today would otherwise read as zero traffic forever.
+     */
+    @Query("select a.kitchenId, "
+            + "sum(case when a.eventType = com.example.my_first_spring_api.service.AnalyticsService.EV_HOMEMADE_STOREFRONT_VIEW then 1 else 0 end), "
+            + "sum(case when a.eventType = com.example.my_first_spring_api.service.AnalyticsService.EV_PRODUCT_VIEW then 1 else 0 end) "
+            + "from AnalyticsEvent a "
+            + "where a.kitchenId is not null "
+            + "and a.eventType in (com.example.my_first_spring_api.service.AnalyticsService.EV_HOMEMADE_STOREFRONT_VIEW, "
+            + "com.example.my_first_spring_api.service.AnalyticsService.EV_PRODUCT_VIEW) "
+            + "group by a.kitchenId")
+    List<Object[]> countStorefrontAndProductViewsByKitchen();
 }

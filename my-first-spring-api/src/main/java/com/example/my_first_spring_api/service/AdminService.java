@@ -31,6 +31,8 @@ public class AdminService {
     private final AnalyticsService analyticsService;
     private final SocietyDirectory societyDirectory;
     private final LocationService locationService;
+    private final AdminAuditService auditService;
+    private final RetentionService retentionService;
     private final org.springframework.core.env.Environment environment;
 
     @Autowired
@@ -39,6 +41,8 @@ public class AdminService {
                         KitchenRepository kitchenRepository, EnquiryRepository enquiryRepository,
                         FavouriteRepository favouriteRepository, SocietyDirectory societyDirectory,
                         LocationService locationService,
+                        AdminAuditService auditService,
+                        RetentionService retentionService,
                         org.springframework.core.env.Environment environment) {
         this.userRepository = userRepository;
         this.analyticsService = analyticsService;
@@ -49,6 +53,8 @@ public class AdminService {
         this.favouriteRepository = favouriteRepository;
         this.societyDirectory = societyDirectory;
         this.locationService = locationService;
+        this.auditService = auditService;
+        this.retentionService = retentionService;
         this.environment = environment;
     }
 
@@ -56,7 +62,34 @@ public class AdminService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> dashboard() {
-        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
+        return dashboard(null);
+    }
+
+    /**
+     * Dashboard with an optional reporting window.
+     *
+     * <p>Handover 4/17 ask for a date selector (Today / Last 5 Days / Custom).
+     * The window is resolved HERE rather than in the browser so the traffic,
+     * order-count and recorded-value cards are always computed over exactly the
+     * same set of orders and can never disagree with each other.
+     *
+     * <p>{@code date} accepts {@code today}, {@code last5} or an explicit
+     * {@code yyyy-MM-dd}. An unrecognised value falls back to today rather than
+     * erroring, so a mistyped filter can never blank the operator's dashboard.</p>
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> dashboard(String date) {
+        LocalDate today = LocalDate.now();
+        LocalDate windowStart = resolveDashboardWindowStart(date, today);
+        LocalDateTime startOfToday = today.atStartOfDay();
+        // The window is a HALF-OPEN [start, end) range. "Today" and an explicit
+        // custom date cover exactly one day; "Last 5 Days" spans today and the
+        // four days before it. Ending at today+1 keeps "today's" orders included
+        // whatever time of day the dashboard is opened.
+        LocalDateTime rangeStart = windowStart.atStartOfDay();
+        LocalDateTime rangeEnd = isLastFiveDays(windowStart, today)
+                ? startOfToday.plusDays(1)
+                : windowStart.plusDays(1).atStartOfDay();
         LocalDateTime startOfMonth = YearMonth.now().atDay(1).atStartOfDay();
 
         List<User> allBuyers = userRepository.findByRole(UserRole.BUYER);
@@ -209,7 +242,72 @@ public class AdminService {
         out.put("ordersFulfilled", ordersFulfilled);
         out.put("ordersCancelled", ordersCancelled);
         out.put("ordersDraft", ordersDraft);
+        // ---- Selected-window figures (handover 4/17 date selector) ----
+        // Additive keys: the cards above keep their fixed semantics, so an
+        // existing consumer of /dashboard cannot silently change meaning.
+        final LocalDateTime from = rangeStart;
+        final LocalDateTime to = rangeEnd;
+        List<Order> inWindow = allOrders.stream()
+                .filter(o -> {
+                    LocalDateTime stamp = o.getOrderTime() != null ? o.getOrderTime() : o.getCreatedAt();
+                    return stamp != null && !stamp.isBefore(from) && stamp.isBefore(to);
+                })
+                .toList();
+        // Same DRAFT/CANCELLED exclusion as the headline value, so the window
+        // figures are directly comparable with the cards above them.
+        List<Order> counted = inWindow.stream()
+                .filter(o -> o.getOrderStatus() != OrderStatus.DRAFT && o.getOrderStatus() != OrderStatus.CANCELLED)
+                .toList();
+        BigDecimal windowValue = counted.stream()
+                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        out.put("selectedPeriod", describeDashboardWindow(windowStart, LocalDate.now()));
+        out.put("selectedStartDate", windowStart);
+        out.put("ordersInPeriod", counted.size());
+        out.put("recordedOrderValueInPeriod", windowValue);
+        out.put("buyersInPeriod", counted.stream()
+                .filter(o -> o.getBuyer() != null)
+                .map(o -> o.getBuyer().getId()).distinct().count());
+        out.put("sellersInPeriod", counted.stream()
+                .filter(o -> o.getKitchen() != null && o.getKitchen().getSeller() != null)
+                .map(o -> o.getKitchen().getSeller().getId()).distinct().count());
         return out;
+    }
+
+    /**
+     * Resolves the dashboard window to its inclusive start date.
+     *
+     * <p>{@code today} -&gt; today, {@code last5} -&gt; today minus 4 days (five
+     * calendar days inclusive), an explicit ISO date -&gt; that date. Blank or
+     * unparseable input falls back to today.</p>
+     */
+    static LocalDate resolveDashboardWindowStart(String date, LocalDate today) {
+        if (date == null || date.isBlank()) return today;
+        String v = date.trim().toLowerCase();
+        if ("last5".equals(v) || "last5days".equals(v) || "last_5_days".equals(v)) {
+            return today.minusDays(4);
+        }
+        if ("today".equals(v)) return today;
+        try {
+            LocalDate parsed = LocalDate.parse(date.trim());
+            // A future date has no data yet; showing it as an empty window would
+            // look like an outage, so clamp to today instead.
+            return parsed.isAfter(today) ? today : parsed;
+        } catch (RuntimeException ex) {
+            return today;
+        }
+    }
+
+    /** True when the resolved start is the "Last 5 Days" preset. */
+    static boolean isLastFiveDays(LocalDate start, LocalDate today) {
+        return start.equals(today.minusDays(4));
+    }
+
+    /** Human label for the active window, reused by the dashboard header. */
+    static String describeDashboardWindow(LocalDate start, LocalDate today) {
+        if (start.equals(today)) return "Today";
+        if (isLastFiveDays(start, today)) return "Last 5 Days";
+        return start.toString();
     }
 
     private boolean isLiveProduct(Product p) {
@@ -229,37 +327,113 @@ public class AdminService {
      * state for buyers. It reports profile completeness, which is genuinely
      * knowable today, rather than inventing a status the domain cannot store.</p>
      */
+    /**
+     * Admin V1 buyer search (handover 8: "Search by name, mobile, Area, Society
+     * or order ID").
+     *
+     * <p>Every parameter is optional and they compose with AND. {@code search}
+     * matches name / mobile / society / building AND - importantly - the
+     * buyer's ORDER ID or order number, so support can start from an order
+     * reference in a ticket and land on the right buyer. That order-number
+     * match is the only new capability here; the rest reuses the same fields
+     * the unfiltered list already returns.
+     *
+     * <p>Area/Society narrow on the buyer's STABLE references, matching how the
+     * Orders screen resolves location, never on the free-text strings.</p>
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> buyers(String search, Long areaId, Long societyId) {
+        List<User> all = userRepository.findByRole(UserRole.BUYER);
+        String term = search == null ? null : search.trim().toLowerCase();
+        boolean filtering = (term != null && !term.isEmpty()) || areaId != null || societyId != null;
+
+        // Order-number matching is only needed when an order-like term was typed.
+        // Building the set up front would scan every order for every keystroke
+        // even when the operator is filtering purely by location.
+        Set<Long> buyersMatchingOrderTerm = null;
+        if (term != null && !term.isEmpty()) {
+            buyersMatchingOrderTerm = new HashSet<>();
+            for (Order o : orderRepository.findAll()) {
+                if (o.getBuyer() == null || o.getBuyer().getId() == null) continue;
+                if (orderNumberMatches(o, term) || String.valueOf(o.getId()).equals(term)) {
+                    buyersMatchingOrderTerm.add(o.getBuyer().getId());
+                }
+            }
+        }
+
+        final Set<Long> orderTermMatches = buyersMatchingOrderTerm;
+        return all.stream().filter(b -> {
+            if (societyId != null) {
+                if (b.getSocietyRef() == null || !societyId.equals(b.getSocietyRef().getId())) return false;
+            }
+            if (areaId != null && !resolveBuyerAreaId(b).equals(areaId)) return false;
+            if (term == null || term.isEmpty()) return true;
+            if (b.getId() != null && orderTermMatches != null && orderTermMatches.contains(b.getId())) return true;
+            return textMatches(term, b.getName(), b.getMobileNumber(), b.getSociety(), b.getBuilding());
+        }).map(this::buyerRow).collect(Collectors.toList());
+    }
+
+    /**
+     * Unfiltered buyer list. Delegates to {@link #buyers(String, Long, Long)}
+     * with no criteria so the two paths can never drift apart.
+     */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> buyers() {
-        List<User> buyers = userRepository.findByRole(UserRole.BUYER);
-        return buyers.stream().map(b -> {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", b.getId());
-            m.put("name", b.getName());
-            m.put("mobileNumber", b.getMobileNumber());
-            m.put("society", b.getSociety());
-            m.put("societyId", b.getSocietyRef() != null ? b.getSocietyRef().getId() : null);
-            m.put("area", b.getArea());
-            m.put("areaId", resolveBuyerAreaId(b));
-            m.put("building", b.getBuilding());
-            m.put("flatHouseNumber", b.getFlatHouseNumber());
-            List<Order> orders = orderRepository.findByBuyerOrderByCreatedAtDesc(b);
-            m.put("orderCount", orders.size());
-            BigDecimal total = orders.stream()
-                    .filter(o -> o.getOrderStatus() != OrderStatus.DRAFT && o.getOrderStatus() != OrderStatus.CANCELLED)
-                    .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            m.put("totalOrderValue", total);
-            // Support picture: payment and delivery split, read from the same
-            // shared Order fields the seller and buyer screens use.
-            m.put("deliveredCount", orders.stream().filter(Order::isDelivered).count());
-            m.put("activeOrderCount", orders.stream().filter(Order::isActiveForDelivery).count());
-            m.put("paidCount", orders.stream().filter(o -> o.getPaymentStatus() == PaymentStatus.PAID).count());
-            m.put("accountStatus", b.getSocietyRef() != null ? "PROFILE_COMPLETE" : "PROFILE_INCOMPLETE");
-            m.put("favouriteKitchens", favouriteRepository.countByUser(b));
-            m.put("createdAt", b.getCreatedAt());
-            return m;
-        }).collect(Collectors.toList());
+        return buyers(null, null, null);
+    }
+
+    private static boolean orderNumberMatches(Order o, String term) {
+        String number = o.getOrderNumber();
+        return number != null && number.toLowerCase().contains(term);
+    }
+
+    private static boolean textMatches(String term, String... values) {
+        for (String v : values) {
+            if (v != null && v.toLowerCase().contains(term)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * One buyer row, shared by the unfiltered list and the searched list.
+     *
+     * <p>All figures are derived from the buyer's own orders, so a search
+     * result carries exactly the same data as the unfiltered list - searching
+     * never degrades or hides a field.</p>
+     */
+    private Map<String, Object> buyerRow(User b) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", b.getId());
+        m.put("name", b.getName());
+        m.put("mobileNumber", b.getMobileNumber());
+        m.put("society", b.getSociety());
+        m.put("societyId", b.getSocietyRef() != null ? b.getSocietyRef().getId() : null);
+        m.put("area", b.getArea());
+        m.put("areaId", resolveBuyerAreaId(b));
+        m.put("building", b.getBuilding());
+        m.put("flatHouseNumber", b.getFlatHouseNumber());
+        List<Order> orders = orderRepository.findByBuyerOrderByCreatedAtDesc(b);
+        m.put("orderCount", orders.size());
+        BigDecimal total = orders.stream()
+                .filter(o -> o.getOrderStatus() != OrderStatus.DRAFT && o.getOrderStatus() != OrderStatus.CANCELLED)
+                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        m.put("totalOrderValue", total);
+        // Support picture: payment and delivery split, read from the same
+        // shared Order fields the seller and buyer screens use.
+        m.put("deliveredCount", orders.stream().filter(Order::isDelivered).count());
+        m.put("activeOrderCount", orders.stream().filter(Order::isActiveForDelivery).count());
+        m.put("paidCount", orders.stream().filter(o -> o.getPaymentStatus() == PaymentStatus.PAID).count());
+        m.put("accountStatus", b.getSocietyRef() != null ? "PROFILE_COMPLETE" : "PROFILE_INCOMPLETE");
+        // Handover 8: the Buyers list needs the account state so the console can
+        // offer Block / Unblock on the right rows (blockedAt/reason feed the
+        // tooltip and the Buyer detail header).
+        m.put("blocked", b.isBlocked());
+        m.put("blockedReason", b.getBlockedReason());
+        m.put("blockedAt", b.getBlockedAt());
+        m.put("favouriteKitchens", favouriteRepository.countByUser(b));
+        m.put("createdAt", b.getCreatedAt());
+        return m;
     }
 
     // ==================== Sellers ====================
@@ -326,6 +500,11 @@ public class AdminService {
                                 .filter(java.util.Objects::nonNull)
                                 .collect(Collectors.toList()));
                 m.put("availableToday", k.getAvailableToday());
+                // Handover 7.3: the Admin Pause/Resume controls need the current
+                // storefront state on the row itself, or the console would offer
+                // "Pause" on an already-paused storefront.
+                m.put("paused", k.isStorefrontPaused());
+                m.put("removed", k.getSeller() != null && k.getSeller().isStorefrontRemoved());
                 m.put("imageUrl", k.getImageUrl());
                 m.put("instagramLink", k.getInstagramLink());
                 List<Product> products = productRepository.findByKitchen(k);
@@ -446,8 +625,15 @@ public class AdminService {
 
     // ==================== Orders ====================
 
-    @Transactional(readOnly = true)
-    public List<Map<String, Object>> orders(OrderFilter requested) {
+    /**
+     * The single source of truth for "which orders match this filter".
+     *
+     * <p>Both the map-returning {@link #orders(OrderFilter)} and the
+     * entity-level analytics readers run through this same predicate chain, so
+     * a seller-analytics figure can never describe a different set of orders
+     * than the Orders screen it sits next to.
+     */
+    private List<Order> matchingOrders(OrderFilter requested) {
         List<Order> all = orderRepository.findAll();
         LocalDateTime threeDaysAgo = LocalDateTime.now().minusDays(3);
         final OrderFilter f = requested != null ? requested : new OrderFilter();
@@ -483,8 +669,12 @@ public class AdminService {
                     if (b.getCreatedAt() == null) return -1;
                     return b.getCreatedAt().compareTo(a.getCreatedAt());
                 })
-                .map(this::adminOrderRow)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> orders(OrderFilter requested) {
+        return matchingOrders(requested).stream().map(this::adminOrderRow).collect(Collectors.toList());
     }
 
     /**
@@ -521,6 +711,15 @@ public class AdminService {
     @Transactional(readOnly = true)
     public String exportCsv(String domain, OrderFilter filter) {
         String safeDomain = domain == null ? "orders" : domain.trim().toLowerCase();
+        // An unknown domain must be an error, not a silent fallback to Orders.
+        // Previously "kitchens.csv" and "bogus.csv" both returned the Orders
+        // export under their own filename, so an operator could believe they had
+        // downloaded kitchens and actually hold order records (incl. buyer
+        // mobiles).
+        if (!EXPORT_DOMAINS.contains(safeDomain)) {
+            throw new IllegalArgumentException("Unknown export '" + safeDomain
+                    + "'. Supported: " + String.join(", ", EXPORT_DOMAINS) + ".");
+        }
         StringBuilder out = new StringBuilder();
         switch (safeDomain) {
             case "sellers" -> sellersCsv(out);
@@ -530,6 +729,10 @@ public class AdminService {
         }
         return out.toString();
     }
+
+    /** Domains the export screen may request. */
+    public static final Set<String> EXPORT_DOMAINS =
+            Set.of("orders", "sellers", "buyers", "analytics");
 
     /** Prepends the generated-at banner every Admin export carries. */
     private void csvBanner(StringBuilder out, String title, OrderFilter filter) {
@@ -554,14 +757,39 @@ public class AdminService {
         out.append('\n');
     }
 
-    /** RFC-4180 escaping: quote when the value contains a comma, quote or newline. */
+    /**
+     * RFC-4180 escaping: quote when the value contains a comma, quote or newline.
+     *
+     * <p>Also neutralises CSV/formula injection (OWASP CSV Injection). Buyer,
+     * seller and offering names are user-supplied, so a name such as
+     * {@code =cmd|...} would otherwise execute when an operator opens the
+     * downloaded file in Excel or Sheets. A leading {@code = + - @} (and the
+     * control characters Excel strips before evaluating) are prefixed with a
+     * single quote, which spreadsheets render as literal text.
+     */
     private static String csv(Object value) {
         if (value == null) return "";
         String s = String.valueOf(value);
+        s = neutraliseFormula(s);
         if (s.contains(",") || s.contains("\"") || s.contains("\n") || s.contains("\r")) {
             return '"' + s.replace("\"", "\"\"") + '"';
         }
         return s;
+    }
+
+    /** True when a CSV field would be interpreted as a formula by a spreadsheet. */
+    static boolean isFormulaLike(String s) {
+        if (s == null || s.isEmpty()) return false;
+        char first = s.charAt(0);
+        if (first == '=' || first == '+' || first == '-' || first == '@' || first == '\t' || first == '\r') {
+            return true;
+        }
+        // Excel ignores leading control characters when evaluating a cell.
+        return first < 0x20 && s.length() > 1 && isFormulaLike(s.substring(1));
+    }
+
+    private static String neutraliseFormula(String s) {
+        return isFormulaLike(s) ? "'" + s : s;
     }
 
     private static boolean notBlank(String s) { return s != null && !s.isBlank(); }
@@ -659,8 +887,26 @@ public class AdminService {
         List<Map<String, Object>> items = new ArrayList<>();
         long pending = userRepository.countByRoleAndSellerApprovalStatus(UserRole.SELLER, SellerApprovalStatus.PENDING);
         if (pending > 0) items.add(attention("Seller applications awaiting approval", pending, "#/approvals"));
+        long changes = userRepository.countByRoleAndSellerApprovalStatus(UserRole.SELLER,
+                SellerApprovalStatus.CHANGES_REQUESTED);
+        if (changes > 0) {
+            items.add(attention("Sellers waiting on requested changes", changes, "#/sellers"));
+        }
         long suspended = userRepository.countByRoleAndSellerApprovalStatus(UserRole.SELLER, SellerApprovalStatus.SUSPENDED);
         if (suspended > 0) items.add(attention("Suspended sellers", suspended, "#/sellers"));
+        // Handover 13 lists "Seller/storefront suspended OR PAUSED by Admin" and
+        // "Buyer blocked" explicitly. Both are read from the same columns the
+        // control screens write, so the panel can never disagree with them.
+        long pausedStorefronts = kitchenRepository.findAll().stream()
+                .filter(Kitchen::isStorefrontPaused).count();
+        if (pausedStorefronts > 0) {
+            items.add(attention("Paused storefronts", pausedStorefronts, "#/sellers"));
+        }
+        long blockedBuyers = userRepository.findByRole(UserRole.BUYER).stream()
+                .filter(User::isBlocked).count();
+        if (blockedBuyers > 0) {
+            items.add(attention("Blocked buyers", blockedBuyers, "#/buyers"));
+        }
         long awaiting = countOrders(OrderStatus.ORDERED);
         if (awaiting > 0) items.add(attention("Orders not yet confirmed by sellers", awaiting, "#/orders"));
         long unpaid = countOrders(PaymentStatus.PENDING) + countOrders(PaymentStatus.WILL_PAY_LATER);
@@ -976,32 +1222,77 @@ public class AdminService {
     @Transactional
     public User approveSeller(Long sellerId, User actingAdmin) {
         User seller = requireSeller(sellerId);
+        SellerApprovalStatus from = seller.getSellerApprovalStatus();
         seller.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
         seller.setSellerStatusReason(null);
         seller.setApprovedAt(LocalDateTime.now());
+        // Handover 7.1: store who acted, not just when.
+        seller.setApprovedBy(actingAdmin);
         analyticsService.record(AnalyticsService.EV_SELLER_APPROVED, seller.getId(),
                 seller.getMobileNumber(), null, "approved by " + actingAdmin.getMobileNumber());
-        return userRepository.save(seller);
+        User saved = userRepository.save(seller);
+        auditService.record(AdminAuditService.SELLER_APPROVED, actingAdmin, "SELLER",
+                seller.getId(), seller.getName(), String.valueOf(from), "APPROVED", null);
+        return saved;
     }
 
     @Transactional
     public User rejectSeller(Long sellerId, String reason, User actingAdmin) {
         User seller = requireSeller(sellerId);
+        SellerApprovalStatus from = seller.getSellerApprovalStatus();
         seller.setSellerApprovalStatus(SellerApprovalStatus.REJECTED);
-        seller.setSellerStatusReason(reason);
+        seller.setSellerStatusReason(trimToNull(reason));
+        seller.setApprovedBy(actingAdmin);
         analyticsService.record(AnalyticsService.EV_SELLER_APPROVED, seller.getId(),
                 seller.getMobileNumber(), null, "rejected by " + actingAdmin.getMobileNumber());
-        return userRepository.save(seller);
+        User saved = userRepository.save(seller);
+        auditService.record(AdminAuditService.SELLER_REJECTED, actingAdmin, "SELLER",
+                seller.getId(), seller.getName(), String.valueOf(from), "REJECTED", trimToNull(reason));
+        return saved;
     }
 
+    /**
+     * Handover section 7.1 third decision: "Actions: Approve, Reject, Request
+     * Changes." The seller stays in the approval queue and is NOT serving.
+     *
+     * <p>A reason is mandatory: without it the seller cannot know what to fix.
+     */
+    @Transactional
+    public User requestSellerChanges(Long sellerId, String reason, User actingAdmin) {
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("A reason is required when requesting changes from a seller.");
+        }
+        User seller = requireSeller(sellerId);
+        SellerApprovalStatus from = seller.getSellerApprovalStatus();
+        seller.setSellerApprovalStatus(SellerApprovalStatus.CHANGES_REQUESTED);
+        seller.setSellerStatusReason(reason.trim());
+        seller.setApprovedBy(actingAdmin);
+        User saved = userRepository.save(seller);
+        auditService.record(AdminAuditService.SELLER_CHANGES_REQUESTED, actingAdmin, "SELLER",
+                seller.getId(), seller.getName(), String.valueOf(from), "CHANGES_REQUESTED", reason.trim());
+        return saved;
+    }
+
+    /**
+     * Handover section 7.3 enforcement action: "Suspend / Block seller ...
+     * Seller cannot operate until Admin restores access." A reason is
+     * mandatory.
+     */
     @Transactional
     public User suspendSeller(Long sellerId, String reason, User actingAdmin) {
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("A reason is required when suspending a seller.");
+        }
         User seller = requireSeller(sellerId);
+        SellerApprovalStatus from = seller.getSellerApprovalStatus();
         seller.setSellerApprovalStatus(SellerApprovalStatus.SUSPENDED);
-        seller.setSellerStatusReason(reason);
+        seller.setSellerStatusReason(reason.trim());
         analyticsService.record(AnalyticsService.EV_SELLER_APPROVED, seller.getId(),
                 seller.getMobileNumber(), null, "suspended by " + actingAdmin.getMobileNumber());
-        return userRepository.save(seller);
+        User saved = userRepository.save(seller);
+        auditService.record(AdminAuditService.SELLER_SUSPENDED, actingAdmin, "SELLER",
+                seller.getId(), seller.getName(), String.valueOf(from), "SUSPENDED", reason.trim());
+        return saved;
     }
 
     private User requireSeller(Long sellerId) {
@@ -1011,6 +1302,381 @@ public class AdminService {
             throw new IllegalArgumentException("User " + sellerId + " is not a seller.");
         }
         return user;
+    }
+
+    private static String trimToNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
+    }
+
+    // ==================== Commercial / seller analytics (handover 6 & 10) ====================
+
+    /**
+     * Handover section 6 seller table, and section 10 commercial view.
+     *
+     * <p>One row per seller: storefront views, offering views, order count,
+     * recorded order value and average order value. Traffic figures come only
+     * from events the application really records
+     * ({@code HOMEMADE_STOREFRONT_VIEW} / {@code PRODUCT_VIEW}); they are never
+     * estimated.
+     *
+     * @param filter the same {@link OrderFilter} the Orders screen uses, so the
+     *               figures describe exactly the rows the operator is looking at.
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> sellerAnalytics(OrderFilter filter) {
+        Map<String, long[]> views = new HashMap<>();
+        Map<String, long[]> offerings = new HashMap<>();
+        for (Object[] row : analyticsService.trafficByKitchen()) {
+            String key = String.valueOf(row[0]);
+            views.put(key, new long[]{ num(row[1]) });
+            offerings.put(key, new long[]{ num(row[2]) });
+        }
+
+        Map<Long, Map<String, Object>> bySeller = new LinkedHashMap<>();
+        for (Order o : matchingOrders(filter)) {
+            Kitchen k = o.getKitchen();
+            if (k == null || k.getSeller() == null) continue;
+            Long sellerId = k.getSeller().getId();
+            Map<String, Object> row = bySeller.computeIfAbsent(sellerId, id -> {
+                User s = k.getSeller();
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("sellerId", id);
+                m.put("sellerName", s.getName());
+                m.put("kitchenName", k.getDisplayName());
+                m.put("sellerType", k.getSellerType() != null ? k.getSellerType().name() : null);
+                m.put("storefrontViews", 0L);
+                m.put("offeringViews", 0L);
+                m.put("orders", 0L);
+                m.put("recordedOrderValue", BigDecimal.ZERO);
+                return m;
+            });
+            row.put("orders", num(row.get("orders")) + 1);
+            BigDecimal value = o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO;
+            row.put("recordedOrderValue", ((BigDecimal) row.get("recordedOrderValue")).add(value));
+
+            long[] sv = views.get(String.valueOf(k.getId()));
+            long[] ov = offerings.get(String.valueOf(k.getId()));
+            row.put("storefrontViews", num(row.get("storefrontViews")) + (sv != null ? sv[0] : 0L));
+            row.put("offeringViews", num(row.get("offeringViews")) + (ov != null ? ov[0] : 0L));
+        }
+
+        for (Map<String, Object> row : bySeller.values()) {
+            long orders = num(row.get("orders"));
+            BigDecimal value = (BigDecimal) row.get("recordedOrderValue");
+            row.put("averageOrderValue", orders == 0 ? BigDecimal.ZERO
+                    : value.divide(BigDecimal.valueOf(orders), 2, java.math.RoundingMode.HALF_UP));
+            // Handover 6: conversion only where events are reliably captured.
+            long storefrontViews = num(row.get("storefrontViews"));
+            row.put("conversionRate", storefrontViews == 0 ? null
+                    : BigDecimal.valueOf(orders * 100.0 / storefrontViews).setScale(1, java.math.RoundingMode.HALF_UP));
+        }
+        return new ArrayList<>(bySeller.values());
+    }
+
+    /** Handover section 10: totals + average for the selected period. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> recordedOrderValueSummary(OrderFilter filter) {
+        List<Map<String, Object>> rows = orders(filter == null ? new OrderFilter() : filter);
+        BigDecimal total = BigDecimal.ZERO;
+        long count = 0;
+        for (Map<String, Object> row : rows) {
+            Object v = row.get("totalAmount");
+            if (v != null) total = total.add(new BigDecimal(String.valueOf(v)));
+            count++;
+        }
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("orderCount", count);
+        m.put("recordedOrderValue", total);
+        m.put("averageOrderValue", count == 0 ? BigDecimal.ZERO
+                : total.divide(BigDecimal.valueOf(count), 2, java.math.RoundingMode.HALF_UP));
+        return m;
+    }
+
+    private static long num(Object o) {
+        return o instanceof Number n ? n.longValue() : 0L;
+    }
+
+    // ==================== Admin storefront + buyer controls (handover 7.3 / 8) ====================
+
+    private Kitchen requireKitchen(Long kitchenId) {
+        return kitchenRepository.findById(kitchenId)
+                .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
+    }
+
+    /**
+     * Handover 7.3 "Pause storefront - Temporary operational stop. Existing
+     * orders remain; new orders blocked/hidden as designed."
+     *
+     * <p>Reversible, so unlike Block/Remove it does not require a reason; an
+     * optional note is still audited when supplied.
+     */
+    @Transactional
+    public Map<String, Object> pauseStorefront(Long kitchenId, String note, User actingAdmin) {
+        Kitchen k = requireKitchen(kitchenId);
+        boolean was = k.isStorefrontPaused();
+        k.setStorefrontPaused(true);
+        kitchenRepository.save(k);
+        auditService.record(AdminAuditService.STOREFRONT_PAUSED, actingAdmin, "STOREFRONT",
+                k.getId(), k.getDisplayName(), was ? "PAUSED" : "ACTIVE", "PAUSED", trimToNull(note));
+        return storefrontState(k);
+    }
+
+    /** Handover 7.3 "Resume - Return a paused storefront to active state." */
+    @Transactional
+    public Map<String, Object> resumeStorefront(Long kitchenId, User actingAdmin) {
+        Kitchen k = requireKitchen(kitchenId);
+        boolean was = k.isStorefrontPaused();
+        k.setStorefrontPaused(false);
+        kitchenRepository.save(k);
+        auditService.record(AdminAuditService.STOREFRONT_RESUMED, actingAdmin, "STOREFRONT",
+                k.getId(), k.getDisplayName(), was ? "PAUSED" : "ACTIVE", "ACTIVE", null);
+        return storefrontState(k);
+    }
+
+    /**
+     * Handover 7.3 "Remove storefront - Prefer soft removal; preserve
+     * historical/audit references."
+     *
+     * <p>Soft: the {@link Kitchen} row and every historical order pointing at it
+     * stay intact, so past orders still render. Only the storefront is flagged
+     * removed. A reason is mandatory.
+     */
+    @Transactional
+    public Map<String, Object> removeStorefront(Long kitchenId, String reason, User actingAdmin) {
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("A reason is required when removing a storefront.");
+        }
+        Kitchen k = requireKitchen(kitchenId);
+        k.setStorefrontPaused(true);
+        User seller = k.getSeller();
+        if (seller != null) {
+            seller.setStorefrontRemoved(true);
+            seller.setStorefrontRemovedAt(LocalDateTime.now());
+            userRepository.save(seller);
+        }
+        kitchenRepository.save(k);
+        auditService.record(AdminAuditService.STOREFRONT_REMOVED, actingAdmin, "STOREFRONT",
+                k.getId(), k.getDisplayName(), "ACTIVE", "REMOVED", reason.trim());
+        return storefrontState(k);
+    }
+
+    private Map<String, Object> storefrontState(Kitchen k) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("kitchenId", k.getId());
+        m.put("name", k.getDisplayName());
+        m.put("sellerId", k.getSeller() != null ? k.getSeller().getId() : null);
+        m.put("paused", k.isStorefrontPaused());
+        m.put("availableToday", k.getAvailableToday());
+        m.put("removed", k.getSeller() != null && k.getSeller().isStorefrontRemoved());
+        return m;
+    }
+
+    /**
+     * Handover section 8: "Block buyer in case of repeated complaints, misuse
+     * or seller-reported issues; reason mandatory."
+     */
+    @Transactional
+    public Map<String, Object> blockBuyer(Long buyerId, String reason, User actingAdmin) {
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("A reason is required when blocking a buyer.");
+        }
+        User buyer = requireBuyer(buyerId);
+        boolean was = buyer.isBlocked();
+        buyer.setBlocked(true);
+        buyer.setBlockedReason(reason.trim());
+        buyer.setBlockedAt(LocalDateTime.now());
+        userRepository.save(buyer);
+        auditService.record(AdminAuditService.BUYER_BLOCKED, actingAdmin, "BUYER",
+                buyer.getId(), buyer.getName(), was ? "BLOCKED" : "ACTIVE", "BLOCKED", reason.trim());
+        return buyerAccountState(buyer);
+    }
+
+    /** Handover section 8: "Unblock buyer." */
+    @Transactional
+    public Map<String, Object> unblockBuyer(Long buyerId, String note, User actingAdmin) {
+        User buyer = requireBuyer(buyerId);
+        boolean was = buyer.isBlocked();
+        buyer.setBlocked(false);
+        buyer.setBlockedAt(null);
+        userRepository.save(buyer);
+        auditService.record(AdminAuditService.BUYER_UNBLOCKED, actingAdmin, "BUYER",
+                buyer.getId(), buyer.getName(), was ? "BLOCKED" : "ACTIVE", "ACTIVE", trimToNull(note));
+        return buyerAccountState(buyer);
+    }
+
+    /** Handover section 8: "Add internal support note if needed." Internal only. */
+    @Transactional
+    public Map<String, Object> saveBuyerSupportNote(Long buyerId, String note, User actingAdmin) {
+        User buyer = requireBuyer(buyerId);
+        buyer.setSupportNote(trimToNull(note));
+        userRepository.save(buyer);
+        auditService.record(AdminAuditService.ORDER_CORRECTED, actingAdmin, "BUYER",
+                buyer.getId(), buyer.getName(), null, "SUPPORT_NOTE_SAVED", trimToNull(note));
+        return buyerAccountState(buyer);
+    }
+
+    private User requireBuyer(Long buyerId) {
+        User user = userRepository.findById(buyerId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + buyerId));
+        if (user.getRole() != UserRole.BUYER) {
+            throw new IllegalArgumentException("User " + buyerId + " is not a buyer.");
+        }
+        return user;
+    }
+
+    private Map<String, Object> buyerAccountState(User buyer) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", buyer.getId());
+        m.put("name", buyer.getName());
+        m.put("mobileNumber", buyer.getMobileNumber());
+        m.put("accountStatus", buyer.isBlocked() ? "BLOCKED" : "ACTIVE");
+        m.put("blocked", buyer.isBlocked());
+        m.put("blockedReason", buyer.getBlockedReason());
+        m.put("blockedAt", buyer.getBlockedAt());
+        m.put("supportNote", buyer.getSupportNote());
+        return m;
+    }
+
+    /**
+     * Handover section 8 buyer detail: "profile/location needed for order
+     * support", "recent orders and their payment/delivery status", "account
+     * status: Active / Blocked", plus the internal support note.
+     *
+     * <p>The note is deliberately only in this ADMIN payload - the buyer-facing
+     * DTOs never expose it.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> buyerDetail(Long buyerId) {
+        User buyer = requireBuyer(buyerId);
+        List<Order> orders = orderRepository.findByBuyerOrderByCreatedAtDesc(buyer);
+
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", buyer.getId());
+        m.put("name", buyer.getName());
+        m.put("mobileNumber", buyer.getMobileNumber());
+        m.put("flatHouseNumber", buyer.getFlatHouseNumber());
+        m.put("building", buyer.getBuilding());
+        m.put("society", buyer.getSociety());
+        m.put("societyId", buyer.getSocietyRef() != null ? buyer.getSocietyRef().getId() : null);
+        m.put("area", buyer.getArea());
+        m.put("areaId", buyer.getAreaRef() != null ? buyer.getAreaRef().getId() : resolveBuyerAreaId(buyer));
+        m.put("accountStatus", buyer.isBlocked() ? "BLOCKED" : "ACTIVE");
+        m.put("blocked", buyer.isBlocked());
+        m.put("blockedReason", buyer.getBlockedReason());
+        m.put("blockedAt", buyer.getBlockedAt());
+        m.put("supportNote", buyer.getSupportNote());
+        m.put("joinedAt", buyer.getCreatedAt());
+        m.put("orderCount", orders.size());
+        m.put("deliveredCount", orders.stream().filter(Order::isDelivered).count());
+        m.put("cancelledCount", orders.stream().filter(o -> o.getOrderStatus() == OrderStatus.CANCELLED).count());
+        m.put("paidCount", orders.stream().filter(o -> o.getPaymentStatus() == PaymentStatus.PAID).count());
+        BigDecimal total = orders.stream()
+                .filter(o -> o.getOrderStatus() != OrderStatus.DRAFT && o.getOrderStatus() != OrderStatus.CANCELLED)
+                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        m.put("recordedOrderValue", total);
+        m.put("recentOrders", orders.stream().limit(20).map(this::adminOrderRow).toList());
+        m.put("auditHistory", auditService.forTarget("BUYER", buyerId));
+        return m;
+    }
+        /**
+     * Handover section 7.2 seller detail: identity/contact, enabled types
+     * (Kitchen / Homemade / Both), storefronts, status, service societies,
+     * traffic, recent orders, recorded order value, offerings summary and the
+     * Admin action history.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> sellerDetail(Long sellerId) {
+        User seller = requireSeller(sellerId);
+        List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
+        List<Order> orders = orderRepository.findAll().stream()
+                .filter(o -> o.getKitchen() != null && o.getKitchen().getSeller() != null
+                        && sellerId.equals(o.getKitchen().getSeller().getId()))
+                .toList();
+
+        Map<String, long[]> traffic = new HashMap<>();
+        for (Object[] row : analyticsService.trafficByKitchen()) {
+            traffic.put(String.valueOf(row[0]),
+                    new long[]{ row[1] != null ? ((Number) row[1]).longValue() : 0L,
+                                row[2] != null ? ((Number) row[2]).longValue() : 0L });
+        }
+
+        boolean hasKitchen = false, hasHomemade = false;
+        List<Map<String, Object>> storefronts = new ArrayList<>();
+        for (Kitchen k : kitchens) {
+            boolean homemade = k.getSellerType() != null
+                    && k.getSellerType() == com.example.my_first_spring_api.model.SellerType.HOMEMADE_PRODUCTS;
+            if (homemade) hasHomemade = true; else hasKitchen = true;
+            Map<String, Object> s = new LinkedHashMap<>();
+            s.put("id", k.getId());
+            s.put("name", k.getDisplayName());
+            s.put("sellerType", k.getSellerType() != null ? k.getSellerType().name() : null);
+            s.put("paused", k.isStorefrontPaused());
+            s.put("availableToday", k.getAvailableToday());
+            s.put("society", k.getSociety());
+            s.put("building", k.getBuilding());
+            s.put("serviceAreas", k.getServiceAreas());
+            s.put("servedSocieties", k.getServedSocieties() != null
+                    ? k.getServedSocieties().stream().map(Society::getName).sorted().toList() : List.of());
+            s.put("offeringCount", productRepository.findByKitchen(k).size());
+            long[] t = traffic.get(String.valueOf(k.getId()));
+            s.put("storefrontViews", t != null ? t[0] : 0L);
+            s.put("offeringViews", t != null ? t[1] : 0L);
+            storefronts.add(s);
+        }
+
+        BigDecimal value = orders.stream()
+                .filter(o -> o.getOrderStatus() != OrderStatus.DRAFT && o.getOrderStatus() != OrderStatus.CANCELLED)
+                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", seller.getId());
+        m.put("name", seller.getName());
+        m.put("mobileNumber", seller.getMobileNumber());
+        m.put("status", seller.getSellerApprovalStatus());
+        m.put("statusReason", seller.getSellerStatusReason());
+        m.put("approvedAt", seller.getApprovedAt());
+        m.put("approvedBy", seller.getApprovedBy() != null ? seller.getApprovedBy().getName() : null);
+        m.put("enabledTypes", hasKitchen && hasHomemade ? "BOTH" : hasKitchen ? "KITCHEN" : hasHomemade ? "HOMEMADE" : "NONE");
+        m.put("storefronts", storefronts);
+        m.put("orderCount", orders.size());
+        m.put("deliveredCount", orders.stream().filter(Order::isDelivered).count());
+        m.put("cancelledCount", orders.stream().filter(o -> o.getOrderStatus() == OrderStatus.CANCELLED).count());
+        m.put("recordedOrderValue", value);
+        m.put("averageOrderValue", orders.isEmpty() ? BigDecimal.ZERO
+                : value.divide(BigDecimal.valueOf(orders.size()), 2, java.math.RoundingMode.HALF_UP));
+        m.put("recentOrders", orders.stream().limit(20).map(this::adminOrderRow).toList());
+        m.put("auditHistory", auditService.forTarget("SELLER", sellerId));
+        return m;
+    }
+
+    /** Handover section 14 read model: the audit trail, newest first. */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> auditLog(int limit) {
+        return auditService.recent(limit <= 0 ? 200 : limit);
+    }
+
+    /** Per-target history rendered inside Seller / Buyer detail (handover 7.2). */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> auditForTarget(String targetType, Long targetId) {
+        return auditService.forTarget(targetType, targetId);
+    }
+
+    /** Handover section 12: resolved retention configuration and purge preview. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> retention() {
+        return retentionService.retentionStatus();
+    }
+
+    @Transactional
+    public Map<String, Object> setRetentionDays(int days, User actingAdmin) {
+        int applied = retentionService.setRetentionDays(days);
+        auditService.record(AdminAuditService.ORDER_CORRECTED, actingAdmin, "PLATFORM", null,
+                "retention", null, String.valueOf(applied), "retention_days set to " + applied);
+        Map<String, Object> m = new LinkedHashMap<>(retentionService.retentionStatus());
+        m.put("retentionDays", applied);
+        return m;
     }
 
     // ---------------- Admin account management (Super Admin) ----------------
@@ -1231,6 +1897,13 @@ public class AdminService {
                 if (society.isActive()) activeSocieties++;
             }
             row.put("societyCount", societyRows.size());
+            // Handover 11 usage counts, summed from the society rows displayed
+            // directly underneath, so the Area figure can never disagree with
+            // the sum of its own children.
+            row.put("buyerCount", societyRows.stream()
+                    .mapToLong(r -> ((Number) r.get("buyerCount")).longValue()).sum());
+            row.put("sellerCount", societyRows.stream()
+                    .mapToLong(r -> ((Number) r.get("sellerCount")).longValue()).sum());
             row.put("societies", societyRows);
             if (area.isActive()) activeAreas++;
             areaRows.add(row);
@@ -1250,13 +1923,31 @@ public class AdminService {
         return areaRow(locationService.createArea(name));
     }
 
-    /** Rename and/or enable-disable an Area. Only supplied fields are applied. */
+    /**
+     * Rename and/or enable-disable an Area. Only supplied fields are applied.
+     *
+     * <p>Handover 14 requires Area/Society enable-disable to be auditable, so an
+     * actual active-state CHANGE is recorded. A rename alone is not one of the
+     * listed actions and is not recorded, and a PATCH that leaves {@code active}
+     * untouched writes no row - so the trail shows decisions, not clicks.</p>
+     */
     @Transactional
-    public Map<String, Object> updateArea(Long areaId, String name, Boolean active) {
+    public Map<String, Object> updateArea(Long areaId, String name, Boolean active, User actingAdmin) {
+        Area existing = locationService.findArea(areaId)
+                .orElseThrow(() -> new IllegalArgumentException("Area not found."));
+        boolean wasActive = existing.isActive();
         if (name != null && !name.isBlank()) locationService.renameArea(areaId, name);
         if (active != null) locationService.setAreaActive(areaId, active);
-        return areaRow(locationService.findArea(areaId)
-                .orElseThrow(() -> new IllegalArgumentException("Area not found.")));
+        Area updated = locationService.findArea(areaId)
+                .orElseThrow(() -> new IllegalArgumentException("Area not found."));
+        if (active != null && wasActive != updated.isActive()) {
+            auditService.record(
+                    updated.isActive() ? AdminAuditService.AREA_ENABLED : AdminAuditService.AREA_DISABLED,
+                    actingAdmin, "AREA", updated.getId(), updated.getName(),
+                    wasActive ? "ACTIVE" : "DISABLED", updated.isActive() ? "ACTIVE" : "DISABLED",
+                    "Area " + updated.getName() + (updated.isActive() ? " enabled" : " disabled"));
+        }
+        return areaRow(updated);
     }
 
     @Transactional
@@ -1264,13 +1955,31 @@ public class AdminService {
         return societyRow(locationService.createSociety(areaId, name));
     }
 
-    /** Rename and/or enable-disable a Society. Only supplied fields are applied. */
+    /**
+     * Rename and/or enable-disable a Society. Audited exactly like an Area.
+     *
+     * <p>Disabling never deletes and never re-points sellers: existing coverage
+     * rows are preserved so re-enabling restores the seller's original opt-in.
+     * Handover 11 also forbids a new Society from silently becoming served -
+     * that is enforced at creation time, not here.</p>
+     */
     @Transactional
-    public Map<String, Object> updateSociety(Long societyId, String name, Boolean active) {
+    public Map<String, Object> updateSociety(Long societyId, String name, Boolean active, User actingAdmin) {
+        Society existing = locationService.findSociety(societyId)
+                .orElseThrow(() -> new IllegalArgumentException("Community not found."));
+        boolean wasActive = existing.isActive();
         if (name != null && !name.isBlank()) locationService.renameSociety(societyId, name);
         if (active != null) locationService.setSocietyActive(societyId, active);
-        return societyRow(locationService.findSociety(societyId)
-                .orElseThrow(() -> new IllegalArgumentException("Community not found.")));
+        Society updated = locationService.findSociety(societyId)
+                .orElseThrow(() -> new IllegalArgumentException("Community not found."));
+        if (active != null && wasActive != updated.isActive()) {
+            auditService.record(
+                    updated.isActive() ? AdminAuditService.SOCIETY_ENABLED : AdminAuditService.SOCIETY_DISABLED,
+                    actingAdmin, "SOCIETY", updated.getId(), updated.getName(),
+                    wasActive ? "ACTIVE" : "DISABLED", updated.isActive() ? "ACTIVE" : "DISABLED",
+                    "Society " + updated.getName() + (updated.isActive() ? " enabled" : " disabled"));
+        }
+        return societyRow(updated);
     }
 
     // ==================== Buyer <-> Kitchen visibility diagnostic ====================
@@ -1550,6 +2259,46 @@ public class AdminService {
         m.put("areaName", society.getArea().getName());
         m.put("createdAt", society.getCreatedAt());
         m.put("updatedAt", society.getUpdatedAt());
+        // Handover 11: "View number of buyers/sellers using each location".
+        // Counted from the stable references, so disabling a location shows its
+        // real usage instead of hiding it.
+        m.put("buyerCount", countBuyersInSociety(society.getId()));
+        m.put("sellerCount", countSellersServing(society.getId()));
         return m;
+    }
+
+    /** Buyers whose profile points at this Society through the stable id. */
+    private long countBuyersInSociety(Long societyId) {
+        return userRepository.findByRole(UserRole.BUYER).stream()
+                .filter(b -> b.getSocietyRef() != null && societyId.equals(b.getSocietyRef().getId()))
+                .count();
+    }
+
+    /**
+     * Sellers serving this Society.
+     *
+     * <p>Counts storefronts that opted IN through {@code Kitchen.servedSocieties}
+     * - the existing stable-ID coverage set. A newly created Society is served
+     * by nobody until a seller adds it, which is exactly handover 11's "sellers
+     * opt into newly added societies" rule, so this number is the honest measure
+     * of real usage.</p>
+     */
+    private long countSellersServing(Long societyId) {
+        return kitchenRepository.findAll().stream()
+                .filter(k -> k.getSeller() != null)
+                .filter(k -> servesSociety(k, societyId))
+                .map(k -> k.getSeller().getId())
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .count();
+    }
+
+    /** True when the storefront's ID-based coverage explicitly includes this Society. */
+    private static boolean servesSociety(Kitchen k, Long societyId) {
+        if (k.getServedSocieties() == null) return false;
+        for (Society s : k.getServedSocieties()) {
+            if (s != null && societyId.equals(s.getId())) return true;
+        }
+        return false;
     }
 }

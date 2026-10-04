@@ -67,6 +67,50 @@ public class User {
     @Column(name = "approved_at")
     private LocalDateTime approvedAt;
 
+    /**
+     * The Admin who performed the last approval decision (handover section 7.1:
+     * "Store approval timestamp and Admin who acted").
+     *
+     * <p>Nullable: legacy rows pre-date the workflow, and system-driven
+     * approvals (the demo bootstrap) have no acting Admin.
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "approved_by_id")
+    private User approvedBy;
+
+    /**
+     * Buyer account status (handover section 8: "See account status:
+     * Active / Blocked").
+     *
+     * <p>Default {@code false} so every existing row keeps working unchanged;
+     * this is the additive pattern already used for {@link #area}.
+     */
+    @Column(name = "blocked", nullable = false)
+    private boolean blocked = false;
+
+    /** Mandatory when blocking: who/what and why. */
+    @Column(name = "blocked_reason", columnDefinition = "TEXT")
+    private String blockedReason;
+
+    @Column(name = "blocked_at")
+    private LocalDateTime blockedAt;
+
+    /** Internal support note. Never surfaced to the buyer. */
+    @Column(name = "support_note", columnDefinition = "TEXT")
+    private String supportNote;
+
+    /**
+     * Soft removal marker for a storefront/kitchen (handover section 7.3:
+     * "Prefer soft removal; preserve historical/audit references").
+     * An existing order keeps its kitchen reference either way; this flag stops
+     * the storefront being surfaced as active to buyers.
+     */
+    @Column(name = "storefront_removed", nullable = false)
+    private boolean storefrontRemoved = false;
+
+    @Column(name = "storefront_removed_at")
+    private LocalDateTime storefrontRemovedAt;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -122,6 +166,22 @@ public class User {
     public void setSellerStatusReason(String sellerStatusReason) { this.sellerStatusReason = sellerStatusReason; }
     public LocalDateTime getApprovedAt() { return approvedAt; }
     public void setApprovedAt(LocalDateTime approvedAt) { this.approvedAt = approvedAt; }
+
+    public User getApprovedBy() { return approvedBy; }
+    public void setApprovedBy(User approvedBy) { this.approvedBy = approvedBy; }
+
+    public boolean isBlocked() { return blocked; }
+    public void setBlocked(boolean blocked) { this.blocked = blocked; }
+    public String getBlockedReason() { return blockedReason; }
+    public void setBlockedReason(String blockedReason) { this.blockedReason = blockedReason; }
+    public LocalDateTime getBlockedAt() { return blockedAt; }
+    public void setBlockedAt(LocalDateTime blockedAt) { this.blockedAt = blockedAt; }
+    public String getSupportNote() { return supportNote; }
+    public void setSupportNote(String supportNote) { this.supportNote = supportNote; }
+    public boolean isStorefrontRemoved() { return storefrontRemoved; }
+    public void setStorefrontRemoved(boolean storefrontRemoved) { this.storefrontRemoved = storefrontRemoved; }
+    public LocalDateTime getStorefrontRemovedAt() { return storefrontRemovedAt; }
+    public void setStorefrontRemovedAt(LocalDateTime at) { this.storefrontRemovedAt = at; }
 
     /**
      * Legacy sellers (created before the approval workflow existed) have a null
