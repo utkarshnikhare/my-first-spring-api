@@ -884,7 +884,7 @@ function deliveryProgressHtml(detail) {
     var pct = active > 0 ? Math.round((done / active) * 100) : 0;
     var h = '<div class="del-progress" id="deliveryBlock">';
     h += '<div class="del-progress-top"><span class="del-progress-title">🚚 Deliveries</span>' +
-        '<span class="del-progress-count">' + done + ' of ' + active + ' delivered</span></div>';
+        '<span class="del-progress-count">' + done + ' of ' + active + ' delivered' + (remaining > 0 ? ' · ' + remaining + ' remaining' : '') + '</span></div>';
     h += '<div class="del-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '">' +
         '<span class="del-bar-fill" style="width:' + pct + '%"></span></div>';
     if (active === 0) {
