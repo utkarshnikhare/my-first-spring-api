@@ -8,7 +8,7 @@
  * developer link still resolves — they are simply not reachable from the normal
  * Admin navigation, which is the point of V1.
  */
-var A = { me: null, role: null, loginMobile: null, trafficPeriod: 'today', kitchenFilter: '' };
+var A = { me: null, role: null, loginMobile: null, trafficPeriod: 'today', kitchenFilter: '', dashPeriod: 'today', buyerAreaId: '', buyerSocietyId: '' };
 // Resolved BEFORE the route table below. `adminAnalyticsView` used to be assigned
 // further down the file with `var`, and a `var` is not initialised until execution
 // reaches it - so while the route table was being built the '#/analytics' entry
@@ -26,6 +26,13 @@ var adminRoutes = {
     '#/analytics': adminAnalyticsView,
     '#/locations': adminLocationsView,
     '#/exports': adminExportsView,
+    // Admin V1 governance + drill-downs. Reached from the Dashboard ("Governance"
+    // panel) and from the row-level View / Details buttons; they are deliberately
+    // not extra top-level navigation items.
+    '#/audit': adminAuditView,
+    '#/retention': adminRetentionView,
+    '#/seller-detail': adminSellerDetailView,
+    '#/buyer-detail': adminBuyerDetailView,
     // ---- Retained, no longer primary navigation ----
     '#/kitchens': adminKitchensView,
     '#/offerings': adminOfferingsView,
@@ -338,6 +345,141 @@ async function adminAction(action, t) {
                 await adminRender();
                 break;
             }
+            // ===== Seller detail drill-down (handover 7.1) =====
+            case 'admin-open-seller-detail': {
+                A.sellerDetailId = Number(t.dataset.id);
+                adminNavigate('#/seller-detail');
+                break;
+            }
+            case 'admin-back-sellers': adminNavigate('#/sellers'); break;
+            case 'admin-open-buyer-detail': {
+                A.buyerDetailId = Number(t.dataset.id);
+                adminNavigate('#/buyer-detail');
+                break;
+            }
+            case 'admin-back-buyers': adminNavigate('#/buyers'); break;
+            case 'reactivate-seller': {
+                // Handover 7.1: a suspended seller is restored through the same
+                // Approve decision - no separate endpoint exists, and none is needed.
+                var rId = Number(t.dataset.id);
+                if (!window.confirm('Reactivate ' + (t.dataset.name || 'this seller') + '?\n\nTheir storefronts become visible to buyers again.')) break;
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/sellers/' + rId + '/approve', { method: 'POST' });
+                    toast('Seller reactivated', 'success');
+                });
+                await adminRender();
+                break;
+            }
+            /**
+             * One modal serves every "reason required/optional" decision:
+             * Request Changes, Suspend, Pause storefront, Remove storefront,
+             * Block buyer and the internal Support note. The mode travels on the
+             * buttons, so wording and endpoint are chosen by data rather than by
+             * six near-identical code paths.
+             */
+            case 'open-admin-reason': {
+                var mode = t.dataset.mode || '';
+                var copy = {
+                    requestChanges: { title: 'Request changes from ' + esc(t.dataset.name || 'seller'), hint: 'The seller stays in the approval queue and cannot serve until they resubmit.', label: 'What must change?', required: true, verb: 'Send request' },
+                    suspend: { title: 'Suspend ' + esc(t.dataset.name || 'seller'), hint: 'Their storefronts stop serving buyers immediately. The seller can be reactivated later.', label: 'Reason (shown to the seller)', required: true, verb: 'Suspend' },
+                    pause: { title: 'Pause storefront ' + esc(t.dataset.name || ''), hint: 'Buyers stop seeing this storefront until it is resumed. Nothing is deleted.', label: 'Internal note (optional)', required: false, verb: 'Pause' },
+                    removeStorefront: { title: 'Remove storefront ' + esc(t.dataset.name || ''), hint: 'The storefront is withdrawn from the buyer app. This is a serious step - the seller is NOT deleted.', label: 'Reason (shown to the seller)', required: true, verb: 'Remove storefront' },
+                    block: { title: 'Block ' + esc(t.dataset.name || 'buyer'), hint: 'A blocked buyer cannot place orders. Existing orders are kept.', label: 'Reason (internal)', required: true, verb: 'Block' },
+                    note: { title: 'Support note - ' + esc(t.dataset.name || 'buyer'), hint: 'Internal only. Visible to Admins on this screen, never to the buyer.', label: 'Note', required: false, verb: 'Save note' }
+                }[mode];
+                if (!copy) { toast('Unknown action', 'error'); break; }
+                openModal(
+                    '<h3>' + copy.title + '</h3>' +
+                    '<p class="muted small">' + copy.hint + '</p>' +
+                    '<div class="form-group"><textarea id="adminReasonInput" class="admin-textarea" rows="3" maxlength="300" placeholder="' + copy.label + '"></textarea></div>' +
+                    '<div class="muted tiny" style="margin-bottom:8px">' + copy.label + (copy.required ? ' - required' : ' - optional') + '</div>' +
+                    '<div class="modal-actions">' +
+                    '<button class="btn btn-outline" type="button" data-action="cancel-admin-reason">Cancel</button>' +
+                    '<button class="btn btn-danger" type="button" data-action="confirm-admin-reason" data-mode="' + esc(mode) + '" data-id="' + esc(t.dataset.id || '') + '" data-name="' + esc(t.dataset.name || '') + '" data-required="' + copy.required + '">' + copy.verb + '</button>' +
+                    '</div>');
+                break;
+            }
+            case 'cancel-admin-reason': closeModal(); break;
+            case 'confirm-admin-reason': {
+                var rMode = t.dataset.mode;
+                var rName = t.dataset.name || 'this record';
+                var input = $('#adminReasonInput');
+                var text = input ? input.value.trim() : '';
+                if (t.dataset.required === 'true' && !text) {
+                    // The modal stays open so the operator does not lose what they typed.
+                    toast('A reason is required', 'error');
+                    break;
+                }
+                var rId = Number(t.dataset.id);
+                closeModal();
+                var confirmCopy = {
+                    requestChanges: 'Ask ' + rName + ' to change something?\n\nReason: ' + text,
+                    suspend: 'Suspend ' + rName + '?\n\nReason: ' + text,
+                    pause: 'Pause this storefront?\n\n' + (text ? 'Note: ' + text : 'No note given.'),
+                    removeStorefront: 'Remove this storefront from the buyer app?\n\nReason: ' + text,
+                    block: 'Block ' + rName + '?\n\nReason: ' + text,
+                    note: 'Save this support note for ' + rName + '?'
+                }[rMode];
+                if (!window.confirm(confirmCopy || ('Confirm ' + rMode + '?'))) break;
+                var calls = {
+                    requestChanges: { url: '/api/admin/sellers/' + rId + '/request-changes', body: { reason: text }, done: 'Changes requested' },
+                    suspend: { url: '/api/admin/sellers/' + rId + '/suspend', body: { reason: text }, done: 'Seller suspended' },
+                    pause: { url: '/api/admin/storefronts/' + rId + '/pause', body: { note: text || null }, done: 'Storefront paused' },
+                    removeStorefront: { url: '/api/admin/storefronts/' + rId + '/remove', body: { reason: text }, done: 'Storefront removed' },
+                    block: { url: '/api/admin/buyers/' + rId + '/block', body: { reason: text }, done: 'Buyer blocked' },
+                    note: { url: '/api/admin/buyers/' + rId + '/support-note', body: { note: text || null }, done: 'Support note saved' }
+                }[rMode];
+                if (!calls) { toast('Unknown action', 'error'); break; }
+                await adminRunOnce(t, async function () {
+                    await api(calls.url, { method: 'POST', body: calls.body });
+                    toast(calls.done, 'success');
+                });
+                await adminRender();
+                break;
+            }
+            case 'storefront-resume': {
+                var sId = Number(t.dataset.id);
+                if (!window.confirm('Resume this storefront?\n\nBuyers see it again straight away.')) break;
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/storefronts/' + sId + '/resume', { method: 'POST' });
+                    toast('Storefront resumed', 'success');
+                });
+                await adminRender();
+                break;
+            }
+            case 'buyer-unblock': {
+                var bId = Number(t.dataset.id);
+                if (!window.confirm('Unblock ' + (t.dataset.name || 'this buyer') + '?\n\nThey can place orders again.')) break;
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/buyers/' + bId + '/unblock', { method: 'POST' });
+                    toast('Buyer unblocked', 'success');
+                });
+                await adminRender();
+                break;
+            }
+            // ===== Governance: retention window (handover 12) =====
+            case 'retention-set': {
+                var daysField = $('#retentionDays');
+                var days = daysField ? parseInt(daysField.value, 10) : NaN;
+                if (isNaN(days) || days < 1) { toast('Enter a whole number of days (1 or more)', 'error'); break; }
+                if (!window.confirm('Change the detailed-order retention window to ' + days + ' days?\n\nThe purge preview updates immediately; nothing is deleted right now.')) break;
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/retention', { method: 'POST', body: { retentionDays: days } });
+                    toast('Retention set to ' + days + ' days', 'success');
+                });
+                await adminRender();
+                break;
+            }
+            case 'admin-audit-domain': {
+                A.auditDomain = t.dataset.value || '';
+                await adminRender();
+                break;
+            }
+            case 'admin-analytics-clear': {
+                A.analyticsFilter = {};
+                await adminRender();
+                break;
+            }
             case 'admin-order-filter': {
                 A.orderFilter = t.dataset.filter || 'all';
                 await adminRender();
@@ -433,6 +575,11 @@ async function adminAction(action, t) {
             case 'admin-back-orders': {
                 A.orderDetailId = null;
                 location.hash = '#/orders';
+                break;
+            }
+            case 'admin-dash-period': {
+                A.dashPeriod = t.dataset.period || 'today';
+                await adminRender();
                 break;
             }
             case 'admin-traffic-period': {
@@ -597,9 +744,31 @@ async function adminAction(action, t) {
 
 // ==================== VIEWS ====================
 async function adminHomeView() {
-    var data = await api('/api/admin/dashboard');
+    // Handover 4/17: date selector (Today / Last 5 Days / Custom) at the top.
+    // The window is resolved SERVER-side, so every card below is computed over
+    // exactly the same set of orders and can never disagree with its neighbour.
+    var dashPeriod = A.dashPeriod || 'today';
+    var data = await api('/api/admin/dashboard?date=' + encodeURIComponent(dashPeriod));
     var h = '<div class="view-enter">';
-    h += '<div class="section-head admin-section-head"><div><h1>' + greeting() + ', ' + esc(A.me ? (A.me.name || A.me.mobileNumber || 'Admin') : 'Admin') + '</h1><p class="muted small">Marketplace overview — live shared-database figures</p></div></div>';
+    h += '<div class="section-head admin-section-head"><div><h1>' + greeting() + ', ' +
+        esc(A.me ? (A.me.name || A.me.mobileNumber || 'Admin') : 'Admin') +
+        '</h1><p class="muted small">Marketplace overview — live shared-database figures</p></div></div>';
+    h += '<div class="admin-filters" style="margin-bottom:12px">';
+    [['today', 'Today'], ['last5', 'Last 5 Days']].forEach(function (p) {
+        h += '<button class="capsule' + (dashPeriod === p[0] ? ' active' : '') + '" type="button" ' +
+            'data-action="admin-dash-period" data-period="' + p[0] + '"' +
+            (dashPeriod === p[0] ? ' aria-current="true"' : '') + '>' + p[1] + '</button>';
+    });
+    h += '<label class="capsule" style="cursor:pointer">' +
+        '<span class="sr-only">Custom date</span>' +
+        '<input type="date" class="form-input form-input-sm" id="adminDashCustomDate" ' +
+        'style="width:auto;border:0;background:transparent" ' +
+        'value="' + esc(/^\d{4}-\d{2}-\d{2}$/.test(dashPeriod) ? dashPeriod : '') + '" ' +
+        'aria-label="Custom dashboard date"></label>';
+    h += '<span class="muted tiny" style="align-self:center">Showing: <strong>' +
+        esc(data.selectedPeriod || 'Today') + '</strong></span>';
+    h += '</div>';
+    var win = data.selectedPeriod || 'Today';
 
     // Operational stat grid — every figure comes from /api/admin/dashboard (no hardcoding)
     h += '<div class="dash-grid">';
@@ -613,15 +782,16 @@ async function adminHomeView() {
             (sub ? '<div class="dc-sub">' + sub + '</div>' : '') +
             close;
     }
-    // Traffic: real active users measured from recorded orders, not a guess.
-    h += dashCard('&#128200;', (data.activeBuyersToday || 0) + ' / ' + (data.activeSellersToday || 0),
-        'Active Users Today', 'buyers / sellers placing orders', '#/analytics');
-    h += dashCard('&#128230;', data.totalOrders || 0, 'Orders',
-        'today: ' + (data.ordersToday || 0) + ' · this month: ' + (data.ordersThisMonth || 0), '#/orders');
+    // Traffic row: distinct buyers/sellers that actually placed an order inside
+    // the selected window. Measured from real orders, never guessed.
+    h += dashCard('&#128200;', (data.buyersInPeriod || 0) + ' / ' + (data.sellersInPeriod || 0),
+        'Active Users', 'buyers / sellers ordering in ' + esc(win), '#/analytics');
+    h += dashCard('&#128230;', data.ordersInPeriod || 0, 'Orders',
+        esc(win) + ' · all time: ' + (data.totalOrders || 0), '#/orders');
     // Deliberately NOT "Revenue": SocioMart does not process buyer payments, so
     // this is the value of orders recorded on the marketplace and nothing more.
-    h += dashCard('&#128202;', money(data.totalOrderValue || 0), 'Recorded Order Value',
-        'today: ' + money(data.todayOrderValue || 0), '#/orders');
+    h += dashCard('&#128202;', money(data.recordedOrderValueInPeriod || 0), 'Recorded Order Value',
+        esc(win) + ' · all time: ' + money(data.totalOrderValue || 0), '#/orders');
     h += dashCard('&#128101;', (data.totalBuyers || 0) + ' / ' + (data.totalSellers || 0),
         'Buyers / Sellers', (data.approvedSellers || 0) + ' sellers approved', '#/buyers');
     h += dashCard('&#9203;', data.pendingSellers || 0, 'Pending Approvals',
@@ -700,6 +870,15 @@ async function adminHomeView() {
     }
     h += '</div>';
 
+    // Governance shortcuts (Admin V1): the audit trail and the data-retention
+    // control are reached from here rather than from the eight primary nav items.
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Governance</h3>' +
+        '<p class="muted tiny" style="margin:0 0 10px">Every Admin decision is recorded; the retention window controls how long detailed orders are kept.</p>' +
+        '<div class="admin-actions">' +
+        '<button class="btn btn-secondary" type="button" data-action="go-tab" data-hash="#/audit">Admin action history</button>' +
+        '<button class="btn btn-secondary" type="button" data-action="go-tab" data-hash="#/retention">Data retention</button>' +
+        '</div></div>';
+
     h += '</div>';
     return h;
 }
@@ -721,19 +900,30 @@ async function adminExportsView() {
         '<p class="muted small">Download operational data as CSV. Every file is generated now and carries its own timestamp.</p>' +
         '</div></div>';
 
+    // The Orders screen holds the monitoring axes; the export form mirrors them,
+    // so the file matches exactly what the operator last filtered to.
+    var of = A.orderFilters || {};
+    function expOpt(value, label, selected) {
+        return '<option value="' + value + '"' + (selected === value ? ' selected' : '') + '>' + label + '</option>';
+    }
     h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Orders export</h3>' +
         '<p class="muted tiny" style="margin:0 0 10px">Apply filters here and the downloaded file contains exactly the matching orders.</p>' +
         '<div class="flex gap-2 wrap">' +
-        '<input class="form-input" type="date" id="expDate" aria-label="Order date" style="max-width:180px">' +
+        '<input class="form-input" type="date" id="expDate" aria-label="Order date" value="' + esc(of.date || '') + '" style="max-width:180px">' +
         '<select class="form-input" id="expCategory" aria-label="Category" style="max-width:180px">' +
-        '<option value="">All categories</option><option value="KITCHEN">Kitchen</option>' +
-        '<option value="HOMEMADE_PRODUCTS">Homemade Products</option></select>' +
+        expOpt('', 'All categories', of.category || '') + expOpt('KITCHEN', 'Kitchen', of.category || '') +
+        expOpt('HOMEMADE_PRODUCTS', 'Homemade Products', of.category || '') + '</select>' +
         '<select class="form-input" id="expPayment" aria-label="Payment" style="max-width:180px">' +
-        '<option value="">All payments</option><option value="PAID">Paid</option>' +
-        '<option value="PENDING">Pending</option><option value="WILL_PAY_LATER">Will pay later</option></select>' +
+        expOpt('', 'All payments', of.payment || '') + expOpt('PAID', 'Paid', of.payment || '') +
+        expOpt('PENDING', 'Pending', of.payment || '') + expOpt('WILL_PAY_LATER', 'Will pay later', of.payment || '') + '</select>' +
         '<select class="form-input" id="expDelivery" aria-label="Delivery" style="max-width:180px">' +
-        '<option value="">All delivery</option><option value="delivered">Delivered</option>' +
-        '<option value="not_delivered">Not delivered</option></select>' +
+        expOpt('', 'All delivery', of.delivery || '') + expOpt('delivered', 'Delivered', of.delivery || '') +
+        expOpt('not_delivered', 'Not delivered', of.delivery || '') + '</select>' +
+        '<select class="form-input" id="expStatus" aria-label="Order status" style="max-width:180px">' +
+        expOpt('', 'All statuses', of.status || '') + expOpt('ORDERED', 'Ordered', of.status || '') +
+        expOpt('CONFIRMED', 'Confirmed', of.status || '') + expOpt('READY', 'Ready', of.status || '') +
+        expOpt('DELIVERED', 'Delivered', of.status || '') + expOpt('COMPLETED', 'Completed', of.status || '') +
+        expOpt('CANCELLED', 'Cancelled', of.status || '') + expOpt('DRAFT', 'Draft', of.status || '') + '</select>' +
         '</div>' +
         '<div class="admin-actions"><button class="btn btn-primary" type="button" data-action="admin-export" data-domain="orders">Download Orders CSV</button></div>' +
         '</div>';
@@ -755,11 +945,14 @@ function adminExportUrl(domain) {
     var url = '/api/admin/exports/' + encodeURIComponent(domain) + '.csv';
     if (domain !== 'orders') return url;
     var q = [];
-    var date = $('#expDate'), cat = $('#expCategory'), pay = $('#expPayment'), del = $('#expDelivery');
+    var date = $('#expDate'), cat = $('#expCategory'), pay = $('#expPayment'), del = $('#expDelivery'), st = $('#expStatus');
     if (date && date.value) q.push('date=' + encodeURIComponent(date.value));
     if (cat && cat.value) q.push('category=' + encodeURIComponent(cat.value));
     if (pay && pay.value) q.push('payment=' + encodeURIComponent(pay.value));
     if (del && del.value) q.push('delivery=' + encodeURIComponent(del.value));
+    // Order-status axis, added with the monitoring filters so the download and
+    // the Orders screen can always be narrowed the same way.
+    if (st && st.value) q.push('status=' + encodeURIComponent(st.value));
     return q.length ? url + '?' + q.join('&') : url;
 }
 
@@ -779,6 +972,8 @@ async function adminPendingView() {
             '</div>' +
             '<div class="sr-actions">' +
             '<button class="btn btn-success btn-sm" type="button" data-action="approve-seller" data-id="' + s.id + '">Approve</button>' +
+            // Handover 7.1: Request Changes is a first-class decision, not a rejection.
+            '<button class="btn btn-outline btn-sm" type="button" data-action="open-admin-reason" data-mode="requestChanges" data-id="' + s.id + '" data-name="' + esc(s.name || 'Seller') + '">Request Changes</button>' +
             '<button class="btn btn-outline btn-sm" type="button" data-action="open-reject" data-id="' + s.id + '" data-name="' + esc(s.name || 'Seller') + '">Reject</button>' +
             '</div></div>';
     });
@@ -787,29 +982,44 @@ async function adminPendingView() {
 }
 
 async function adminBuyersView() {
-    var list = await api('/api/admin/buyers');
+    // Handover 8 search (name / mobile / area / society / ORDER ID) is resolved
+    // SERVER-side, so an order number pasted from a support ticket finds the
+    // right buyer, and location narrowing uses stable ids, not display text.
     var term = adminSearchTerm('buyers');
-    var rows = (list || []).filter(function (b) {
-        return adminMatches(term, [b.name, b.mobileNumber, b.society, b.building]);
-    });
+    var q = [];
+    if (term) q.push('search=' + encodeURIComponent(term));
+    if (A.buyerAreaId) q.push('areaId=' + encodeURIComponent(A.buyerAreaId));
+    if (A.buyerSocietyId) q.push('societyId=' + encodeURIComponent(A.buyerSocietyId));
+    var list = await api('/api/admin/buyers' + (q.length ? '?' + q.join('&') : ''));
+    var rows = list || [];
     var h = '<div class="view-enter">';
     h += '<div class="section-head admin-section-head"><div><h1>Buyers</h1><p class="muted small">' +
         rows.length + ' of ' + (list ? list.length : 0) + ' registered buyers</p></div></div>';
-    h += adminSearchBar({ key: 'buyers', label: 'buyers', placeholder: 'Name, mobile, society…' });
+    h += adminSearchBar({ key: 'buyers', label: 'buyers', placeholder: 'Name, mobile, society, order ID…' });
     if (!rows.length) {
         return h + adminEmptyState(term, 'buyers') + '</div>';
     }
     rows.forEach(function (b) {
+        var statusPill = b.blocked
+            ? '<span class="pill pill-red">Blocked</span>'
+            : '<span class="pill pill-green">Active</span>';
         h += '<div class="seller-row">' +
             '<div class="sr-avatar">' + esc(String(b.name || '?').charAt(0).toUpperCase()) + '</div>' +
             '<div class="sr-body">' +
-            '<div class="sr-name">' + esc(b.name || 'Unknown') + '</div>' +
+            '<div class="sr-name">' + esc(b.name || 'Unknown') + ' ' + statusPill + '</div>' +
             '<div class="sr-meta">📱 ' + esc(b.mobileNumber || '—') + ' · ' + esc(b.society || '') + (b.building ? ', ' + esc(b.building) : '') + '</div>' +
             '<div class="sr-meta">Orders: ' + (b.orderCount || 0) + ' · Value: ' + money(b.totalOrderValue || 0) + ' · Favourites: ' + (b.favouriteKitchens || 0) + '</div>' +
+            (b.blocked && b.blockedReason ? '<div class="sr-meta sr-reason">⚠ ' + esc(b.blockedReason) + '</div>' : '') +
             '</div>' +
-            // Observation only: opens the read-only visibility diagnostic. Buyers are
-            // deliberately not editable from Admin.
-            '<div class="sr-actions"><button class="btn btn-secondary btn-sm" type="button" ' +
+            // Handover 8: Buyer detail (profile/location, orders, account state,
+            // support note) plus the Block / Unblock control. The visibility
+            // diagnostic stays as the read-only observation tool.
+            '<div class="sr-actions">' +
+            '<button class="btn btn-secondary btn-sm" type="button" data-action="admin-open-buyer-detail" data-id="' + b.id + '">Details</button>' +
+            (b.blocked
+                ? '<button class="btn btn-success btn-sm" type="button" data-action="buyer-unblock" data-id="' + b.id + '" data-name="' + esc(b.name || 'Buyer') + '">Unblock</button>'
+                : '<button class="btn btn-outline btn-sm" type="button" data-action="open-admin-reason" data-mode="block" data-id="' + b.id + '" data-name="' + esc(b.name || 'Buyer') + '">Block</button>') +
+            '<button class="btn btn-secondary btn-sm" type="button" ' +
             'data-action="admin-diag-buyer-open" data-id="' + b.id + '">Check visibility</button></div>' +
             '</div>';
     });
@@ -825,7 +1035,7 @@ async function adminSellersView() {
     var list = await api('/api/admin/sellers');
     var status = A.sellerStatus || '';
     var term = adminSearchTerm('sellers');
-    var counts = { '': (list || []).length, PENDING: 0, APPROVED: 0, REJECTED: 0, SUSPENDED: 0 };
+    var counts = { '': (list || []).length, PENDING: 0, APPROVED: 0, REJECTED: 0, SUSPENDED: 0, CHANGES_REQUESTED: 0 };
     (list || []).forEach(function (s) {
         if (counts[s.sellerApprovalStatus] !== undefined) counts[s.sellerApprovalStatus]++;
     });
@@ -846,6 +1056,7 @@ async function adminSellersView() {
             { label: 'Pending (' + counts.PENDING + ')', value: 'PENDING', active: status === 'PENDING' },
             { label: 'Approved (' + counts.APPROVED + ')', value: 'APPROVED', active: status === 'APPROVED' },
             { label: 'Rejected (' + counts.REJECTED + ')', value: 'REJECTED', active: status === 'REJECTED' },
+            { label: 'Changes Requested (' + counts.CHANGES_REQUESTED + ')', value: 'CHANGES_REQUESTED', active: status === 'CHANGES_REQUESTED' },
             { label: 'Suspended (' + counts.SUSPENDED + ')', value: 'SUSPENDED', active: status === 'SUSPENDED' },
         ],
     });
@@ -854,11 +1065,29 @@ async function adminSellersView() {
     }
     rows.forEach(function (s) {
         var st = s.sellerApprovalStatus || '';
-        var needsAction = st === 'PENDING' || st === 'REJECTED';
+        // Handover 7.1: "Request Changes" is an open decision state, exactly like
+        // Pending and Rejected - the seller cannot serve until it is resolved.
+        var needsAction = st === 'PENDING' || st === 'REJECTED' || st === 'CHANGES_REQUESTED';
+        // The decision set adapts to the current state: open applications get
+        // Approve / Request Changes / Reject; an approved seller can be Suspended;
+        // a suspended seller is restored with Reactivate (the same endpoint as
+        // Approve). View is always available.
+        var actions = '<div class="sr-actions">' +
+            '<button class="btn btn-secondary btn-sm" type="button" data-action="admin-open-seller-detail" data-id="' + s.id + '">View</button>';
+        if (needsAction) {
+            actions += '<button class="btn btn-success btn-sm" type="button" data-action="approve-seller" data-id="' + s.id + '">Approve</button>' +
+                '<button class="btn btn-outline btn-sm" type="button" data-action="open-admin-reason" data-mode="requestChanges" data-id="' + s.id + '" data-name="' + esc(s.name || 'Seller') + '">Request Changes</button>' +
+                '<button class="btn btn-outline btn-sm" type="button" data-action="open-reject" data-id="' + s.id + '" data-name="' + esc(s.name || 'Seller') + '">Reject</button>';
+        } else if (st === 'APPROVED') {
+            actions += '<button class="btn btn-outline btn-sm" type="button" data-action="open-admin-reason" data-mode="suspend" data-id="' + s.id + '" data-name="' + esc(s.name || 'Seller') + '">Suspend</button>';
+        } else if (st === 'SUSPENDED') {
+            actions += '<button class="btn btn-success btn-sm" type="button" data-action="reactivate-seller" data-id="' + s.id + '" data-name="' + esc(s.name || 'Seller') + '">Reactivate</button>';
+        }
+        actions += '</div>';
         h += '<div class="seller-row">' +
             '<div class="sr-avatar">' + esc(String(s.name || '?').charAt(0).toUpperCase()) + '</div>' +
             '<div class="sr-body">' +
-            '<div class="sr-name">' + esc(s.name || 'Unknown') + ' <span class="pill pill-' + (st === 'APPROVED' ? 'green' : st === 'PENDING' ? 'amber' : 'grey') + '">' + esc(st || '') + '</span></div>' +
+            '<div class="sr-name">' + esc(s.name || 'Unknown') + ' <span class="pill pill-' + (st === 'APPROVED' ? 'green' : (st === 'PENDING' || st === 'CHANGES_REQUESTED') ? 'amber' : 'grey') + '">' + esc(st || '') + '</span></div>' +
             '<div class="sr-meta">📱 ' + esc(s.mobileNumber || '—') + ' · ' + esc(s.kitchenName || 'No kitchen') + ' · ' + esc(s.area || '') + '</div>' +
             '<div class="sr-meta">Live: ' + (s.liveOfferings || 0) + '/' + (s.totalOfferings || 0) + ' offerings · Registered ' + adminDate(s.createdAt) + '</div>' +
             // A seller's statusReason is persisted and returned by /api/admin/sellers,
@@ -868,12 +1097,7 @@ async function adminSellersView() {
             // The row only ever describes the first kitchen; say so when there are more.
             (s.kitchenCount > 1 ? '<div class="sr-meta">🍳 ' + s.kitchenCount + ' kitchens (showing the first)</div>' : '') +
             '</div>' +
-            (needsAction
-                ? '<div class="sr-actions">' +
-                  '<button class="btn btn-success btn-sm" type="button" data-action="approve-seller" data-id="' + s.id + '">Approve</button>' +
-                  '<button class="btn btn-outline btn-sm" type="button" data-action="open-reject" data-id="' + s.id + '" data-name="' + esc(s.name || 'Seller') + '">Reject</button>' +
-                  '</div>'
-                : '') +
+            actions +
             '</div>';
     });
     h += '</div>';
@@ -919,8 +1143,18 @@ async function adminKitchensView() {
             // Availability is a real operational fact; coverage is the Admin control.
             '<div class="sr-meta">' + (k.availableToday ? '🟢 Available today' : '⚪ Not available today') +
             ' · ' + (k.hasLiveOfferings ? 'has live items' : 'no live items') + '</div>' +
+            // Handover 7.3: Admin-side storefront state, surfaced where it matters.
+            (k.removed ? '<div class="sr-meta sr-reason">🚫 Removed from the buyer app by Admin</div>' : '') +
+            (k.paused ? '<div class="sr-meta sr-reason">⏸ Paused by Admin — buyers cannot see this storefront</div>' : '') +
             '<div class="mt-1"><button class="btn btn-secondary btn-sm" type="button" data-action="admin-edit-service-areas" data-kid="' + k.id + '">Manage Service Areas</button> ' +
-            '<button class="btn btn-secondary btn-sm" type="button" data-action="admin-diag-focus" data-kitchen-id="' + k.id + '">Diagnose</button></div>' +
+            '<button class="btn btn-secondary btn-sm" type="button" data-action="admin-diag-focus" data-kitchen-id="' + k.id + '">Diagnose</button> ' +
+            // Handover 7.3 storefront controls. Pause and Resume are the same
+            // switch; Remove is the serious step and always asks for a reason.
+            (k.paused
+                ? '<button class="btn btn-success btn-sm" type="button" data-action="storefront-resume" data-id="' + k.id + '" data-name="' + esc(k.displayName || k.name || '') + '">Resume</button> '
+                : '<button class="btn btn-outline btn-sm" type="button" data-action="open-admin-reason" data-mode="pause" data-id="' + k.id + '" data-name="' + esc(k.displayName || k.name || '') + '">Pause</button> ') +
+            '<button class="btn btn-outline btn-sm" type="button" data-action="open-admin-reason" data-mode="removeStorefront" data-id="' + k.id + '" data-name="' + esc(k.displayName || k.name || '') + '">Remove</button>' +
+            '</div>' +
             '</div></div>';
     });
     h += '</div>';
@@ -988,7 +1222,20 @@ async function adminOrdersView() {
     if (f.status) qs += '&status=' + encodeURIComponent(f.status);
     if (f.societyId) qs += '&societyId=' + encodeURIComponent(f.societyId);
     if (f.areaId) qs += '&areaId=' + encodeURIComponent(f.areaId);
-    var list = await api('/api/admin/orders' + qs);
+    // Seller / buyer drill-down axes (handover 6): the same params the detail
+    // screens and the export use, so one filter language covers every surface.
+    if (f.sellerId) qs += '&sellerId=' + encodeURIComponent(f.sellerId);
+    if (f.buyerId) qs += '&buyerId=' + encodeURIComponent(f.buyerId);
+    // The seller / buyer axes need their option lists. Requests run together; a
+    // failing option list only empties its own dropdown, it never blanks the table.
+    var results = await Promise.all([
+        api('/api/admin/orders' + qs),
+        api('/api/admin/sellers').catch(function () { return []; }),
+        api('/api/admin/buyers').catch(function () { return []; })
+    ]);
+    var list = results[0];
+    var sellerOptions = results[1] || [];
+    var buyerOptions = results[2] || [];
     var h = '<div class="view-enter">';
     h += '<div class="section-head admin-section-head"><div><h1>Orders</h1><p class="muted small">' + (list ? list.length : 0) + ' orders</p></div></div>';
     h += adminSearchBar({
@@ -1021,6 +1268,16 @@ async function adminOrdersView() {
         '<option value="CONFIRMED">Confirmed</option><option value="READY">Ready</option>' +
         '<option value="DELIVERED">Delivered</option><option value="COMPLETED">Completed</option>' +
         '<option value="CANCELLED">Cancelled</option><option value="DRAFT">Draft</option></select>' +
+        // Drill-down axes: pick a seller or a buyer and the list narrows to their
+        // orders; combined with the other axes the backend ANDs them all.
+        '<select class="form-input" id="ordSeller" data-action="admin-order-axis" data-axis="sellerId" aria-label="Seller" style="max-width:200px">' +
+        '<option value="">All sellers</option>' + sellerOptions.map(function (s) {
+            return '<option value="' + s.id + '"' + (String(f.sellerId || '') === String(s.id) ? ' selected' : '') + '>' + esc(s.name || ('Seller ' + s.id)) + '</option>';
+        }).join('') + '</select>' +
+        '<select class="form-input" id="ordBuyer" data-action="admin-order-axis" data-axis="buyerId" aria-label="Buyer" style="max-width:200px">' +
+        '<option value="">All buyers</option>' + buyerOptions.map(function (b) {
+            return '<option value="' + b.id + '"' + (String(f.buyerId || '') === String(b.id) ? ' selected' : '') + '>' + esc(b.name || ('Buyer ' + b.id)) + '</option>';
+        }).join('') + '</select>' +
         '<button class="btn" type="button" data-action="admin-order-axis-clear">Clear filters</button>' +
         '</div></div>';
 
@@ -1205,6 +1462,10 @@ async function adminLocationsView() {
                 '<div class="sr-name">' + esc(area.name) +
                 (area.active ? '' : ' <span class="pill pill-grey">Disabled</span>') + '</div>' +
                 '<div class="sr-meta">' + (area.societyCount || 0) + ' societies · added ' + adminDate(area.createdAt) + '</div>' +
+                // Handover 11 usage counts, so an operator can see which
+                // locations are genuinely in use before disabling one.
+                '<div class="sr-meta">&#128100; ' + (area.buyerCount || 0) + ' buyers · ' +
+                '&#127978; ' + (area.sellerCount || 0) + ' sellers</div>' +
                 '</div>' +
                 '<div class="admin-actions" style="display:flex;gap:8px;flex-wrap:wrap">' +
                 '<button class="btn btn-secondary btn-sm" type="button" data-action="loc-rename-begin" ' +
@@ -1238,6 +1499,11 @@ async function adminLocationsView() {
                 '<div class="sr-name">' + esc(soc.name) +
                 (soc.active ? '' : ' <span class="pill pill-grey">Disabled</span>') + '</div>' +
                 '<div class="sr-meta">added ' + adminDate(soc.createdAt) + '</div>' +
+                // Per-society usage. A brand-new society reads 0 buyers / 0
+                // sellers, which is the visible proof of handover 11's rule
+                // that sellers must opt in rather than inherit new societies.
+                '<div class="sr-meta">&#128100; ' + (soc.buyerCount || 0) + ' buyers · ' +
+                '&#127978; ' + (soc.sellerCount || 0) + ' sellers</div>' +
                 '</div>' +
                 '<div class="admin-actions" style="display:flex;gap:8px;flex-wrap:wrap">' +
                 '<button class="btn btn-secondary btn-sm" type="button" data-action="loc-rename-begin" ' +
@@ -1282,28 +1548,358 @@ function adminPlaceholderView(title, copy, icon) {
 function adminTrafficView() {
     return async function () {
         var period = A.trafficPeriod || 'today';
-        // Every other admin view RETURNS its markup, which adminRender assigns.
-        // This one used to assign view.innerHTML itself and return undefined, so
-        // adminRender immediately overwrote it with '' and Analytics rendered blank.
-        var h = '<div class="view-enter"><div class="section-head admin-section-head"><div><h1>Traffic Analytics</h1><p class="muted small">Active Buyers and Sellers based on real order activity</p></div></div>' +
+        // Seller performance and recorded order value share one filter set
+        // (date / area / society), the same axes the Orders screen exposes.
+        var af = A.analyticsFilter || {};
+        var fq = [];
+        if (af.date) fq.push('date=' + encodeURIComponent(af.date));
+        if (af.areaId) fq.push('areaId=' + encodeURIComponent(af.areaId));
+        if (af.societyId) fq.push('societyId=' + encodeURIComponent(af.societyId));
+        var fqs = fq.length ? '?' + fq.join('&') : '';
+        // One round of fetches; each section degrades on its own instead of
+        // blanking the whole screen.
+        var results = await Promise.all([
+            api('/api/admin/traffic?period=' + encodeURIComponent(period)).catch(function () { return null; }),
+            api('/api/admin/seller-analytics' + fqs).catch(function () { return []; }),
+            api('/api/admin/recorded-order-value' + fqs).catch(function () { return null; }),
+            api('/api/admin/coverage-options').catch(function () { return []; })
+        ]);
+        var data = results[0];
+        var sellers = results[1] || [];
+        var value = results[2];
+        var areas = results[3] || [];
+
+        var h = '<div class="view-enter"><div class="section-head admin-section-head"><div><h1>Analytics</h1>' +
+            '<p class="muted small">Traffic, seller performance and recorded order value — all measured from real marketplace activity</p></div></div>';
+
+        // ---- Traffic (period axis) ----
+        h += '<h2 class="font-700 mb-2">Traffic</h2>' +
             '<div class="admin-filters">' +
             '<button class="btn btn-sm ' + (period === 'today' ? 'btn-primary' : 'btn-secondary') + '" data-action="admin-traffic-period" data-period="today">Today</button>' +
             '<button class="btn btn-sm ' + (period === 'week' ? 'btn-primary' : 'btn-secondary') + '" data-action="admin-traffic-period" data-period="week">This Week</button>' +
             '<button class="btn btn-sm ' + (period === 'month' ? 'btn-primary' : 'btn-secondary') + '" data-action="admin-traffic-period" data-period="month">This Month</button>' +
             '</div>' +
-            '<div id="trafficContent"><div class="page-loading"><div class="spinner"></div></div></div>';
-        try {
-            var data = await api('/api/admin/traffic?period=' + encodeURIComponent(period));
+            '<div id="trafficContent">' + (data ? '' : '<div class="admin-empty">Traffic analytics could not be loaded.</div>') + '</div>';
+        if (data) {
             // Fill the container after adminRender has placed this markup.
             setTimeout(function () { renderTrafficContent(data, period); }, 0);
-        } catch (err) {
-            setTimeout(function () {
-                var c = document.getElementById('trafficContent');
-                if (c) c.innerHTML = '<div class="admin-empty">Failed to load traffic analytics: ' + esc(err.message) + '</div>';
-            }, 0);
         }
+        // ---- Shared filters (date / area / society) ----
+        var socOpts = [];
+        (areas || []).forEach(function (a) {
+            if (!af.areaId || String(a.id) === String(af.areaId)) {
+                (a.societies || []).forEach(function (s) { socOpts.push(s); });
+            }
+        });
+        h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Filters</h3>' +
+            '<p class="muted tiny" style="margin:0 0 10px">Applies to seller performance and recorded order value below. Clear a control to drop that constraint.</p>' +
+            '<div class="flex gap-2 wrap">' +
+            '<input class="form-input" type="date" id="anDate" data-action="admin-analytics-axis" data-axis="date" aria-label="Date" value="' + esc(af.date || '') + '" style="max-width:170px">' +
+            '<select class="form-input" id="anArea" data-action="admin-analytics-axis" data-axis="areaId" aria-label="Area" style="max-width:200px">' +
+            '<option value="">All areas</option>' + (areas || []).map(function (a) {
+                return '<option value="' + a.id + '"' + (String(af.areaId || '') === String(a.id) ? ' selected' : '') + '>' + esc(a.name) + '</option>';
+            }).join('') + '</select>' +
+            // The society list follows the chosen area so the pair stays consistent.
+            '<select class="form-input" id="anSociety" data-action="admin-analytics-axis" data-axis="societyId" aria-label="Society" style="max-width:220px">' +
+            '<option value="">All societies</option>' + socOpts.map(function (s) {
+                return '<option value="' + s.id + '"' + (String(af.societyId || '') === String(s.id) ? ' selected' : '') + '>' + esc(s.name) + '</option>';
+            }).join('') + '</select>' +
+            '<button class="btn" type="button" data-action="admin-analytics-clear">Clear filters</button>' +
+            '</div></div>';
+
+        // ---- Recorded order value (handover 10) ----
+        h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Recorded Order Value</h3>';
+        if (!value) {
+            h += '<div class="admin-empty admin-empty-inline">Recorded order value could not be loaded.</div>';
+        } else {
+            h += '<p class="muted tiny" style="margin:0 0 10px">Value of orders recorded on the marketplace — not platform revenue. Covers the selected filters' +
+                (af.date ? ' for ' + esc(af.date) : '') + '.</p>' +
+                '<div class="flex gap-2 wrap">' +
+                '<div class="flex-1 min-140"><div class="muted small">Orders</div><div class="font-700 font-size-2">' + (value.orderCount || 0) + '</div></div>' +
+                '<div class="flex-1 min-140"><div class="muted small">Total value</div><div class="font-700 font-size-2">' + money(value.recordedOrderValue || 0) + '</div></div>' +
+                '<div class="flex-1 min-140"><div class="muted small">Average order value</div><div class="font-700 font-size-2">' + money(value.averageOrderValue || 0) + '</div></div>' +
+                '</div>';
+        }
+        h += '</div>';
+
+        // ---- Seller performance (handover 6) ----
+        h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Seller Performance</h3>' +
+            '<p class="muted tiny" style="margin:0 0 10px">Views come from storefront and offering visits; conversion is orders ÷ storefront views and is only shown where views are tracked.</p>';
+        if (!sellers.length) {
+            h += '<div class="admin-empty admin-empty-inline">No seller activity matches these filters.</div>';
+        }
+        sellers.forEach(function (s) {
+            h += '<div class="seller-row"><div class="sr-avatar">🍳</div><div class="sr-body">' +
+                '<div class="sr-name">' + esc(s.sellerName || 'Seller') + ' <span class="muted small">' + esc(s.kitchenName || '') + '</span></div>' +
+                '<div class="sr-meta">Orders: ' + (s.orders || 0) + ' · Recorded value: <strong>' + money(s.recordedOrderValue || 0) + '</strong> · Avg: ' + money(s.averageOrderValue || 0) + '</div>' +
+                '<div class="sr-meta">Views: ' + (s.storefrontViews || 0) + ' storefront · ' + (s.offeringViews || 0) + ' offerings · Conversion: ' +
+                    (s.conversionRate == null ? '<span class="muted">not tracked</span>' : (s.conversionRate + '%')) + '</div>' +
+                '</div></div>';
+        });
+        h += '</div>';
+        h += '</div>';
         return h;
     };
+}
+
+/**
+ * Admin action history (handover 14).
+ *
+ * <p>Every consequential Admin decision is written server-side to the audit
+ * trail. This screen is read-only: there is deliberately no way to edit or
+ * delete an entry, because an audit log that Admin can rewrite is not an audit
+ * log. The domain chips filter client-side over the newest page of entries.</p>
+ */
+async function adminAuditView() {
+    var domain = A.auditDomain || '';
+    var limit = A.auditLimit || 200;
+    var list = await api('/api/admin/audit-log?limit=' + encodeURIComponent(limit));
+    var rows = (list || []).filter(function (a) {
+        return !domain || (a.targetType || '') === domain;
+    });
+    var domains = ['', 'SELLER', 'BUYER', 'ORDER', 'PLATFORM'];
+    var h = '<div class="view-enter">';
+    h += '<div class="section-head admin-section-head"><div><h1>Admin Action History</h1>' +
+        '<p class="muted small">' + rows.length + ' of the newest ' + (list || []).length + ' recorded actions</p></div></div>';
+    h += '<div class="admin-filters">';
+    domains.forEach(function (d) {
+        h += '<button class="btn btn-sm ' + (domain === d ? 'btn-primary' : 'btn-secondary') + '" type="button" data-action="admin-audit-domain" data-value="' + d + '">' +
+            (d === '' ? 'All' : esc(d.charAt(0) + d.slice(1).toLowerCase())) + '</button>';
+    });
+    h += '</div>';
+    if (!rows.length) {
+        return h + '<div class="admin-empty">No recorded actions' + (domain ? ' for ' + esc(domain) : '') + ' yet.</div></div>';
+    }
+    rows.forEach(function (a) {
+        var pill = a.action === 'SELLER_APPROVED' || a.action === 'BUYER_UNBLOCKED' || a.action === 'STOREFRONT_RESUMED' ? 'pill-green'
+            : a.action === 'SELLER_REJECTED' || a.action === 'SELLER_SUSPENDED' || a.action === 'BUYER_BLOCKED' || a.action === 'STOREFRONT_REMOVED' ? 'pill-red'
+            : 'pill-grey';
+        h += '<div class="seller-row">' +
+            '<div class="sr-avatar">🗒️</div>' +
+            '<div class="sr-body">' +
+            '<div class="sr-name">' + esc(a.action || 'ACTION') + ' <span class="pill ' + pill + '">' + esc(a.targetType || '') + '</span></div>' +
+            '<div class="sr-meta">By ' + esc(a.actorName || ('Admin ' + (a.actorId || ''))) + ' · ' + adminDate(a.at) + '</div>' +
+            '<div class="sr-meta">Target: ' + esc(a.targetLabel || (a.targetType ? a.targetType + ' ' + (a.targetId || '') : '—')) +
+                (a.oldState || a.newState ? ' · ' + esc(a.oldState || '—') + ' → ' + esc(a.newState || '—') : '') + '</div>' +
+            (a.reason ? '<div class="sr-meta sr-reason">📝 ' + esc(a.reason) + '</div>' : '') +
+            '</div></div>';
+    });
+    h += '</div>';
+    return h;
+}
+
+/**
+ * Data retention (handover 12).
+ *
+ * <p>Detailed orders older than the window can be purged; the analytics
+ * aggregates (recorded at transition time, handover 18) survive, so platform
+ * numbers stay correct on both sides of a purge. The purge itself is a
+ * scheduled, server-side job - this screen reports the resolved configuration
+ * and changes the window. It never deletes anything on the spot.</p>
+ */
+async function adminRetentionView() {
+    var d = await api('/api/admin/retention');
+    var h = '<div class="view-enter">';
+    h += '<div class="section-head admin-section-head"><div><h1>Data Retention</h1>' +
+        '<p class="muted small">How long detailed order records are kept, and what a purge would cover</p></div></div>';
+
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Current window</h3>' +
+        '<div class="flex gap-2 wrap">' +
+        '<div class="flex-1 min-140"><div class="muted small">Retention</div><div class="font-700 font-size-2">' + (d.retentionDays || 0) + ' days</div></div>' +
+        '<div class="flex-1 min-140"><div class="muted small">Purge cutoff</div><div class="font-700 mt-1">' + (d.purgeCutoffDate ? esc(String(d.purgeCutoffDate)) : '—') + '</div></div>' +
+        '<div class="flex-1 min-140"><div class="muted small">Detailed rows past the window</div><div class="font-700 mt-1">' + (d.detailedRowsPastWindow || 0) + '</div></div>' +
+        '</div>' +
+        '<p class="muted tiny" style="margin:10px 0 0">Setting: <code>' + esc(d.settingKey || '') + '</code>' +
+        (d.destructivePurgeEnabled === false ? ' · Destructive purge is DISABLED — rows are counted, never deleted.' : '') + '</p>' +
+        '</div>';
+
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Change the window</h3>' +
+        '<p class="muted tiny" style="margin:0 0 10px">Shorter windows purge sooner; the change is recorded in the Admin action history. Buyers and sellers are never notified of a purge.</p>' +
+        '<div class="flex gap-2 wrap" style="align-items:flex-end">' +
+        '<div><label class="form-label" for="retentionDays">Retention (days)</label>' +
+        '<input class="form-input" type="number" min="1" id="retentionDays" value="' + (d.retentionDays || 30) + '" style="max-width:140px"></div>' +
+        '<button class="btn btn-primary" type="button" data-action="retention-set">Save retention</button>' +
+        '</div></div>';
+
+    h += '</div>';
+    return h;
+}
+
+/**
+ * Seller detail (handover 7.2): identity/contact, enabled types, status,
+ * storefronts with Admin controls, recorded activity, recent orders and the
+ * Admin action history - everything a support question about a seller needs,
+ * on one screen.
+ */
+async function adminSellerDetailView() {
+    var id = A.sellerDetailId;
+    if (!id) {
+        return '<div class="view-enter"><div class="section-head admin-section-head"><div><h1>Seller</h1>' +
+            '<p class="muted small">Open a seller from the Sellers list to see their full record.</p></div></div>' +
+            '<button class="btn btn-secondary" type="button" data-action="admin-back-sellers">← Back to Sellers</button></div>';
+    }
+    var d = await api('/api/admin/sellers/' + id + '/detail');
+    var st = d.status || '';
+    var stPill = st === 'APPROVED' ? 'green' : (st === 'PENDING' || st === 'CHANGES_REQUESTED') ? 'amber' : st === 'SUSPENDED' ? 'red' : 'grey';
+    var stat = function (label, value) {
+        return '<div class="flex-1 min-140"><div class="muted small">' + label + '</div><div class="font-700 mt-1">' + value + '</div></div>';
+    };
+    var h = '<div class="view-enter">';
+    h += '<div class="section-head admin-section-head"><div><h1>' + esc(d.name || 'Seller') +
+        ' <span class="pill pill-' + stPill + '">' + esc(st || '') + '</span></h1>' +
+        '<p class="muted small">📱 ' + esc(d.mobileNumber || '—') + ' · ' + esc(d.enabledTypes || 'NONE') +
+        ' · ' + (d.approvedAt ? 'approved ' + adminDate(d.approvedAt) + (d.approvedBy ? ' by ' + esc(d.approvedBy) : '') : 'no approval recorded') + '</p></div></div>';
+    if (d.statusReason) {
+        h += '<div class="card pad"><div class="sr-reason">⚠ ' + esc(d.statusReason) + '</div></div>';
+    }
+
+    // Decision row: the same handlers the list rows use, so state and audit
+    // behave identically wherever the decision is taken.
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Decision</h3><div class="admin-actions">' +
+        '<button class="btn btn-secondary" type="button" data-action="admin-back-sellers">← Back to Sellers</button>';
+    if (st === 'SUSPENDED') {
+        h += '<button class="btn btn-success" type="button" data-action="reactivate-seller" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Reactivate</button>';
+    } else if (st !== 'APPROVED') {
+        h += '<button class="btn btn-success" type="button" data-action="approve-seller" data-id="' + d.id + '">Approve</button>';
+    }
+    if (st !== 'SUSPENDED') {
+        h += '<button class="btn btn-outline" type="button" data-action="open-admin-reason" data-mode="requestChanges" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Request Changes</button>' +
+            '<button class="btn btn-outline" type="button" data-action="open-admin-reason" data-mode="suspend" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Suspend</button>';
+    }
+    h += '<button class="btn btn-outline" type="button" data-action="open-reject" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Reject</button>' +
+        '</div></div>';
+
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Recorded activity</h3>' +
+        '<div class="flex gap-2 wrap">' +
+        stat('Orders', d.orderCount || 0) + stat('Delivered', d.deliveredCount || 0) + stat('Cancelled', d.cancelledCount || 0) +
+        stat('Recorded Order Value', money(d.recordedOrderValue || 0)) + stat('Average Order Value', money(d.averageOrderValue || 0)) +
+        '</div></div>';
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Storefronts (' + (d.storefronts || []).length + ')</h3>';
+    if (!(d.storefronts || []).length) {
+        h += '<div class="admin-empty admin-empty-inline">No storefronts on record.</div>';
+    }
+    (d.storefronts || []).forEach(function (k) {
+        var coverage = k.servedSocieties && k.servedSocieties.length ? k.servedSocieties.join(', ') : (k.serviceAreas || '');
+        h += '<div class="seller-row">' +
+            '<div class="sr-avatar">🏪</div>' +
+            '<div class="sr-body">' +
+            '<div class="sr-name">' + esc(k.name || 'Storefront') +
+                (k.paused ? ' <span class="pill pill-amber">Paused</span>' : ' <span class="pill pill-green">Active</span>') + '</div>' +
+            '<div class="sr-meta">' + esc(k.sellerType || '') + ' · ' + (k.availableToday ? '🟢 Available today' : '⚪ Not available today') +
+                ' · Offerings: ' + (k.offeringCount || 0) + '</div>' +
+            '<div class="sr-meta">Coverage: ' + esc(coverage || 'not configured') + '</div>' +
+            '<div class="sr-meta">Traffic: ' + (k.storefrontViews || 0) + ' storefront views · ' + (k.offeringViews || 0) + ' offering views</div>' +
+            '</div>' +
+            '<div class="sr-actions">' +
+            (k.paused
+                ? '<button class="btn btn-success btn-sm" type="button" data-action="storefront-resume" data-id="' + k.id + '" data-name="' + esc(k.name || '') + '">Resume</button>'
+                : '<button class="btn btn-outline btn-sm" type="button" data-action="open-admin-reason" data-mode="pause" data-id="' + k.id + '" data-name="' + esc(k.name || '') + '">Pause</button>') +
+            '<button class="btn btn-outline btn-sm" type="button" data-action="open-admin-reason" data-mode="removeStorefront" data-id="' + k.id + '" data-name="' + esc(k.name || '') + '">Remove</button>' +
+            '</div></div>';
+    });
+    h += '</div>';
+
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Recent orders</h3>';
+    if (!(d.recentOrders || []).length) {
+        h += '<div class="admin-empty admin-empty-inline">No orders yet.</div>';
+    } else {
+        d.recentOrders.forEach(function (o) {
+            h += '<div class="sr-meta" style="padding:6px 0">#' + esc(o.orderNumber || String(o.id)) + ' · ' + esc(o.buyerName || 'Buyer') +
+                ' · ' + esc(o.orderStatus || '') + ' · ' + adminDate(o.orderTime || o.createdAt) +
+                ' · <strong>' + money(o.totalAmount || 0) + '</strong></div>';
+        });
+    }
+    h += '</div>';
+
+    h += adminAuditHistoryHtml(d.auditHistory, 'Seller');
+    return h;
+}
+
+/**
+ * Compact Admin action history, shared by the Seller and Buyer detail screens
+ * so the same decision reads the same way wherever it is audited.
+ */
+function adminAuditHistoryHtml(history, noun) {
+    var h = '<div class="card pad card-mt"><h3 class="font-700 mb-2">' + esc(noun) + ' action history</h3>';
+    if (!history || !history.length) {
+        return h + '<div class="admin-empty admin-empty-inline">No Admin actions recorded for this ' + esc(noun.toLowerCase()) + ' yet.</div></div>';
+    }
+    history.forEach(function (a) {
+        h += '<div class="seller-row"><div class="sr-avatar">🗒️</div><div class="sr-body">' +
+            '<div class="sr-name">' + esc(a.action || '') + (a.newState ? ' <span class="pill pill-grey">' + esc(a.newState) + '</span>' : '') + '</div>' +
+            '<div class="sr-meta">By ' + esc(a.actorName || 'Admin') + ' · ' + adminDate(a.at) + (a.oldState ? ' · from ' + esc(a.oldState) : '') + '</div>' +
+            (a.reason ? '<div class="sr-meta sr-reason">' + esc(a.reason) + '</div>' : '') +
+            '</div></div>';
+    });
+    return h + '</div>';
+}
+
+/**
+ * Buyer detail (handover 8): profile/location needed for order support, recent
+ * orders with payment/delivery status, account state (Active / Blocked) and the
+ * internal support note. The note never leaves the Admin surface.
+ */
+async function adminBuyerDetailView() {
+    var id = A.buyerDetailId;
+    if (!id) {
+        return '<div class="view-enter"><div class="section-head admin-section-head"><div><h1>Buyer</h1>' +
+            '<p class="muted small">Open a buyer from the Buyers list to see their full record.</p></div></div>' +
+            '<button class="btn btn-secondary" type="button" data-action="admin-back-buyers">← Back to Buyers</button></div>';
+    }
+    var d = await api('/api/admin/buyers/' + id);
+    var stat = function (label, value) {
+        return '<div class="flex-1 min-140"><div class="muted small">' + label + '</div><div class="font-700 mt-1">' + value + '</div></div>';
+    };
+    var h = '<div class="view-enter">';
+    h += '<div class="section-head admin-section-head"><div><h1>' + esc(d.name || 'Buyer') +
+        ' <span class="pill ' + (d.blocked ? 'pill-red">Blocked' : 'pill-green">Active') + '</span></h1>' +
+        '<p class="muted small">📱 ' + esc(d.mobileNumber || '—') + ' · joined ' + adminDate(d.joinedAt) + '</p></div></div>';
+    if (d.blocked && d.blockedReason) {
+        h += '<div class="card pad"><div class="sr-reason">⚠ Blocked' + (d.blockedAt ? ' on ' + adminDate(d.blockedAt) : '') + ': ' + esc(d.blockedReason) + '</div></div>';
+    }
+
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Account</h3><div class="admin-actions">' +
+        '<button class="btn btn-secondary" type="button" data-action="admin-back-buyers">← Back to Buyers</button>' +
+        (d.blocked
+            ? '<button class="btn btn-success" type="button" data-action="buyer-unblock" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Unblock</button>'
+            : '<button class="btn btn-outline" type="button" data-action="open-admin-reason" data-mode="block" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Block</button>') +
+        '<button class="btn btn-secondary" type="button" data-action="open-admin-reason" data-mode="note" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">' +
+        (d.supportNote ? 'Edit support note' : 'Add support note') + '</button>' +
+        '</div>' +
+        (d.supportNote ? '<div class="sr-meta sr-reason" style="margin-top:8px">🗒️ ' + esc(d.supportNote) + '</div>'
+                       : '<p class="muted tiny" style="margin:8px 0 0">No internal support note yet.</p>') +
+        '</div>';
+
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Profile & location</h3>' +
+        '<div class="flex gap-2 wrap">' +
+        stat('Society', esc(d.society || '—') + (d.societyId ? ' <span class="muted tiny">#' + d.societyId + '</span>' : '')) +
+        stat('Area', esc(d.area || '—')) +
+        stat('Building', esc(d.building || '—')) +
+        stat('Flat / House', esc(d.flatHouseNumber || '—')) +
+        '</div></div>';
+
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Recorded activity</h3>' +
+        '<div class="flex gap-2 wrap">' +
+        stat('Orders', d.orderCount || 0) + stat('Delivered', d.deliveredCount || 0) +
+        stat('Cancelled', d.cancelledCount || 0) + stat('Paid', d.paidCount || 0) +
+        stat('Recorded Order Value', money(d.recordedOrderValue || 0)) +
+        '</div></div>';
+
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Recent orders</h3>';
+    if (!(d.recentOrders || []).length) {
+        h += '<div class="admin-empty admin-empty-inline">No orders yet.</div>';
+    } else {
+        d.recentOrders.forEach(function (o) {
+            h += '<div class="sr-meta" style="padding:6px 0">#' + esc(o.orderNumber || String(o.id)) + ' · ' + esc(o.kitchenName || 'Store') +
+                ' · ' + esc(o.orderStatus || '') + ' / ' + esc(o.paymentStatus || '') + ' / ' + esc(o.deliveryStatus || '') +
+                ' · ' + adminDate(o.orderTime || o.createdAt) + ' · <strong>' + money(o.totalAmount || 0) + '</strong></div>';
+        });
+    }
+    h += '</div>';
+
+    h += adminAuditHistoryHtml(d.auditHistory, 'Buyer');
+    h += '</div>';
+    return h;
 }
 
 /**
@@ -1716,6 +2312,13 @@ document.addEventListener('keyup', function (ev) {
 });
 // <select> and checkbox interactions report through 'change', not 'click'.
 document.addEventListener('change', function (ev) {
+    // Dashboard custom date (handover 4/17 "Custom where applicable"). An empty
+    // box falls back to Today rather than sending an unparseable value.
+    if (ev.target.id === 'adminDashCustomDate') {
+        A.dashPeriod = ev.target.value || 'today';
+        adminRender();
+        return;
+    }
     // Admin V1 Orders monitoring axes. 'change' is the only correct source: a
     // 'click' on a <select> reports the PREVIOUS selection and would re-render
     // over the freshly chosen value.
@@ -1726,6 +2329,15 @@ document.addEventListener('change', function (ev) {
         // A blank control means "no constraint on this axis", never "match nothing".
         if (axis.value) A.orderFilters[axisKey] = axis.value;
         else delete A.orderFilters[axisKey];
+        adminRender();
+        return;
+    }
+    // Analytics screen axes (date / area / society) - same blank-means-any rule.
+    var anAxis = ev.target.closest('[data-action="admin-analytics-axis"]');
+    if (anAxis) {
+        A.analyticsFilter = A.analyticsFilter || {};
+        if (anAxis.value) A.analyticsFilter[anAxis.dataset.axis] = anAxis.value;
+        else delete A.analyticsFilter[anAxis.dataset.axis];
         adminRender();
         return;
     }
