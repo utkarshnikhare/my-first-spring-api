@@ -33,6 +33,9 @@ public class AdminService {
     private final LocationService locationService;
     private final AdminAuditService auditService;
     private final RetentionService retentionService;
+    // Window-scoped traffic counters for the dashboard. Reads the SAME event
+    // table the analytics screen already uses - no second analytics store.
+    private final com.example.my_first_spring_api.repository.AnalyticsEventRepository analyticsEventRepository;
     private final org.springframework.core.env.Environment environment;
 
     @Autowired
@@ -43,6 +46,7 @@ public class AdminService {
                         LocationService locationService,
                         AdminAuditService auditService,
                         RetentionService retentionService,
+                        com.example.my_first_spring_api.repository.AnalyticsEventRepository analyticsEventRepository,
                         org.springframework.core.env.Environment environment) {
         this.userRepository = userRepository;
         this.analyticsService = analyticsService;
@@ -55,6 +59,7 @@ public class AdminService {
         this.locationService = locationService;
         this.auditService = auditService;
         this.retentionService = retentionService;
+        this.analyticsEventRepository = analyticsEventRepository;
         this.environment = environment;
     }
 
@@ -271,6 +276,23 @@ public class AdminService {
         out.put("sellersInPeriod", counted.stream()
                 .filter(o -> o.getKitchen() != null && o.getKitchen().getSeller() != null)
                 .map(o -> o.getKitchen().getSeller().getId()).distinct().count());
+        // ---- Traffic in the selected window (handover 4/6) ----
+        // Counted from the events the application really records. A storefront or
+        // marketplace nobody has opened in the window legitimately reads zero;
+        // nothing here is estimated or carried forward from an earlier day.
+        out.put("marketplaceViewsInPeriod", analyticsEventRepository
+                .countByEventTypeAndCreatedAtAfter(AnalyticsService.EV_MARKETPLACE_VIEW, from));
+        out.put("storefrontViewsInPeriod", analyticsEventRepository.countByEventTypeAndCreatedAtAfter(
+                AnalyticsService.EV_HOMEMADE_STOREFRONT_VIEW, from));
+        out.put("offeringViewsInPeriod", analyticsEventRepository.countByEventTypeAndCreatedAtAfter(
+                AnalyticsService.EV_PRODUCT_VIEW, from));
+        out.put("enquiriesInPeriod", allEnquiries.stream()
+                .filter(e -> e.getCreatedAt() != null && !e.getCreatedAt().isBefore(from))
+                .count());
+        // "Attention Needed": how many operational items are open right now. One
+        // count for the card, computed from the SAME attention model the panel
+        // below renders, so the card and the panel can never disagree.
+        out.put("attentionNeeded", attentionItems().size());
         return out;
     }
 
@@ -722,9 +744,9 @@ public class AdminService {
         }
         StringBuilder out = new StringBuilder();
         switch (safeDomain) {
-            case "sellers" -> sellersCsv(out);
-            case "buyers" -> buyersCsv(out);
-            case "analytics" -> analyticsCsv(out);
+            case "sellers" -> sellersCsv(out, filter);
+            case "buyers" -> buyersCsv(out, filter);
+            case "analytics" -> analyticsCsv(out, filter);
             default -> ordersCsv(out, filter);
         }
         return out.toString();
@@ -821,16 +843,54 @@ public class AdminService {
         }
     }
 
-    private void sellersCsv(StringBuilder out) {
-        csvBanner(out, "SocioMart Admin V1 - Sellers export", null);
-        out.append("Seller ID,Name,Mobile,Approval Status,Status Reason,Approved At,Registered At,Storefronts,Recorded Order Value\n");
+    private void sellersCsv(StringBuilder out, OrderFilter filter) {
+        csvBanner(out, "SocioMart Admin V1 - Sellers export", filter);
+        out.append("Seller ID,Name,Mobile,Approval Status,Status Reason,Approved At,Registered At,Storefronts,Orders,Recorded Order Value\n");
+        // Handover 12.1: an export must respect the operator's active filters and
+        // date range. Seller rows are kept when they match the seller/location
+        // axes, but their order figures come from the FILTERED order set - so a
+        // narrowed export can never carry a wider total than the screen shows.
         for (User s : userRepository.findByRole(UserRole.SELLER)) {
+            if (!sellerMatchesFilter(s, filter)) continue;
+            List<Order> sellerOrders = matchingOrders(filter).stream()
+                    .filter(o -> o.getKitchen() != null && o.getKitchen().getSeller() != null
+                            && o.getKitchen().getSeller().getId().equals(s.getId()))
+                    .toList();
             out.append(csv(s.getId())).append(',').append(csv(s.getName())).append(',')
                .append(csv(s.getMobileNumber())).append(',').append(csv(s.getSellerApprovalStatus())).append(',')
                .append(csv(s.getSellerStatusReason())).append(',').append(csv(s.getApprovedAt())).append(',')
                .append(csv(s.getCreatedAt())).append(',').append(csv(kitchenRepository.findBySeller(s).size())).append(',')
-               .append(csv(sellerOrderValue(s))).append('\n');
+               .append(csv(sellerOrders.size())).append(',')
+               .append(csv(sumRecordedValue(sellerOrders))).append('\n');
         }
+    }
+
+    /**
+     * True when a seller is inside the export's scope.
+     *
+     * <p>Only the axes that identify a SELLER narrow the row list: an explicit
+     * seller id, or a seller whose storefront serves the chosen Area/Society.
+     * Date, payment, delivery and order status describe ORDERS, so they shape
+     * each seller's figures instead of deciding whether the seller appears.</p>
+     */
+    private boolean sellerMatchesFilter(User seller, OrderFilter filter) {
+        if (filter == null) return true;
+        if (filter.sellerId != null) return filter.sellerId.equals(seller.getId());
+        if (filter.areaId == null && filter.societyId == null) return true;
+        for (Kitchen k : kitchenRepository.findBySeller(seller)) {
+            if (filter.societyId != null && servesSociety(k, filter.societyId)) return true;
+            if (filter.areaId != null && servesAnySocietyInArea(k, filter.areaId)) return true;
+        }
+        return false;
+    }
+
+    /** True when the storefront serves any Society belonging to this Area. */
+    private boolean servesAnySocietyInArea(Kitchen k, Long areaId) {
+        if (k.getServedSocieties() == null) return false;
+        for (Society s : k.getServedSocieties()) {
+            if (s != null && s.getArea() != null && areaId.equals(s.getArea().getId())) return true;
+        }
+        return false;
     }
 
     /** Sum of non-draft, non-cancelled order totals for one seller's kitchens. */
@@ -845,24 +905,45 @@ public class AdminService {
         return total;
     }
 
-    private void buyersCsv(StringBuilder out) {
-        csvBanner(out, "SocioMart Admin V1 - Buyers export", null);
+    private void buyersCsv(StringBuilder out, OrderFilter filter) {
+        csvBanner(out, "SocioMart Admin V1 - Buyers export", filter);
         out.append("Buyer ID,Name,Mobile,Area,Society,Building,Flat,Orders,Recorded Order Value\n");
-        for (Map<String, Object> b : buyers()) {
+        // Reuses the same search the Buyers screen applies, so the export honours
+        // the name/mobile/society/order-id term as well as Area and Society.
+        for (Map<String, Object> b : buyers(filter != null ? filter.search : null,
+                filter != null ? filter.areaId : null,
+                filter != null ? filter.societyId : null)) {
+            Long buyerId = (Long) b.get("id");
+            List<Order> buyerOrders = matchingOrders(filter).stream()
+                    .filter(o -> o.getBuyer() != null && o.getBuyer().getId().equals(buyerId))
+                    .toList();
             out.append(csv(b.get("id"))).append(',').append(csv(b.get("name"))).append(',')
                .append(csv(b.get("mobileNumber"))).append(',').append(csv(b.get("area"))).append(',')
                .append(csv(b.get("society"))).append(',').append(csv(b.get("building"))).append(',')
-               .append(csv(b.get("flatHouseNumber"))).append(',').append(csv(b.get("orderCount"))).append(',')
-               .append(csv(b.get("totalOrderValue"))).append('\n');
+               .append(csv(b.get("flatHouseNumber"))).append(',').append(csv(buyerOrders.size())).append(',')
+               .append(csv(sumRecordedValue(buyerOrders))).append('\n');
         }
     }
 
+    /** Recorded Order Value of an already-filtered order set. */
+    private static BigDecimal sumRecordedValue(List<Order> orders) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (Order o : orders) {
+            if (o.getOrderStatus() == OrderStatus.DRAFT || o.getOrderStatus() == OrderStatus.CANCELLED) continue;
+            if (o.getTotalAmount() != null) total = total.add(o.getTotalAmount());
+        }
+        return total;
+    }
+
     /** Aggregate marketplace figures - the same counters the dashboard shows. */
-    private void analyticsCsv(StringBuilder out) {
-        csvBanner(out, "SocioMart Admin V1 - Analytics export", null);
-        Map<String, Object> d = dashboard();
+    private void analyticsCsv(StringBuilder out, OrderFilter filter) {
+        csvBanner(out, "SocioMart Admin V1 - Analytics export", filter);
+        Map<String, Object> d = dashboard(filter != null ? filter.date : null);
         out.append("Metric,Value\n");
-        for (String key : List.of("totalBuyers", "totalSellers", "approvedSellers", "pendingSellers",
+        // The selected-window figures lead the file, so the export answers "what
+        // happened in the period the operator chose" before the all-time totals.
+        for (String key : List.of("selectedPeriod", "ordersInPeriod", "recordedOrderValueInPeriod",
+                "totalBuyers", "totalSellers", "approvedSellers", "pendingSellers",
                 "suspendedSellers", "totalOrders", "ordersToday", "ordersThisMonth",
                 "totalOrderValue", "todayOrderValue", "monthOrderValue",
                 "paidCount", "pendingPaymentCount", "willPayLaterCount",
@@ -1169,6 +1250,20 @@ public class AdminService {
         m.put("customInstructions", order.getCustomInstructions());
         m.put("createdAt", order.getCreatedAt());
         m.put("orderTime", order.getOrderTime());
+        // Handover 9: the support-facing detail needs the delivery facts and a
+        // status/event history, not just the current snapshot.
+        m.put("deliveryStatus", order.getEffectiveDeliveryStatus().name());
+        m.put("deliveredAt", order.getDeliveredAt());
+        m.put("deliveryEditable", order.isActiveForDelivery());
+        m.put("area", order.getBuyer() != null ? order.getBuyer().getArea() : null);
+        m.put("areaId", resolveBuyerAreaId(order.getBuyer()));
+        m.put("societyId", order.getBuyer() != null && order.getBuyer().getSocietyRef() != null
+                ? order.getBuyer().getSocietyRef().getId() : null);
+        m.put("category", order.getKitchen() != null && order.getKitchen().getSellerType() != null
+                ? order.getKitchen().getSellerType().name() : null);
+        m.put("acknowledgedAt", order.getAcknowledgedAt());
+        m.put("updatedAt", order.getUpdatedAt());
+        m.put("history", orderHistory(order));
         List<Map<String, Object>> items = order.getItems().stream().map(it -> {
             Map<String, Object> im = new LinkedHashMap<>();
             im.put("productId", it.getProduct() != null ? it.getProduct().getId() : null);
@@ -1184,7 +1279,46 @@ public class AdminService {
         return m;
     }
 
-    // ==================== Enquiries ====================
+    /**
+ * Chronological event/status history for one order (handover 9).
+ *
+ * <p>Built from timestamps the order ALREADY stores - created, placed,
+ * acknowledged, paid-updated, delivered, last updated - so it can never claim an
+ * event that did not happen. A step with no timestamp is simply omitted rather
+ * than dated "now", which would be a fabricated event.
+ *
+ * <p>Delivery deliberately appears only when it actually happened: a cancelled
+ * order has a cleared {@code deliveredAt} and must not show a Delivered entry.</p>
+ */
+private List<Map<String, Object>> orderHistory(Order order) {
+    List<Map<String, Object>> events = new ArrayList<>();
+    addHistoryEvent(events, order.getCreatedAt(), "Order started", "Basket created");
+    addHistoryEvent(events, order.getOrderTime(), "Order placed", order.getOrderNumber());
+    addHistoryEvent(events, order.getAcknowledgedAt(), "Acknowledged by seller", null);
+    addHistoryEvent(events, order.getPaymentStatus() == PaymentStatus.PAID ? order.getUpdatedAt() : null,
+            "Payment recorded as Paid", null);
+    if (order.isDelivered() && order.getDeliveredAt() != null) {
+        addHistoryEvent(events, order.getDeliveredAt(), "Marked delivered by seller", null);
+    }
+    if (order.getOrderStatus() == OrderStatus.CANCELLED) {
+        addHistoryEvent(events, order.getUpdatedAt(), "Order cancelled", null);
+    }
+    // Newest first: support reads "what happened last", not "what happened first".
+    events.sort((a, b) -> ((LocalDateTime) b.get("at")).compareTo((LocalDateTime) a.get("at")));
+    return events;
+}
+
+private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateTime at,
+                                    String label, String detail) {
+    if (at == null) return; // no timestamp = the event did not happen
+    Map<String, Object> e = new LinkedHashMap<>();
+    e.put("at", at);
+    e.put("label", label);
+    if (detail != null) e.put("detail", detail);
+    events.add(e);
+}
+
+// ==================== Enquiries ====================
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> enquiries() {
@@ -1408,7 +1542,59 @@ public class AdminService {
         m.put("recordedOrderValue", total);
         m.put("averageOrderValue", count == 0 ? BigDecimal.ZERO
                 : total.divide(BigDecimal.valueOf(count), 2, java.math.RoundingMode.HALF_UP));
+        // Handover 10: the breakdown the figure is actually made of - by seller,
+        // by Area and by Society - derived from the SAME filtered rows as the
+        // total, so the parts always add up to the whole. Location grouping uses
+        // the stable ids; a profile with only free text is grouped under its text
+        // rather than silently dropped.
+        m.put("bySeller", groupRecordedValue(rows, "sellerId", "sellerName"));
+        m.put("byArea", groupRecordedValue(rows, "areaId", "area"));
+        m.put("bySociety", groupRecordedValue(rows, "societyId", "society"));
         return m;
+    }
+
+    /**
+     * Groups already-filtered order rows into an ordered breakdown.
+     *
+     * <p>Only rows with a real value for the key are grouped; rows with no
+     * location reference at all would otherwise create an unreadable empty
+     * bucket. Each group carries its order count, recorded value and average.</p>
+     */
+    private List<Map<String, Object>> groupRecordedValue(List<Map<String, Object>> rows,
+                                                         String idKey, String nameKey) {
+        Map<Object, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            Object key = row.get(idKey);
+            if (key == null) continue;
+            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(row);
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        // Largest value first: this is a commercial view, so the operator wants
+        // the biggest contributors at the top without having to sort anything.
+        grouped.entrySet().stream()
+                .sorted((a, b) -> sumValue(b.getValue()).compareTo(sumValue(a.getValue())))
+                .forEach(e -> {
+                    Map<String, Object> g = new LinkedHashMap<>();
+                    List<Map<String, Object>> members = e.getValue();
+                    g.put(idKey, e.getKey());
+                    g.put("label", members.get(0).get(nameKey));
+                    g.put("orderCount", members.size());
+                    BigDecimal value = sumValue(members);
+                    g.put("recordedOrderValue", value);
+                    g.put("averageOrderValue", members.isEmpty() ? BigDecimal.ZERO
+                            : value.divide(BigDecimal.valueOf(members.size()), 2, java.math.RoundingMode.HALF_UP));
+                    out.add(g);
+                });
+        return out;
+    }
+
+    private static BigDecimal sumValue(List<Map<String, Object>> rows) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (Map<String, Object> r : rows) {
+            Object v = r.get("totalAmount");
+            if (v != null) total = total.add(new BigDecimal(String.valueOf(v)));
+        }
+        return total;
     }
 
     private static long num(Object o) {

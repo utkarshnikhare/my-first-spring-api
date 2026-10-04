@@ -577,6 +577,16 @@ async function adminAction(action, t) {
                 location.hash = '#/orders';
                 break;
             }
+            case 'admin-seller-sort': {
+                // Same column toggles direction; a new column starts descending,
+                // because the useful default for every numeric column here is
+                // "biggest first".
+                var key = t.dataset.key;
+                if (A.sellerSort === key) A.sellerSortDir = A.sellerSortDir === 'asc' ? 'desc' : 'asc';
+                else { A.sellerSort = key; A.sellerSortDir = 'desc'; }
+                adminRender();
+                break;
+            }
             case 'admin-dash-period': {
                 A.dashPeriod = t.dataset.period || 'today';
                 await adminRender();
@@ -782,20 +792,34 @@ async function adminHomeView() {
             (sub ? '<div class="dc-sub">' + sub + '</div>' : '') +
             close;
     }
-    // Traffic row: distinct buyers/sellers that actually placed an order inside
-    // the selected window. Measured from real orders, never guessed.
-    h += dashCard('&#128200;', (data.buyersInPeriod || 0) + ' / ' + (data.sellersInPeriod || 0),
-        'Active Users', 'buyers / sellers ordering in ' + esc(win), '#/analytics');
+    // Handover 4/17 layout:
+    //   row 1: Traffic | Orders | Recorded Order Value | Pending Approvals
+    //   row 2: Buyers   | Sellers | Attention Needed
+    // Two grids keep the two rows visually distinct instead of one long strip.
+    h += '<div class="dash-grid">';
+    h += dashCard('&#128200;', (data.marketplaceViewsInPeriod || 0) + ' / ' + (data.storefrontViewsInPeriod || 0),
+        'Traffic', 'marketplace / storefront views in ' + esc(win), '#/analytics');
     h += dashCard('&#128230;', data.ordersInPeriod || 0, 'Orders',
         esc(win) + ' · all time: ' + (data.totalOrders || 0), '#/orders');
     // Deliberately NOT "Revenue": SocioMart does not process buyer payments, so
     // this is the value of orders recorded on the marketplace and nothing more.
     h += dashCard('&#128202;', money(data.recordedOrderValueInPeriod || 0), 'Recorded Order Value',
         esc(win) + ' · all time: ' + money(data.totalOrderValue || 0), '#/orders');
-    h += dashCard('&#128101;', (data.totalBuyers || 0) + ' / ' + (data.totalSellers || 0),
-        'Buyers / Sellers', (data.approvedSellers || 0) + ' sellers approved', '#/buyers');
     h += dashCard('&#9203;', data.pendingSellers || 0, 'Pending Approvals',
         'seller applications awaiting review', '#/approvals');
+    h += '</div>';
+
+    h += '<div class="dash-grid">';
+    h += dashCard('&#128100;', data.totalBuyers || 0, 'Buyers',
+        (data.buyersInPeriod || 0) + ' ordering in ' + esc(win), '#/buyers');
+    h += dashCard('&#128101;', data.totalSellers || 0, 'Sellers',
+        (data.approvedSellers || 0) + ' approved · ' + (data.pendingSellers || 0) + ' pending', '#/sellers');
+    // Highlighted only when something is actually open, so the dashboard does not
+    // cry wolf on a healthy day. Count comes from the same attention model the
+    // Pending Actions panel renders below.
+    h += dashCard('&#9888;', data.attentionNeeded || 0, 'Attention Needed',
+        (data.attentionNeeded || 0) === 0 ? 'nothing waiting on the Admin team' : 'items need a decision',
+        '#/orders');
     h += '</div>';
 
     h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Recorded Order Value</h3>' +
@@ -1231,11 +1255,24 @@ async function adminOrdersView() {
     var results = await Promise.all([
         api('/api/admin/orders' + qs),
         api('/api/admin/sellers').catch(function () { return []; }),
-        api('/api/admin/buyers').catch(function () { return []; })
+        api('/api/admin/buyers').catch(function () { return []; }),
+        // Area/Society option lists for the two new filter axes. Each degrades to
+        // an empty list on its own, so a location failure never blanks Orders.
+        api('/api/admin/locations').catch(function () { return null; })
     ]);
     var list = results[0];
     var sellerOptions = results[1] || [];
     var buyerOptions = results[2] || [];
+    var locations = results[3] || null;
+    var areaOptions = locations ? (locations.areas || []) : [];
+    // Societies follow the chosen Area so the pair can never contradict itself;
+    // with no Area chosen every society is offered.
+    var societyOptions = [];
+    areaOptions.forEach(function (a) {
+        if (!f.areaId || String(a.id) === String(f.areaId)) {
+            (a.societies || []).forEach(function (s) { societyOptions.push(s); });
+        }
+    });
     var h = '<div class="view-enter">';
     h += '<div class="section-head admin-section-head"><div><h1>Orders</h1><p class="muted small">' + (list ? list.length : 0) + ' orders</p></div></div>';
     h += adminSearchBar({
@@ -1277,6 +1314,18 @@ async function adminOrdersView() {
         '<select class="form-input" id="ordBuyer" data-action="admin-order-axis" data-axis="buyerId" aria-label="Buyer" style="max-width:200px">' +
         '<option value="">All buyers</option>' + buyerOptions.map(function (b) {
             return '<option value="' + b.id + '"' + (String(f.buyerId || '') === String(b.id) ? ' selected' : '') + '>' + esc(b.name || ('Buyer ' + b.id)) + '</option>';
+        }).join('') + '</select>' +
+        // Handover 5/9: Area and Society are first-class order filters. The
+        // backend already matched on the buyer's stable ids; these controls make
+        // that reachable. Society options follow the chosen Area so the pair can
+        // never contradict itself.
+        '<select class="form-input" id="ordArea" data-action="admin-order-axis" data-axis="areaId" aria-label="Area" style="max-width:180px">' +
+        '<option value="">All areas</option>' + (areaOptions || []).map(function (a) {
+            return '<option value="' + a.id + '"' + (String(f.areaId || '') === String(a.id) ? ' selected' : '') + '>' + esc(a.name) + '</option>';
+        }).join('') + '</select>' +
+        '<select class="form-input" id="ordSociety" data-action="admin-order-axis" data-axis="societyId" aria-label="Society" style="max-width:200px">' +
+        '<option value="">All societies</option>' + (societyOptions || []).map(function (s) {
+            return '<option value="' + s.id + '"' + (String(f.societyId || '') === String(s.id) ? ' selected' : '') + '>' + esc(s.name) + '</option>';
         }).join('') + '</select>' +
         '<button class="btn" type="button" data-action="admin-order-axis-clear">Clear filters</button>' +
         '</div></div>';
@@ -1619,16 +1668,45 @@ function adminTrafficView() {
                 '<div class="flex-1 min-140"><div class="muted small">Total value</div><div class="font-700 font-size-2">' + money(value.recordedOrderValue || 0) + '</div></div>' +
                 '<div class="flex-1 min-140"><div class="muted small">Average order value</div><div class="font-700 font-size-2">' + money(value.averageOrderValue || 0) + '</div></div>' +
                 '</div>';
+            // Handover 10: the breakdown the total is made of. Rendered from the
+            // same filtered rows as the headline, so the parts always sum to the
+            // whole. Groups with no recorded value are omitted rather than shown blank.
+            h += breakdownBlock('By Area', value.byArea) +
+                breakdownBlock('By Society', value.bySociety) +
+                breakdownBlock('By Seller', value.bySeller);
         }
         h += '</div>';
 
-        // ---- Seller performance (handover 6) ----
+        // ---- Seller performance (handover 6: sortable seller table) ----
         h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Seller Performance</h3>' +
             '<p class="muted tiny" style="margin:0 0 10px">Views come from storefront and offering visits; conversion is orders ÷ storefront views and is only shown where views are tracked.</p>';
         if (!sellers.length) {
             h += '<div class="admin-empty admin-empty-inline">No seller activity matches these filters.</div>';
         }
-        sellers.forEach(function (s) {
+        // Sortable because the handover asks for a "sortable seller table": the
+        // operator usually wants the biggest contributor, or the worst converter.
+        var sortKey = A.sellerSort || 'recordedOrderValue';
+        var sortDir = A.sellerSortDir === 'asc' ? 1 : -1;
+        var sorted = sellers.slice().sort(function (x, y) {
+            var a = sortValue(x, sortKey), b = sortValue(y, sortKey);
+            if (typeof a === 'string' || typeof b === 'string') {
+                return String(a).localeCompare(String(b)) * sortDir;
+            }
+            return (a - b) * sortDir;
+        });
+        if (sellers.length) {
+            h += '<div class="admin-filters" style="margin-bottom:10px">' +
+                [['recordedOrderValue', 'Recorded value'], ['orders', 'Orders'],
+                 ['storefrontViews', 'Storefront views'], ['sellerName', 'Seller']]
+                .map(function (s) {
+                    var active = sortKey === s[0];
+                    return '<button class="capsule' + (active ? ' active' : '') + '" type="button" ' +
+                        'data-action="admin-seller-sort" data-key="' + s[0] + '">' + s[1] +
+                        (active ? (sortDir === -1 ? ' ↓' : ' ↑') : '') + '</button>';
+                }).join('') +
+                '</div>';
+        }
+        sorted.forEach(function (s) {
             h += '<div class="seller-row"><div class="sr-avatar">🍳</div><div class="sr-body">' +
                 '<div class="sr-name">' + esc(s.sellerName || 'Seller') + ' <span class="muted small">' + esc(s.kitchenName || '') + '</span></div>' +
                 '<div class="sr-meta">Orders: ' + (s.orders || 0) + ' · Recorded value: <strong>' + money(s.recordedOrderValue || 0) + '</strong> · Avg: ' + money(s.averageOrderValue || 0) + '</div>' +
@@ -1640,6 +1718,26 @@ function adminTrafficView() {
         h += '</div>';
         return h;
     };
+}
+
+/** Comparable value for one seller-table column; missing numbers sort as 0. */
+function sortValue(row, key) {
+    var v = row[key];
+    if (key === 'sellerName') return String(v || '').toLowerCase();
+    return Number(v || 0);
+}
+
+/** One "X of Y · count orders" breakdown list, or nothing when there is no data. */
+function breakdownBlock(title, rows) {
+    if (!rows || !rows.length) return '';
+    return '<h4 class="font-700 mt-2 mb-1" style="font-size:0.95rem">' + esc(title) + '</h4>' +
+        rows.slice(0, 10).map(function (r) {
+            return '<div class="sr-meta" style="display:flex;justify-content:space-between;gap:10px">' +
+                '<span>' + esc(r.label || 'Unassigned') + '</span>' +
+                '<span>' + (r.orderCount || 0) + ' orders · <strong>' + money(r.recordedOrderValue || 0) + '</strong></span>' +
+                '</div>';
+        }).join('') +
+        (rows.length > 10 ? '<div class="muted tiny">+ ' + (rows.length - 10) + ' more</div>' : '');
 }
 
 /**

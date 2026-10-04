@@ -10,6 +10,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -88,6 +89,9 @@ class AdminHandoverGapTest {
         o.setPaymentStatus(payment);
         o.addItem(new OrderItem(p, qty, BigDecimal.valueOf(40)));
         o.recalculateTotal();
+        // A genuinely PLACED order always has a server-side order time; without it
+        // the order-detail history would correctly refuse to invent one.
+        o.setOrderTime(LocalDateTime.now());
         return orders.save(o);
     }
 
@@ -371,5 +375,157 @@ class AdminHandoverGapTest {
         return analyticsEventRepo.findAll().stream()
                 .filter(e -> type.equals(e.getEventType()))
                 .count();
+    }
+
+    // ---------- Sections 12.1 / 10: exports and the value breakdown ----------
+
+    @Test
+    @DisplayName("s12.1: every export domain honours the active filter")
+    void everyExportDomainRespectsTheFilter() {
+        Seller s = sellerWithStore("Exp");
+        User b = buyer();
+        users.save(b);
+        place(b, s.kitchen(), s.product(), "e1", 1);
+        place(b, s.kitchen(), s.product(), "e2", 1);
+
+        AdminService.OrderFilter unfiltered = new AdminService.OrderFilter();
+        AdminService.OrderFilter narrowed = new AdminService.OrderFilter();
+        narrowed.sellerId = s.user().getId();
+
+        String sellersAll = adminService.exportCsv("sellers", unfiltered);
+        String sellersNarrow = adminService.exportCsv("sellers", narrowed);
+        assertThat(sellersNarrow.split("\n").length)
+                .as("a seller filter must reduce the row count")
+                .isLessThan(sellersAll.split("\n").length);
+
+        // The filter is echoed, so a downloaded file can never be mistaken for
+        // the whole platform.
+        for (String domain : AdminService.EXPORT_DOMAINS) {
+            assertThat(adminService.exportCsv(domain, narrowed))
+                    .as(domain + " export must record the filter it applied")
+                    .contains("Filters applied:").contains("sellerId=");
+        }
+    }
+
+    @Test
+    @DisplayName("s12.1: exports keep headers, timestamps and formula-injection safety")
+    void exportsStaySafeAndSelfDescribing() {
+        User b = buyer();
+        // A name that would execute as a formula if written to a spreadsheet raw.
+        b.setName("=cmd|'/c calc'!A1");
+        users.save(b);
+
+        String buyers = adminService.exportCsv("buyers", new AdminService.OrderFilter());
+        assertThat(buyers).contains("Generated at").contains("Buyer ID,Name,Mobile");
+        // The formula is neutralised: the field is quoted AND carries a leading
+        // apostrophe, so a spreadsheet treats it as text. The raw text still
+        // appears after that apostrophe, so the check is on the field boundary.
+        assertThat(buyers).contains("'=cmd");
+        assertThat(buyers)
+                .as("no CSV field may start a formula")
+                .doesNotContain(",=cmd").doesNotContain("\n=cmd");
+
+        for (String domain : AdminService.EXPORT_DOMAINS) {
+            assertThat(adminService.exportCsv(domain, new AdminService.OrderFilter()))
+                    .as(domain + " export carries a timestamp").contains("Generated at");
+        }
+    }
+
+    @Test
+    @DisplayName("s10: recorded order value breaks down by seller, area and society")
+    void recordedOrderValueHasRealBreakdowns() {
+        Seller s = sellerWithStore("Brk");
+        User b = buyer();
+        // Give the buyer a real Area/Society reference so the location breakdown
+        // is genuinely exercised rather than skipped for having no master row.
+        Area area = locationService.createArea("BrkArea " + sfx);
+        Society soc = locationService.createSociety(area.getId(), "BrkSoc " + sfx);
+        b.setSocietyRef(soc);
+        b.setAreaRef(area);
+        users.save(b);
+        place(b, s.kitchen(), s.product(), "b1", 2);
+        place(b, s.kitchen(), s.product(), "b2", 1);
+
+        Map<String, Object> value = adminService.recordedOrderValueSummary(new AdminService.OrderFilter());
+
+        assertThat(value).containsKeys("bySeller", "byArea", "bySociety");
+        assertThat((List<?>) value.get("bySeller")).isNotEmpty();
+        assertThat((List<?>) value.get("byArea")).isNotEmpty();
+
+        // The breakdown comes from the same rows as the headline, so subtracting
+        // the parts must reproduce the total exactly.
+        BigDecimal remaining = new BigDecimal(String.valueOf(value.get("recordedOrderValue")));
+        for (Object entry : (List<?>) value.get("bySeller")) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> g = (Map<String, Object>) entry;
+            remaining = remaining.subtract(new BigDecimal(String.valueOf(g.get("recordedOrderValue"))));
+        }
+        assertThat(remaining)
+                .as("seller breakdown must sum to the recorded order value").isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("s4: the dashboard exposes real traffic counters and an attention count")
+    void dashboardExposesTrafficAndAttention() {
+        Seller s = sellerWithStore("Dash");
+        User b = buyer();
+        users.save(b);
+        place(b, s.kitchen(), s.product(), "d1", 1);
+        analyticsService.record(AnalyticsService.EV_HOMEMADE_STOREFRONT_VIEW,
+                null, null, s.kitchen().getId(), null);
+
+        Map<String, Object> d = adminService.dashboard("today");
+
+        assertThat(d).containsKeys("marketplaceViewsInPeriod", "storefrontViewsInPeriod",
+                "offeringViewsInPeriod", "enquiriesInPeriod", "attentionNeeded");
+        assertThat(((Number) d.get("storefrontViewsInPeriod")).longValue())
+                .as("a storefront viewed today must show as traffic today").isGreaterThanOrEqualTo(1L);
+        // The Attention Needed card and the Pending Actions panel are one model,
+        // so their numbers can never disagree.
+        assertThat(((Number) d.get("attentionNeeded")).longValue())
+                .isEqualTo((long) adminService.attentionItems().size());
+    }
+
+    @Test
+    @DisplayName("s9: an order's detail carries delivery facts and a real status history")
+    void orderDetailExposesDeliveryAndHistory() {
+        Seller s = sellerWithStore("Hist");
+        User b = buyer();
+        users.save(b);
+        Order placed = place(b, s.kitchen(), s.product(), "h1", 1);
+        orderService.updateDeliveryStatus(placed.getId(), DeliveryStatus.DELIVERED, s.user());
+
+        Map<String, Object> detail = adminService.orderDetail(placed.getId());
+
+        assertThat(detail.get("deliveryStatus")).isEqualTo("DELIVERED");
+        assertThat(detail.get("deliveredAt")).isNotNull();
+        assertThat(detail).containsKey("history");
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> history = (List<Map<String, Object>>) detail.get("history");
+        assertThat(history).isNotEmpty();
+        assertThat(history).extracting(e -> String.valueOf(e.get("label")))
+                .contains("Order placed", "Marked delivered by seller");
+        // Newest first, so support reads what happened last.
+        assertThat((LocalDateTime) history.get(0).get("at"))
+                .isAfterOrEqualTo((LocalDateTime) history.get(history.size() - 1).get("at"));
+    }
+
+    @Test
+    @DisplayName("s9: a cancelled order's history never claims a delivery")
+    void cancelledOrderHistoryHasNoDeliveryEntry() {
+        Seller s = sellerWithStore("NoHist");
+        User b = buyer();
+        users.save(b);
+        Order placed = place(b, s.kitchen(), s.product(), "c1", 1);
+        orderService.cancelOrder(placed.getId(), b);
+
+        Map<String, Object> detail = adminService.orderDetail(placed.getId());
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> history = (List<Map<String, Object>>) detail.get("history");
+        assertThat(detail.get("deliveryStatus")).isEqualTo("NOT_DELIVERED");
+        assertThat(history).extracting(e -> String.valueOf(e.get("label")))
+                .contains("Order cancelled")
+                .doesNotContain("Marked delivered by seller");
     }
 }

@@ -191,17 +191,29 @@ class AdminV1ScopeTest {
                 .doesNotContain("'Offerings',")
                 .doesNotContain("'Kitchens',")
                 .doesNotContain("'Enquiries',");
-        assertThat(dashboard).contains("Active Users")
-                .contains("Pending Approvals")
+        // Handover 4/17 names the exact cards the dashboard must carry:
+        //   Traffic | Orders | Recorded Order Value | Pending Approvals
+        //   Buyers | Sellers | Attention Needed
+        assertThat(dashboard).contains("'Traffic'")
+                .contains("'Orders'")
+                .contains("'Recorded Order Value'")
+                .contains("'Pending Approvals'")
+                .contains("'Buyers'")
+                .contains("'Sellers'")
+                .contains("'Attention Needed'")
                 .contains("Recent Orders")
                 .contains("Pending Actions")
-                // Handover 4/17: the dashboard carries a Today / Last 5 Days /
-                // Custom date selector, resolved server-side.
+                // Handover 4/17: Today / Last 5 Days / Custom, server-resolved.
                 .contains("Last 5 Days")
                 .contains("adminDashCustomDate")
                 .contains("/api/admin/dashboard?date=");
+        // "Revenue" is the one word the handover forbids for this figure.
+        assertThat(dashboard).doesNotContain("'Revenue'");
         assertThat(adminService.dashboard()).containsKeys("activeBuyersToday",
                 "activeSellersToday", "totalOrderValue", "pendingSellers");
+        // Traffic and Attention Needed are real counters, not decoration.
+        assertThat(adminService.dashboard()).containsKeys("marketplaceViewsInPeriod",
+                "storefrontViewsInPeriod", "offeringViewsInPeriod", "attentionNeeded");
         // The window figures exist alongside the fixed-semantics headline cards,
         // so no existing consumer of /dashboard changes meaning.
         assertThat(adminService.dashboard()).containsKeys("selectedPeriod",
