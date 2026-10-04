@@ -41,6 +41,7 @@ class AdminHandoverGapTest {
     @Autowired private AnalyticsService analyticsService;
     @Autowired private OrderService orderService;
     @Autowired private AnalyticsEventRepository analyticsEventRepo;
+    @Autowired private RetentionService retentionService;
 
     private static int seq = 0;
     private final String sfx = "gap" + (seq++);
@@ -618,5 +619,105 @@ class AdminHandoverGapTest {
                 "A-1", UserRole.ADMIN);
         a.setAdminAreaId(area.getId());
         return users.saveAndFlush(a);
+    }
+
+    // ---------- Section 11: retention purge is safe and never automatic ----------
+
+    @Test
+    @DisplayName("s11: nothing is purged until an admin enables, exports, confirms and gives a reason")
+    void retentionPurgeRefusesEveryUnsafeAttempt() {
+        Seller s = sellerWithStore("Ret");
+        User b = buyer();
+        users.save(b);
+        Order old = place(b, s.kitchen(), s.product(), "r1", 1);
+        Order oldDelivered = place(b, s.kitchen(), s.product(), "r2", 1);
+        orderService.updateDeliveryStatus(oldDelivered.getId(), DeliveryStatus.DELIVERED, s.user());
+        orders.save(ageTo(old, 30));            // both well past the default 5-day window
+        orders.save(ageTo(oldDelivered, 30));
+        User admin = admin();
+
+        // 1. Off is the safe default: with the purge disabled nothing can be
+        // deleted, whatever the request says. Set explicitly so the test does not
+        // depend on the order tests happen to run in.
+        retentionService.setPurgeEnabled(false);
+        assertThat(retentionService.purgeEnabled()).isFalse();
+        assertThatThrownBy(() -> adminService.purgeRetention(true, true, "cleanup", admin))
+                .isInstanceOf(IllegalStateException.class);
+
+        retentionService.setPurgeEnabled(true);
+
+        // 2. Not confirmed.  3. No reason.  4. Export not done.
+        assertThatThrownBy(() -> adminService.purgeRetention(false, true, "cleanup", admin))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("confirmed");
+        assertThatThrownBy(() -> adminService.purgeRetention(true, true, "  ", admin))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("reason");
+        assertThatThrownBy(() -> adminService.purgeRetention(true, false, "cleanup", admin))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Export");
+
+        // Every refused attempt left the data untouched.
+        assertThat(orders.findById(old.getId())).isPresent();
+        assertThat(orders.findById(oldDelivered.getId())).isPresent();
+    }
+
+    @Test
+    @DisplayName("s11: a fully authorised purge removes closed old orders and keeps aggregates")
+    void authorisedPurgeRemovesOnlyClosedOldOrders() {
+        Seller s = sellerWithStore("Ret2");
+        User b = buyer();
+        users.save(b);
+
+        Order oldDelivered = place(b, s.kitchen(), s.product(), "g1", 1);
+        orderService.updateDeliveryStatus(oldDelivered.getId(), DeliveryStatus.DELIVERED, s.user());
+        orders.save(ageTo(oldDelivered, 30));
+
+        Order recentDelivered = place(b, s.kitchen(), s.product(), "g2", 1);
+        orderService.updateDeliveryStatus(recentDelivered.getId(), DeliveryStatus.DELIVERED, s.user());
+
+        Order inFlight = place(b, s.kitchen(), s.product(), "g3", 1);
+        orders.save(ageTo(inFlight, 30)); // old, but still CONFIRMED and in flight
+
+        User admin = admin();
+        retentionService.setPurgeEnabled(true);
+
+        // The preview tells the admin exactly what will go, before they commit.
+        assertThat(((Number) adminService.retentionPreview().get("purgeCandidateCount")).intValue())
+                .isEqualTo(1);
+
+        Map<String, Object> result = adminService.purgeRetention(true, true, "retention window elapsed", admin);
+        assertThat(((Number) result.get("purgedOrderCount")).intValue()).isEqualTo(1);
+        assertThat(result).containsEntry("aggregatesRetained", true).containsEntry("auditTrailRetained", true);
+
+        assertThat(orders.findById(oldDelivered.getId())).isEmpty();
+        assertThat(orders.findById(recentDelivered.getId()))
+                .as("an order inside the window must survive").isPresent();
+        assertThat(orders.findById(inFlight.getId()))
+                .as("an old but still in-flight order must never be purged").isPresent();
+
+        // The purge is itself an auditable action (handover 14).
+        assertThat(adminService.auditLog(200)).extracting(a -> String.valueOf(a.get("action")))
+                .contains("RETENTION_PURGE");
+
+        // Re-running is a clean no-op.
+        assertThat(((Number) adminService.purgeRetention(true, true, "again", admin)
+                .get("purgedOrderCount")).intValue()).isZero();
+    }
+
+    /**
+     * Ages a row by re-reading it first.
+     *
+     * <p>The instance held by the test is DETACHED from the one
+     * {@code orderService} updated and committed, so saving the stale copy would
+     * silently overwrite the delivery state back to not-delivered and the row would
+     * (correctly) not be a purge candidate.</p>
+     */
+private Order ageTo(Order order, int daysAgo) {
+        Order managed = orders.findById(order.getId()).orElseThrow();
+        LocalDateTime past = LocalDateTime.now().minusDays(daysAgo);
+        managed.setCreatedAt(past);
+        managed.setUpdatedAt(past);
+        // Delivery is the TERMINAL event for a delivered order, so the retention
+        // clock legitimately runs from deliveredAt. Age it too.
+        if (managed.getDeliveredAt() != null) managed.setDeliveredAt(past);
+        return orders.saveAndFlush(managed);
     }
 }

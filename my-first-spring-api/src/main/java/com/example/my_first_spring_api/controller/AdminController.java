@@ -412,7 +412,9 @@ public class AdminController {
 
     @GetMapping("/retention")
     public ResponseEntity<Map<String, Object>> retention() {
-        return ResponseEntity.ok(adminService.retention());
+        // Includes the server-calculated purge candidate count, so the operator
+        // can see exactly what a purge would remove before authorising it.
+        return ResponseEntity.ok(adminService.retentionPreview());
     }
 
     @PostMapping("/retention")
@@ -428,6 +430,43 @@ public class AdminController {
             throw new IllegalArgumentException("retentionDays must be a whole number of days.");
         }
         return ResponseEntity.ok(adminService.setRetentionDays(days, admin));
+    }
+
+    /**
+     * Turns the destructive retention purge on or off (handover 11).
+     *
+     * <p>Separate from the retention window on purpose: setting "keep 5 days" is a
+     * routine configuration change, while arming a delete is a safety decision that
+     * deserves its own deliberate action and its own audit entry.</p>
+     */
+    @PostMapping("/retention/purge-enabled")
+    public ResponseEntity<Map<String, Object>> setRetentionPurgeEnabled(
+            @RequestBody Map<String, Object> body, HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        boolean enabled = Boolean.parseBoolean(String.valueOf(
+                body != null ? body.get("enabled") : "false"));
+        return ResponseEntity.ok(adminService.setRetentionPurgeEnabled(enabled, admin));
+    }
+
+    /**
+     * Runs the retention purge (handover 11).
+     *
+     * <p>Never automatic - only ever from this explicit call. The service refuses
+     * unless the purge is enabled, confirmed, given a reason and preceded by an
+     * export, so the worst outcome of a mistake is a rejected request, not lost
+     * history.</p>
+     */
+    @PostMapping("/retention/purge")
+    public ResponseEntity<Map<String, Object>> purgeRetention(
+            @RequestBody Map<String, Object> body, HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        boolean confirmed = Boolean.parseBoolean(String.valueOf(
+                body != null ? body.get("confirmed") : "false"));
+        boolean exported = Boolean.parseBoolean(String.valueOf(
+                body != null ? body.get("exported") : "false"));
+        String reason = body != null && body.get("reason") != null
+                ? String.valueOf(body.get("reason")) : null;
+        return ResponseEntity.ok(adminService.purgeRetention(confirmed, exported, reason, admin));
     }
 
     // ---------- Commercial + seller analytics (handover 6 & 10) ----------

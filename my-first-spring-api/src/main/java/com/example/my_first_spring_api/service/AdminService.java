@@ -975,6 +975,49 @@ public class AdminService {
         }
     }
 
+    // ==================== Retention purge (handover 11) ====================
+
+    /**
+     * Read-only preview of the destructive purge, so the Admin can see the exact
+     * server-calculated count before committing to it.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> retentionPreview() {
+        Map<String, Object> m = new LinkedHashMap<>(retentionService.retentionStatus());
+        m.put("purgeCandidateCount", retentionService.purgeCandidates().size());
+        return m;
+    }
+
+    /** Turns the destructive purge on or off. Default is off. */
+    @Transactional
+    public Map<String, Object> setRetentionPurgeEnabled(boolean enabled, User actingAdmin) {
+        retentionService.setPurgeEnabled(enabled);
+        auditService.record("RETENTION_PURGE_ENABLED", actingAdmin, "PLATFORM", null,
+                "retention purge", String.valueOf(!enabled), String.valueOf(enabled),
+                "Retention purge switch changed");
+        return retentionPreview();
+    }
+
+    /**
+     * Purges closed detailed orders older than the retention window (handover 11).
+     *
+     * <p>All safety guards live in {@link RetentionService}; this method adds the
+     * audit record, because a purge is one of the most consequential things an
+     * Admin can do and must never be an unattributable action.</p>
+     */
+    @Transactional
+    public Map<String, Object> purgeRetention(boolean confirmed, boolean exported,
+                                             String reason, User actingAdmin) {
+        // Captured before the purge, so the audit entry records what the operator
+        // was told would be removed, not what happens to be left afterwards.
+        int before = retentionService.purgeCandidates().size();
+        Map<String, Object> result =
+                retentionService.purgeClosedOrdersPastRetention(confirmed, exported, reason);
+        auditService.record("RETENTION_PURGE", actingAdmin, "PLATFORM", null,
+                "retention purge", String.valueOf(before), "0", reason);
+        return result;
+    }
+
     // ==================== Admin role scope (handover 15) ====================
 
     /**

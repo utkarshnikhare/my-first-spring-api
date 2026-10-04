@@ -45,19 +45,31 @@ public class RetentionService {
     public static final int MAX_RETENTION_DAYS = 3650;
     public static final String PROPERTY = "sociomart.retention.order-days";
 
+    /**
+     * Operator switch for the destructive purge.
+     *
+     * <p>Defaults to OFF. Nothing is ever deleted until an Admin deliberately
+     * turns this on AND runs the purge by hand with a confirmation and a reason,
+     * so no schedule, boot or test can delete data behind anyone's back.</p>
+     */
+    public static final String SETTING_PURGE_KEY = "retention_purge_enabled";
+
     private final PlatformSettingRepository settings;
     private final OrderDailyAggregateRepository aggregates;
     private final OrderRepository orders;
+    private final OrderItemRepository orderItems;
     private final Environment environment;
 
     @Autowired
     public RetentionService(PlatformSettingRepository settings,
                             OrderDailyAggregateRepository aggregates,
                             OrderRepository orders,
+                            OrderItemRepository orderItems,
                             Environment environment) {
         this.settings = settings;
         this.aggregates = aggregates;
         this.orders = orders;
+        this.orderItems = orderItems;
         this.environment = environment;
     }
 
@@ -180,13 +192,122 @@ public class RetentionService {
         m.put("defaultDays", DEFAULT_RETENTION_DAYS);
         m.put("purgeCutoffDate", cutoffAt.toLocalDate());
         m.put("detailedRowsPastWindow", wouldPurge);
-        m.put("destructivePurgeEnabled", false);
-        m.put("note", "Configuration and daily aggregates are in place; no automatic delete runs in "
-                + "the demo environment. Aggregate analytics outlive any future detailed-order purge.");
+        m.put("destructivePurgeEnabled", purgeEnabled());
+        m.put("purgeEnabledSettingKey", SETTING_PURGE_KEY);
+        m.put("note", "Purge is OFF by default and never runs on a schedule. An Admin must enable it, "
+                + "export the affected rows, confirm the server-calculated count and give a reason. "
+                + "Daily aggregates and the audit trail always outlive any purge.");
         m.put("aggregatedOrderCount",
                 aggregates.sumOrderCount(LocalDate.now().minusDays(365), LocalDate.now()));
         m.put("aggregatedRecordedOrderValue",
                 aggregates.sumValue(LocalDate.now().minusDays(365), LocalDate.now()));
+        return m;
+    }
+
+    /** True only when an Admin has explicitly switched the purge on. Default OFF. */
+    @Transactional(readOnly = true)
+    public boolean purgeEnabled() {
+        PlatformSetting row = settings.findBySettingKey(SETTING_PURGE_KEY).orElse(null);
+        return row != null && row.getSettingValue() != null
+                && "true".equalsIgnoreCase(row.getSettingValue().trim());
+    }
+
+    @Transactional
+    public void setPurgeEnabled(boolean enabled) {
+        // Upsert, matching setRetentionDays: SETTING_KEY is unique, so a plain
+        // insert would fail the second time an Admin toggles the switch.
+        PlatformSetting row = settings.findBySettingKey(SETTING_PURGE_KEY).orElse(null);
+        if (row == null) {
+            settings.save(new PlatformSetting(SETTING_PURGE_KEY, enabled ? "true" : "false"));
+        } else {
+            row.setSettingValue(enabled ? "true" : "false");
+            settings.save(row);
+        }
+    }
+
+    /**
+     * Detailed rows eligible for purge right now.
+     *
+     * <p>Only CLOSED orders count: delivered, or cancelled. An order still in
+     * flight - draft, ordered, confirmed, ready - is never a candidate, however
+     * old, because removing it would destroy a live customer order.</p>
+     *
+     * <p>Uses the same predicate as {@link #retentionStatus()} so the number the
+     * Admin confirms always matches what the purge would actually remove.</p>
+     */
+    @Transactional(readOnly = true)
+    public List<Order> purgeCandidates() {
+        int days = retentionDays();
+        LocalDateTime cutoffAt = LocalDate.now().minusDays(days).atStartOfDay();
+        List<Order> out = new ArrayList<>();
+        for (Order o : orders.findAll()) {
+            if (o.getOrderStatus() == OrderStatus.DRAFT) continue;
+            if (!(o.getOrderStatus() == OrderStatus.CANCELLED || o.isDelivered())) continue;
+            LocalDateTime terminalAt = o.getDeliveredAt() != null ? o.getDeliveredAt() : o.getUpdatedAt();
+            if (terminalAt == null || terminalAt.isBefore(cutoffAt)) out.add(o);
+        }
+        return out;
+    }
+
+    /**
+     * Deletes closed detailed orders older than the retention window (handover 11).
+     *
+     * <p>Every guard is a hard precondition and none is optional:</p>
+     * <ol>
+     *   <li>the purge must have been explicitly enabled by an Admin;</li>
+     *   <li>the caller must confirm, so no accidental single click deletes data;</li>
+     *   <li>a non-blank reason is required and becomes the audit reason;</li>
+     *   <li>the caller must confirm having exported the affected rows first.</li>
+     * </ol>
+     *
+     * <p>Only {@code orders} rows are deleted. Daily aggregates and the audit
+     * trail are long-lived records that must outlive the detailed orders, so they
+     * are never touched here - which is precisely why the aggregate rollup exists.</p>
+     *
+     * <p>Transactional: the whole batch commits or rolls back, so a failure part
+     * way through cannot leave the platform with half its history removed.</p>
+     */
+    @Transactional
+    public Map<String, Object> purgeClosedOrdersPastRetention(boolean confirmed, boolean exported,
+                                                              String reason) {
+        if (!purgeEnabled()) {
+            throw new IllegalStateException(
+                    "Retention purge is disabled. Enable it in Admin before purging.");
+        }
+        if (!confirmed) {
+            throw new IllegalArgumentException("The purge must be explicitly confirmed.");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("A reason is required when purging orders.");
+        }
+        if (!exported) {
+            // Handover 11: "export before purge". Without an export the evidence
+            // would be gone for good, so this is refused rather than merely warned.
+            throw new IllegalArgumentException(
+                    "Export the affected orders before purging.");
+        }
+
+        List<Order> candidates = purgeCandidates();
+        List<Long> ids = new ArrayList<>();
+        for (Order o : candidates) if (o.getId() != null) ids.add(o.getId());
+        if (!ids.isEmpty()) {
+            // ORDER_ITEMS has a non-nullable FK to ORDERS, so the children must be
+            // removed first or the whole purge fails on referential integrity.
+            // Both statements are in this one transaction: either both happen or
+            // neither does, so a failure cannot orphan any line items.
+            orderItems.deleteByOrderIds(ids);
+            orders.deleteAllByIdInBatch(ids);
+        }
+
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("purgedOrderCount", ids.size());
+        m.put("retentionDays", retentionDays());
+        m.put("purgeCutoffDate", LocalDate.now().minusDays(retentionDays()));
+        m.put("reason", reason.trim());
+        m.put("aggregatesRetained", true);
+        m.put("auditTrailRetained", true);
+        m.put("aggregatedOrderCount",
+                aggregates.sumOrderCount(LocalDate.now().minusDays(365), LocalDate.now()));
         return m;
     }
 
