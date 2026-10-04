@@ -49,8 +49,12 @@ public class AdminController {
     public ResponseEntity<List<Map<String, Object>>> buyers(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Long areaId,
-            @RequestParam(required = false) Long societyId) {
-        return ResponseEntity.ok(adminService.buyers(search, areaId, societyId));
+            @RequestParam(required = false) Long societyId,
+            HttpSession session) {
+        // The acting Admin is resolved server-side from the session - never from a
+        // parameter - so the Area scope in handover 15 cannot be spoofed.
+        return ResponseEntity.ok(adminService.buyers(search, areaId, societyId,
+                buyerService.requireCurrentBuyer(session)));
     }
 
     /**
@@ -320,6 +324,35 @@ public class AdminController {
                 body != null ? body.get("reason") : null, admin)));
     }
 
+    /** Handover 7.3: Block seller - account-level stop, reason mandatory. */
+    @PostMapping("/sellers/{id}/block")
+    public ResponseEntity<Map<String, Object>> blockSeller(@PathVariable Long id,
+                                                           @RequestBody(required = false) Map<String, String> body,
+                                                           HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.blockSeller(id,
+                body != null ? body.get("reason") : null, admin));
+    }
+
+    @PostMapping("/sellers/{id}/unblock")
+    public ResponseEntity<Map<String, Object>> unblockSeller(@PathVariable Long id,
+                                                             @RequestBody(required = false) Map<String, String> body,
+                                                             HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.unblockSeller(id,
+                body != null ? body.get("note") : null, admin));
+    }
+
+    /** Handover 7.2: internal support note on a seller. Never seller-visible. */
+    @PostMapping("/sellers/{id}/support-note")
+    public ResponseEntity<Map<String, Object>> sellerSupportNote(@PathVariable Long id,
+                                                                @RequestBody(required = false) Map<String, String> body,
+                                                                HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.saveSellerSupportNote(id,
+                body != null ? body.get("note") : null, admin));
+    }
+
     @PostMapping("/sellers/{id}/request-changes")
     public ResponseEntity<Map<String, Object>> requestChanges(@PathVariable Long id,
                                                               @RequestBody(required = false) Map<String, String> body,
@@ -386,8 +419,8 @@ public class AdminController {
     }
 
     @GetMapping("/buyers/{id}")
-    public ResponseEntity<Map<String, Object>> buyerDetail(@PathVariable Long id) {
-        return ResponseEntity.ok(adminService.buyerDetail(id));
+    public ResponseEntity<Map<String, Object>> buyerDetail(@PathVariable Long id, HttpSession session) {
+        return ResponseEntity.ok(adminService.buyerDetail(id, buyerService.requireCurrentBuyer(session)));
     }
 
     // ---------- Audit log (handover 14) ----------
@@ -408,7 +441,9 @@ public class AdminController {
 
     @GetMapping("/retention")
     public ResponseEntity<Map<String, Object>> retention() {
-        return ResponseEntity.ok(adminService.retention());
+        // Includes the server-calculated purge candidate count, so the operator
+        // can see exactly what a purge would remove before authorising it.
+        return ResponseEntity.ok(adminService.retentionPreview());
     }
 
     @PostMapping("/retention")
@@ -424,6 +459,43 @@ public class AdminController {
             throw new IllegalArgumentException("retentionDays must be a whole number of days.");
         }
         return ResponseEntity.ok(adminService.setRetentionDays(days, admin));
+    }
+
+    /**
+     * Turns the destructive retention purge on or off (handover 11).
+     *
+     * <p>Separate from the retention window on purpose: setting "keep 5 days" is a
+     * routine configuration change, while arming a delete is a safety decision that
+     * deserves its own deliberate action and its own audit entry.</p>
+     */
+    @PostMapping("/retention/purge-enabled")
+    public ResponseEntity<Map<String, Object>> setRetentionPurgeEnabled(
+            @RequestBody Map<String, Object> body, HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        boolean enabled = Boolean.parseBoolean(String.valueOf(
+                body != null ? body.get("enabled") : "false"));
+        return ResponseEntity.ok(adminService.setRetentionPurgeEnabled(enabled, admin));
+    }
+
+    /**
+     * Runs the retention purge (handover 11).
+     *
+     * <p>Never automatic - only ever from this explicit call. The service refuses
+     * unless the purge is enabled, confirmed, given a reason and preceded by an
+     * export, so the worst outcome of a mistake is a rejected request, not lost
+     * history.</p>
+     */
+    @PostMapping("/retention/purge")
+    public ResponseEntity<Map<String, Object>> purgeRetention(
+            @RequestBody Map<String, Object> body, HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        boolean confirmed = Boolean.parseBoolean(String.valueOf(
+                body != null ? body.get("confirmed") : "false"));
+        boolean exported = Boolean.parseBoolean(String.valueOf(
+                body != null ? body.get("exported") : "false"));
+        String reason = body != null && body.get("reason") != null
+                ? String.valueOf(body.get("reason")) : null;
+        return ResponseEntity.ok(adminService.purgeRetention(confirmed, exported, reason, admin));
     }
 
     // ---------- Commercial + seller analytics (handover 6 & 10) ----------

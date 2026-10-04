@@ -89,6 +89,9 @@ public class AuthController {
         // The profile screen restores the Area dropdown from /api/auth/me, so the
         // saved area has to travel with the session payload.
         dto.setArea(buyer.getArea());
+        // Handover 7.3: a seller must be able to see WHY they are not yet
+        // approved instead of silently failing to publish. Null for buyers.
+        dto.setSellerStatusReason(buyer.getSellerStatusReason());
         return ResponseEntity.ok(dto);
     }
 

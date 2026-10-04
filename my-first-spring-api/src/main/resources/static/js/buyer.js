@@ -480,6 +480,10 @@ async function kitchenPageView(hash) {
             h += emptyHtml('⏸️', 'This kitchen is currently closed.', 'Please check again later.');
             return h;
         }
+        // Handover 6/18 storefront_view. Fire-and-forget AFTER the storefront is
+        // confirmed viewable, so a kitchen the buyer is not allowed to open never
+        // counts as traffic. Analytics must never block or fail the page.
+        recordAnalyticsView('HOMEMADE_STOREFRONT_VIEW', k && k.id);
         var today = (detail.products || []).filter(function (p) { return !p.isPreorder; });
         var preorder = (detail.preorderProducts && detail.preorderProducts.length)
             ? detail.preorderProducts
@@ -639,6 +643,31 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
 
 var sheet = { product: null, kitchen: null, qty: 1, date: null, slot: null };
 
+/**
+ * Fire-and-forget analytics capture (handover 6/18: storefront_view, offering_view).
+ *
+ * <p>Deliberately not awaited: an analytics call must never delay or break the
+ * buyer's page. The server whitelists the event types and swallows its own
+ * failures, so a lost beacon costs one data point, never a user-visible error.</p>
+ *
+ * <p>Duplicates within a short window are suppressed in the browser so a single
+ * human opening one storefront is not counted as several views - the counts stay
+ * comparable to order volume, which is what conversion is measured against.</p>
+ */
+var _recentViews = {};
+function recordAnalyticsView(type, kitchenId) {
+    try {
+        var key = type + ':' + (kitchenId == null ? '' : kitchenId);
+        var now = Date.now();
+        if (_recentViews[key] && (now - _recentViews[key]) < 30000) return; // same view within 30s
+        _recentViews[key] = now;
+        api('/api/analytics/event', {
+            method: 'POST',
+            body: { type: type, kitchenId: kitchenId == null ? null : String(kitchenId) }
+        }).catch(function () {});
+    } catch (e) { /* analytics never breaks the page */ }
+}
+
 function openOrderSheet(productJson, kitchenJson) {
     var p = JSON.parse(decodeURIComponent(productJson));
     var k = JSON.parse(decodeURIComponent(kitchenJson));
@@ -653,6 +682,9 @@ function openOrderSheet(productJson, kitchenJson) {
         return;
     }
     sheet = { product: p, kitchen: k, qty: 1, date: null, slot: null };
+    // offering_view: recorded when the buyer actually opens this offering's
+    // detail, so it counts interest rather than mere scrolling of a list.
+    recordAnalyticsView('PRODUCT_VIEW', k && k.id);
 
     var flex = p.isPreorder && p.preorderType === 'FLEXIBLE';
     var fixed = p.isPreorder && !flex;

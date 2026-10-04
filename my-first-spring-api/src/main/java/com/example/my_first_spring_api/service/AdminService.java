@@ -5,6 +5,7 @@ import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.exception.OrderNotFoundException;
+import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +34,9 @@ public class AdminService {
     private final LocationService locationService;
     private final AdminAuditService auditService;
     private final RetentionService retentionService;
+    // Window-scoped traffic counters for the dashboard. Reads the SAME event
+    // table the analytics screen already uses - no second analytics store.
+    private final com.example.my_first_spring_api.repository.AnalyticsEventRepository analyticsEventRepository;
     private final org.springframework.core.env.Environment environment;
 
     @Autowired
@@ -43,6 +47,7 @@ public class AdminService {
                         LocationService locationService,
                         AdminAuditService auditService,
                         RetentionService retentionService,
+                        com.example.my_first_spring_api.repository.AnalyticsEventRepository analyticsEventRepository,
                         org.springframework.core.env.Environment environment) {
         this.userRepository = userRepository;
         this.analyticsService = analyticsService;
@@ -55,6 +60,7 @@ public class AdminService {
         this.locationService = locationService;
         this.auditService = auditService;
         this.retentionService = retentionService;
+        this.analyticsEventRepository = analyticsEventRepository;
         this.environment = environment;
     }
 
@@ -271,6 +277,23 @@ public class AdminService {
         out.put("sellersInPeriod", counted.stream()
                 .filter(o -> o.getKitchen() != null && o.getKitchen().getSeller() != null)
                 .map(o -> o.getKitchen().getSeller().getId()).distinct().count());
+        // ---- Traffic in the selected window (handover 4/6) ----
+        // Counted from the events the application really records. A storefront or
+        // marketplace nobody has opened in the window legitimately reads zero;
+        // nothing here is estimated or carried forward from an earlier day.
+        out.put("marketplaceViewsInPeriod", analyticsEventRepository
+                .countByEventTypeAndCreatedAtAfter(AnalyticsService.EV_MARKETPLACE_VIEW, from));
+        out.put("storefrontViewsInPeriod", analyticsEventRepository.countByEventTypeAndCreatedAtAfter(
+                AnalyticsService.EV_HOMEMADE_STOREFRONT_VIEW, from));
+        out.put("offeringViewsInPeriod", analyticsEventRepository.countByEventTypeAndCreatedAtAfter(
+                AnalyticsService.EV_PRODUCT_VIEW, from));
+        out.put("enquiriesInPeriod", allEnquiries.stream()
+                .filter(e -> e.getCreatedAt() != null && !e.getCreatedAt().isBefore(from))
+                .count());
+        // "Attention Needed": how many operational items are open right now. One
+        // count for the card, computed from the SAME attention model the panel
+        // below renders, so the card and the panel can never disagree.
+        out.put("attentionNeeded", attentionItems().size());
         return out;
     }
 
@@ -342,10 +365,15 @@ public class AdminService {
      * Orders screen resolves location, never on the free-text strings.</p>
      */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> buyers(String search, Long areaId, Long societyId) {
+    public List<Map<String, Object>> buyers(String search, Long areaId, Long societyId, User actingAdmin) {
         List<User> all = userRepository.findByRole(UserRole.BUYER);
         String term = search == null ? null : search.trim().toLowerCase();
-        boolean filtering = (term != null && !term.isEmpty()) || areaId != null || societyId != null;
+        // Handover 15: an Area Admin's own Area overrides anything the browser sent.
+        Long scope = adminAreaScope(actingAdmin);
+        final Long effectiveArea = scope != null ? scope : areaId;
+        final Long effectiveSociety = societyId;
+        boolean filtering = (term != null && !term.isEmpty())
+                || effectiveArea != null || effectiveSociety != null;
 
         // Order-number matching is only needed when an order-like term was typed.
         // Building the set up front would scan every order for every keystroke
@@ -363,10 +391,13 @@ public class AdminService {
 
         final Set<Long> orderTermMatches = buyersMatchingOrderTerm;
         return all.stream().filter(b -> {
-            if (societyId != null) {
-                if (b.getSocietyRef() == null || !societyId.equals(b.getSocietyRef().getId())) return false;
+            if (effectiveSociety != null) {
+                if (b.getSocietyRef() == null || !effectiveSociety.equals(b.getSocietyRef().getId())) return false;
             }
-            if (areaId != null && !resolveBuyerAreaId(b).equals(areaId)) return false;
+            // Null-safe, and compared the good way round: a buyer with no Area
+            // reference yet must be EXCLUDED by an Area filter, not blow up the
+            // whole search for the operator.
+            if (effectiveArea != null && !effectiveArea.equals(resolveBuyerAreaId(b))) return false;
             if (term == null || term.isEmpty()) return true;
             if (b.getId() != null && orderTermMatches != null && orderTermMatches.contains(b.getId())) return true;
             return textMatches(term, b.getName(), b.getMobileNumber(), b.getSociety(), b.getBuilding());
@@ -374,12 +405,25 @@ public class AdminService {
     }
 
     /**
-     * Unfiltered buyer list. Delegates to {@link #buyers(String, Long, Long)}
+     * Unfiltered buyer list. Delegates to {@link #buyers(String, Long, Long, User)}
      * with no criteria so the two paths can never drift apart.
      */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> buyers() {
-        return buyers(null, null, null);
+        return buyers(null, null, null, null);
+    }
+
+    /**
+     * Unscoped buyer search.
+     *
+     * <p>Present for callers that legitimately have no Admin identity to scope by
+     * (internal services and tests). Anything acting ON BEHALF OF AN ADMIN must use
+     * the four-argument form with the acting Admin, or the handover 15 Area scope
+     * would be silently bypassed.</p>
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> buyers(String search, Long areaId, Long societyId) {
+        return buyers(search, areaId, societyId, null);
     }
 
     private static boolean orderNumberMatches(Order o, String term) {
@@ -722,9 +766,9 @@ public class AdminService {
         }
         StringBuilder out = new StringBuilder();
         switch (safeDomain) {
-            case "sellers" -> sellersCsv(out);
-            case "buyers" -> buyersCsv(out);
-            case "analytics" -> analyticsCsv(out);
+            case "sellers" -> sellersCsv(out, filter);
+            case "buyers" -> buyersCsv(out, filter);
+            case "analytics" -> analyticsCsv(out, filter);
             default -> ordersCsv(out, filter);
         }
         return out.toString();
@@ -821,16 +865,54 @@ public class AdminService {
         }
     }
 
-    private void sellersCsv(StringBuilder out) {
-        csvBanner(out, "SocioMart Admin V1 - Sellers export", null);
-        out.append("Seller ID,Name,Mobile,Approval Status,Status Reason,Approved At,Registered At,Storefronts,Recorded Order Value\n");
+    private void sellersCsv(StringBuilder out, OrderFilter filter) {
+        csvBanner(out, "SocioMart Admin V1 - Sellers export", filter);
+        out.append("Seller ID,Name,Mobile,Approval Status,Status Reason,Approved At,Registered At,Storefronts,Orders,Recorded Order Value\n");
+        // Handover 12.1: an export must respect the operator's active filters and
+        // date range. Seller rows are kept when they match the seller/location
+        // axes, but their order figures come from the FILTERED order set - so a
+        // narrowed export can never carry a wider total than the screen shows.
         for (User s : userRepository.findByRole(UserRole.SELLER)) {
+            if (!sellerMatchesFilter(s, filter)) continue;
+            List<Order> sellerOrders = matchingOrders(filter).stream()
+                    .filter(o -> o.getKitchen() != null && o.getKitchen().getSeller() != null
+                            && o.getKitchen().getSeller().getId().equals(s.getId()))
+                    .toList();
             out.append(csv(s.getId())).append(',').append(csv(s.getName())).append(',')
                .append(csv(s.getMobileNumber())).append(',').append(csv(s.getSellerApprovalStatus())).append(',')
                .append(csv(s.getSellerStatusReason())).append(',').append(csv(s.getApprovedAt())).append(',')
                .append(csv(s.getCreatedAt())).append(',').append(csv(kitchenRepository.findBySeller(s).size())).append(',')
-               .append(csv(sellerOrderValue(s))).append('\n');
+               .append(csv(sellerOrders.size())).append(',')
+               .append(csv(sumRecordedValue(sellerOrders))).append('\n');
         }
+    }
+
+    /**
+     * True when a seller is inside the export's scope.
+     *
+     * <p>Only the axes that identify a SELLER narrow the row list: an explicit
+     * seller id, or a seller whose storefront serves the chosen Area/Society.
+     * Date, payment, delivery and order status describe ORDERS, so they shape
+     * each seller's figures instead of deciding whether the seller appears.</p>
+     */
+    private boolean sellerMatchesFilter(User seller, OrderFilter filter) {
+        if (filter == null) return true;
+        if (filter.sellerId != null) return filter.sellerId.equals(seller.getId());
+        if (filter.areaId == null && filter.societyId == null) return true;
+        for (Kitchen k : kitchenRepository.findBySeller(seller)) {
+            if (filter.societyId != null && servesSociety(k, filter.societyId)) return true;
+            if (filter.areaId != null && servesAnySocietyInArea(k, filter.areaId)) return true;
+        }
+        return false;
+    }
+
+    /** True when the storefront serves any Society belonging to this Area. */
+    private boolean servesAnySocietyInArea(Kitchen k, Long areaId) {
+        if (k.getServedSocieties() == null) return false;
+        for (Society s : k.getServedSocieties()) {
+            if (s != null && s.getArea() != null && areaId.equals(s.getArea().getId())) return true;
+        }
+        return false;
     }
 
     /** Sum of non-draft, non-cancelled order totals for one seller's kitchens. */
@@ -845,24 +927,45 @@ public class AdminService {
         return total;
     }
 
-    private void buyersCsv(StringBuilder out) {
-        csvBanner(out, "SocioMart Admin V1 - Buyers export", null);
+    private void buyersCsv(StringBuilder out, OrderFilter filter) {
+        csvBanner(out, "SocioMart Admin V1 - Buyers export", filter);
         out.append("Buyer ID,Name,Mobile,Area,Society,Building,Flat,Orders,Recorded Order Value\n");
-        for (Map<String, Object> b : buyers()) {
+        // Reuses the same search the Buyers screen applies, so the export honours
+        // the name/mobile/society/order-id term as well as Area and Society.
+        for (Map<String, Object> b : buyers(filter != null ? filter.search : null,
+                filter != null ? filter.areaId : null,
+                filter != null ? filter.societyId : null, null)) {
+            Long buyerId = (Long) b.get("id");
+            List<Order> buyerOrders = matchingOrders(filter).stream()
+                    .filter(o -> o.getBuyer() != null && o.getBuyer().getId().equals(buyerId))
+                    .toList();
             out.append(csv(b.get("id"))).append(',').append(csv(b.get("name"))).append(',')
                .append(csv(b.get("mobileNumber"))).append(',').append(csv(b.get("area"))).append(',')
                .append(csv(b.get("society"))).append(',').append(csv(b.get("building"))).append(',')
-               .append(csv(b.get("flatHouseNumber"))).append(',').append(csv(b.get("orderCount"))).append(',')
-               .append(csv(b.get("totalOrderValue"))).append('\n');
+               .append(csv(b.get("flatHouseNumber"))).append(',').append(csv(buyerOrders.size())).append(',')
+               .append(csv(sumRecordedValue(buyerOrders))).append('\n');
         }
     }
 
+    /** Recorded Order Value of an already-filtered order set. */
+    private static BigDecimal sumRecordedValue(List<Order> orders) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (Order o : orders) {
+            if (o.getOrderStatus() == OrderStatus.DRAFT || o.getOrderStatus() == OrderStatus.CANCELLED) continue;
+            if (o.getTotalAmount() != null) total = total.add(o.getTotalAmount());
+        }
+        return total;
+    }
+
     /** Aggregate marketplace figures - the same counters the dashboard shows. */
-    private void analyticsCsv(StringBuilder out) {
-        csvBanner(out, "SocioMart Admin V1 - Analytics export", null);
-        Map<String, Object> d = dashboard();
+    private void analyticsCsv(StringBuilder out, OrderFilter filter) {
+        csvBanner(out, "SocioMart Admin V1 - Analytics export", filter);
+        Map<String, Object> d = dashboard(filter != null ? filter.date : null);
         out.append("Metric,Value\n");
-        for (String key : List.of("totalBuyers", "totalSellers", "approvedSellers", "pendingSellers",
+        // The selected-window figures lead the file, so the export answers "what
+        // happened in the period the operator chose" before the all-time totals.
+        for (String key : List.of("selectedPeriod", "ordersInPeriod", "recordedOrderValueInPeriod",
+                "totalBuyers", "totalSellers", "approvedSellers", "pendingSellers",
                 "suspendedSellers", "totalOrders", "ordersToday", "ordersThisMonth",
                 "totalOrderValue", "todayOrderValue", "monthOrderValue",
                 "paidCount", "pendingPaymentCount", "willPayLaterCount",
@@ -870,6 +973,134 @@ public class AdminService {
                 "ordersCancelled", "ordersDraft")) {
             out.append(csv(key)).append(',').append(csv(d.get(key))).append('\n');
         }
+    }
+
+    // ==================== Retention purge (handover 11) ====================
+
+    /**
+     * Read-only preview of the destructive purge, so the Admin can see the exact
+     * server-calculated count before committing to it.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> retentionPreview() {
+        Map<String, Object> m = new LinkedHashMap<>(retentionService.retentionStatus());
+        m.put("purgeCandidateCount", retentionService.purgeCandidates().size());
+        return m;
+    }
+
+    /** Turns the destructive purge on or off. Default is off. */
+    @Transactional
+    public Map<String, Object> setRetentionPurgeEnabled(boolean enabled, User actingAdmin) {
+        retentionService.setPurgeEnabled(enabled);
+        auditService.record("RETENTION_PURGE_ENABLED", actingAdmin, "PLATFORM", null,
+                "retention purge", String.valueOf(!enabled), String.valueOf(enabled),
+                "Retention purge switch changed");
+        return retentionPreview();
+    }
+
+    /**
+     * Purges closed detailed orders older than the retention window (handover 11).
+     *
+     * <p>All safety guards live in {@link RetentionService}; this method adds the
+     * audit record, because a purge is one of the most consequential things an
+     * Admin can do and must never be an unattributable action.</p>
+     */
+    @Transactional
+    public Map<String, Object> purgeRetention(boolean confirmed, boolean exported,
+                                             String reason, User actingAdmin) {
+        // Captured before the purge, so the audit entry records what the operator
+        // was told would be removed, not what happens to be left afterwards.
+        int before = retentionService.purgeCandidates().size();
+        Map<String, Object> result =
+                retentionService.purgeClosedOrdersPastRetention(confirmed, exported, reason);
+        auditService.record("RETENTION_PURGE", actingAdmin, "PLATFORM", null,
+                "retention purge", String.valueOf(before), "0", reason);
+        return result;
+    }
+
+    // ==================== Admin role scope (handover 15) ====================
+
+    /**
+     * The Area this admin is responsible for, or {@code null} for global scope.
+     *
+     * <p>SUPER_ADMIN is always global: the handover gives them "all Areas". A
+     * plain ADMIN is scoped only when a Super Admin has explicitly assigned one;
+     * an unassigned ADMIN behaves exactly as before, so introducing the concept
+     * can never silently narrow anyone's access.</p>
+     *
+     * <p>Returned as the AUTHORITY's scope and applied on the server, so the
+     * boundary holds no matter what the browser sends.</p>
+     */
+    @Transactional(readOnly = true)
+    public Long adminAreaScope(User actingAdmin) {
+        if (actingAdmin == null) return null;
+        if (actingAdmin.getRole() != UserRole.ADMIN) return null; // SUPER_ADMIN/global
+        return actingAdmin.getAdminAreaId();
+    }
+
+    /**
+     * Pins a read filter to the acting admin's Area.
+     *
+     * <p>An Area Admin's own Area always WINS over a filter the browser sent: a
+     * crafted request for another Area cannot widen the scope, and an explicit
+     * request for a different Area is corrected to the admin's Area rather than
+     * silently returning nothing.</p>
+     */
+    private OrderFilter scoped(OrderFilter filter, User actingAdmin) {
+        Long scope = adminAreaScope(actingAdmin);
+        if (scope == null) return filter;
+        OrderFilter f = filter != null ? filter : new OrderFilter();
+        f.areaId = scope;
+        return f;
+    }
+
+    /** Throws unless this admin may act on a record in {@code areaId}. */
+    private void requireAreaAccess(Long areaId, User actingAdmin) {
+        Long scope = adminAreaScope(actingAdmin);
+        if (scope == null) return; // global
+        if (areaId == null || !scope.equals(areaId)) {
+            throw new SellerNotAuthorizedException("This record is outside your assigned Area.");
+        }
+    }
+
+    /** The Area a seller operates in, or null when it cannot be determined. */
+    private Long sellerAreaId(User seller) {
+        for (Kitchen k : kitchenRepository.findBySeller(seller)) {
+            if (k.getServedSocieties() != null) {
+                for (Society soc : k.getServedSocieties()) {
+                    if (soc.getArea() != null) return soc.getArea().getId();
+                }
+            }
+        }
+        return null;
+    }
+
+    /** An Area Admin may only act on sellers inside their own Area. */
+    private void requireSellerAccess(User seller, User actingAdmin) {
+        Long scope = adminAreaScope(actingAdmin);
+        if (scope == null) return;
+        Long sellerArea = sellerAreaId(seller);
+        if (sellerArea == null || !scope.equals(sellerArea)) {
+            throw new SellerNotAuthorizedException("This seller is outside your assigned Area.");
+        }
+    }
+
+    /** An Area Admin may only act on buyers inside their own Area. */
+    private void requireBuyerAccess(User buyer, User actingAdmin) {
+        Long scope = adminAreaScope(actingAdmin);
+        if (scope == null) return;
+        if (!scope.equals(resolveBuyerAreaId(buyer))) {
+            throw new SellerNotAuthorizedException("This buyer is outside your assigned Area.");
+        }
+    }
+
+    /** The Area a storefront serves, or null when it serves none. */
+    private Long storefrontAreaId(Kitchen k) {
+        if (k == null || k.getServedSocieties() == null) return null;
+        for (Society s : k.getServedSocieties()) {
+            if (s != null && s.getArea() != null) return s.getArea().getId();
+        }
+        return null;
     }
 
     // ==================== Attention / Pending actions ====================
@@ -906,6 +1137,18 @@ public class AdminService {
                 .filter(User::isBlocked).count();
         if (blockedBuyers > 0) {
             items.add(attention("Blocked buyers", blockedBuyers, "#/buyers"));
+        }
+        // Handover 13 also requires "unresolved support flags / complaints".
+        // The internal support note IS the flag in this model, so an account that
+        // still carries one is an open case someone has to close. Counted across
+        // buyers and sellers, and linked to the screen where the note is read and
+        // cleared - no invented alert, just the notes the Admin has actually written.
+        long openSupportCases = userRepository.findByRole(UserRole.BUYER).stream()
+                .filter(u -> trimToNull(u.getSupportNote()) != null).count()
+                + userRepository.findByRole(UserRole.SELLER).stream()
+                .filter(u -> trimToNull(u.getSupportNote()) != null).count();
+        if (openSupportCases > 0) {
+            items.add(attention("Accounts with an unresolved support note", openSupportCases, "#/buyers"));
         }
         long awaiting = countOrders(OrderStatus.ORDERED);
         if (awaiting > 0) items.add(attention("Orders not yet confirmed by sellers", awaiting, "#/orders"));
@@ -1169,6 +1412,20 @@ public class AdminService {
         m.put("customInstructions", order.getCustomInstructions());
         m.put("createdAt", order.getCreatedAt());
         m.put("orderTime", order.getOrderTime());
+        // Handover 9: the support-facing detail needs the delivery facts and a
+        // status/event history, not just the current snapshot.
+        m.put("deliveryStatus", order.getEffectiveDeliveryStatus().name());
+        m.put("deliveredAt", order.getDeliveredAt());
+        m.put("deliveryEditable", order.isActiveForDelivery());
+        m.put("area", order.getBuyer() != null ? order.getBuyer().getArea() : null);
+        m.put("areaId", resolveBuyerAreaId(order.getBuyer()));
+        m.put("societyId", order.getBuyer() != null && order.getBuyer().getSocietyRef() != null
+                ? order.getBuyer().getSocietyRef().getId() : null);
+        m.put("category", order.getKitchen() != null && order.getKitchen().getSellerType() != null
+                ? order.getKitchen().getSellerType().name() : null);
+        m.put("acknowledgedAt", order.getAcknowledgedAt());
+        m.put("updatedAt", order.getUpdatedAt());
+        m.put("history", orderHistory(order));
         List<Map<String, Object>> items = order.getItems().stream().map(it -> {
             Map<String, Object> im = new LinkedHashMap<>();
             im.put("productId", it.getProduct() != null ? it.getProduct().getId() : null);
@@ -1184,7 +1441,46 @@ public class AdminService {
         return m;
     }
 
-    // ==================== Enquiries ====================
+    /**
+ * Chronological event/status history for one order (handover 9).
+ *
+ * <p>Built from timestamps the order ALREADY stores - created, placed,
+ * acknowledged, paid-updated, delivered, last updated - so it can never claim an
+ * event that did not happen. A step with no timestamp is simply omitted rather
+ * than dated "now", which would be a fabricated event.
+ *
+ * <p>Delivery deliberately appears only when it actually happened: a cancelled
+ * order has a cleared {@code deliveredAt} and must not show a Delivered entry.</p>
+ */
+private List<Map<String, Object>> orderHistory(Order order) {
+    List<Map<String, Object>> events = new ArrayList<>();
+    addHistoryEvent(events, order.getCreatedAt(), "Order started", "Basket created");
+    addHistoryEvent(events, order.getOrderTime(), "Order placed", order.getOrderNumber());
+    addHistoryEvent(events, order.getAcknowledgedAt(), "Acknowledged by seller", null);
+    addHistoryEvent(events, order.getPaymentStatus() == PaymentStatus.PAID ? order.getUpdatedAt() : null,
+            "Payment recorded as Paid", null);
+    if (order.isDelivered() && order.getDeliveredAt() != null) {
+        addHistoryEvent(events, order.getDeliveredAt(), "Marked delivered by seller", null);
+    }
+    if (order.getOrderStatus() == OrderStatus.CANCELLED) {
+        addHistoryEvent(events, order.getUpdatedAt(), "Order cancelled", null);
+    }
+    // Newest first: support reads "what happened last", not "what happened first".
+    events.sort((a, b) -> ((LocalDateTime) b.get("at")).compareTo((LocalDateTime) a.get("at")));
+    return events;
+}
+
+private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateTime at,
+                                    String label, String detail) {
+    if (at == null) return; // no timestamp = the event did not happen
+    Map<String, Object> e = new LinkedHashMap<>();
+    e.put("at", at);
+    e.put("label", label);
+    if (detail != null) e.put("detail", detail);
+    events.add(e);
+}
+
+// ==================== Enquiries ====================
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> enquiries() {
@@ -1221,6 +1517,7 @@ public class AdminService {
 
     @Transactional
     public User approveSeller(Long sellerId, User actingAdmin) {
+        requireSellerAccess(requireSeller(sellerId), actingAdmin); // handover 15
         User seller = requireSeller(sellerId);
         SellerApprovalStatus from = seller.getSellerApprovalStatus();
         seller.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
@@ -1295,6 +1592,117 @@ public class AdminService {
         return saved;
     }
 
+    /**
+     * Handover 7.3 seller control: <strong>Block seller</strong>.
+     *
+     * <p>The handover lists "Suspend seller" and "Block seller" as separate
+     * controls, so this is not an alias for {@link #suspendSeller}: suspend is an
+     * approval-state decision an Admin can lift, while block is an account-level
+     * stop with a mandatory reason.</p>
+     *
+     * <p>Blocking sets BOTH the account flag and the approval state. That is
+     * deliberate: the approval state is what the existing
+     * {@link KitchenVisibility} gate already reads, so the seller's storefronts
+     * leave buyer discovery immediately - "seller cannot operate until Admin
+     * restores access" - without inventing a second enforcement mechanism. The
+     * reason is also written to {@code sellerStatusReason}, which
+     * {@code /api/auth/me} already returns, so the seller sees an understandable
+     * status instead of a silent failure.</p>
+     *
+     * <p>Nothing historical is touched: orders, storefronts, offerings and the
+     * audit trail are all left intact, so a later unblock restores the seller with
+     * their history rather than rebuilding them from scratch.</p>
+     */
+    @Transactional
+    public Map<String, Object> blockSeller(Long sellerId, String reason, User actingAdmin) {
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("A reason is required when blocking a seller.");
+        }
+        User seller = requireSeller(sellerId);
+        requireSellerAccess(seller, actingAdmin); // handover 15 Area boundary
+        boolean wasBlocked = seller.isBlocked();
+        SellerApprovalStatus from = seller.getSellerApprovalStatus();
+
+        seller.setBlocked(true);
+        seller.setBlockedReason(reason.trim());
+        seller.setBlockedAt(LocalDateTime.now());
+        seller.setSellerApprovalStatus(SellerApprovalStatus.SUSPENDED);
+        seller.setSellerStatusReason(reason.trim());
+        userRepository.save(seller);
+        // Recorded as an approval/status change too: handover 6 requires the
+        // seller approval/status change to be captured as an event.
+        analyticsService.record(AnalyticsService.EV_SELLER_APPROVED, seller.getId(),
+                seller.getMobileNumber(), null, "blocked by " + actingAdmin.getMobileNumber());
+        auditService.record(AdminAuditService.SELLER_BLOCKED, actingAdmin, "SELLER",
+                seller.getId(), seller.getName(),
+                wasBlocked ? "BLOCKED" : String.valueOf(from), "BLOCKED", reason.trim());
+        return sellerAccountState(seller);
+    }
+
+    /**
+     * Handover 7.3: restores a blocked seller.
+     *
+     * <p>The approval state is only reset back to APPROVED when it is currently
+     * SUSPENDED. A seller who is PENDING, REJECTED or CHANGES_REQUESTED is left
+     * exactly as they are, so unblocking can never quietly approve an application
+     * the Admin never accepted.</p>
+     */
+    @Transactional
+    public Map<String, Object> unblockSeller(Long sellerId, String note, User actingAdmin) {
+        User seller = requireSeller(sellerId);
+        requireSellerAccess(seller, actingAdmin); // handover 15 Area boundary
+        boolean wasBlocked = seller.isBlocked();
+        SellerApprovalStatus from = seller.getSellerApprovalStatus();
+
+        seller.setBlocked(false);
+        seller.setBlockedAt(null);
+        if (seller.getSellerApprovalStatus() == SellerApprovalStatus.SUSPENDED) {
+            seller.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
+            seller.setSellerStatusReason(null);
+        }
+        userRepository.save(seller);
+        auditService.record(AdminAuditService.SELLER_UNBLOCKED, actingAdmin, "SELLER",
+                seller.getId(), seller.getName(),
+                wasBlocked ? "BLOCKED" : String.valueOf(from),
+                String.valueOf(seller.getSellerApprovalStatus()), trimToNull(note));
+        return sellerAccountState(seller);
+    }
+
+    /**
+     * Handover 7.2: an internal support note on a seller.
+     *
+     * <p>Internal only - it is never returned to the seller or the buyer. The
+     * audit action is {@code ORDER_CORRECTED}, the same generic
+     * "manual operational correction" channel already used for buyer support
+     * notes, so no new audit vocabulary is invented for the same idea.</p>
+     */
+    @Transactional
+    public Map<String, Object> saveSellerSupportNote(Long sellerId, String note, User actingAdmin) {
+        User seller = requireSeller(sellerId);
+        requireSellerAccess(seller, actingAdmin);
+        seller.setSupportNote(trimToNull(note));
+        userRepository.save(seller);
+        auditService.record(AdminAuditService.ORDER_CORRECTED, actingAdmin, "SELLER",
+                seller.getId(), seller.getName(), null, "SUPPORT_NOTE_SAVED", trimToNull(note));
+        return sellerAccountState(seller);
+    }
+
+    /** Account-status read model for a seller, mirroring the buyer one exactly. */
+    private Map<String, Object> sellerAccountState(User seller) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", seller.getId());
+        m.put("name", seller.getName());
+        m.put("mobileNumber", seller.getMobileNumber());
+        m.put("accountStatus", seller.isBlocked() ? "BLOCKED" : "ACTIVE");
+        m.put("blocked", seller.isBlocked());
+        m.put("blockedReason", seller.getBlockedReason());
+        m.put("blockedAt", seller.getBlockedAt());
+        m.put("sellerApprovalStatus", seller.getSellerApprovalStatus());
+        m.put("statusReason", seller.getSellerStatusReason());
+        m.put("supportNote", seller.getSupportNote());
+        return m;
+    }
+
     private User requireSeller(Long sellerId) {
         User user = userRepository.findById(sellerId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + sellerId));
@@ -1333,6 +1741,11 @@ public class AdminService {
         }
 
         Map<Long, Map<String, Object>> bySeller = new LinkedHashMap<>();
+        // The storefronts behind each seller, so view totals can be added ONCE
+        // per storefront. Accumulating them inside the order loop counted a
+        // storefront view once per ORDER the seller received, so a seller with
+        // 5 orders and 10 views reported 50 - which made conversion nonsense.
+        Map<Long, Set<Long>> kitchensBySeller = new HashMap<>();
         for (Order o : matchingOrders(filter)) {
             Kitchen k = o.getKitchen();
             if (k == null || k.getSeller() == null) continue;
@@ -1353,11 +1766,25 @@ public class AdminService {
             row.put("orders", num(row.get("orders")) + 1);
             BigDecimal value = o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO;
             row.put("recordedOrderValue", ((BigDecimal) row.get("recordedOrderValue")).add(value));
+            kitchensBySeller.computeIfAbsent(sellerId, id -> new HashSet<>()).add(k.getId());
+        }
 
-            long[] sv = views.get(String.valueOf(k.getId()));
-            long[] ov = offerings.get(String.valueOf(k.getId()));
-            row.put("storefrontViews", num(row.get("storefrontViews")) + (sv != null ? sv[0] : 0L));
-            row.put("offeringViews", num(row.get("offeringViews")) + (ov != null ? ov[0] : 0L));
+        // Views are per STOREFRONT, not per order: each storefront's totals are
+        // added exactly once, which is what makes "orders / storefront views"
+        // a real conversion rate rather than an artefact of order volume.
+        for (Map.Entry<Long, Set<Long>> entry : kitchensBySeller.entrySet()) {
+            Map<String, Object> row = bySeller.get(entry.getKey());
+            if (row == null) continue;
+            long storefrontViews = 0;
+            long offeringViews = 0;
+            for (Long kitchenId : entry.getValue()) {
+                long[] sv = views.get(String.valueOf(kitchenId));
+                long[] ov = offerings.get(String.valueOf(kitchenId));
+                storefrontViews += sv != null ? sv[0] : 0L;
+                offeringViews += ov != null ? ov[0] : 0L;
+            }
+            row.put("storefrontViews", storefrontViews);
+            row.put("offeringViews", offeringViews);
         }
 
         for (Map<String, Object> row : bySeller.values()) {
@@ -1389,7 +1816,59 @@ public class AdminService {
         m.put("recordedOrderValue", total);
         m.put("averageOrderValue", count == 0 ? BigDecimal.ZERO
                 : total.divide(BigDecimal.valueOf(count), 2, java.math.RoundingMode.HALF_UP));
+        // Handover 10: the breakdown the figure is actually made of - by seller,
+        // by Area and by Society - derived from the SAME filtered rows as the
+        // total, so the parts always add up to the whole. Location grouping uses
+        // the stable ids; a profile with only free text is grouped under its text
+        // rather than silently dropped.
+        m.put("bySeller", groupRecordedValue(rows, "sellerId", "sellerName"));
+        m.put("byArea", groupRecordedValue(rows, "areaId", "area"));
+        m.put("bySociety", groupRecordedValue(rows, "societyId", "society"));
         return m;
+    }
+
+    /**
+     * Groups already-filtered order rows into an ordered breakdown.
+     *
+     * <p>Only rows with a real value for the key are grouped; rows with no
+     * location reference at all would otherwise create an unreadable empty
+     * bucket. Each group carries its order count, recorded value and average.</p>
+     */
+    private List<Map<String, Object>> groupRecordedValue(List<Map<String, Object>> rows,
+                                                         String idKey, String nameKey) {
+        Map<Object, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            Object key = row.get(idKey);
+            if (key == null) continue;
+            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(row);
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        // Largest value first: this is a commercial view, so the operator wants
+        // the biggest contributors at the top without having to sort anything.
+        grouped.entrySet().stream()
+                .sorted((a, b) -> sumValue(b.getValue()).compareTo(sumValue(a.getValue())))
+                .forEach(e -> {
+                    Map<String, Object> g = new LinkedHashMap<>();
+                    List<Map<String, Object>> members = e.getValue();
+                    g.put(idKey, e.getKey());
+                    g.put("label", members.get(0).get(nameKey));
+                    g.put("orderCount", members.size());
+                    BigDecimal value = sumValue(members);
+                    g.put("recordedOrderValue", value);
+                    g.put("averageOrderValue", members.isEmpty() ? BigDecimal.ZERO
+                            : value.divide(BigDecimal.valueOf(members.size()), 2, java.math.RoundingMode.HALF_UP));
+                    out.add(g);
+                });
+        return out;
+    }
+
+    private static BigDecimal sumValue(List<Map<String, Object>> rows) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (Map<String, Object> r : rows) {
+            Object v = r.get("totalAmount");
+            if (v != null) total = total.add(new BigDecimal(String.valueOf(v)));
+        }
+        return total;
     }
 
     private static long num(Object o) {
@@ -1413,6 +1892,8 @@ public class AdminService {
     @Transactional
     public Map<String, Object> pauseStorefront(Long kitchenId, String note, User actingAdmin) {
         Kitchen k = requireKitchen(kitchenId);
+        // Handover 15: a storefront outside the admin's Area is not theirs to stop.
+        requireAreaAccess(storefrontAreaId(k), actingAdmin);
         boolean was = k.isStorefrontPaused();
         k.setStorefrontPaused(true);
         kitchenRepository.save(k);
@@ -1480,6 +1961,9 @@ public class AdminService {
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException("A reason is required when blocking a buyer.");
         }
+        // Handover 15: scoped before any mutation, so an Area Admin cannot reach
+        // a buyer outside their Area even with a correct buyer id.
+        requireBuyerAccess(requireBuyer(buyerId), actingAdmin);
         User buyer = requireBuyer(buyerId);
         boolean was = buyer.isBlocked();
         buyer.setBlocked(true);
@@ -1547,7 +2031,19 @@ public class AdminService {
      */
     @Transactional(readOnly = true)
     public Map<String, Object> buyerDetail(Long buyerId) {
+        return buyerDetail(buyerId, null);
+    }
+
+    /**
+     * Buyer detail, optionally scoped to an Area Admin (handover 15).
+     *
+     * <p>{@code actingAdmin} null means global scope, which is what every caller
+     * without an Admin identity gets.</p>
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> buyerDetail(Long buyerId, User actingAdmin) {
         User buyer = requireBuyer(buyerId);
+        requireBuyerAccess(buyer, actingAdmin); // handover 15
         List<Order> orders = orderRepository.findByBuyerOrderByCreatedAtDesc(buyer);
 
         Map<String, Object> m = new LinkedHashMap<>();
@@ -1647,6 +2143,14 @@ public class AdminService {
         m.put("averageOrderValue", orders.isEmpty() ? BigDecimal.ZERO
                 : value.divide(BigDecimal.valueOf(orders.size()), 2, java.math.RoundingMode.HALF_UP));
         m.put("recentOrders", orders.stream().limit(20).map(this::adminOrderRow).toList());
+        // Handover 7.2: the seller detail must carry support notes and the account
+        // status, so an Admin can see why a seller is blocked without leaving the
+        // screen. Both are internal-only fields.
+        m.put("supportNote", seller.getSupportNote());
+        m.put("accountStatus", seller.isBlocked() ? "BLOCKED" : "ACTIVE");
+        m.put("blocked", seller.isBlocked());
+        m.put("blockedReason", seller.getBlockedReason());
+        m.put("blockedAt", seller.getBlockedAt());
         m.put("auditHistory", auditService.forTarget("SELLER", sellerId));
         return m;
     }

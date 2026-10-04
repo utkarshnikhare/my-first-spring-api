@@ -729,4 +729,65 @@ class SellerDeliveryCompletionServiceTest {
         assertThat(rowFor(detail(null, null, null), order.getId()).isDelivered()).isTrue();
     }
 
+    // ------------------------------------------------------------------
+    // G. A seller with MORE THAN ONE storefront
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("a seller's second storefront has its own delivery progress and bulk scope")
+    void aSecondStorefrontIsNotConfusedWithTheFirst() {
+        // Same seller, two storefronts of different categories - exactly the
+        // Kitchen + Homemade pairing the model supports.
+        Kitchen second = kitchen(seller, "second-store-" + UUID.randomUUID().toString().substring(0, 6),
+                "Kingsbury", SellerType.HOMEMADE_PRODUCTS);
+        Product cake = product(second, "Cake");
+
+        Order firstStorefront = place(buyerA, 1, PaymentStatus.PAID, OrderStatus.CONFIRMED);
+        Order secondStorefront = place(buyerB, cake, 2, PaymentStatus.PENDING, OrderStatus.ORDERED);
+
+        // Each offering reports only its OWN storefront's orders.
+        DeliveryProgressDto firstProgress = progress(poha);
+        assertThat(firstProgress.getActiveOrderCount()).isEqualTo(1);
+
+        DeliveryProgressDto secondProgress = progress(cake);
+        assertThat(secondProgress.getActiveOrderCount())
+                .as("the second storefront's progress must count its own order")
+                .isEqualTo(1);
+        assertThat(secondProgress.getBulkScopeOrderCount()).isEqualTo(1);
+
+        // Bulk-delivering the second storefront must change the second order and
+        // leave the first storefront's order untouched.
+        DeliveryProgressDto applied = orderService.markAllOfferingOrdersDelivered(
+                cake.getId(), LocalDate.now(), seller);
+        assertThat(applied.getAppliedCount()).isEqualTo(1);
+        assertThat(storedStatus(secondStorefront.getId())).isEqualTo(DeliveryStatus.DELIVERED);
+        assertThat(storedStatus(firstStorefront.getId()))
+                .as("a bulk action must never touch another storefront's orders")
+                .isEqualTo(DeliveryStatus.NOT_DELIVERED);
+
+        // And the drill-down screen for that offering agrees.
+        assertThat(rowFor(sellerApp.getOrderItemDetail(seller, cake.getId(), LocalDate.now(),
+                null, null, null), secondStorefront.getId()).isDelivered()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Mark All Delivered on an already-complete storefront changes nothing")
+    void bulkOnAnAlreadyCompleteOfferingIsANoOp() {
+        Order first = place(buyerA, 1, PaymentStatus.PAID, OrderStatus.CONFIRMED);
+        Kitchen second = kitchen(seller, "done-store-" + UUID.randomUUID().toString().substring(0, 6),
+                "Kingsbury", SellerType.HOMEMADE_PRODUCTS);
+        Product cake = product(second, "Cake");
+        Order secondOrder = place(buyerB, cake, 1, PaymentStatus.PAID, OrderStatus.CONFIRMED);
+
+        orderService.markAllOfferingOrdersDelivered(cake.getId(), LocalDate.now(), seller);
+        DeliveryProgressDto secondRun = orderService.markAllOfferingOrdersDelivered(
+                cake.getId(), LocalDate.now(), seller);
+
+        assertThat(secondRun.getAppliedCount()).isZero();
+        assertThat(secondRun.getRemainingCount()).isZero();
+        assertThat(secondRun.getDeliveredCount()).isEqualTo(1);
+        assertThat(storedStatus(secondOrder.getId())).isEqualTo(DeliveryStatus.DELIVERED);
+        assertThat(storedStatus(first.getId())).isEqualTo(DeliveryStatus.NOT_DELIVERED);
+    }
+
 }

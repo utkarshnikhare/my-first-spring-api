@@ -385,7 +385,12 @@ async function adminAction(action, t) {
                     pause: { title: 'Pause storefront ' + esc(t.dataset.name || ''), hint: 'Buyers stop seeing this storefront until it is resumed. Nothing is deleted.', label: 'Internal note (optional)', required: false, verb: 'Pause' },
                     removeStorefront: { title: 'Remove storefront ' + esc(t.dataset.name || ''), hint: 'The storefront is withdrawn from the buyer app. This is a serious step - the seller is NOT deleted.', label: 'Reason (shown to the seller)', required: true, verb: 'Remove storefront' },
                     block: { title: 'Block ' + esc(t.dataset.name || 'buyer'), hint: 'A blocked buyer cannot place orders. Existing orders are kept.', label: 'Reason (internal)', required: true, verb: 'Block' },
-                    note: { title: 'Support note - ' + esc(t.dataset.name || 'buyer'), hint: 'Internal only. Visible to Admins on this screen, never to the buyer.', label: 'Note', required: false, verb: 'Save note' }
+                    // Handover 7.3 lists "Block seller" as its own control, separate
+                    // from Suspend. The seller stops serving buyers until an Admin
+                    // unblocks them; orders and storefronts are kept.
+                    blockSeller: { title: 'Block ' + esc(t.dataset.name || 'seller'), hint: 'Their storefronts stop serving buyers immediately and they cannot operate until you unblock them. Existing orders and history are kept.', label: 'Reason (shown to the seller)', required: true, verb: 'Block seller' },
+                    note: { title: 'Support note - ' + esc(t.dataset.name || 'buyer'), hint: 'Internal only. Visible to Admins on this screen, never to the buyer.', label: 'Note', required: false, verb: 'Save note' },
+                    sellerNote: { title: 'Support note - ' + esc(t.dataset.name || 'seller'), hint: 'Internal only. Visible to Admins on this screen, never to the seller or a buyer.', label: 'Note', required: false, verb: 'Save note' }
                 }[mode];
                 if (!copy) { toast('Unknown action', 'error'); break; }
                 openModal(
@@ -418,12 +423,15 @@ async function adminAction(action, t) {
                     pause: 'Pause this storefront?\n\n' + (text ? 'Note: ' + text : 'No note given.'),
                     removeStorefront: 'Remove this storefront from the buyer app?\n\nReason: ' + text,
                     block: 'Block ' + rName + '?\n\nReason: ' + text,
+                    blockSeller: 'Block ' + rName + '?\n\nThey stop serving buyers until you unblock them. Existing orders are kept.\n\nReason: ' + text,
                     note: 'Save this support note for ' + rName + '?'
                 }[rMode];
                 if (!window.confirm(confirmCopy || ('Confirm ' + rMode + '?'))) break;
                 var calls = {
                     requestChanges: { url: '/api/admin/sellers/' + rId + '/request-changes', body: { reason: text }, done: 'Changes requested' },
                     suspend: { url: '/api/admin/sellers/' + rId + '/suspend', body: { reason: text }, done: 'Seller suspended' },
+                    blockSeller: { url: '/api/admin/sellers/' + rId + '/block', body: { reason: text }, done: 'Seller blocked' },
+                    sellerNote: { url: '/api/admin/sellers/' + rId + '/support-note', body: { note: text || null }, done: 'Support note saved' },
                     pause: { url: '/api/admin/storefronts/' + rId + '/pause', body: { note: text || null }, done: 'Storefront paused' },
                     removeStorefront: { url: '/api/admin/storefronts/' + rId + '/remove', body: { reason: text }, done: 'Storefront removed' },
                     block: { url: '/api/admin/buyers/' + rId + '/block', body: { reason: text }, done: 'Buyer blocked' },
@@ -433,6 +441,17 @@ async function adminAction(action, t) {
                 await adminRunOnce(t, async function () {
                     await api(calls.url, { method: 'POST', body: calls.body });
                     toast(calls.done, 'success');
+                });
+                await adminRender();
+                break;
+            }
+            case 'seller-unblock': {
+                var suId = Number(t.dataset.id);
+                if (!window.confirm('Unblock ' + (t.dataset.name || 'this seller')
+                    + '?\n\nThey serve buyers again, and the suspension from the block is lifted.')) break;
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/sellers/' + suId + '/unblock', { method: 'POST' });
+                    toast('Seller unblocked', 'success');
                 });
                 await adminRender();
                 break;
@@ -467,6 +486,44 @@ async function adminAction(action, t) {
                     await api('/api/admin/retention', { method: 'POST', body: { retentionDays: days } });
                     toast('Retention set to ' + days + ' days', 'success');
                 });
+                await adminRender();
+                break;
+            }
+            case 'retention-purge-toggle': {
+                var on = t.textContent.indexOf('Disable') === -1; // label shows the action
+                if (on && !window.confirm('Arm the destructive retention purge?\n\n'
+                    + 'It still deletes nothing by itself - every purge must be confirmed by hand.')) break;
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/retention/purge-enabled', { method: 'POST', body: { enabled: on } });
+                    toast(on ? 'Retention purge armed' : 'Retention purge disabled', 'success');
+                });
+                await adminRender();
+                break;
+            }
+            case 'retention-purge': {
+                var reasonField = $('#retentionPurgeReason');
+                var reason = reasonField ? reasonField.value.trim() : '';
+                var exported = ($('#retentionPurgeExported') || {}).checked === true;
+                if (!reason) { toast('A reason is required to purge', 'error'); break; }
+                if (!exported) { toast('Confirm you exported the affected orders first', 'error'); break; }
+                // The count quoted here is the one the SERVER calculated, so the
+                // confirmation cannot disagree with what actually happens.
+                var count = parseInt((t.textContent.match(/(\d+)/) || [])[1], 10);
+                if (!window.confirm('Permanently delete ' + count + ' closed order' + (count === 1 ? '' : 's')
+                    + ' older than the retention window?\n\n'
+                    + 'This cannot be undone. Aggregates and the audit trail are kept.')) break;
+                // Reconcile with the server on failure: if the purge was rejected, refresh so
+                // the screen shows the real candidate count rather than a stale
+                // "Purge N orders" button that no longer matches the server.
+                var purged = 0;
+                await adminRunOnce(t, async function () {
+                    var res = await api('/api/admin/retention/purge', {
+                        method: 'POST',
+                        body: { confirmed: true, exported: exported, reason: reason }
+                    });
+                    purged = res.purgedOrderCount || 0;
+                });
+                if (purged > 0) toast('Purged ' + purged + ' orders', 'success');
                 await adminRender();
                 break;
             }
@@ -575,6 +632,16 @@ async function adminAction(action, t) {
             case 'admin-back-orders': {
                 A.orderDetailId = null;
                 location.hash = '#/orders';
+                break;
+            }
+            case 'admin-seller-sort': {
+                // Same column toggles direction; a new column starts descending,
+                // because the useful default for every numeric column here is
+                // "biggest first".
+                var key = t.dataset.key;
+                if (A.sellerSort === key) A.sellerSortDir = A.sellerSortDir === 'asc' ? 'desc' : 'asc';
+                else { A.sellerSort = key; A.sellerSortDir = 'desc'; }
+                adminRender();
                 break;
             }
             case 'admin-dash-period': {
@@ -782,20 +849,34 @@ async function adminHomeView() {
             (sub ? '<div class="dc-sub">' + sub + '</div>' : '') +
             close;
     }
-    // Traffic row: distinct buyers/sellers that actually placed an order inside
-    // the selected window. Measured from real orders, never guessed.
-    h += dashCard('&#128200;', (data.buyersInPeriod || 0) + ' / ' + (data.sellersInPeriod || 0),
-        'Active Users', 'buyers / sellers ordering in ' + esc(win), '#/analytics');
+    // Handover 4/17 layout:
+    //   row 1: Traffic | Orders | Recorded Order Value | Pending Approvals
+    //   row 2: Buyers   | Sellers | Attention Needed
+    // Two grids keep the two rows visually distinct instead of one long strip.
+    h += '<div class="dash-grid">';
+    h += dashCard('&#128200;', (data.marketplaceViewsInPeriod || 0) + ' / ' + (data.storefrontViewsInPeriod || 0),
+        'Traffic', 'marketplace / storefront views in ' + esc(win), '#/analytics');
     h += dashCard('&#128230;', data.ordersInPeriod || 0, 'Orders',
         esc(win) + ' · all time: ' + (data.totalOrders || 0), '#/orders');
     // Deliberately NOT "Revenue": SocioMart does not process buyer payments, so
     // this is the value of orders recorded on the marketplace and nothing more.
     h += dashCard('&#128202;', money(data.recordedOrderValueInPeriod || 0), 'Recorded Order Value',
         esc(win) + ' · all time: ' + money(data.totalOrderValue || 0), '#/orders');
-    h += dashCard('&#128101;', (data.totalBuyers || 0) + ' / ' + (data.totalSellers || 0),
-        'Buyers / Sellers', (data.approvedSellers || 0) + ' sellers approved', '#/buyers');
     h += dashCard('&#9203;', data.pendingSellers || 0, 'Pending Approvals',
         'seller applications awaiting review', '#/approvals');
+    h += '</div>';
+
+    h += '<div class="dash-grid">';
+    h += dashCard('&#128100;', data.totalBuyers || 0, 'Buyers',
+        (data.buyersInPeriod || 0) + ' ordering in ' + esc(win), '#/buyers');
+    h += dashCard('&#128101;', data.totalSellers || 0, 'Sellers',
+        (data.approvedSellers || 0) + ' approved · ' + (data.pendingSellers || 0) + ' pending', '#/sellers');
+    // Highlighted only when something is actually open, so the dashboard does not
+    // cry wolf on a healthy day. Count comes from the same attention model the
+    // Pending Actions panel renders below.
+    h += dashCard('&#9888;', data.attentionNeeded || 0, 'Attention Needed',
+        (data.attentionNeeded || 0) === 0 ? 'nothing waiting on the Admin team' : 'items need a decision',
+        '#/orders');
     h += '</div>';
 
     h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Recorded Order Value</h3>' +
@@ -1231,11 +1312,24 @@ async function adminOrdersView() {
     var results = await Promise.all([
         api('/api/admin/orders' + qs),
         api('/api/admin/sellers').catch(function () { return []; }),
-        api('/api/admin/buyers').catch(function () { return []; })
+        api('/api/admin/buyers').catch(function () { return []; }),
+        // Area/Society option lists for the two new filter axes. Each degrades to
+        // an empty list on its own, so a location failure never blanks Orders.
+        api('/api/admin/locations').catch(function () { return null; })
     ]);
     var list = results[0];
     var sellerOptions = results[1] || [];
     var buyerOptions = results[2] || [];
+    var locations = results[3] || null;
+    var areaOptions = locations ? (locations.areas || []) : [];
+    // Societies follow the chosen Area so the pair can never contradict itself;
+    // with no Area chosen every society is offered.
+    var societyOptions = [];
+    areaOptions.forEach(function (a) {
+        if (!f.areaId || String(a.id) === String(f.areaId)) {
+            (a.societies || []).forEach(function (s) { societyOptions.push(s); });
+        }
+    });
     var h = '<div class="view-enter">';
     h += '<div class="section-head admin-section-head"><div><h1>Orders</h1><p class="muted small">' + (list ? list.length : 0) + ' orders</p></div></div>';
     h += adminSearchBar({
@@ -1277,6 +1371,18 @@ async function adminOrdersView() {
         '<select class="form-input" id="ordBuyer" data-action="admin-order-axis" data-axis="buyerId" aria-label="Buyer" style="max-width:200px">' +
         '<option value="">All buyers</option>' + buyerOptions.map(function (b) {
             return '<option value="' + b.id + '"' + (String(f.buyerId || '') === String(b.id) ? ' selected' : '') + '>' + esc(b.name || ('Buyer ' + b.id)) + '</option>';
+        }).join('') + '</select>' +
+        // Handover 5/9: Area and Society are first-class order filters. The
+        // backend already matched on the buyer's stable ids; these controls make
+        // that reachable. Society options follow the chosen Area so the pair can
+        // never contradict itself.
+        '<select class="form-input" id="ordArea" data-action="admin-order-axis" data-axis="areaId" aria-label="Area" style="max-width:180px">' +
+        '<option value="">All areas</option>' + (areaOptions || []).map(function (a) {
+            return '<option value="' + a.id + '"' + (String(f.areaId || '') === String(a.id) ? ' selected' : '') + '>' + esc(a.name) + '</option>';
+        }).join('') + '</select>' +
+        '<select class="form-input" id="ordSociety" data-action="admin-order-axis" data-axis="societyId" aria-label="Society" style="max-width:200px">' +
+        '<option value="">All societies</option>' + (societyOptions || []).map(function (s) {
+            return '<option value="' + s.id + '"' + (String(f.societyId || '') === String(s.id) ? ' selected' : '') + '>' + esc(s.name) + '</option>';
         }).join('') + '</select>' +
         '<button class="btn" type="button" data-action="admin-order-axis-clear">Clear filters</button>' +
         '</div></div>';
@@ -1619,16 +1725,45 @@ function adminTrafficView() {
                 '<div class="flex-1 min-140"><div class="muted small">Total value</div><div class="font-700 font-size-2">' + money(value.recordedOrderValue || 0) + '</div></div>' +
                 '<div class="flex-1 min-140"><div class="muted small">Average order value</div><div class="font-700 font-size-2">' + money(value.averageOrderValue || 0) + '</div></div>' +
                 '</div>';
+            // Handover 10: the breakdown the total is made of. Rendered from the
+            // same filtered rows as the headline, so the parts always sum to the
+            // whole. Groups with no recorded value are omitted rather than shown blank.
+            h += breakdownBlock('By Area', value.byArea) +
+                breakdownBlock('By Society', value.bySociety) +
+                breakdownBlock('By Seller', value.bySeller);
         }
         h += '</div>';
 
-        // ---- Seller performance (handover 6) ----
+        // ---- Seller performance (handover 6: sortable seller table) ----
         h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Seller Performance</h3>' +
             '<p class="muted tiny" style="margin:0 0 10px">Views come from storefront and offering visits; conversion is orders ÷ storefront views and is only shown where views are tracked.</p>';
         if (!sellers.length) {
             h += '<div class="admin-empty admin-empty-inline">No seller activity matches these filters.</div>';
         }
-        sellers.forEach(function (s) {
+        // Sortable because the handover asks for a "sortable seller table": the
+        // operator usually wants the biggest contributor, or the worst converter.
+        var sortKey = A.sellerSort || 'recordedOrderValue';
+        var sortDir = A.sellerSortDir === 'asc' ? 1 : -1;
+        var sorted = sellers.slice().sort(function (x, y) {
+            var a = sortValue(x, sortKey), b = sortValue(y, sortKey);
+            if (typeof a === 'string' || typeof b === 'string') {
+                return String(a).localeCompare(String(b)) * sortDir;
+            }
+            return (a - b) * sortDir;
+        });
+        if (sellers.length) {
+            h += '<div class="admin-filters" style="margin-bottom:10px">' +
+                [['recordedOrderValue', 'Recorded value'], ['orders', 'Orders'],
+                 ['storefrontViews', 'Storefront views'], ['sellerName', 'Seller']]
+                .map(function (s) {
+                    var active = sortKey === s[0];
+                    return '<button class="capsule' + (active ? ' active' : '') + '" type="button" ' +
+                        'data-action="admin-seller-sort" data-key="' + s[0] + '">' + s[1] +
+                        (active ? (sortDir === -1 ? ' ↓' : ' ↑') : '') + '</button>';
+                }).join('') +
+                '</div>';
+        }
+        sorted.forEach(function (s) {
             h += '<div class="seller-row"><div class="sr-avatar">🍳</div><div class="sr-body">' +
                 '<div class="sr-name">' + esc(s.sellerName || 'Seller') + ' <span class="muted small">' + esc(s.kitchenName || '') + '</span></div>' +
                 '<div class="sr-meta">Orders: ' + (s.orders || 0) + ' · Recorded value: <strong>' + money(s.recordedOrderValue || 0) + '</strong> · Avg: ' + money(s.averageOrderValue || 0) + '</div>' +
@@ -1640,6 +1775,26 @@ function adminTrafficView() {
         h += '</div>';
         return h;
     };
+}
+
+/** Comparable value for one seller-table column; missing numbers sort as 0. */
+function sortValue(row, key) {
+    var v = row[key];
+    if (key === 'sellerName') return String(v || '').toLowerCase();
+    return Number(v || 0);
+}
+
+/** One "X of Y · count orders" breakdown list, or nothing when there is no data. */
+function breakdownBlock(title, rows) {
+    if (!rows || !rows.length) return '';
+    return '<h4 class="font-700 mt-2 mb-1" style="font-size:0.95rem">' + esc(title) + '</h4>' +
+        rows.slice(0, 10).map(function (r) {
+            return '<div class="sr-meta" style="display:flex;justify-content:space-between;gap:10px">' +
+                '<span>' + esc(r.label || 'Unassigned') + '</span>' +
+                '<span>' + (r.orderCount || 0) + ' orders · <strong>' + money(r.recordedOrderValue || 0) + '</strong></span>' +
+                '</div>';
+        }).join('') +
+        (rows.length > 10 ? '<div class="muted tiny">+ ' + (rows.length - 10) + ' more</div>' : '');
 }
 
 /**
@@ -1713,6 +1868,29 @@ async function adminRetentionView() {
         (d.destructivePurgeEnabled === false ? ' · Destructive purge is DISABLED — rows are counted, never deleted.' : '') + '</p>' +
         '</div>';
 
+    // Purge (handover 11). Deliberately behind a typed reason, an explicit
+    // "I exported first" tick and a confirmation quoting the SERVER's own count -
+    // so nothing is deleted without the operator seeing exactly what will go.
+    var candidates = d.purgeCandidateCount || 0;
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Purge closed orders</h3>' +
+        '<p class="muted tiny" style="margin:0 0 10px">' + esc(d.note || '') + '</p>' +
+        '<div class="flex gap-2 wrap">' +
+        '<div class="flex-1 min-140"><div class="muted small">Would be removed</div><div class="font-700 font-size-2">' + candidates + '</div></div>' +
+        '<div class="flex-1 min-140"><div class="muted small">Aggregates kept</div><div class="font-700 mt-1">' + (d.aggregatedOrderCount || 0) + '</div></div>' +
+        '<div class="flex-1 min-140"><div class="muted small">Purge status</div><div class="font-700 mt-1">' + (d.destructivePurgeEnabled ? 'Armed' : 'Disabled') + '</div></div>' +
+        '</div>' +
+        '<div class="flex gap-2 wrap" style="align-items:flex-end;margin-top:12px">' +
+        '<div><label class="form-label" for="retentionPurgeReason">Reason (required)</label>' +
+        '<input class="form-input" type="text" id="retentionPurgeReason" placeholder="Why is this being purged?" style="max-width:260px"></div>' +
+        '<button class="btn" type="button" data-action="retention-purge-toggle">' +
+        (d.destructivePurgeEnabled ? 'Disable purge' : 'Enable purge') + '</button>' +
+        '<button class="btn btn-danger" type="button" data-action="retention-purge" ' +
+        (d.destructivePurgeEnabled && candidates > 0 ? '' : 'disabled') + '>Purge ' + candidates + ' orders</button>' +
+        '</div>' +
+        '<label class="small muted mt-2" style="display:flex;gap:6px;align-items:center">' +
+        '<input type="checkbox" id="retentionPurgeExported"> I exported the affected orders first</label>' +
+        '</div>';
+
     h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Change the window</h3>' +
         '<p class="muted tiny" style="margin:0 0 10px">Shorter windows purge sooner; the change is recorded in the Admin action history. Buyers and sellers are never notified of a purge.</p>' +
         '<div class="flex gap-2 wrap" style="align-items:flex-end">' +
@@ -1768,6 +1946,21 @@ async function adminSellerDetailView() {
     }
     h += '<button class="btn btn-outline" type="button" data-action="open-reject" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Reject</button>' +
         '</div></div>';
+
+    // Account control (handover 7.3): Block / Unblock seller, plus the internal
+    // support note (7.2). Shown regardless of approval status, because a blocked
+    // account is a separate fact from the approval state.
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Account</h3><div class="admin-actions">' +
+        '<span class="pill pill-' + (d.accountStatus === 'BLOCKED' ? 'red' : 'green') + '">' +
+        esc(d.accountStatus || 'ACTIVE') + '</span>' +
+        (d.blockedReason ? '<span class="sr-reason">' + esc(d.blockedReason) + '</span>' : '') +
+        (d.accountStatus === 'BLOCKED'
+            ? '<button class="btn btn-success btn-sm" type="button" data-action="seller-unblock" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Unblock seller</button>'
+            : '<button class="btn btn-danger btn-sm" type="button" data-action="open-admin-reason" data-mode="blockSeller" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Block seller</button>') +
+        '<button class="btn btn-outline btn-sm" type="button" data-action="open-admin-reason" data-mode="sellerNote" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">' + (d.supportNote ? 'Edit support note' : 'Add support note') + '</button>' +
+        '</div>' +
+        (d.supportNote ? '<div class="sr-reason mt-2">Note: ' + esc(d.supportNote) + '</div>' : '') +
+        '</div>';
 
     h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Recorded activity</h3>' +
         '<div class="flex gap-2 wrap">' +

@@ -39,6 +39,9 @@ class AdminDashboardOrderStatusTest {
     @Mock private UserRepository userRepository;
     @Mock private EnquiryRepository enquiryRepository;
     @Mock private FavouriteRepository favouriteRepository;
+    // The dashboard reads window-scoped traffic from the shared event table, so
+    // this repository is now part of AdminService's collaborator set.
+    @Mock private com.example.my_first_spring_api.repository.AnalyticsEventRepository analyticsEventRepository;
 
     @InjectMocks private AdminService adminService;
 

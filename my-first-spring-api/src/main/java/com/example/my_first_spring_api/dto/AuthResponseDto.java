@@ -19,6 +19,14 @@ public class AuthResponseDto {
     private String area;
     private String role;
     private SellerApprovalStatus sellerApprovalStatus;
+    /**
+     * Why the Admin made that decision (handover 7.3: the seller must "see an
+     * understandable status rather than silently failing to log in or publish").
+     *
+     * <p>Additive, so every existing constructor call site stays
+     * source-compatible. Absent for buyers.</p>
+     */
+    private String sellerStatusReason;
 
     public AuthResponseDto() {}
 
@@ -78,4 +86,6 @@ public class AuthResponseDto {
     public void setBuilding(String building) { this.building = building; }
     public SellerApprovalStatus getSellerApprovalStatus() { return sellerApprovalStatus; }
     public void setSellerApprovalStatus(SellerApprovalStatus sellerApprovalStatus) { this.sellerApprovalStatus = sellerApprovalStatus; }
+    public String getSellerStatusReason() { return sellerStatusReason; }
+    public void setSellerStatusReason(String sellerStatusReason) { this.sellerStatusReason = sellerStatusReason; }
 }

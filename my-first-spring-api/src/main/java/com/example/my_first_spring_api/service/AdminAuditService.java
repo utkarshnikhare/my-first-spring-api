@@ -34,6 +34,11 @@ public class AdminAuditService {
     public static final String SELLER_REJECTED = "SELLER_REJECTED";
     public static final String SELLER_CHANGES_REQUESTED = "SELLER_CHANGES_REQUESTED";
     public static final String SELLER_SUSPENDED = "SELLER_SUSPENDED";
+    // Handover 7.3 lists "Suspend / Block seller" as SEPARATE controls. Suspend is
+    // an approval-state action; block is an account-level action that also takes
+    // the storefront out of buyer discovery until an Admin restores access.
+    public static final String SELLER_BLOCKED = "SELLER_BLOCKED";
+    public static final String SELLER_UNBLOCKED = "SELLER_UNBLOCKED";
     public static final String STOREFRONT_PAUSED = "STOREFRONT_PAUSED";
     public static final String STOREFRONT_RESUMED = "STOREFRONT_RESUMED";
     public static final String STOREFRONT_REMOVED = "STOREFRONT_REMOVED";

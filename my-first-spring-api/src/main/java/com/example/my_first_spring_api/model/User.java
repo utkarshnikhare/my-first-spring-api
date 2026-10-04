@@ -100,6 +100,20 @@ public class User {
     private String supportNote;
 
     /**
+     * Area an ADMIN is responsible for (handover 15: an Area Admin sees "only
+     * assigned Area/cluster").
+     *
+     * <p>Null means platform-wide, which is how every Admin behaves until a Super
+     * Admin deliberately narrows one - so adding the concept cannot silently
+     * restrict an existing admin. SUPER_ADMIN ignores this entirely and is always
+     * global.
+     *
+     * <p>Enforced server-side in {@code AdminService}; the UI only reflects it.</p>
+     */
+    @Column(name = "admin_area_id")
+    private Long adminAreaId;
+
+    /**
      * Soft removal marker for a storefront/kitchen (handover section 7.3:
      * "Prefer soft removal; preserve historical/audit references").
      * An existing order keeps its kitchen reference either way; this flag stops
@@ -178,6 +192,8 @@ public class User {
     public void setBlockedAt(LocalDateTime blockedAt) { this.blockedAt = blockedAt; }
     public String getSupportNote() { return supportNote; }
     public void setSupportNote(String supportNote) { this.supportNote = supportNote; }
+    public Long getAdminAreaId() { return adminAreaId; }
+    public void setAdminAreaId(Long adminAreaId) { this.adminAreaId = adminAreaId; }
     public boolean isStorefrontRemoved() { return storefrontRemoved; }
     public void setStorefrontRemoved(boolean storefrontRemoved) { this.storefrontRemoved = storefrontRemoved; }
     public LocalDateTime getStorefrontRemovedAt() { return storefrontRemovedAt; }

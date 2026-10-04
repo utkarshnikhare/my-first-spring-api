@@ -10,10 +10,12 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Covers the Admin handover clauses that had no implementation: buyer search by
@@ -36,6 +38,11 @@ class AdminHandoverGapTest {
     @Autowired private KitchenRepository kitchens;
     @Autowired private ProductRepository products;
     @Autowired private OrderRepository orders;
+    @Autowired private AnalyticsService analyticsService;
+    @Autowired private OrderService orderService;
+    @Autowired private AnalyticsEventRepository analyticsEventRepo;
+    @Autowired private RetentionService retentionService;
+    @Autowired private com.example.my_first_spring_api.service.KitchenService kitchenService;
 
     private static int seq = 0;
     private final String sfx = "gap" + (seq++);
@@ -70,12 +77,24 @@ class AdminHandoverGapTest {
     }
 
     private Order place(User b, Kitchen k, Product p, String suffix, int qty) {
+        return place(b, k, p, suffix, qty, PaymentStatus.PAID);
+    }
+
+    /**
+     * Payment is a parameter because a seller-side "Mark as Paid" is a no-op on
+     * an order that is already paid - a test for that transition needs an order
+     * that genuinely starts unpaid.
+     */
+    private Order place(User b, Kitchen k, Product p, String suffix, int qty, PaymentStatus payment) {
         Order o = new Order(b, k);
         o.setOrderNumber("ORD-" + sfx + suffix);
         o.setOrderStatus(OrderStatus.CONFIRMED);
-        o.setPaymentStatus(PaymentStatus.PAID);
+        o.setPaymentStatus(payment);
         o.addItem(new OrderItem(p, qty, BigDecimal.valueOf(40)));
         o.recalculateTotal();
+        // A genuinely PLACED order always has a server-side order time; without it
+        // the order-detail history would correctly refuse to invent one.
+        o.setOrderTime(LocalDateTime.now());
         return orders.save(o);
     }
 
@@ -271,5 +290,594 @@ class AdminHandoverGapTest {
 
         // An unparseable value degrades to Today rather than blanking the screen.
         assertThat(adminService.dashboard("not-a-date").get("selectedPeriod")).isEqualTo("Today");
+    }
+
+    // ---------- Sections 6 / 18: the analytics the seller table depends on ----------
+
+    @Test
+    @DisplayName("s18: a captured storefront view reaches the seller table as a real number")
+    void sellerAnalyticsUsesActuallyCapturedViews() {
+        Seller s = sellerWithStore("Conv");
+        User b = buyer();
+        users.save(b);
+
+        // Exactly what the buyer app now posts when a storefront/offering is opened.
+        analyticsService.record(AnalyticsService.EV_HOMEMADE_STOREFRONT_VIEW,
+                null, null, s.kitchen().getId(), null);
+        analyticsService.record(AnalyticsService.EV_PRODUCT_VIEW,
+                null, null, s.kitchen().getId(), null);
+        place(b, s.kitchen(), s.product(), "conv", 1);
+
+        Map<String, Object> row = rowForSeller(s);
+
+        assertThat(((Number) row.get("storefrontViews")).longValue())
+                .as("captured storefront views must reach the seller table").isEqualTo(1L);
+        assertThat(((Number) row.get("offeringViews")).longValue()).isEqualTo(1L);
+        assertThat(row.get("conversionRate"))
+                .as("with views captured, conversion becomes measurable").isNotNull();
+    }
+
+    @Test
+    @DisplayName("s6: a storefront view is counted once, not once per order")
+    void viewsAreNotMultipliedByOrderCount() {
+        Seller s = sellerWithStore("Multi");
+        User b = buyer();
+        users.save(b);
+        analyticsService.record(AnalyticsService.EV_HOMEMADE_STOREFRONT_VIEW,
+                null, null, s.kitchen().getId(), null);
+
+        place(b, s.kitchen(), s.product(), "v1", 1);
+        place(b, s.kitchen(), s.product(), "v2", 1);
+        place(b, s.kitchen(), s.product(), "v3", 1);
+
+        Map<String, Object> row = rowForSeller(s);
+
+        assertThat(((Number) row.get("orders")).longValue()).isEqualTo(3L);
+        assertThat(((Number) row.get("storefrontViews")).longValue())
+                .as("one storefront view stays one view however many orders follow")
+                .isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("s6: conversion is omitted rather than faked when no views exist")
+    void conversionIsOmittedRatherThanFaked() {
+        Seller s = sellerWithStore("NoViews");
+        User b = buyer();
+        users.save(b);
+        place(b, s.kitchen(), s.product(), "c1", 1);
+
+        assertThat(rowForSeller(s).get("conversionRate"))
+                .as("no captured views means no conversion figure, never a guess")
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("s18: payment status is captured once per real transition")
+    void paymentStatusIsRecordedOncePerTransition() {
+        Seller s = sellerWithStore("PayEv");
+        User b = buyer();
+        users.save(b);
+        Order placed = place(b, s.kitchen(), s.product(), "p1", 1, PaymentStatus.PENDING);
+        long before = countEvents(AnalyticsService.EV_PAYMENT_STATUS);
+
+        orderService.markOrderAsPaid(placed.getId(), s.user());
+        assertThat(countEvents(AnalyticsService.EV_PAYMENT_STATUS)).isEqualTo(before + 1);
+
+        // Repeating it is a no-op and must not add a second event.
+        orderService.markOrderAsPaid(placed.getId(), s.user());
+        assertThat(countEvents(AnalyticsService.EV_PAYMENT_STATUS)).isEqualTo(before + 1);
+    }
+
+    private Map<String, Object> rowForSeller(Seller s) {
+        return adminService.sellerAnalytics(new AdminService.OrderFilter()).stream()
+                .filter(r -> s.user().getId().equals(r.get("sellerId")))
+                .findFirst().orElseThrow(() -> new AssertionError("no analytics row for this seller"));
+    }
+
+    private long countEvents(String type) {
+        return analyticsEventRepo.findAll().stream()
+                .filter(e -> type.equals(e.getEventType()))
+                .count();
+    }
+
+    // ---------- Sections 12.1 / 10: exports and the value breakdown ----------
+
+    @Test
+    @DisplayName("s12.1: every export domain honours the active filter")
+    void everyExportDomainRespectsTheFilter() {
+        Seller s = sellerWithStore("Exp");
+        User b = buyer();
+        users.save(b);
+        place(b, s.kitchen(), s.product(), "e1", 1);
+        place(b, s.kitchen(), s.product(), "e2", 1);
+
+        AdminService.OrderFilter unfiltered = new AdminService.OrderFilter();
+        AdminService.OrderFilter narrowed = new AdminService.OrderFilter();
+        narrowed.sellerId = s.user().getId();
+
+        String sellersAll = adminService.exportCsv("sellers", unfiltered);
+        String sellersNarrow = adminService.exportCsv("sellers", narrowed);
+        assertThat(sellersNarrow.split("\n").length)
+                .as("a seller filter must reduce the row count")
+                .isLessThan(sellersAll.split("\n").length);
+
+        // The filter is echoed, so a downloaded file can never be mistaken for
+        // the whole platform.
+        for (String domain : AdminService.EXPORT_DOMAINS) {
+            assertThat(adminService.exportCsv(domain, narrowed))
+                    .as(domain + " export must record the filter it applied")
+                    .contains("Filters applied:").contains("sellerId=");
+        }
+    }
+
+    @Test
+    @DisplayName("s12.1: exports keep headers, timestamps and formula-injection safety")
+    void exportsStaySafeAndSelfDescribing() {
+        User b = buyer();
+        // A name that would execute as a formula if written to a spreadsheet raw.
+        b.setName("=cmd|'/c calc'!A1");
+        users.save(b);
+
+        String buyers = adminService.exportCsv("buyers", new AdminService.OrderFilter());
+        assertThat(buyers).contains("Generated at").contains("Buyer ID,Name,Mobile");
+        // The formula is neutralised: the field is quoted AND carries a leading
+        // apostrophe, so a spreadsheet treats it as text. The raw text still
+        // appears after that apostrophe, so the check is on the field boundary.
+        assertThat(buyers).contains("'=cmd");
+        assertThat(buyers)
+                .as("no CSV field may start a formula")
+                .doesNotContain(",=cmd").doesNotContain("\n=cmd");
+
+        for (String domain : AdminService.EXPORT_DOMAINS) {
+            assertThat(adminService.exportCsv(domain, new AdminService.OrderFilter()))
+                    .as(domain + " export carries a timestamp").contains("Generated at");
+        }
+    }
+
+    @Test
+    @DisplayName("s10: recorded order value breaks down by seller, area and society")
+    void recordedOrderValueHasRealBreakdowns() {
+        Seller s = sellerWithStore("Brk");
+        User b = buyer();
+        // Give the buyer a real Area/Society reference so the location breakdown
+        // is genuinely exercised rather than skipped for having no master row.
+        Area area = locationService.createArea("BrkArea " + sfx);
+        Society soc = locationService.createSociety(area.getId(), "BrkSoc " + sfx);
+        b.setSocietyRef(soc);
+        b.setAreaRef(area);
+        users.save(b);
+        place(b, s.kitchen(), s.product(), "b1", 2);
+        place(b, s.kitchen(), s.product(), "b2", 1);
+
+        Map<String, Object> value = adminService.recordedOrderValueSummary(new AdminService.OrderFilter());
+
+        assertThat(value).containsKeys("bySeller", "byArea", "bySociety");
+        assertThat((List<?>) value.get("bySeller")).isNotEmpty();
+        assertThat((List<?>) value.get("byArea")).isNotEmpty();
+
+        // The breakdown comes from the same rows as the headline, so subtracting
+        // the parts must reproduce the total exactly.
+        BigDecimal remaining = new BigDecimal(String.valueOf(value.get("recordedOrderValue")));
+        for (Object entry : (List<?>) value.get("bySeller")) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> g = (Map<String, Object>) entry;
+            remaining = remaining.subtract(new BigDecimal(String.valueOf(g.get("recordedOrderValue"))));
+        }
+        assertThat(remaining)
+                .as("seller breakdown must sum to the recorded order value").isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("s4: the dashboard exposes real traffic counters and an attention count")
+    void dashboardExposesTrafficAndAttention() {
+        Seller s = sellerWithStore("Dash");
+        User b = buyer();
+        users.save(b);
+        place(b, s.kitchen(), s.product(), "d1", 1);
+        analyticsService.record(AnalyticsService.EV_HOMEMADE_STOREFRONT_VIEW,
+                null, null, s.kitchen().getId(), null);
+
+        Map<String, Object> d = adminService.dashboard("today");
+
+        assertThat(d).containsKeys("marketplaceViewsInPeriod", "storefrontViewsInPeriod",
+                "offeringViewsInPeriod", "enquiriesInPeriod", "attentionNeeded");
+        assertThat(((Number) d.get("storefrontViewsInPeriod")).longValue())
+                .as("a storefront viewed today must show as traffic today").isGreaterThanOrEqualTo(1L);
+        // The Attention Needed card and the Pending Actions panel are one model,
+        // so their numbers can never disagree.
+        assertThat(((Number) d.get("attentionNeeded")).longValue())
+                .isEqualTo((long) adminService.attentionItems().size());
+    }
+
+    @Test
+    @DisplayName("s9: an order's detail carries delivery facts and a real status history")
+    void orderDetailExposesDeliveryAndHistory() {
+        Seller s = sellerWithStore("Hist");
+        User b = buyer();
+        users.save(b);
+        Order placed = place(b, s.kitchen(), s.product(), "h1", 1);
+        orderService.updateDeliveryStatus(placed.getId(), DeliveryStatus.DELIVERED, s.user());
+
+        Map<String, Object> detail = adminService.orderDetail(placed.getId());
+
+        assertThat(detail.get("deliveryStatus")).isEqualTo("DELIVERED");
+        assertThat(detail.get("deliveredAt")).isNotNull();
+        assertThat(detail).containsKey("history");
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> history = (List<Map<String, Object>>) detail.get("history");
+        assertThat(history).isNotEmpty();
+        assertThat(history).extracting(e -> String.valueOf(e.get("label")))
+                .contains("Order placed", "Marked delivered by seller");
+        // Newest first, so support reads what happened last.
+        assertThat((LocalDateTime) history.get(0).get("at"))
+                .isAfterOrEqualTo((LocalDateTime) history.get(history.size() - 1).get("at"));
+    }
+
+    @Test
+    @DisplayName("s9: a cancelled order's history never claims a delivery")
+    void cancelledOrderHistoryHasNoDeliveryEntry() {
+        Seller s = sellerWithStore("NoHist");
+        User b = buyer();
+        users.save(b);
+        Order placed = place(b, s.kitchen(), s.product(), "c1", 1);
+        orderService.cancelOrder(placed.getId(), b);
+
+        Map<String, Object> detail = adminService.orderDetail(placed.getId());
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> history = (List<Map<String, Object>>) detail.get("history");
+        assertThat(detail.get("deliveryStatus")).isEqualTo("NOT_DELIVERED");
+        assertThat(history).extracting(e -> String.valueOf(e.get("label")))
+                .contains("Order cancelled")
+                .doesNotContain("Marked delivered by seller");
+    }
+
+    // ---------- Section 15: Area Admin scope is enforced on the server ----------
+
+    @Test
+    @DisplayName("s15: an Area Admin only sees buyers from their own Area")
+    void areaAdminCannotSeeBuyersOutsideTheirArea() {
+        Area mine = locationService.createArea("Scope A " + sfx);
+        Area theirs = locationService.createArea("Scope B " + sfx);
+        User myBuyer = buyer();
+        myBuyer.setAreaRef(mine);
+        myBuyer.setSocietyRef(locationService.createSociety(mine.getId(), "ScopeSocA " + sfx));
+        users.save(myBuyer);
+        User theirBuyer = buyer();
+        theirBuyer.setAreaRef(theirs);
+        theirBuyer.setSocietyRef(locationService.createSociety(theirs.getId(), "ScopeSocB " + sfx));
+        users.save(theirBuyer);
+
+        User areaAdmin = areaAdminFor(mine);
+
+        List<Map<String, Object>> visible = adminService.buyers(null, null, null, areaAdmin);
+        assertThat(visible).extracting(m -> m.get("id")).contains(myBuyer.getId());
+        assertThat(visible).extracting(m -> m.get("id"))
+                .as("an Area Admin must not see another Area's buyers").doesNotContain(theirBuyer.getId());
+    }
+
+    @Test
+    @DisplayName("s15: an Area Admin's own Area overrides a request for a different Area")
+    void areaScopeCannotBeWidenedByTheRequest() {
+        Area mine = locationService.createArea("ScopeC " + sfx);
+        Area other = locationService.createArea("ScopeD " + sfx);
+        User myBuyer = buyer();
+        myBuyer.setAreaRef(mine);
+        myBuyer.setSocietyRef(locationService.createSociety(mine.getId(), "ScopeSocC " + sfx));
+        users.save(myBuyer);
+        User otherBuyer = buyer();
+        otherBuyer.setAreaRef(other);
+        otherBuyer.setSocietyRef(locationService.createSociety(other.getId(), "ScopeSocD " + sfx));
+        users.save(otherBuyer);
+
+        User areaAdmin = areaAdminFor(mine);
+
+        // The browser asks for the OTHER Area; the admin's own Area must win.
+        List<Map<String, Object>> visible = adminService.buyers(null, other.getId(), null, areaAdmin);
+        assertThat(visible).extracting(m -> m.get("id"))
+                .contains(myBuyer.getId()).doesNotContain(otherBuyer.getId());
+    }
+
+    @Test
+    @DisplayName("s15: an Area Admin cannot block a buyer outside their Area")
+    void areaAdminCannotActOutsideTheirArea() {
+        Area mine = locationService.createArea("ScopeE " + sfx);
+        Area theirs = locationService.createArea("ScopeF " + sfx);
+        User theirBuyer = buyer();
+        theirBuyer.setAreaRef(theirs);
+        theirBuyer.setSocietyRef(locationService.createSociety(theirs.getId(), "ScopeSocF " + sfx));
+        users.save(theirBuyer);
+        User areaAdmin = areaAdminFor(mine);
+
+        assertThatThrownBy(() -> adminService.blockBuyer(theirBuyer.getId(), "out of scope", areaAdmin))
+                .as("a correct buyer id must not bypass the Area boundary")
+                .isInstanceOf(com.example.my_first_spring_api.exception.SellerNotAuthorizedException.class);
+
+        assertThat(users.findById(theirBuyer.getId()).orElseThrow().isBlocked())
+                .as("the rejected action must not have mutated anything").isFalse();
+    }
+
+    @Test
+    @DisplayName("s15: a Super Admin is never area-restricted")
+    void superAdminIsAlwaysGlobal() {
+        Area a = locationService.createArea("ScopeG " + sfx);
+        User superAdmin = admin();                 // SUPER_ADMIN
+        superAdmin.setAdminAreaId(a.getId());      // even if a value were set
+        users.save(superAdmin);
+
+        assertThat(adminService.adminAreaScope(superAdmin))
+                .as("Super Admin keeps all Areas by definition").isNull();
+
+        User unassignedAdmin = new User("Plain Admin " + sfx, "91" + (8000 + mobileSeq++),
+                "A-1", UserRole.ADMIN);
+        users.save(unassignedAdmin);
+        assertThat(adminService.adminAreaScope(unassignedAdmin))
+                .as("an Admin with no assigned Area keeps today's global access").isNull();
+    }
+
+    private User areaAdminFor(Area area) {
+        User a = new User("Area Admin " + sfx + mobileSeq, "91" + (8000 + mobileSeq++),
+                "A-1", UserRole.ADMIN);
+        a.setAdminAreaId(area.getId());
+        return users.saveAndFlush(a);
+    }
+
+    @Test
+    @DisplayName("s11: the retention screen cannot delete anything without the guards")
+    void retentionScreenIsGuarded() {
+        String source = readStaticJs("admin.js");
+        assertThat(source)
+                // The screen must show the server-calculated count, not a guess.
+                .contains("purgeCandidateCount")
+                // Arming the purge is a separate, deliberate action.
+                .contains("/api/admin/retention/purge-enabled")
+                .contains("/api/admin/retention/purge")
+                // Both guard inputs are required before the call is made.
+                .contains("retentionPurgeReason")
+                .contains("retentionPurgeExported")
+                .contains("A reason is required to purge")
+                .contains("exported the affected orders first")
+                // The button is disabled while the purge is off or nothing is due.
+                .contains("d.destructivePurgeEnabled && candidates > 0 ? '' : 'disabled'");
+    }
+
+    // ---------- Section 7.2 / 7.3: block seller + support notes ----------
+
+    @Test
+    @DisplayName("s7.3: blocking a seller stops their storefronts without destroying history")
+    void blockingASellerStopsStorefrontsButKeepsHistory() {
+        Seller s = sellerWithStore("Blk");
+        User b = buyer();
+        users.save(b);
+        Order placed = place(b, s.kitchen(), s.product(), "blk1", 1);
+        User admin = admin();
+
+        // Asserted through the REAL buyer-facing path (KitchenService), not the
+        // predicate directly: that proves a blocked seller's storefront is
+        // genuinely unreachable by a buyer, using the existing
+        // KitchenVisibility gate rather than a second mechanism.
+        User shopper = buyer();
+        users.save(shopper);
+        Long kitchenId = s.kitchen().getId();
+        assertThat(kitchenService.getKitchenDetailById(kitchenId, shopper))
+                .as("precondition: an approved seller's storefront is reachable").isNotNull();
+
+        Map<String, Object> state = adminService.blockSeller(s.user().getId(), "repeated complaints", admin);
+
+        assertThat(state).containsEntry("accountStatus", "BLOCKED").containsEntry("blocked", true);
+        assertThat(state.get("blockedReason")).isEqualTo("repeated complaints");
+
+        User stored = users.findById(s.user().getId()).orElseThrow();
+        assertThat(stored.isBlocked()).isTrue();
+        // The approval gate is what KitchenVisibility already reads, so this is
+        // the EXISTING enforcement path - no second mechanism invented.
+        assertThat(stored.getSellerApprovalStatus())
+                .isEqualTo(com.example.my_first_spring_api.model.SellerApprovalStatus.SUSPENDED);
+        assertThatThrownBy(() -> kitchenService.getKitchenDetailById(kitchenId, shopper))
+                .as("a blocked seller's storefront must not be reachable by a buyer")
+                .isInstanceOf(com.example.my_first_spring_api.exception.KitchenNotEligibleException.class);
+
+        // History survives: the order and its references are untouched.
+        assertThat(orders.findById(placed.getId()))
+                .as("blocking a seller must never remove historical orders").isPresent();
+
+        // Reason mandatory, and the action is audited.
+        assertThatThrownBy(() -> adminService.blockSeller(s.user().getId(), "  ", admin))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("reason");
+        assertThat(adminService.auditLog(300)).extracting(a -> String.valueOf(a.get("action")))
+                .contains("SELLER_BLOCKED");
+    }
+
+    @Test
+    @DisplayName("s7.3: unblocking restores a suspended seller but never approves a pending one")
+    void unblockRestoresOnlyASuspendedSeller() {
+        User admin = admin();
+
+        Seller suspended = sellerWithStore("UnbA");
+        adminService.blockSeller(suspended.user().getId(), "misuse", admin);
+        Map<String, Object> restored = adminService.unblockSeller(suspended.user().getId(), "resolved", admin);
+
+        assertThat(restored).containsEntry("accountStatus", "ACTIVE").containsEntry("blocked", false);
+        assertThat(users.findById(suspended.user().getId()).orElseThrow().getSellerApprovalStatus())
+                .isEqualTo(com.example.my_first_spring_api.model.SellerApprovalStatus.APPROVED);
+
+        // A PENDING seller must stay pending - unblock must never silently approve
+        // an application the Admin never accepted.
+        Seller pending = sellerWithStore("UnbB");
+        pending.user().setSellerApprovalStatus(
+                com.example.my_first_spring_api.model.SellerApprovalStatus.PENDING);
+        users.save(pending.user());
+        adminService.unblockSeller(pending.user().getId(), null, admin);
+        assertThat(users.findById(pending.user().getId()).orElseThrow().getSellerApprovalStatus())
+                .isEqualTo(com.example.my_first_spring_api.model.SellerApprovalStatus.PENDING);
+
+        assertThat(adminService.auditLog(300)).extracting(a -> String.valueOf(a.get("action")))
+                .contains("SELLER_UNBLOCKED");
+    }
+
+    @Test
+    @DisplayName("s7.2: seller support notes are internal, shown in detail, and drive attention")
+    void sellerSupportNotesAreInternalAndSurfaceInAttention() {
+        Seller s = sellerWithStore("Note");
+        User admin = admin();
+        User buyer = buyer();
+        users.save(buyer);
+
+        assertThat(adminService.attentionItems())
+                .as("nothing is flagged before an Admin writes a note")
+                .extracting(i -> String.valueOf(i.get("label")))
+                .doesNotContain("Accounts with an unresolved support note");
+
+        adminService.saveSellerSupportNote(s.user().getId(), "called twice about a missing item", admin);
+        adminService.saveBuyerSupportNote(buyer.getId(), "buyer disputes a delivery", admin);
+
+        // Support note is present on the seller detail (handover 7.2).
+        assertThat(adminService.sellerDetail(s.user().getId()))
+                .containsEntry("supportNote", "called twice about a missing item");
+
+        // And an open case shows up in Attention (handover 13).
+        Map<String, Object> flag = adminService.attentionItems().stream()
+                .filter(i -> "Accounts with an unresolved support note".equals(i.get("label")))
+                .findFirst().orElseThrow(() -> new AssertionError("no unresolved-support attention item"));
+        assertThat(((Number) flag.get("count")).intValue()).isEqualTo(2);
+        assertThat(flag.get("hash"))
+                .as("every attention item links to the screen that resolves it").isNotNull();
+
+        // Clearing the note closes the case.
+        adminService.saveSellerSupportNote(s.user().getId(), null, admin);
+        adminService.saveBuyerSupportNote(buyer.getId(), null, admin);
+        assertThat(adminService.attentionItems())
+                .extracting(i -> String.valueOf(i.get("label")))
+                .doesNotContain("Accounts with an unresolved support note");
+    }
+
+    @Test
+    @DisplayName("s7.3: the seller screen exposes block/unblock and the support note")
+    void sellerScreenExposesBlockAndSupportNote() {
+        String source = readStaticJs("admin.js");
+        assertThat(source)
+                // Both controls are reachable from the seller detail screen...
+                .contains("data-mode=\"blockSeller\"")
+                .contains("data-mode=\"sellerNote\"")
+                .contains("data-action=\"seller-unblock\"")
+                // ...and both are wired to the new endpoints, not just rendered.
+                .contains("'/api/admin/sellers/' + rId + '/block'")
+                .contains("'/api/admin/sellers/' + suId + '/unblock'")
+                .contains("'/api/admin/sellers/' + rId + '/support-note'")
+                // Blocking is a high-impact action: reason required + confirmation that
+                // says the seller stops serving and keeps their orders.
+                .contains("blockSeller: { title:")
+                .contains("required: true, verb: 'Block seller'")
+                .contains("They stop serving buyers until you unblock them. Existing orders are kept.");
+    }
+
+    /** Reads a shipped static asset so the test asserts on the real source, not a copy. */
+    private static String readStaticJs(String name) {
+        try {
+            return java.nio.file.Files.readString(
+                    java.nio.file.Path.of("src", "main", "resources", "static", "js", name));
+        } catch (java.io.IOException e) {
+            throw new AssertionError("cannot read static asset " + name, e);
+        }
+    }
+
+    // ---------- Section 11: retention purge is safe and never automatic ----------
+
+    @Test
+    @DisplayName("s11: nothing is purged until an admin enables, exports, confirms and gives a reason")
+    void retentionPurgeRefusesEveryUnsafeAttempt() {
+        Seller s = sellerWithStore("Ret");
+        User b = buyer();
+        users.save(b);
+        Order old = place(b, s.kitchen(), s.product(), "r1", 1);
+        Order oldDelivered = place(b, s.kitchen(), s.product(), "r2", 1);
+        orderService.updateDeliveryStatus(oldDelivered.getId(), DeliveryStatus.DELIVERED, s.user());
+        orders.save(ageTo(old, 30));            // both well past the default 5-day window
+        orders.save(ageTo(oldDelivered, 30));
+        User admin = admin();
+
+        // 1. Off is the safe default: with the purge disabled nothing can be
+        // deleted, whatever the request says. Set explicitly so the test does not
+        // depend on the order tests happen to run in.
+        retentionService.setPurgeEnabled(false);
+        assertThat(retentionService.purgeEnabled()).isFalse();
+        assertThatThrownBy(() -> adminService.purgeRetention(true, true, "cleanup", admin))
+                .isInstanceOf(IllegalStateException.class);
+
+        retentionService.setPurgeEnabled(true);
+
+        // 2. Not confirmed.  3. No reason.  4. Export not done.
+        assertThatThrownBy(() -> adminService.purgeRetention(false, true, "cleanup", admin))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("confirmed");
+        assertThatThrownBy(() -> adminService.purgeRetention(true, true, "  ", admin))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("reason");
+        assertThatThrownBy(() -> adminService.purgeRetention(true, false, "cleanup", admin))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Export");
+
+        // Every refused attempt left the data untouched.
+        assertThat(orders.findById(old.getId())).isPresent();
+        assertThat(orders.findById(oldDelivered.getId())).isPresent();
+    }
+
+    @Test
+    @DisplayName("s11: a fully authorised purge removes closed old orders and keeps aggregates")
+    void authorisedPurgeRemovesOnlyClosedOldOrders() {
+        Seller s = sellerWithStore("Ret2");
+        User b = buyer();
+        users.save(b);
+
+        Order oldDelivered = place(b, s.kitchen(), s.product(), "g1", 1);
+        orderService.updateDeliveryStatus(oldDelivered.getId(), DeliveryStatus.DELIVERED, s.user());
+        orders.save(ageTo(oldDelivered, 30));
+
+        Order recentDelivered = place(b, s.kitchen(), s.product(), "g2", 1);
+        orderService.updateDeliveryStatus(recentDelivered.getId(), DeliveryStatus.DELIVERED, s.user());
+
+        Order inFlight = place(b, s.kitchen(), s.product(), "g3", 1);
+        orders.save(ageTo(inFlight, 30)); // old, but still CONFIRMED and in flight
+
+        User admin = admin();
+        retentionService.setPurgeEnabled(true);
+
+        // The preview tells the admin exactly what will go, before they commit.
+        assertThat(((Number) adminService.retentionPreview().get("purgeCandidateCount")).intValue())
+                .isEqualTo(1);
+
+        Map<String, Object> result = adminService.purgeRetention(true, true, "retention window elapsed", admin);
+        assertThat(((Number) result.get("purgedOrderCount")).intValue()).isEqualTo(1);
+        assertThat(result).containsEntry("aggregatesRetained", true).containsEntry("auditTrailRetained", true);
+
+        assertThat(orders.findById(oldDelivered.getId())).isEmpty();
+        assertThat(orders.findById(recentDelivered.getId()))
+                .as("an order inside the window must survive").isPresent();
+        assertThat(orders.findById(inFlight.getId()))
+                .as("an old but still in-flight order must never be purged").isPresent();
+
+        // The purge is itself an auditable action (handover 14).
+        assertThat(adminService.auditLog(200)).extracting(a -> String.valueOf(a.get("action")))
+                .contains("RETENTION_PURGE");
+
+        // Re-running is a clean no-op.
+        assertThat(((Number) adminService.purgeRetention(true, true, "again", admin)
+                .get("purgedOrderCount")).intValue()).isZero();
+    }
+
+    /**
+     * Ages a row by re-reading it first.
+     *
+     * <p>The instance held by the test is DETACHED from the one
+     * {@code orderService} updated and committed, so saving the stale copy would
+     * silently overwrite the delivery state back to not-delivered and the row would
+     * (correctly) not be a purge candidate.</p>
+     */
+private Order ageTo(Order order, int daysAgo) {
+        Order managed = orders.findById(order.getId()).orElseThrow();
+        LocalDateTime past = LocalDateTime.now().minusDays(daysAgo);
+        managed.setCreatedAt(past);
+        managed.setUpdatedAt(past);
+        // Delivery is the TERMINAL event for a delivered order, so the retention
+        // clock legitimately runs from deliveredAt. Age it too.
+        if (managed.getDeliveredAt() != null) managed.setDeliveredAt(past);
+        return orders.saveAndFlush(managed);
     }
 }
