@@ -621,6 +621,35 @@ class AdminHandoverGapTest {
         return users.saveAndFlush(a);
     }
 
+    @Test
+    @DisplayName("s11: the retention screen cannot delete anything without the guards")
+    void retentionScreenIsGuarded() {
+        String source = readStaticJs("admin.js");
+        assertThat(source)
+                // The screen must show the server-calculated count, not a guess.
+                .contains("purgeCandidateCount")
+                // Arming the purge is a separate, deliberate action.
+                .contains("/api/admin/retention/purge-enabled")
+                .contains("/api/admin/retention/purge")
+                // Both guard inputs are required before the call is made.
+                .contains("retentionPurgeReason")
+                .contains("retentionPurgeExported")
+                .contains("A reason is required to purge")
+                .contains("exported the affected orders first")
+                // The button is disabled while the purge is off or nothing is due.
+                .contains("d.destructivePurgeEnabled && candidates > 0 ? '' : 'disabled'");
+    }
+
+    /** Reads a shipped static asset so the test asserts on the real source, not a copy. */
+    private static String readStaticJs(String name) {
+        try {
+            return java.nio.file.Files.readString(
+                    java.nio.file.Path.of("src", "main", "resources", "static", "js", name));
+        } catch (java.io.IOException e) {
+            throw new AssertionError("cannot read static asset " + name, e);
+        }
+    }
+
     // ---------- Section 11: retention purge is safe and never automatic ----------
 
     @Test

@@ -470,6 +470,44 @@ async function adminAction(action, t) {
                 await adminRender();
                 break;
             }
+            case 'retention-purge-toggle': {
+                var on = t.textContent.indexOf('Disable') === -1; // label shows the action
+                if (on && !window.confirm('Arm the destructive retention purge?\n\n'
+                    + 'It still deletes nothing by itself - every purge must be confirmed by hand.')) break;
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/retention/purge-enabled', { method: 'POST', body: { enabled: on } });
+                    toast(on ? 'Retention purge armed' : 'Retention purge disabled', 'success');
+                });
+                await adminRender();
+                break;
+            }
+            case 'retention-purge': {
+                var reasonField = $('#retentionPurgeReason');
+                var reason = reasonField ? reasonField.value.trim() : '';
+                var exported = ($('#retentionPurgeExported') || {}).checked === true;
+                if (!reason) { toast('A reason is required to purge', 'error'); break; }
+                if (!exported) { toast('Confirm you exported the affected orders first', 'error'); break; }
+                // The count quoted here is the one the SERVER calculated, so the
+                // confirmation cannot disagree with what actually happens.
+                var count = parseInt((t.textContent.match(/(\d+)/) || [])[1], 10);
+                if (!window.confirm('Permanently delete ' + count + ' closed order' + (count === 1 ? '' : 's')
+                    + ' older than the retention window?\n\n'
+                    + 'This cannot be undone. Aggregates and the audit trail are kept.')) break;
+                // Reconcile with the server on failure: if the purge was rejected, refresh so
+                // the screen shows the real candidate count rather than a stale
+                // "Purge N orders" button that no longer matches the server.
+                var purged = 0;
+                await adminRunOnce(t, async function () {
+                    var res = await api('/api/admin/retention/purge', {
+                        method: 'POST',
+                        body: { confirmed: true, exported: exported, reason: reason }
+                    });
+                    purged = res.purgedOrderCount || 0;
+                });
+                if (purged > 0) toast('Purged ' + purged + ' orders', 'success');
+                await adminRender();
+                break;
+            }
             case 'admin-audit-domain': {
                 A.auditDomain = t.dataset.value || '';
                 await adminRender();
@@ -1809,6 +1847,29 @@ async function adminRetentionView() {
         '</div>' +
         '<p class="muted tiny" style="margin:10px 0 0">Setting: <code>' + esc(d.settingKey || '') + '</code>' +
         (d.destructivePurgeEnabled === false ? ' · Destructive purge is DISABLED — rows are counted, never deleted.' : '') + '</p>' +
+        '</div>';
+
+    // Purge (handover 11). Deliberately behind a typed reason, an explicit
+    // "I exported first" tick and a confirmation quoting the SERVER's own count -
+    // so nothing is deleted without the operator seeing exactly what will go.
+    var candidates = d.purgeCandidateCount || 0;
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Purge closed orders</h3>' +
+        '<p class="muted tiny" style="margin:0 0 10px">' + esc(d.note || '') + '</p>' +
+        '<div class="flex gap-2 wrap">' +
+        '<div class="flex-1 min-140"><div class="muted small">Would be removed</div><div class="font-700 font-size-2">' + candidates + '</div></div>' +
+        '<div class="flex-1 min-140"><div class="muted small">Aggregates kept</div><div class="font-700 mt-1">' + (d.aggregatedOrderCount || 0) + '</div></div>' +
+        '<div class="flex-1 min-140"><div class="muted small">Purge status</div><div class="font-700 mt-1">' + (d.destructivePurgeEnabled ? 'Armed' : 'Disabled') + '</div></div>' +
+        '</div>' +
+        '<div class="flex gap-2 wrap" style="align-items:flex-end;margin-top:12px">' +
+        '<div><label class="form-label" for="retentionPurgeReason">Reason (required)</label>' +
+        '<input class="form-input" type="text" id="retentionPurgeReason" placeholder="Why is this being purged?" style="max-width:260px"></div>' +
+        '<button class="btn" type="button" data-action="retention-purge-toggle">' +
+        (d.destructivePurgeEnabled ? 'Disable purge' : 'Enable purge') + '</button>' +
+        '<button class="btn btn-danger" type="button" data-action="retention-purge" ' +
+        (d.destructivePurgeEnabled && candidates > 0 ? '' : 'disabled') + '>Purge ' + candidates + ' orders</button>' +
+        '</div>' +
+        '<label class="small muted mt-2" style="display:flex;gap:6px;align-items:center">' +
+        '<input type="checkbox" id="retentionPurgeExported"> I exported the affected orders first</label>' +
         '</div>';
 
     h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Change the window</h3>' +
