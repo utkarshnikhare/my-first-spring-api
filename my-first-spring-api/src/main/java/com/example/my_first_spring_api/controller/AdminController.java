@@ -324,6 +324,35 @@ public class AdminController {
                 body != null ? body.get("reason") : null, admin)));
     }
 
+    /** Handover 7.3: Block seller - account-level stop, reason mandatory. */
+    @PostMapping("/sellers/{id}/block")
+    public ResponseEntity<Map<String, Object>> blockSeller(@PathVariable Long id,
+                                                           @RequestBody(required = false) Map<String, String> body,
+                                                           HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.blockSeller(id,
+                body != null ? body.get("reason") : null, admin));
+    }
+
+    @PostMapping("/sellers/{id}/unblock")
+    public ResponseEntity<Map<String, Object>> unblockSeller(@PathVariable Long id,
+                                                             @RequestBody(required = false) Map<String, String> body,
+                                                             HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.unblockSeller(id,
+                body != null ? body.get("note") : null, admin));
+    }
+
+    /** Handover 7.2: internal support note on a seller. Never seller-visible. */
+    @PostMapping("/sellers/{id}/support-note")
+    public ResponseEntity<Map<String, Object>> sellerSupportNote(@PathVariable Long id,
+                                                                @RequestBody(required = false) Map<String, String> body,
+                                                                HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.saveSellerSupportNote(id,
+                body != null ? body.get("note") : null, admin));
+    }
+
     @PostMapping("/sellers/{id}/request-changes")
     public ResponseEntity<Map<String, Object>> requestChanges(@PathVariable Long id,
                                                               @RequestBody(required = false) Map<String, String> body,

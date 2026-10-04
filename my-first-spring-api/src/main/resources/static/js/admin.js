@@ -385,7 +385,12 @@ async function adminAction(action, t) {
                     pause: { title: 'Pause storefront ' + esc(t.dataset.name || ''), hint: 'Buyers stop seeing this storefront until it is resumed. Nothing is deleted.', label: 'Internal note (optional)', required: false, verb: 'Pause' },
                     removeStorefront: { title: 'Remove storefront ' + esc(t.dataset.name || ''), hint: 'The storefront is withdrawn from the buyer app. This is a serious step - the seller is NOT deleted.', label: 'Reason (shown to the seller)', required: true, verb: 'Remove storefront' },
                     block: { title: 'Block ' + esc(t.dataset.name || 'buyer'), hint: 'A blocked buyer cannot place orders. Existing orders are kept.', label: 'Reason (internal)', required: true, verb: 'Block' },
-                    note: { title: 'Support note - ' + esc(t.dataset.name || 'buyer'), hint: 'Internal only. Visible to Admins on this screen, never to the buyer.', label: 'Note', required: false, verb: 'Save note' }
+                    // Handover 7.3 lists "Block seller" as its own control, separate
+                    // from Suspend. The seller stops serving buyers until an Admin
+                    // unblocks them; orders and storefronts are kept.
+                    blockSeller: { title: 'Block ' + esc(t.dataset.name || 'seller'), hint: 'Their storefronts stop serving buyers immediately and they cannot operate until you unblock them. Existing orders and history are kept.', label: 'Reason (shown to the seller)', required: true, verb: 'Block seller' },
+                    note: { title: 'Support note - ' + esc(t.dataset.name || 'buyer'), hint: 'Internal only. Visible to Admins on this screen, never to the buyer.', label: 'Note', required: false, verb: 'Save note' },
+                    sellerNote: { title: 'Support note - ' + esc(t.dataset.name || 'seller'), hint: 'Internal only. Visible to Admins on this screen, never to the seller or a buyer.', label: 'Note', required: false, verb: 'Save note' }
                 }[mode];
                 if (!copy) { toast('Unknown action', 'error'); break; }
                 openModal(
@@ -418,12 +423,15 @@ async function adminAction(action, t) {
                     pause: 'Pause this storefront?\n\n' + (text ? 'Note: ' + text : 'No note given.'),
                     removeStorefront: 'Remove this storefront from the buyer app?\n\nReason: ' + text,
                     block: 'Block ' + rName + '?\n\nReason: ' + text,
+                    blockSeller: 'Block ' + rName + '?\n\nThey stop serving buyers until you unblock them. Existing orders are kept.\n\nReason: ' + text,
                     note: 'Save this support note for ' + rName + '?'
                 }[rMode];
                 if (!window.confirm(confirmCopy || ('Confirm ' + rMode + '?'))) break;
                 var calls = {
                     requestChanges: { url: '/api/admin/sellers/' + rId + '/request-changes', body: { reason: text }, done: 'Changes requested' },
                     suspend: { url: '/api/admin/sellers/' + rId + '/suspend', body: { reason: text }, done: 'Seller suspended' },
+                    blockSeller: { url: '/api/admin/sellers/' + rId + '/block', body: { reason: text }, done: 'Seller blocked' },
+                    sellerNote: { url: '/api/admin/sellers/' + rId + '/support-note', body: { note: text || null }, done: 'Support note saved' },
                     pause: { url: '/api/admin/storefronts/' + rId + '/pause', body: { note: text || null }, done: 'Storefront paused' },
                     removeStorefront: { url: '/api/admin/storefronts/' + rId + '/remove', body: { reason: text }, done: 'Storefront removed' },
                     block: { url: '/api/admin/buyers/' + rId + '/block', body: { reason: text }, done: 'Buyer blocked' },
@@ -433,6 +441,17 @@ async function adminAction(action, t) {
                 await adminRunOnce(t, async function () {
                     await api(calls.url, { method: 'POST', body: calls.body });
                     toast(calls.done, 'success');
+                });
+                await adminRender();
+                break;
+            }
+            case 'seller-unblock': {
+                var suId = Number(t.dataset.id);
+                if (!window.confirm('Unblock ' + (t.dataset.name || 'this seller')
+                    + '?\n\nThey serve buyers again, and the suspension from the block is lifted.')) break;
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/sellers/' + suId + '/unblock', { method: 'POST' });
+                    toast('Seller unblocked', 'success');
                 });
                 await adminRender();
                 break;
@@ -1927,6 +1946,21 @@ async function adminSellerDetailView() {
     }
     h += '<button class="btn btn-outline" type="button" data-action="open-reject" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Reject</button>' +
         '</div></div>';
+
+    // Account control (handover 7.3): Block / Unblock seller, plus the internal
+    // support note (7.2). Shown regardless of approval status, because a blocked
+    // account is a separate fact from the approval state.
+    h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Account</h3><div class="admin-actions">' +
+        '<span class="pill pill-' + (d.accountStatus === 'BLOCKED' ? 'red' : 'green') + '">' +
+        esc(d.accountStatus || 'ACTIVE') + '</span>' +
+        (d.blockedReason ? '<span class="sr-reason">' + esc(d.blockedReason) + '</span>' : '') +
+        (d.accountStatus === 'BLOCKED'
+            ? '<button class="btn btn-success btn-sm" type="button" data-action="seller-unblock" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Unblock seller</button>'
+            : '<button class="btn btn-danger btn-sm" type="button" data-action="open-admin-reason" data-mode="blockSeller" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Block seller</button>') +
+        '<button class="btn btn-outline btn-sm" type="button" data-action="open-admin-reason" data-mode="sellerNote" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">' + (d.supportNote ? 'Edit support note' : 'Add support note') + '</button>' +
+        '</div>' +
+        (d.supportNote ? '<div class="sr-reason mt-2">Note: ' + esc(d.supportNote) + '</div>' : '') +
+        '</div>';
 
     h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Recorded activity</h3>' +
         '<div class="flex gap-2 wrap">' +

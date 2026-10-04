@@ -42,6 +42,7 @@ class AdminHandoverGapTest {
     @Autowired private OrderService orderService;
     @Autowired private AnalyticsEventRepository analyticsEventRepo;
     @Autowired private RetentionService retentionService;
+    @Autowired private com.example.my_first_spring_api.service.KitchenService kitchenService;
 
     private static int seq = 0;
     private final String sfx = "gap" + (seq++);
@@ -638,6 +639,136 @@ class AdminHandoverGapTest {
                 .contains("exported the affected orders first")
                 // The button is disabled while the purge is off or nothing is due.
                 .contains("d.destructivePurgeEnabled && candidates > 0 ? '' : 'disabled'");
+    }
+
+    // ---------- Section 7.2 / 7.3: block seller + support notes ----------
+
+    @Test
+    @DisplayName("s7.3: blocking a seller stops their storefronts without destroying history")
+    void blockingASellerStopsStorefrontsButKeepsHistory() {
+        Seller s = sellerWithStore("Blk");
+        User b = buyer();
+        users.save(b);
+        Order placed = place(b, s.kitchen(), s.product(), "blk1", 1);
+        User admin = admin();
+
+        // Asserted through the REAL buyer-facing path (KitchenService), not the
+        // predicate directly: that proves a blocked seller's storefront is
+        // genuinely unreachable by a buyer, using the existing
+        // KitchenVisibility gate rather than a second mechanism.
+        User shopper = buyer();
+        users.save(shopper);
+        Long kitchenId = s.kitchen().getId();
+        assertThat(kitchenService.getKitchenDetailById(kitchenId, shopper))
+                .as("precondition: an approved seller's storefront is reachable").isNotNull();
+
+        Map<String, Object> state = adminService.blockSeller(s.user().getId(), "repeated complaints", admin);
+
+        assertThat(state).containsEntry("accountStatus", "BLOCKED").containsEntry("blocked", true);
+        assertThat(state.get("blockedReason")).isEqualTo("repeated complaints");
+
+        User stored = users.findById(s.user().getId()).orElseThrow();
+        assertThat(stored.isBlocked()).isTrue();
+        // The approval gate is what KitchenVisibility already reads, so this is
+        // the EXISTING enforcement path - no second mechanism invented.
+        assertThat(stored.getSellerApprovalStatus())
+                .isEqualTo(com.example.my_first_spring_api.model.SellerApprovalStatus.SUSPENDED);
+        assertThatThrownBy(() -> kitchenService.getKitchenDetailById(kitchenId, shopper))
+                .as("a blocked seller's storefront must not be reachable by a buyer")
+                .isInstanceOf(com.example.my_first_spring_api.exception.KitchenNotEligibleException.class);
+
+        // History survives: the order and its references are untouched.
+        assertThat(orders.findById(placed.getId()))
+                .as("blocking a seller must never remove historical orders").isPresent();
+
+        // Reason mandatory, and the action is audited.
+        assertThatThrownBy(() -> adminService.blockSeller(s.user().getId(), "  ", admin))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("reason");
+        assertThat(adminService.auditLog(300)).extracting(a -> String.valueOf(a.get("action")))
+                .contains("SELLER_BLOCKED");
+    }
+
+    @Test
+    @DisplayName("s7.3: unblocking restores a suspended seller but never approves a pending one")
+    void unblockRestoresOnlyASuspendedSeller() {
+        User admin = admin();
+
+        Seller suspended = sellerWithStore("UnbA");
+        adminService.blockSeller(suspended.user().getId(), "misuse", admin);
+        Map<String, Object> restored = adminService.unblockSeller(suspended.user().getId(), "resolved", admin);
+
+        assertThat(restored).containsEntry("accountStatus", "ACTIVE").containsEntry("blocked", false);
+        assertThat(users.findById(suspended.user().getId()).orElseThrow().getSellerApprovalStatus())
+                .isEqualTo(com.example.my_first_spring_api.model.SellerApprovalStatus.APPROVED);
+
+        // A PENDING seller must stay pending - unblock must never silently approve
+        // an application the Admin never accepted.
+        Seller pending = sellerWithStore("UnbB");
+        pending.user().setSellerApprovalStatus(
+                com.example.my_first_spring_api.model.SellerApprovalStatus.PENDING);
+        users.save(pending.user());
+        adminService.unblockSeller(pending.user().getId(), null, admin);
+        assertThat(users.findById(pending.user().getId()).orElseThrow().getSellerApprovalStatus())
+                .isEqualTo(com.example.my_first_spring_api.model.SellerApprovalStatus.PENDING);
+
+        assertThat(adminService.auditLog(300)).extracting(a -> String.valueOf(a.get("action")))
+                .contains("SELLER_UNBLOCKED");
+    }
+
+    @Test
+    @DisplayName("s7.2: seller support notes are internal, shown in detail, and drive attention")
+    void sellerSupportNotesAreInternalAndSurfaceInAttention() {
+        Seller s = sellerWithStore("Note");
+        User admin = admin();
+        User buyer = buyer();
+        users.save(buyer);
+
+        assertThat(adminService.attentionItems())
+                .as("nothing is flagged before an Admin writes a note")
+                .extracting(i -> String.valueOf(i.get("label")))
+                .doesNotContain("Accounts with an unresolved support note");
+
+        adminService.saveSellerSupportNote(s.user().getId(), "called twice about a missing item", admin);
+        adminService.saveBuyerSupportNote(buyer.getId(), "buyer disputes a delivery", admin);
+
+        // Support note is present on the seller detail (handover 7.2).
+        assertThat(adminService.sellerDetail(s.user().getId()))
+                .containsEntry("supportNote", "called twice about a missing item");
+
+        // And an open case shows up in Attention (handover 13).
+        Map<String, Object> flag = adminService.attentionItems().stream()
+                .filter(i -> "Accounts with an unresolved support note".equals(i.get("label")))
+                .findFirst().orElseThrow(() -> new AssertionError("no unresolved-support attention item"));
+        assertThat(((Number) flag.get("count")).intValue()).isEqualTo(2);
+        assertThat(flag.get("hash"))
+                .as("every attention item links to the screen that resolves it").isNotNull();
+
+        // Clearing the note closes the case.
+        adminService.saveSellerSupportNote(s.user().getId(), null, admin);
+        adminService.saveBuyerSupportNote(buyer.getId(), null, admin);
+        assertThat(adminService.attentionItems())
+                .extracting(i -> String.valueOf(i.get("label")))
+                .doesNotContain("Accounts with an unresolved support note");
+    }
+
+    @Test
+    @DisplayName("s7.3: the seller screen exposes block/unblock and the support note")
+    void sellerScreenExposesBlockAndSupportNote() {
+        String source = readStaticJs("admin.js");
+        assertThat(source)
+                // Both controls are reachable from the seller detail screen...
+                .contains("data-mode=\"blockSeller\"")
+                .contains("data-mode=\"sellerNote\"")
+                .contains("data-action=\"seller-unblock\"")
+                // ...and both are wired to the new endpoints, not just rendered.
+                .contains("'/api/admin/sellers/' + rId + '/block'")
+                .contains("'/api/admin/sellers/' + suId + '/unblock'")
+                .contains("'/api/admin/sellers/' + rId + '/support-note'")
+                // Blocking is a high-impact action: reason required + confirmation that
+                // says the seller stops serving and keeps their orders.
+                .contains("blockSeller: { title:")
+                .contains("required: true, verb: 'Block seller'")
+                .contains("They stop serving buyers until you unblock them. Existing orders are kept.");
     }
 
     /** Reads a shipped static asset so the test asserts on the real source, not a copy. */

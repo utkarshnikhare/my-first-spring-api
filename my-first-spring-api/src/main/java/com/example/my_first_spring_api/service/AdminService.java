@@ -1138,6 +1138,18 @@ public class AdminService {
         if (blockedBuyers > 0) {
             items.add(attention("Blocked buyers", blockedBuyers, "#/buyers"));
         }
+        // Handover 13 also requires "unresolved support flags / complaints".
+        // The internal support note IS the flag in this model, so an account that
+        // still carries one is an open case someone has to close. Counted across
+        // buyers and sellers, and linked to the screen where the note is read and
+        // cleared - no invented alert, just the notes the Admin has actually written.
+        long openSupportCases = userRepository.findByRole(UserRole.BUYER).stream()
+                .filter(u -> trimToNull(u.getSupportNote()) != null).count()
+                + userRepository.findByRole(UserRole.SELLER).stream()
+                .filter(u -> trimToNull(u.getSupportNote()) != null).count();
+        if (openSupportCases > 0) {
+            items.add(attention("Accounts with an unresolved support note", openSupportCases, "#/buyers"));
+        }
         long awaiting = countOrders(OrderStatus.ORDERED);
         if (awaiting > 0) items.add(attention("Orders not yet confirmed by sellers", awaiting, "#/orders"));
         long unpaid = countOrders(PaymentStatus.PENDING) + countOrders(PaymentStatus.WILL_PAY_LATER);
@@ -1580,6 +1592,117 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
         return saved;
     }
 
+    /**
+     * Handover 7.3 seller control: <strong>Block seller</strong>.
+     *
+     * <p>The handover lists "Suspend seller" and "Block seller" as separate
+     * controls, so this is not an alias for {@link #suspendSeller}: suspend is an
+     * approval-state decision an Admin can lift, while block is an account-level
+     * stop with a mandatory reason.</p>
+     *
+     * <p>Blocking sets BOTH the account flag and the approval state. That is
+     * deliberate: the approval state is what the existing
+     * {@link KitchenVisibility} gate already reads, so the seller's storefronts
+     * leave buyer discovery immediately - "seller cannot operate until Admin
+     * restores access" - without inventing a second enforcement mechanism. The
+     * reason is also written to {@code sellerStatusReason}, which
+     * {@code /api/auth/me} already returns, so the seller sees an understandable
+     * status instead of a silent failure.</p>
+     *
+     * <p>Nothing historical is touched: orders, storefronts, offerings and the
+     * audit trail are all left intact, so a later unblock restores the seller with
+     * their history rather than rebuilding them from scratch.</p>
+     */
+    @Transactional
+    public Map<String, Object> blockSeller(Long sellerId, String reason, User actingAdmin) {
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("A reason is required when blocking a seller.");
+        }
+        User seller = requireSeller(sellerId);
+        requireSellerAccess(seller, actingAdmin); // handover 15 Area boundary
+        boolean wasBlocked = seller.isBlocked();
+        SellerApprovalStatus from = seller.getSellerApprovalStatus();
+
+        seller.setBlocked(true);
+        seller.setBlockedReason(reason.trim());
+        seller.setBlockedAt(LocalDateTime.now());
+        seller.setSellerApprovalStatus(SellerApprovalStatus.SUSPENDED);
+        seller.setSellerStatusReason(reason.trim());
+        userRepository.save(seller);
+        // Recorded as an approval/status change too: handover 6 requires the
+        // seller approval/status change to be captured as an event.
+        analyticsService.record(AnalyticsService.EV_SELLER_APPROVED, seller.getId(),
+                seller.getMobileNumber(), null, "blocked by " + actingAdmin.getMobileNumber());
+        auditService.record(AdminAuditService.SELLER_BLOCKED, actingAdmin, "SELLER",
+                seller.getId(), seller.getName(),
+                wasBlocked ? "BLOCKED" : String.valueOf(from), "BLOCKED", reason.trim());
+        return sellerAccountState(seller);
+    }
+
+    /**
+     * Handover 7.3: restores a blocked seller.
+     *
+     * <p>The approval state is only reset back to APPROVED when it is currently
+     * SUSPENDED. A seller who is PENDING, REJECTED or CHANGES_REQUESTED is left
+     * exactly as they are, so unblocking can never quietly approve an application
+     * the Admin never accepted.</p>
+     */
+    @Transactional
+    public Map<String, Object> unblockSeller(Long sellerId, String note, User actingAdmin) {
+        User seller = requireSeller(sellerId);
+        requireSellerAccess(seller, actingAdmin); // handover 15 Area boundary
+        boolean wasBlocked = seller.isBlocked();
+        SellerApprovalStatus from = seller.getSellerApprovalStatus();
+
+        seller.setBlocked(false);
+        seller.setBlockedAt(null);
+        if (seller.getSellerApprovalStatus() == SellerApprovalStatus.SUSPENDED) {
+            seller.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
+            seller.setSellerStatusReason(null);
+        }
+        userRepository.save(seller);
+        auditService.record(AdminAuditService.SELLER_UNBLOCKED, actingAdmin, "SELLER",
+                seller.getId(), seller.getName(),
+                wasBlocked ? "BLOCKED" : String.valueOf(from),
+                String.valueOf(seller.getSellerApprovalStatus()), trimToNull(note));
+        return sellerAccountState(seller);
+    }
+
+    /**
+     * Handover 7.2: an internal support note on a seller.
+     *
+     * <p>Internal only - it is never returned to the seller or the buyer. The
+     * audit action is {@code ORDER_CORRECTED}, the same generic
+     * "manual operational correction" channel already used for buyer support
+     * notes, so no new audit vocabulary is invented for the same idea.</p>
+     */
+    @Transactional
+    public Map<String, Object> saveSellerSupportNote(Long sellerId, String note, User actingAdmin) {
+        User seller = requireSeller(sellerId);
+        requireSellerAccess(seller, actingAdmin);
+        seller.setSupportNote(trimToNull(note));
+        userRepository.save(seller);
+        auditService.record(AdminAuditService.ORDER_CORRECTED, actingAdmin, "SELLER",
+                seller.getId(), seller.getName(), null, "SUPPORT_NOTE_SAVED", trimToNull(note));
+        return sellerAccountState(seller);
+    }
+
+    /** Account-status read model for a seller, mirroring the buyer one exactly. */
+    private Map<String, Object> sellerAccountState(User seller) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", seller.getId());
+        m.put("name", seller.getName());
+        m.put("mobileNumber", seller.getMobileNumber());
+        m.put("accountStatus", seller.isBlocked() ? "BLOCKED" : "ACTIVE");
+        m.put("blocked", seller.isBlocked());
+        m.put("blockedReason", seller.getBlockedReason());
+        m.put("blockedAt", seller.getBlockedAt());
+        m.put("sellerApprovalStatus", seller.getSellerApprovalStatus());
+        m.put("statusReason", seller.getSellerStatusReason());
+        m.put("supportNote", seller.getSupportNote());
+        return m;
+    }
+
     private User requireSeller(Long sellerId) {
         User user = userRepository.findById(sellerId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + sellerId));
@@ -2020,6 +2143,14 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
         m.put("averageOrderValue", orders.isEmpty() ? BigDecimal.ZERO
                 : value.divide(BigDecimal.valueOf(orders.size()), 2, java.math.RoundingMode.HALF_UP));
         m.put("recentOrders", orders.stream().limit(20).map(this::adminOrderRow).toList());
+        // Handover 7.2: the seller detail must carry support notes and the account
+        // status, so an Admin can see why a seller is blocked without leaving the
+        // screen. Both are internal-only fields.
+        m.put("supportNote", seller.getSupportNote());
+        m.put("accountStatus", seller.isBlocked() ? "BLOCKED" : "ACTIVE");
+        m.put("blocked", seller.isBlocked());
+        m.put("blockedReason", seller.getBlockedReason());
+        m.put("blockedAt", seller.getBlockedAt());
         m.put("auditHistory", auditService.forTarget("SELLER", sellerId));
         return m;
     }
