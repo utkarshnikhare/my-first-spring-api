@@ -572,8 +572,13 @@ public class OrderService {
      * and of other kitchens are never loaded.</p>
      */
     public DeliveryProgressDto markAllOfferingOrdersDelivered(Long productId, LocalDate date, User seller) {
-        requireOwnedProduct(productId, seller);
-        Kitchen kitchen = requireOwnedKitchen(seller);
+        // The kitchen is derived from the OFFERING the seller opened, never from
+        // "the seller's first kitchen". A seller may own several storefronts
+        // (e.g. a Kitchen and a Homemade one); resolving to kitchens.get(0)
+        // silently scoped progress and the bulk write to the wrong storefront,
+        // so the second storefront's offering always reported 0 active orders
+        // and "Mark All Delivered" did nothing at all.
+        Kitchen kitchen = requireOwnedProduct(productId, seller).getKitchen();
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime start = date.atStartOfDay();
         LocalDateTime end = date.plusDays(1).atStartOfDay();
@@ -621,8 +626,10 @@ public class OrderService {
      */
     @Transactional(readOnly = true)
     public DeliveryProgressDto getDeliveryProgress(Long productId, LocalDate date, User seller) {
-        requireOwnedProduct(productId, seller);
-        Kitchen kitchen = requireOwnedKitchen(seller);
+        // Same offering-derived kitchen resolution as the bulk write, so the
+        // progress the seller reads and the rows the bulk action changes are
+        // always computed over the same storefront.
+        Kitchen kitchen = requireOwnedProduct(productId, seller).getKitchen();
         return computeDeliveryProgress(productId, date, kitchen, date.atStartOfDay(), date.plusDays(1).atStartOfDay());
     }
 
@@ -674,11 +681,16 @@ public class OrderService {
                 && kitchen.getSeller().getId().equals(seller.getId());
     }
 
-    private Kitchen requireOwnedKitchen(User seller) {
-        List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
-        if (kitchens.isEmpty()) throw new KitchenNotFoundException((Long) null);
-        return kitchens.get(0);
-    }
+    /*
+     * Deliberately absent: a "first kitchen of the seller" lookup.
+     *
+     * A seller may own several storefronts, so "the seller's kitchen" is not a
+     * well-defined value. Delivery scope is always resolved from the OFFERING the
+     * seller opened (see requireOwnedProduct), which is both unambiguous and
+     * ownership-checked. Returning kitchens.get(0) silently pointed the Kitchen
+     * and Homemade storefronts of one seller at each other's orders, so the
+     * second storefront reported 0 deliveries and Mark All Delivered did nothing.
+     */
 
     @Transactional(readOnly = true)
     public List<SellerOrderSummaryRowDto> getSellerOrders(User seller) {

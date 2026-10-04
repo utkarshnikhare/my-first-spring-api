@@ -579,11 +579,16 @@ public class SellerAppService {
     @Transactional(readOnly = true)
     public OrderItemDetailDto getOrderItemDetail(User seller, Long productId, LocalDate date,
                                                     String society, String status, String delivery) {
-        Kitchen kitchen = getOwnedKitchen(seller);
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
         if (!product.getKitchen().getSeller().getId().equals(seller.getId()))
             throw new SellerNotAuthorizedException("Not your product");
+        // Orders are read from the OFFERING's own storefront. Resolving "the
+        // seller's first kitchen" instead made this screen belong to the wrong
+        // storefront whenever a seller owned more than one, so the rows for the
+        // opened offering came back empty (and the delivery filter had nothing
+        // to filter). Ownership is still proven by the check above.
+        Kitchen kitchen = product.getKitchen();
 
         LocalDateTime start = date.atStartOfDay();
         LocalDateTime end = date.plusDays(1).atStartOfDay();
