@@ -882,30 +882,96 @@ async function sellerEditOfferingView() {
     return h;
 }
 
+/**
+ * Loading skeleton for the Orders screen (Screen 7A).
+ *
+ * <p>Painted by {@link sellerOrdersView} before its request resolves - the same
+ * pattern the Seller Dashboard uses - so a slow connection never shows a blank
+ * page. It is purely presentational: no figure is invented, every block is an
+ * empty shell that the real /api/seller-app/orders/summary payload replaces.
+ */
+function soSkeletonHtml() {
+    function card() {
+        return '<div class="sd-skel-card"><div class="sd-skel sd-skel--thumb"></div><div class="sd-skel-lines">'
+            + '<div class="sd-skel sd-skel--line w60"></div><div class="sd-skel sd-skel--line w90"></div>'
+            + '<div class="sd-skel sd-skel--line w40"></div></div></div>';
+    }
+    return '<div class="sd-root so-root" role="status" aria-busy="true" aria-label="Loading orders">'
+        + '<div class="sd-skel so-skel-summary"></div>'
+        + '<div class="sd-skel sd-skel--line w40"></div>'
+        + card() + card() + card()
+        + '</div>';
+}
+
 // SCREEN 7A: ORDER SUMMARY
 async function sellerOrdersView() {
-    var h = '<div class="view-enter"><div class="page-head"><h1>Orders</h1></div>';
-    h += '<div class="date-tabs"><button class="date-tab' + (S.selectedDate === 'today' ? ' active' : '') + '" data-action="set-date" data-date="today">Today</button><button class="date-tab' + (S.selectedDate === 'tomorrow' ? ' active' : '') + '" data-action="set-date" data-date="tomorrow">Tomorrow</button><button class="date-tab' + (S.selectedDate !== 'today' && S.selectedDate !== 'tomorrow' ? ' active' : '') + '" data-action="set-date" data-date="pick">Pick date</button></div>';
+    // Paint a content-shaped skeleton immediately so a slow payload never shows
+    // a blank screen; sellerRender replaces it with the real markup when we
+    // return. Purely presentational - every figure still comes from the API.
+    var live = viewEl();
+    if (live) live.innerHTML = soSkeletonHtml();
+    // The RESOLVED date drives both the request and every label: the third tab
+    // can hold a picked ISO date, so labels come from sellerDate() rather than
+    // from the tab key alone.
+    var selDate = sellerDate(S.selectedDate);
+    var isToday = selDate === sellerDate('today');
+    var isTomorrow = !isToday && selDate === sellerDate('tomorrow');
+    var dayLabel = isToday ? 'Today' : isTomorrow ? 'Tomorrow' : prettyDate(selDate);
+    var listTitle = isToday ? 'Today\u2019s Orders' : isTomorrow ? 'Tomorrow\u2019s Orders' : prettyDate(selDate);
+    var h = '<div class="view-enter sd-root so-root">';
+    h += '<header class="so-head"><h1 class="so-title">Orders</h1></header>';
+    h += '<div class="date-tabs so-tabs" role="group" aria-label="Orders by day">'
+        + '<button class="date-tab' + (S.selectedDate === 'today' ? ' active' : '') + '" type="button" data-action="set-date" data-date="today" aria-pressed="' + (S.selectedDate === 'today') + '">Today</button>'
+        + '<button class="date-tab' + (S.selectedDate === 'tomorrow' ? ' active' : '') + '" type="button" data-action="set-date" data-date="tomorrow" aria-pressed="' + (S.selectedDate === 'tomorrow') + '">Tomorrow</button>'
+        + '<button class="date-tab' + (S.selectedDate !== 'today' && S.selectedDate !== 'tomorrow' ? ' active' : '') + '" type="button" data-action="set-date" data-date="pick" aria-pressed="' + (S.selectedDate !== 'today' && S.selectedDate !== 'tomorrow') + '">Pick date</button>'
+        + '</div>';
     try {
-        var summary = await sellerApi('/api/seller-app/orders/summary?date=' + sellerDate(S.selectedDate));
+        var summary = await sellerApi('/api/seller-app/orders/summary?date=' + selDate);
         var hasOrders = summary.totalOrderCount > 0;
         if (hasOrders) {
-            h += '<div class="daily-total-card"><div class="dtc-number">' + summary.totalOrderCount + '</div><div class="dtc-label">Total Orders</div>';
-            h += '<div class="dtc-badges"><span class="dtc-badge green">✓ ' + summary.paidCount + ' Paid</span><span class="dtc-badge orange">⏳ ' + summary.pendingCount + ' Pending</span><span class="dtc-badge red">✕ ' + summary.cancelledCount + ' Cancelled</span></div>';
+            // Summary card: eyebrow day, big real count, then the three real
+            // status counts. Nothing here is sample data from the mockup.
+            h += '<section class="daily-total-card so-summary" aria-label="Orders summary">';
+            h += '<div class="dtc-eyebrow">' + esc(dayLabel) + '</div>';
+            h += '<div class="dtc-headline"><span class="dtc-number">' + summary.totalOrderCount + '</span>'
+                + '<span class="dtc-label">Total Orders</span></div>';
+            h += '<div class="dtc-badges">'
+                + '<span class="dtc-badge green"><span class="dtc-dot" aria-hidden="true"></span>' + summary.paidCount + ' Paid</span>'
+                + '<span class="dtc-badge orange"><span class="dtc-dot" aria-hidden="true"></span>' + summary.pendingCount + ' Pending</span>'
+                + '<span class="dtc-badge red"><span class="dtc-dot" aria-hidden="true"></span>' + summary.cancelledCount + ' Cancelled</span>'
+                + '</div>';
             if (summary.totalRevenue) h += '<div class="tiny muted mt-2">Revenue: <strong class="text-brand">' + money(summary.totalRevenue) + '</strong></div>';
-            h += '</div>';
+            h += '</section>';
         } else {
             h += emptyHtml('📋', 'No Orders', 'No orders yet. New orders will appear here.');
         }
         if (!summary.products || summary.products.length === 0) {
             if (hasOrders) h += emptyHtml('📋', 'No order items', 'No order items exist for this date.');
         } else {
+            h += '<h2 class="so-section">' + esc(listTitle) + '</h2>';
+            h += '<div class="so-list">';
             summary.products.forEach(function (p) {
-                h += '<div class="order-product-card"><div class="opc-header"><span class="opc-name">' + esc(p.productName) + '</span><span class="opc-revenue">' + money(p.revenue) + '</span></div>';
-                h += '<div class="opc-meta">' + p.totalOrders + ' orders · ' + p.totalPlates + ' plates</div>';
-                h += '<div class="opc-meta"><span class="dot-green">●</span> ' + p.paidCount + ' paid · <span class="dot-orange">●</span> ' + p.pendingCount + ' pending</div>';
-                 h += '<a class="btn btn-secondary btn-sm btn-block btn-mt-sm" href="#/order-detail/' + p.productId + '">View Orders</a></div>';
+                var img = p.imageUrl || '';
+                h += '<article class="order-product-card">';
+                h += '<div class="opc-header">';
+                h += '<span class="opc-thumb">'
+                    + (img ? '<img src="' + esc(img) + '" alt="" data-emoji="' + foodEmoji(p.productName) + '" onerror="imgFallback(this)">' : foodEmoji(p.productName))
+                    + '</span>';
+                h += '<span class="opc-body"><span class="opc-name">' + esc(p.productName) + '</span>'
+                    + '<span class="opc-meta">' + p.totalOrders + ' orders · ' + p.totalPlates + ' plates</span></span>';
+                h += '<span class="opc-revenue">' + money(p.revenue) + '</span>';
+                h += '</div>';
+                h += '<div class="opc-foot">'
+                    + '<span class="opc-meta"><span class="dot-green">●</span> ' + p.paidCount + ' paid · <span class="dot-orange">●</span> ' + p.pendingCount + ' pending</span>'
+                    + '<a class="opc-link" href="#/order-detail/' + p.productId + '">View Orders <span aria-hidden="true">→</span></a>'
+                    + '</div>';
+                h += '</article>';
             });
+            h += '</div>';
+            // The mockup's closing pill. It points at the existing full-history
+            // route the Earnings screen already links to - no new screen and no
+            // new endpoint were created for it.
+            h += '<div class="so-foot"><a class="so-history" href="#/my-offerings">View full history</a></div>';
         }
     } catch (e) { h += emptyHtml('⚠️', 'Could not load orders', e.message); }
     h += '</div>';

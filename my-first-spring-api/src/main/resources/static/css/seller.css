@@ -2217,3 +2217,276 @@ html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #3321
     overflow: hidden; clip: rect(0, 0, 0, 0);
     white-space: nowrap; border: 0;
 }
+
+/* ============================================================
+   SELLER ORDERS (SCREEN 7A) — approved "Order Summary" mockup.
+
+   Every rule is scoped to `.so-root`, and that class is only ever rendered
+   together with `.sd-root`, so the screen reuses the shared warm-orange
+   design tokens (light AND dark) without restyling any other Seller screen.
+   The base `.date-tab*`, `.dtc-*` and `.order-product-card` rules above stay
+   untouched because `.dtc-badges` / `.dtc-badge` are also used by the
+   per-offering drill-down, which is deliberately left exactly as it was.
+   ============================================================ */
+
+.so-root {
+    /* Layout comes from .sd-root (column + gap + overflow-x clip); only this
+       screen's own spacing is adjusted here. */
+    gap: 14px;
+    padding-top: 4px;
+}
+
+/* ---------- Header ---------- */
+
+.so-head { padding: 4px 2px 0; }
+.so-title {
+    margin: 0;
+    font-size: 1.45rem;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: var(--sd-text);
+}
+
+/* ---------- Date tabs (the screen's existing filter, restyled only) ---------- */
+
+.so-root .date-tabs { margin-bottom: 0; gap: 8px; }
+.so-root .date-tab {
+    min-height: 40px;
+    padding: 9px 16px;
+    border: 1px solid var(--sd-border);
+    border-radius: 999px;
+    background: var(--sd-card);
+    color: var(--sd-muted);
+    font-size: .84rem;
+    font-weight: 700;
+}
+@media (hover: hover) {
+    .so-root .date-tab:hover { transform: none; border-color: var(--sd-orange); color: var(--sd-orange); }
+}
+.so-root .date-tab:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+.so-root .date-tab.active {
+    border-color: var(--sd-orange);
+    background: var(--sd-orange);
+    color: #fff;
+    box-shadow: 0 4px 10px rgba(198, 79, 0, .22);
+}
+
+/* ---------- Summary card ---------- */
+
+.so-root .daily-total-card {
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 0;
+    padding: 18px 18px 16px;
+    text-align: left;
+    border: 1px solid var(--sd-border);
+    border-radius: 20px;
+    background: var(--sd-card);
+    box-shadow: var(--sd-shadow);
+}
+/* The faint corner arc from the mockup, kept behind the content. */
+.so-root .daily-total-card::after {
+    content: "";
+    position: absolute;
+    top: -42px; right: -42px;
+    width: 124px; height: 124px;
+    border-radius: 50%;
+    background: var(--sd-orange-soft);
+    opacity: .8;
+    pointer-events: none;
+}
+.so-root .daily-total-card > * { position: relative; z-index: 1; }
+
+.so-root .dtc-eyebrow {
+    font-size: .7rem;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--sd-muted);
+}
+.so-root .daily-total-card .dtc-headline {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+    margin-top: 2px;
+}
+.so-root .daily-total-card .dtc-number {
+    font-size: 2.6rem;
+    line-height: 1.05;
+    color: var(--sd-orange);
+}
+.so-root .daily-total-card .dtc-label {
+    margin-bottom: 0;
+    font-size: .95rem;
+    font-weight: 700;
+}
+.so-root .dtc-badges { justify-content: flex-start; gap: 8px 16px; margin-top: 12px; }
+.so-root .dtc-badge,
+.so-root .dtc-badge.green,
+.so-root .dtc-badge.orange,
+.so-root .dtc-badge.red {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    background: none;
+    font-size: .84rem;
+    font-weight: 700;
+    color: var(--sd-text);
+}
+.so-root .dtc-dot { width: 9px; height: 9px; flex: 0 0 9px; border-radius: 50%; }
+.so-root .dtc-badge.green  .dtc-dot { background: var(--green); }
+.so-root .dtc-badge.orange .dtc-dot { background: var(--amber); }
+.so-root .dtc-badge.red    .dtc-dot { background: var(--danger); }
+
+/* ---------- Section heading ---------- */
+
+.so-root .so-section {
+    margin: 4px 0 0;
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: -.01em;
+    color: var(--sd-text);
+}
+
+/* ---------- Order (offering) cards ---------- */
+
+.so-list { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.so-root .order-product-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius);
+    background: var(--sd-card);
+    box-shadow: var(--sd-shadow);
+}
+.so-root .order-product-card .opc-header {
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 0;
+}
+.so-root .opc-thumb {
+    display: grid;
+    place-items: center;
+    flex: 0 0 46px;
+    width: 46px; height: 46px;
+    border-radius: 14px;
+    background: var(--sd-orange-soft);
+    font-size: 1.3rem;
+    overflow: hidden;
+}
+.so-root .opc-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.so-root .opc-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.so-root .order-product-card .opc-name {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--sd-text);
+}
+.so-root .order-product-card .opc-meta { color: var(--sd-muted); }
+.so-root .order-product-card .opc-revenue {
+    margin-left: auto;
+    max-width: 46%;
+    text-align: right;
+    font-size: 1.02rem;
+    font-weight: 800;
+    color: var(--sd-orange);
+}
+.so-root .opc-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--sd-border);
+    min-width: 0;
+}
+.so-root .opc-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 2px;
+    margin-left: auto;
+    color: var(--sd-orange);
+    font-size: .88rem;
+    font-weight: 800;
+    text-decoration: none;
+    white-space: nowrap;
+}
+@media (hover: hover) {
+    .so-root .opc-link:hover { color: var(--sd-orange-deep); text-decoration: underline; }
+}
+.so-root .opc-link:focus-visible {
+    outline: 2px solid var(--sd-orange);
+    outline-offset: 3px;
+    border-radius: 6px;
+    color: var(--sd-orange-deep);
+}
+
+/* ---------- Closing pill ---------- */
+
+.so-foot { display: flex; justify-content: center; }
+.so-history {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 24px;
+    border: 1px solid var(--sd-border);
+    border-radius: 999px;
+    background: var(--sd-card);
+    color: var(--sd-text);
+    font-size: .9rem;
+    font-weight: 700;
+    text-decoration: none;
+}
+@media (hover: hover) {
+    .so-history:hover { border-color: var(--sd-orange); color: var(--sd-orange); }
+}
+.so-history:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+
+/* ---------- Loading skeleton ---------- */
+
+.so-skel-summary { height: 132px; border-radius: 20px; }
+
+/* ---------- Responsive ---------- */
+
+/* Small phones: shrink the count and thumbnail, and stack the card footer so
+   status text and the action link can never collide or overlap. */
+@media (max-width: 380px) {
+    .so-root .daily-total-card .dtc-number { font-size: 2.1rem; }
+    .so-root .opc-thumb { flex: 0 0 40px; width: 40px; height: 40px; border-radius: 12px; font-size: 1.15rem; }
+    .so-root .order-product-card { padding: 12px 14px; }
+    .so-root .opc-foot { flex-direction: column; align-items: flex-start; }
+    .so-root .opc-link { margin-left: 0; }
+}
+
+/* Tablet / desktop: keep the phone-first column but widen into a grid rather
+   than stretching one card across the whole page. No horizontal scrolling. */
+@media (min-width: 768px) {
+    .so-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+}
+@media (min-width: 1280px) {
+    .so-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .so-root .order-product-card { transition: none; }
+    .so-root .order-product-card:hover { transform: none; }
+}
+
+
+
