@@ -2734,5 +2734,269 @@ html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #3321
     .er-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
+/* ============================================================
+   SELLER OFFERING ORDERS / ORDER DETAIL (SCREEN 7B) — approved
+   "Offering Orders Summary" mockup.
+
+   Every rule is scoped to `.od-root`, and that class is only ever
+   rendered together with `.sd-root`, so the screen reuses the shared
+   warm-orange design tokens (light AND dark) without restyling any
+   other Seller screen. The base `.drilldown-header`, `.customer-row`,
+   `.oc-*` and `.del-*` rules above stay untouched because they also
+   serve screens and states outside this drill-down.
+   ============================================================ */
+
+.od-root {
+    /* Layout comes from .sd-root (column + gap + overflow-x clip); only this
+       screen's own spacing is adjusted here. */
+    gap: 14px;
+    padding-top: 4px;
+}
+
+/* ---------- Header (back control + title, mockup top bar) ---------- */
+
+.od-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 2px 0;
+    min-width: 0;
+}
+.od-root .od-back {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    color: var(--sd-text);
+    box-shadow: none;
+}
+.od-root .od-back:hover {
+    transform: none;
+    border-color: var(--sd-orange);
+    color: var(--sd-orange);
+    box-shadow: none;
+}
+.od-root .od-back:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+.od-title {
+    margin: 0;
+    min-width: 0;
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: var(--sd-text);
+    overflow-wrap: anywhere;
+}
+.od-kitchen { margin: -4px 0 0; overflow-wrap: anywhere; }
+
+/* ---------- Summary card (mockup: name · orders · plates · amount) ---------- */
+
+.od-root .drilldown-header.od-summary {
+    margin-bottom: 0;
+    padding: 18px;
+    text-align: left;
+    border: 1px solid var(--sd-border);
+    border-radius: 20px;
+    background: var(--sd-card);
+    box-shadow: var(--sd-shadow);
+}
+.od-sum-name {
+    margin: 0 0 6px;
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -.01em;
+    color: var(--sd-text);
+    overflow-wrap: anywhere;
+}
+.od-root .drilldown-header .dd-stats {
+    margin: 0;
+    font-size: .92rem;
+    font-weight: 600;
+    color: var(--sd-muted);
+    overflow-wrap: anywhere;
+}
+/* Same treatment the approved Orders screen gives its badges: the coloured
+   dot carries the state colour, the label stays fully readable text - status
+   is never colour-only, in either theme. */
+.od-root .od-summary .dtc-badges {
+    justify-content: flex-start;
+    gap: 8px 16px;
+    margin-top: 12px;
+}
+.od-root .od-summary .dtc-badge,
+.od-root .od-summary .dtc-badge.green,
+.od-root .od-summary .dtc-badge.orange,
+.od-root .od-summary .dtc-badge.red {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    background: none;
+    font-size: .84rem;
+    font-weight: 700;
+    color: var(--sd-text);
+}
+.od-root .od-summary .dtc-dot {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 9px;
+    border-radius: 50%;
+}
+.od-root .od-summary .dtc-badge.green  .dtc-dot { background: var(--green); }
+.od-root .od-summary .dtc-badge.orange .dtc-dot { background: var(--amber); }
+.od-root .od-summary .dtc-badge.red    .dtc-dot { background: var(--danger); }
+.od-booked { margin-top: -2px; overflow-wrap: anywhere; }
+
+/* ---------- Filters (the screen's existing three axes, restyled) ---------- */
+
+/* NOTE: no flex shorthand here on purpose. Below 400px the base rule stacks
+   .oc-filters into a COLUMN, where any flex-basis would become the control's
+   HEIGHT; keeping the base flex values makes the pills row- or column-shaped
+   correctly at every width while this rule only restyles their skin. */
+.od-root .od-filters { gap: 8px; margin: 0; }
+.od-root .oc-filters .oc-filter-select {
+    min-height: 44px;
+    padding: 0 14px;
+    border: 1px solid var(--sd-border);
+    border-radius: 999px;
+    background: var(--sd-card);
+    color: var(--sd-text);
+    font-size: .84rem;
+    font-weight: 700;
+}
+.od-root .oc-filters .oc-filter-select:focus-visible {
+    outline: 2px solid var(--sd-orange);
+    outline-offset: 1px;
+}
+.od-showing { margin-top: -2px; overflow-wrap: anywhere; }
+
+/* ---------- Delivery progress block ---------- */
+
+.od-root .del-progress {
+    margin: 0;
+    padding: 14px;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    border-radius: 16px;
+    box-shadow: var(--sd-shadow);
+}
+.od-root .del-progress-title { color: var(--sd-text); }
+.od-root .del-progress-count { color: var(--sd-orange); }
+.od-root .del-bar { background: var(--sd-border); }
+.od-root .del-bar-fill { background: var(--sd-orange); }
+.od-root .del-done-note { color: var(--green); }
+.od-root .del-mark-all {
+    min-height: 44px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--sd-orange);
+    color: #fff;
+    font-weight: 800;
+    box-shadow: 0 4px 12px rgba(198, 79, 0, .25);
+}
+.od-root .del-mark-all:hover { background: var(--sd-orange-deep); color: #fff; }
+.od-root .del-mark-all:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+
+/* ---------- Order rows (mockup list) ---------- */
+
+.od-list { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+.od-root .customer-row.oc-row {
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 0;
+    padding: 12px 14px;
+    min-height: 56px;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    border-radius: 14px;
+    box-shadow: var(--sd-shadow);
+    transition: border-color .15s ease, box-shadow .15s ease, transform .12s ease;
+}
+.od-root .customer-row.oc-row:hover {
+    transform: translateY(-1px);
+    border-color: var(--sd-orange);
+    box-shadow: var(--sd-shadow);
+}
+.od-root .customer-row.oc-row:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+.od-root .customer-row.oc-row .status-dot { margin-top: 5px; }
+.od-root .customer-row.oc-row .cr-qty {
+    font-size: .95rem;
+    font-weight: 800;
+    color: var(--sd-text);
+}
+.od-root .customer-row.oc-row .cr-loc { font-size: .8rem; color: var(--sd-muted); }
+
+/* Mockup row tints: pending = warm peach, cancelled = quiet background. The
+   explicit PAID / PENDING / CANCELLED text pill keeps the meaning visible
+   without relying on the tint. */
+.od-root .customer-row.oc-row.oc-row--pending { background: var(--sd-orange-soft); }
+.od-root .customer-row.oc-row.oc-row--cancelled { background: var(--sd-bg); }
+.od-root .customer-row.oc-row.oc-row--cancelled .cr-qty { color: var(--sd-muted); }
+
+.od-root .customer-row .cr-status { font-size: .7rem; }
+
+/* Remark control: mockup's trailing bubble, sized to a comfortable tap
+   target and visible on keyboard focus. */
+.od-root .customer-row .remark-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: transparent;
+    border-color: transparent;
+    font-size: 1.05rem;
+}
+.od-root .customer-row .remark-icon:hover { background: var(--sd-orange-soft); }
+.od-root .customer-row .remark-icon:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+.od-root .oc-row-chevron { color: var(--sd-muted); font-size: 1.25rem; }
+
+/* Delivered toggle pill */
+.od-root .oc-delivered {
+    min-height: 36px;
+    border: 1px solid var(--sd-border);
+    background: var(--sd-card);
+    color: var(--sd-muted);
+}
+.od-root .oc-delivered:hover { border-color: var(--sd-orange); }
+.od-root .oc-delivered.on {
+    background: var(--green-soft);
+    border-color: var(--green);
+    color: var(--green);
+}
+.od-root .oc-delivered:focus-within { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+.od-root .oc-delivered-static { background: var(--sd-border); color: var(--sd-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+    .od-root .customer-row.oc-row,
+    .od-root .customer-row.oc-row:hover { transition: none; transform: none; }
+}
+
+/* ---------- Loading skeleton ---------- */
+
+.od-skel-head { padding: 4px 2px 0; }
+.od-skel-summary { height: 150px; border-radius: 20px; }
+.od-skel-row { align-items: center; }
+.od-skel-dot { width: 14px; height: 14px; flex: 0 0 14px; border-radius: 50%; }
+
+/* ---------- Responsive ---------- */
+
+/* Small phones: shrink the heading and summary so a long offering name or a
+   long society name can never force horizontal scrolling. */
+@media (max-width: 380px) {
+    .od-title { font-size: 1.2rem; }
+    .od-sum-name { font-size: 1.15rem; }
+    .od-root .drilldown-header.od-summary { padding: 14px; }
+    .od-root .customer-row.oc-row { padding: 10px 12px; }
+    .od-root .customer-row .remark-icon { width: 40px; height: 40px; }
+}
+
+/* Tablet / desktop: keep the phone-first column but stop it stretching across
+   a very wide window. */
+@media (min-width: 768px) {
+    .od-root { max-width: 760px; margin: 0 auto; width: 100%; }
+    .od-title { font-size: 1.5rem; }
+}
+
 
 

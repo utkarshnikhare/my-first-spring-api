@@ -1174,6 +1174,28 @@ async function sellerEnquiriesView() {
     return h;
 }
 
+/**
+ * Loading skeleton for the Offering Orders screen (Screen 7B).
+ *
+ * <p>Painted by {@link sellerOrderDetailView} before its request resolves - the
+ * same pattern the Dashboard / Orders / Earnings screens use - so a slow
+ * connection never shows a blank page. It is purely presentational: no figure
+ * is invented, every block is an empty shell that the real
+ * /api/seller-app/orders/product/{id} payload replaces.</p>
+ */
+function odSkeletonHtml() {
+    function row() {
+        return '<div class="sd-skel-card od-skel-row"><div class="sd-skel od-skel-dot"></div><div class="sd-skel-lines">'
+            + '<div class="sd-skel sd-skel--line w40"></div><div class="sd-skel sd-skel--line w60"></div></div></div>';
+    }
+    return '<div class="sd-root od-root" role="status" aria-busy="true" aria-label="Loading offering orders">'
+        + '<div class="od-skel-head"><div class="sd-skel sd-skel--line w40"></div></div>'
+        + '<div class="sd-skel od-skel-summary"></div>'
+        + '<div class="sd-skel sd-skel--line w60"></div>'
+        + row() + row() + row()
+        + '</div>';
+}
+
 // SCREEN 7B: OFFERING ORDERS (summary-first with filters)
 //
 // This view returns an HTML STRING. sellerRender() only assigns that string to
@@ -1205,7 +1227,12 @@ async function sellerOrderDetailView(productId) {
     // Remembered so the delivery block can repaint ITSELF from the server after a
     // checkbox toggle without re-rendering (and possibly disturbing) the rows.
     S.offeringProductId = productId;
-    var h = '<div class="view-enter">';
+    // Content-shaped skeleton while the payload is in flight - the same pattern
+    // the Dashboard / Orders / Earnings screens use. Purely presentational:
+    // sellerRender replaces it with the string we return once we resolve.
+    var live = viewEl();
+    if (live) live.innerHTML = odSkeletonHtml();
+    var h = '<div class="view-enter sd-root od-root">';
     try {
         var detail = await sellerApi(offeringDetailUrl(productId));
         // Options come from the UNFILTERED society list for this offering/date, so
@@ -1230,19 +1257,21 @@ async function sellerOrderDetailView(productId) {
         var orderCount = detail.totalOrders || 0;
         var orderWord = orderCount === 1 ? 'order' : 'orders';
 
-        h += '<div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button>' +
-            '<h2 class="flex-1">Order Summary</h2></div>';
-        if (kitchenName) h += '<p class="muted small text-sm card-mb">🏪 ' + esc(kitchenName) + '</p>';
+        h += '<header class="od-head"><button class="icon-btn od-back" type="button" data-action="go-back" aria-label="Back">←</button>' +
+            '<h1 class="od-title">Order Summary</h1></header>';
+        if (kitchenName) h += '<p class="od-kitchen muted small">🏪 ' + esc(kitchenName) + '</p>';
 
-        // Headline: N orders • X plates • ₹Y - all from persisted order data.
-        h += '<div class="drilldown-header"><h3>' + esc(pname) + '</h3>';
-        h += '<div class="dd-stats">' + orderCount + ' ' + orderWord + ' • ' +
-            (detail.totalPlates || 0) + ' plates • ' + money(detail.totalRevenue || 0) + '</div>';
+        // Mockup summary card: offering name, then N orders · X plates · ₹Y -
+        // all from persisted order data, never sample figures from the design.
+        h += '<section class="drilldown-header od-summary" aria-label="Offering summary">';
+        h += '<h2 class="od-sum-name">' + esc(pname) + '</h2>';
+        h += '<p class="dd-stats">' + orderCount + ' ' + orderWord + ' · ' +
+            (detail.totalPlates || 0) + ' plates · ' + money(detail.totalRevenue || 0) + '</p>';
         h += '<div class="dtc-badges">' +
-            '<span class="dtc-badge green">' + (detail.paidCount || 0) + ' Paid</span>' +
-            '<span class="dtc-badge orange">' + (detail.pendingCount || 0) + ' Pending</span>' +
-            '<span class="dtc-badge red">' + (detail.cancelledCount || 0) + ' Cancelled</span>' +
-            '</div></div>';
+            '<span class="dtc-badge green"><span class="dtc-dot" aria-hidden="true"></span>' + (detail.paidCount || 0) + ' Paid</span>' +
+            '<span class="dtc-badge orange"><span class="dtc-dot" aria-hidden="true"></span>' + (detail.pendingCount || 0) + ' Pending</span>' +
+            '<span class="dtc-badge red"><span class="dtc-dot" aria-hidden="true"></span>' + (detail.cancelledCount || 0) + ' Cancelled</span>' +
+            '</div></section>';
 
         // Reconcile with the dashboard card: "N booked" is the offering's live
         // reservation total across every date it is posted for, while these rows
@@ -1252,14 +1281,14 @@ async function sellerOrderDetailView(productId) {
         if (typeof bookedTotal === 'number' && bookedTotal !== (detail.totalPlates || 0)) {
             var bookedUnit = detail.productUnit || 'units';
             if (bookedTotal !== 1 && bookedUnit.slice(-1) !== 's') bookedUnit += 's';
-            h += '<div class="tiny muted mt-1">Dashboard shows ' + bookedTotal + ' ' +
+            h += '<div class="tiny muted mt-1 od-booked">Dashboard shows ' + bookedTotal + ' ' +
                 esc(bookedUnit) + ' booked — that covers every date of this ' +
                 'offering. These orders are ' + esc(prettyDate(sellerDate(S.selectedDate))) + ' only.</div>';
         }
 
         // Filters only. Sorting within a single offering is meaningless - the
         // seller is already looking at one item - so no sort control is offered.
-        h += '<div class="oc-filters">';
+        h += '<div class="oc-filters od-filters" role="group" aria-label="Filter orders">';
         h += '<select class="oc-filter-select" data-action="set-offering-society" aria-label="Filter by society"><option value="">All Societies</option>';
         societies.forEach(function (s) { h += '<option value="' + esc(s) + '"' + (S.offeringFilterSociety === s ? ' selected' : '') + '>' + esc(s) + '</option>'; });
         h += '</select>';
@@ -1278,16 +1307,16 @@ async function sellerOrderDetailView(productId) {
         h += '</select></div>';
 
         if (S.offeringFilterSociety || S.offeringFilterStatus || S.offeringFilterDelivery) {
-            h += '<div class="tiny muted mt-1">Showing ' + (detail.filteredTotalOrders || 0) + ' of ' + orderCount + ' orders</div>';
+            h += '<div class="tiny muted mt-1 od-showing">Showing ' + (detail.filteredTotalOrders || 0) + ' of ' + orderCount + ' orders</div>';
         }
         // Delivery progress sits ABOVE the rows and is deliberately unfiltered: it
         // describes the whole offering for this date, which is also the scope of
         // its Mark All Delivered action.
         h += deliveryProgressHtml(detail);
-        h += '<div id="offeringCustomers">' + offeringCustomersHtml(detail) + '</div>';
+        h += '<div id="offeringCustomers" class="od-list">' + offeringCustomersHtml(detail) + '</div>';
     } catch (e) {
-        h += '<div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button>' +
-            '<h2 class="flex-1">Order Summary</h2></div>';
+        h += '<header class="od-head"><button class="icon-btn od-back" type="button" data-action="go-back" aria-label="Back">←</button>' +
+            '<h1 class="od-title">Order Summary</h1></header>';
         h += emptyHtml('⚠️', 'Could not load orders', e.message,
             '<button class="btn btn-primary card-mt" type="button" data-action="seller-retry">Retry</button>');
     }
@@ -1332,7 +1361,7 @@ function offeringCustomersHtml(detail) {
         } else if (delivered) {
             deliveryCtrl = '<span class="oc-delivered-static">Delivered</span>';
         }
-        out += '<div class="customer-row compact oc-row" role="button" tabindex="0" data-action="open-order" data-order="' + esc(c.orderId) + '">';
+        out += '<div class="customer-row compact oc-row oc-row--' + bucket + '" role="button" tabindex="0" data-action="open-order" data-order="' + esc(c.orderId) + '">';
         out += '<span class="status-dot ' + bucket + '" aria-hidden="true"></span>';
         out += '<div class="oc-row-main">';
         out += '<div class="oc-row-top"><span class="cr-qty">' + qtyLabel + '</span>' +
@@ -2193,6 +2222,22 @@ document.addEventListener('change', function (e) {
 // across the SPA re-renders that replace #view on every navigation.
 document.addEventListener('input', function (e) {
     if (e.target && e.target.id === 'qpMessage') updateQuickPostCounter();
+});
+
+// Keyboard activation for the tappable order rows on the Offering Orders
+// screen. They carry role="button" + tabindex, so Enter/Space must open the
+// order exactly like a click does. Children that already own their keys (the
+// Delivered checkbox, the remark button, the filter selects, links) are left
+// alone so this can never steal or double-handle their behaviour.
+document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+    var t = e.target;
+    if (!t || typeof t.closest !== 'function') return;
+    if (t.closest('input, select, textarea, button, a')) return;
+    var row = t.closest('.oc-row[data-action="open-order"]');
+    if (!row) return;
+    e.preventDefault();
+    sellerNavigate('#/order-detail/order/' + row.dataset.order);
 });
 
 // BOOT - never leaves the page on an infinite spinner
