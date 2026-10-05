@@ -1120,6 +1120,20 @@
     resize: vertical;
     margin-bottom: 14px;
 }
+.qp-counter-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: -10px;
+    margin-bottom: 14px;
+}
+.qp-counter {
+    font-size: .74rem;
+    font-weight: 700;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+/* Over-limit state: the seller must see the overflow named, never lose text. */
+.qp-counter.over { color: var(--danger); }
 .parse-result-box {
     background: var(--accent-soft);
     border: 1px solid var(--accent);
