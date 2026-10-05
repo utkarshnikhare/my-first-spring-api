@@ -1844,3 +1844,376 @@
 @media (max-width: 400px) {
     .del-progress-top { flex-direction: column; align-items: flex-start; }
 }
+
+/* ============================================================
+   SELLER DASHBOARD - Stitch visual system (sd-* scoped)
+   ------------------------------------------------------------
+   Self-contained design tokens + components for the redesigned
+   Seller Dashboard. Every selector is scoped to `.sd-root`, so
+   nothing here can restyle the other Seller screens or the
+   Buyer/Admin apps. Values mirror the approved reference:
+   warm orange primary, soft cream background, pastel stat cards,
+   white rounded cards with a soft border and a light shadow.
+   ============================================================ */
+
+.sd-root {
+    /* Design tokens (reusable visual language for future Seller screens) */
+    --sd-orange: #C64F00;
+    --sd-orange-deep: #9E3D00;
+    --sd-orange-soft: #FFF1E6;
+    --sd-bg: #FCF9F5;
+    --sd-card: #FFFFFF;
+    --sd-text: #091D2E;
+    --sd-muted: #6B6B7B;
+    --sd-border: #EFE3D8;
+    --sd-radius: 18px;
+    --sd-radius-sm: 12px;
+    --sd-gap: 14px;
+    --sd-shadow: 0 1px 2px rgba(9, 29, 46, .04), 0 6px 18px rgba(9, 29, 46, .06);
+    --sd-tap: 44px; /* comfortable touch target */
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--sd-gap);
+    /* Never allow a wide child (long product name, big price) to force a
+       horizontal scrollbar on a phone. */
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
+}
+
+html[data-theme="dark"] .sd-root {
+    --sd-orange: #E8792B;
+    --sd-orange-deep: #F59E5B;
+    --sd-orange-soft: #3A2412;
+    --sd-bg: #1A1410;
+    --sd-card: #241C17;
+    --sd-text: #F1EDF9;
+    --sd-muted: #A79FC0;
+    --sd-border: #3D2F26;
+    --sd-shadow: 0 2px 10px rgba(0, 0, 0, .4);
+}
+
+/* ---------- Header ---------- */
+
+.sd-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 2px 2px;
+}
+.sd-header__brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sd-header__logo {
+    width: 40px; height: 40px;
+    flex: 0 0 40px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--sd-orange), var(--sd-orange-deep));
+    color: #fff; font-weight: 800; font-size: 1.05rem;
+}
+.sd-header__word {
+    font-size: 1.4rem; font-weight: 800; letter-spacing: -.02em;
+    color: var(--sd-orange);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sd-header__right { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.sd-header__avatar {
+    width: 40px; height: 40px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    border: 1px solid var(--sd-border);
+    background: var(--sd-card);
+    color: var(--sd-orange); font-weight: 800; font-size: .95rem;
+    cursor: pointer;
+}
+.sd-header__avatar:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+
+/* ---------- Greeting ---------- */
+
+.sd-greet { padding: 2px 2px 0; }
+.sd-greet__hi {
+    margin: 0;
+    font-size: 1.35rem; font-weight: 800; letter-spacing: -.02em;
+    color: var(--sd-text);
+    overflow-wrap: anywhere;
+}
+.sd-greet__sub { margin: 2px 0 0; color: var(--sd-muted); font-size: .92rem; }
+
+/* ---------- Summary stat cards ---------- */
+
+.sd-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.sd-stat {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 14px 6px;
+    border-radius: var(--sd-radius);
+    border: 1px solid var(--sd-border);
+    min-width: 0; text-align: center;
+}
+.sd-stat--peach { background: #FDEDE3; border-color: #F7DCCB; }
+.sd-stat--pink  { background: #FCE7EF; border-color: #F6D5E1; }
+.sd-stat--blue  { background: #E6EFFB; border-color: #D3E2F7; }
+html[data-theme="dark"] .sd-stat { border-color: var(--sd-border); }
+html[data-theme="dark"] .sd-stat--peach { background: #3A2417; }
+html[data-theme="dark"] .sd-stat--pink  { background: #3A1E28; }
+html[data-theme="dark"] .sd-stat--blue  { background: #1B2740; }
+.sd-stat__icon { font-size: 1.15rem; line-height: 1; }
+.sd-stat__value {
+    font-size: 1.5rem; font-weight: 800; color: var(--sd-text);
+    line-height: 1.15; overflow-wrap: anywhere;
+}
+.sd-stat__label {
+    font-size: .74rem; font-weight: 600; color: var(--sd-muted);
+    overflow-wrap: anywhere;
+}
+
+/* ---------- Store profile card ---------- */
+
+.sd-store {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius);
+    box-shadow: var(--sd-shadow);
+    min-width: 0;
+}
+.sd-store__photo {
+    width: 58px; height: 58px; flex: 0 0 58px;
+    display: grid; place-items: center;
+    border-radius: var(--sd-radius-sm); overflow: hidden;
+    background: var(--sd-orange-soft);
+    font-size: 1.6rem;
+}
+.sd-store__photo img { width: 100%; height: 100%; object-fit: cover; }
+.sd-store__main { flex: 1 1 auto; min-width: 0; }
+.sd-store__nameline { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.sd-store__name {
+    font-size: 1.05rem; font-weight: 800; color: var(--sd-text);
+    text-decoration: none;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.sd-store__chev { color: var(--sd-muted); text-decoration: none; font-size: 1.1rem; flex: 0 0 auto; }
+.sd-store__status {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    margin-top: 3px; font-size: .82rem; font-weight: 700;
+}
+.sd-store__sep { color: var(--sd-muted); }
+/* Status is always spelled out in text as well as colour. */
+.is-active  { color: var(--green); }
+.is-paused  { color: var(--amber); }
+.sd-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: 0 0 8px; }
+.sd-flag { font-size: .7rem; letter-spacing: .04em; }
+.sd-store__edit {
+    flex: 0 0 auto;
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: 38px; padding: 0 14px;
+    border-radius: 999px;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    color: var(--sd-text); font-weight: 700; font-size: .85rem;
+    text-decoration: none;
+}
+.sd-store__edit:hover { border-color: var(--sd-orange); color: var(--sd-orange); }
+
+/* ---------- Quick actions ---------- */
+
+.sd-quick {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+    padding: 12px;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius);
+    box-shadow: var(--sd-shadow);
+}
+.sd-qa {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    min-height: var(--sd-tap);
+    padding: 10px 4px;
+    border: 0; border-radius: var(--sd-radius-sm);
+    background: var(--sd-orange-soft);
+    color: var(--sd-orange);
+    font: inherit; text-decoration: none; cursor: pointer;
+}
+.sd-qa:hover { background: var(--sd-orange); color: #fff; }
+.sd-qa:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+.sd-qa__icon { font-size: 1.2rem; line-height: 1; }
+.sd-qa__label {
+    font-size: .68rem; font-weight: 700; line-height: 1.2;
+    text-align: center; overflow-wrap: anywhere; word-break: break-word;
+}
+
+/* ---------- Section heading + filter ---------- */
+
+.sd-section { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.sd-section__title { margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--sd-text); }
+.sd-section__count { color: var(--sd-muted); font-weight: 700; }
+.sd-filter select {
+    min-height: 38px; padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid var(--sd-border);
+    background: var(--sd-card);
+    color: var(--sd-text); font-weight: 700; font-size: .82rem;
+}
+.sd-filter select:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 1px; }
+
+/* ---------- Offering card ---------- */
+
+.sd-card {
+    display: flex; gap: 12px;
+    padding: 12px;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius);
+    box-shadow: var(--sd-shadow);
+    min-width: 0;
+}
+.sd-card__photo {
+    width: 82px; height: 82px; flex: 0 0 82px;
+    display: grid; place-items: center;
+    border-radius: var(--sd-radius-sm); overflow: hidden;
+    background: var(--sd-orange-soft);
+    font-size: 2rem;
+}
+.sd-card__photo img { width: 100%; height: 100%; object-fit: cover; }
+.sd-card__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.sd-card__top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+/* Long offering names wrap instead of destroying the row layout. */
+.sd-card__name {
+    font-size: 1.02rem; font-weight: 800; color: var(--sd-text);
+    min-width: 0; overflow-wrap: anywhere;
+}
+.sd-card__qty { font-size: .82rem; color: var(--sd-muted); }
+.sd-card__times {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: .78rem; color: var(--sd-muted);
+}
+.sd-card__tdiv { opacity: .5; }
+.sd-tv { color: var(--sd-text); font-weight: 700; }
+.sd-card__price { font-size: 1.05rem; font-weight: 800; color: var(--sd-text); }
+.sd-card__unit { font-size: .78rem; font-weight: 600; color: var(--sd-muted); }
+.sd-card__stepper { margin-top: 2px; }
+
+.sd-card__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.sd-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 40px; padding: 0 14px;
+    border-radius: 12px; border: 1px solid transparent;
+    font: inherit; font-size: .82rem; font-weight: 700;
+    text-decoration: none; cursor: pointer; white-space: nowrap;
+}
+.sd-btn:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+.sd-btn:active { transform: scale(.97); }
+.sd-btn--primary {
+    flex: 1 1 130px;
+    background: var(--sd-orange); color: #fff;
+    box-shadow: 0 4px 12px rgba(198, 79, 0, .25);
+}
+.sd-btn--primary:hover { background: var(--sd-orange-deep); color: #fff; }
+.sd-btn--edit    { background: var(--danger-soft); color: var(--danger); }
+.sd-btn--pause   { background: var(--amber-soft);  color: var(--amber); }
+.sd-btn--resume  { background: var(--green-soft);  color: var(--green); }
+.sd-btn--soldout { background: var(--danger-soft); color: var(--danger); }
+.sd-btn--edit:hover, .sd-btn--soldout:hover { filter: brightness(.96); }
+.sd-btn--pause:hover { filter: brightness(.96); }
+
+/* ---------- Add Offering CTA ---------- */
+
+.sd-add {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; min-height: 52px;
+    border: 0; border-radius: var(--sd-radius);
+    background: var(--sd-orange); color: #fff;
+    font: inherit; font-size: 1rem; font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(198, 79, 0, .35);
+}
+.sd-add:hover { background: var(--sd-orange-deep); }
+.sd-add:active { transform: scale(.98); }
+.sd-add:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+
+/* ---------- Earnings summary ---------- */
+
+.sd-earnings {
+    padding: 16px;
+    background: linear-gradient(135deg, #FDEDE3, #FCE7EF);
+    border: 1px solid #F3DCCF;
+    border-radius: var(--sd-radius);
+}
+html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #33210F, #2C1A20); border-color: var(--sd-border); }
+.sd-earnings__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.sd-earnings__title { display: flex; align-items: center; gap: 8px; font-size: 1.05rem; font-weight: 800; color: var(--sd-text); }
+.sd-earnings__more {
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: 36px; padding: 0 14px;
+    border-radius: 999px; background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    color: var(--sd-text); font-weight: 700; font-size: .8rem; text-decoration: none;
+}
+.sd-earnings__grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    margin-top: 12px; padding: 12px;
+    background: var(--sd-card); border-radius: var(--sd-radius-sm);
+}
+.sd-earnings__cell { text-align: center; min-width: 0; padding: 0 4px; border-left: 1px solid var(--sd-border); }
+.sd-earnings__cell:first-child { border-left: 0; }
+.sd-earnings__label { font-size: .74rem; font-weight: 600; color: var(--sd-muted); overflow-wrap: anywhere; }
+.sd-earnings__val { font-size: 1.1rem; font-weight: 800; color: var(--sd-text); overflow-wrap: anywhere; }
+.sd-earnings__val.is-green { color: var(--green); }
+.sd-earnings__val.is-amber { color: var(--amber); }
+
+/* ---------- Note / retry ---------- */
+
+.sd-note { margin: 0; font-size: .8rem; color: var(--sd-muted); text-align: center; }
+.sd-note__retry {
+    border: 0; background: none; padding: 0 2px;
+    color: var(--sd-orange); font: inherit; font-weight: 700;
+    text-decoration: underline; cursor: pointer;
+}
+
+/* ---------- Skeleton loading ---------- */
+
+.sd-skel { background: var(--sd-border); border-radius: 8px; }
+.sd-skel--stat { height: 92px; border-radius: var(--sd-radius); }
+.sd-skel--store { height: 88px; border-radius: var(--sd-radius); }
+.sd-skel--qa { height: 64px; border-radius: var(--sd-radius-sm); }
+.sd-skel--thumb { width: 82px; height: 82px; flex: 0 0 82px; border-radius: var(--sd-radius-sm); }
+.sd-skel--line { height: 11px; border-radius: 999px; }
+.sd-skel--gap { margin-top: 8px; }
+.w30 { width: 30%; } .w40 { width: 40%; } .w60 { width: 60%; } .w90 { width: 90%; }
+.sd-skel-card {
+    display: flex; gap: 12px; padding: 12px;
+    background: var(--sd-card); border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius);
+}
+.sd-skel-lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
+
+/* ---------- Responsive ---------- */
+
+/* Small phones: keep everything readable, let the action buttons wrap. */
+@media (max-width: 360px) {
+    .sd-stat__value { font-size: 1.3rem; }
+    .sd-stat__label { font-size: .68rem; }
+    .sd-quick { grid-template-columns: repeat(5, 1fr); gap: 6px; padding: 10px 8px; }
+    .sd-qa__label { font-size: .6rem; }
+    .sd-card__photo { width: 66px; height: 66px; flex: 0 0 66px; font-size: 1.6rem; }
+    .sd-btn { padding: 0 10px; font-size: .78rem; }
+}
+
+/* Tablets / desktop: keep the phone-first column but stop it stretching. */
+@media (min-width: 768px) {
+    .sd-header__word { font-size: 1.55rem; }
+    .sd-card__photo { width: 96px; height: 96px; flex: 0 0 96px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sd-btn:active, .sd-add:active { transform: none; }
+}
+/* Visually hidden but exposed to screen readers (filter label). */
+.sd-root .visually-hidden {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0);
+    white-space: nowrap; border: 0;
+}

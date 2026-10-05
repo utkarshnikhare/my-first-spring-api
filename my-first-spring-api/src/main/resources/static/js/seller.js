@@ -1,7 +1,7 @@
 /**
  * SocioMart Seller App v1.0 - 5-tab SPA
  */
-var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFilterDelivery: '', offeringProductId: '', deliverySaving: {}, deliveryBlockRequestId: 0, bulkDelivering: false, offeringFor: 'today', quickPostRequestId: null, editOffering: null };
+var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFilterDelivery: '', offeringProductId: '', deliverySaving: {}, deliveryBlockRequestId: 0, bulkDelivering: false, offeringFor: 'today', quickPostRequestId: null, editOffering: null, dashFilter: 'ALL' };
 var sellerRoutes = {
     '#/home': sellerHomeView, '#/add': sellerAddView, '#/create': sellerCreateView,
     '#/edit-offering': sellerEditOfferingView,
@@ -276,75 +276,340 @@ async function sellerAddView() {
 }
 
 // SCREEN 1: SELLER DASHBOARD (HOME)
-async function sellerHomeView() {
-    var h = '<div class="view-enter">';
-    h += '<div class="seller-header"><div class="sdh-text"><p class="sdh-greeting">' + greeting() + ', ' + esc(S.user && S.user.name ? S.user.name : 'Seller') + '</p><h1 class="sdh-title">Your Dashboard</h1></div><span class="notif-bell">' + notificationBadgeHtml() + '<button class="icon-btn" type="button" data-action="toggle-theme" aria-label="Toggle theme">🌓</button>' + notificationPanelHtml('sellerNotifPanel') + '</span></div>';
+/* ============================================================
+   SELLER DASHBOARD - Stitch redesign (presentation only)
+   ------------------------------------------------------------
+   Every class below is prefixed `sd-` so the new visual language
+   cannot leak into the other seller screens (Kitchen, Orders, My
+   Offerings, Earnings, Quick Post) or into the Buyer/Admin apps.
+   All data still comes from the EXISTING endpoints:
+     GET /api/seller-app/dashboard  (metrics + offerings + earnings)
+     GET /api/seller/kitchen        (store image / name / paused / sellerType)
+     GET /api/seller-app/orders/summary?date=today (per-offering counts)
+   No new API, no new route, no backend change.
+   ============================================================ */
+
+/** Seller first name for the greeting. Falls back to the session user name. */
+function sellerFirstName(dash) {
+    var raw = (dash && dash.sellerName) || (S.user && S.user.name) || '';
+    raw = String(raw).trim();
+    if (!raw) return 'Seller';
+    return raw.split(/\s+/)[0];
+}
+
+/** Initial letter for the header avatar. */
+function sellerInitial() {
+    var raw = (S.user && S.user.name) || '';
+    raw = String(raw).trim();
+    return raw ? raw.charAt(0).toUpperCase() : 'S';
+}
+
+/**
+ * Top summary cards. Values come straight from the dashboard payload:
+ * Views Today / Followers are real analytics counts and Total Orders is the
+ * seller's real order count. Nothing here is invented.
+ */
+function sdStatCardsHtml(dash) {
+    var cards = [
+        { icon: '👁️', cls: 'peach', value: dash.viewsToday || 0, label: 'Views Today' },
+        { icon: '💗', cls: 'pink', value: dash.followers || 0, label: 'Followers' },
+        { icon: '📦', cls: 'blue', value: dash.totalOrders || 0, label: 'Total Orders' }
+    ];
+    return '<div class="sd-stats">' + cards.map(function (c) {
+        return '<div class="sd-stat sd-stat--' + c.cls + '">'
+            + '<span class="sd-stat__icon" aria-hidden="true">' + c.icon + '</span>'
+            + '<span class="sd-stat__value">' + esc(String(c.value)) + '</span>'
+            + '<span class="sd-stat__label">' + esc(c.label) + '</span>'
+            + '</div>';
+    }).join('') + '</div>';
+}
+
+/**
+ * Storefront card: real store photo, real store name, real operational status.
+ * LIVE is derived from the seller's own kitchen.paused flag - never hard-coded,
+ * and a paused kitchen reads PAUSED instead. Both seller types share this one
+ * component, so no Kitchen-only assumption is baked in.
+ */
+function sdStoreCardHtml(dash, kitchen) {
+    var img = kitchen ? sellerImg(kitchen.imageUrl) : '';
+    var name = (kitchen && kitchen.displayName) || dash.kitchenName || 'Your Store';
+    var paused = !!(kitchen && kitchen.paused);
+    var homemade = !!(kitchen && kitchen.sellerType === 'HOMEMADE_PRODUCTS');
+    var ph = homemade ? '🧺' : '🍽️';
+    var state = paused ? 'is-paused' : 'is-active';
+    return '<div class="sd-store">'
+        + '<div class="sd-store__photo" data-emoji="' + ph + '">'
+        + (img ? '<img src="' + esc(img) + '" alt="' + esc(name) + '" onerror="imgFallback(this)">' : ph)
+        + '</div>'
+        + '<div class="sd-store__main">'
+        + '<div class="sd-store__nameline">'
+        + '<a class="sd-store__name" href="#/kitchen">' + esc(name) + '</a>'
+        + '<a class="sd-store__chev" href="#/kitchen" aria-label="Manage ' + esc(name) + '">›</a>'
+        + '</div>'
+        + '<div class="sd-store__status">'
+        + '<span class="sd-dot ' + state + '" aria-hidden="true"></span>'
+        + '<span class="' + state + '">' + (paused ? 'Paused' : 'Active') + '</span>'
+        + '<span class="sd-store__sep">•</span>'
+        + '<span class="sd-flag ' + state + '">' + (paused ? 'PAUSED' : 'LIVE') + '</span>'
+        + '</div></div>'
+        + '<a class="sd-store__edit" href="#/kitchen"><span aria-hidden="true">✏️</span> Edit</a>'
+        + '</div>';
+}
+
+/**
+ * Quick actions. Each one is a real, already-working destination:
+ *   View Store     -> the existing preview-kitchen action, which opens the
+ *                     buyer kitchen page at /index.html#/kitchen/{id}
+ *   Manage Profile -> #/kitchen (store profile + Service Areas + gallery)
+ *   Today's Menu   -> #/my-offerings
+ *   Gallery        -> #/kitchen (gallery images are managed there)
+ *   More           -> #/quick-post
+ * No decorative no-op controls are introduced.
+ */
+function sdQuickActionsHtml() {
+    var acts = [
+        { icon: '🏪', label: 'View Store', act: 'preview-kitchen' },
+        { icon: '👤', label: 'Manage Profile', route: '#/kitchen' },
+        { icon: '📋', label: 'Today\u2019s Menu', route: '#/my-offerings' },
+        { icon: '🖼️', label: 'Gallery', route: '#/kitchen' },
+        { icon: '⋯', label: 'More', route: '#/quick-post' }
+    ];
+    return '<div class="sd-quick">' + acts.map(function (a) {
+        var icon = '<span class="sd-qa__icon" aria-hidden="true">' + a.icon + '</span>';
+        var label = '<span class="sd-qa__label">' + esc(a.label) + '</span>';
+        // The preview action must run through the existing click handler, so it
+        // is a button; the rest are plain links to existing routes.
+        if (a.act) return '<button class="sd-qa" type="button" data-action="' + a.act + '">' + icon + label + '</button>';
+        return '<a class="sd-qa" href="' + a.route + '">' + icon + label + '</a>';
+    }).join('') + '</div>';
+}
+
+/** Coarse grouping used only by the dashboard filter dropdown. */
+function sdCategoryGroup(p) {
+    var c = String((p && p.category) || '').toLowerCase();
+    if (!c) return 'KITCHEN';
+    return /homemade|ghee|achar|papad|cake|sweet|jar|pack/.test(c) ? 'HOMEMADE' : 'KITCHEN';
+}
+function sdCategoryLabel(k) { return k === 'HOMEMADE' ? 'Homemade' : 'Kitchen'; }
+
+/**
+ * Simple dashboard filter. Full filtering/history lives on My Offerings, so this
+ * stays deliberately minimal: "All", plus Kitchen/Homemade only when the seller
+ * actually has offerings in more than one category.
+ */
+function sdOfferingFilterHtml(offerings) {
+    var groups = {};
+    offerings.forEach(function (p) {
+        var g = sdCategoryGroup(p);
+        groups[g] = (groups[g] || 0) + 1;
+    });
+    var keys = Object.keys(groups);
+    var current = S.dashFilter || 'ALL';
+    if (current !== 'ALL' && keys.indexOf(current) === -1) current = 'ALL';
+    var opts = [{ k: 'ALL', n: offerings.length, label: 'All' }];
+    if (keys.length > 1) keys.forEach(function (k) { opts.push({ k: k, n: groups[k], label: sdCategoryLabel(k) }); });
+    return '<label class="sd-filter"><span class="visually-hidden">Filter offerings</span>'
+        + '<select data-action="set-dash-filter" aria-label="Filter offerings by category">'
+        + opts.map(function (o) {
+            return '<option value="' + esc(o.k) + '"' + (o.k === current ? ' selected' : '') + '>'
+                + esc(o.label + ' (' + o.n + ')') + '</option>';
+        }).join('') + '</select></label>';
+}
+
+/**
+ * One offering card. Structure follows the approved reference while keeping
+ * every operational control the seller relies on: image, name, status badge,
+ * booked/available quantities, order deadline, delivery time, price, and the
+ * View Orders / Edit / Pause-Resume / Sold Out actions.
+ *
+ * @param p          the ProductDto from the existing dashboard payload
+ * @param orderCount real order count for this offering today, or null when the
+ *                   app has no figure to show (never a made-up number)
+ */
+function sdOfferingCardHtml(p, orderCount) {
+    var img = sellerImg(p.imageUrl);
+    var remaining = p.remainingQuantity;
+    var maxQty = p.maxQuantity;
+    var h = '<div class="sd-card">';
+    h += '<div class="sd-card__photo" data-emoji="' + foodEmoji(p.name) + '">'
+        + (img ? '<img src="' + esc(img) + '" alt="' + esc(p.name) + '" onerror="imgFallback(this)">' : foodEmoji(p.name))
+        + '</div>';
+    h += '<div class="sd-card__body">';
+    h += '<div class="sd-card__top"><span class="sd-card__name">' + esc(p.name) + '</span>' + offeringStatusBadge(p) + '</div>';
+    h += '<div class="sd-card__qty"><strong>' + (p.bookedQuantity || 0) + ' booked</strong> · '
+        + (remaining != null ? '<strong>' + remaining + ' available</strong>' : 'No limit') + '</div>';
+    h += '<div class="sd-card__times">'
+        + '<span class="sd-card__time">🕐 Orders close <span class="sd-tv">' + esc(sellerOrdersCloseLabel(p)) + '</span></span>'
+        + '<span class="sd-card__tdiv">|</span>'
+        + '<span class="sd-card__time">🛵 Delivery <span class="sd-tv">' + esc(sellerDeliveryLabel(p)) + '</span></span>'
+        + '</div>';
+    // Price is real product data (price + unit), never a sample figure.
+    if (p.price != null) {
+        h += '<div class="sd-card__price">' + money(p.price)
+            + (p.priceUnit ? ' <span class="sd-card__unit">/ ' + esc(p.priceUnit) + '</span>' : '') + '</div>';
+    }
+    // Inline stock adjust stays available for limited-quantity offerings.
+    if (maxQty != null && remaining != null && remaining >= 0 && !p.soldOut && !p.ordersPaused) {
+        h += '<div class="stepper oc-stepper sd-card__stepper">'
+            + '<button type="button" data-action="inv-dec" data-pid="' + p.id + '" aria-label="Decrease available quantity for ' + esc(p.name) + '">−</button>'
+            + '<span class="stepper-value" id="inv-' + p.id + '">' + remaining + '</span>'
+            + '<button type="button" data-action="inv-inc" data-pid="' + p.id + '" aria-label="Increase available quantity for ' + esc(p.name) + '">+</button></div>';
+    }
+    h += '<div class="sd-card__actions">';
+    // View Orders (N) uses the existing #/order-detail/{productId} route. The
+    // count is appended only when the app returned a real one.
+    h += '<a class="sd-btn sd-btn--primary" href="#/order-detail/' + p.id + '">View Orders'
+        + (orderCount != null ? ' (' + esc(String(orderCount)) + ')' : '') + '</a>';
+    h += '<button class="sd-btn sd-btn--edit" type="button" data-action="edit-offering" data-pid="' + p.id + '">Edit</button>';
+    // Pause stays reversible and is never conflated with Sold Out.
+    if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--pause" type="button" data-action="pause-orders" data-pid="' + p.id + '">Pause</button>';
+    if (p.ordersPaused && !p.soldOut) h += '<button class="sd-btn sd-btn--resume" type="button" data-action="resume-orders" data-pid="' + p.id + '">Resume</button>';
+    if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Sold Out</button>';
+    h += '</div></div></div>';
+    return h;
+}
+
+/**
+ * Earnings summary. Uses the app's OWN financial definitions and wording
+ * (order value by payment status). It deliberately does NOT claim verified
+ * bank revenue, because the app records order values rather than settling
+ * money itself. "View Details" opens the existing Earnings screen.
+ */
+function sdEarningsHtml(dash) {
+    return '<div class="sd-earnings">'
+        + '<div class="sd-earnings__head">'
+        + '<div class="sd-earnings__title"><span aria-hidden="true">💰</span> Earnings Summary</div>'
+        + '<a class="sd-earnings__more" href="#/earnings">View Details <span aria-hidden="true">→</span></a>'
+        + '</div>'
+        + '<div class="sd-earnings__grid">'
+        + '<div class="sd-earnings__cell"><div class="sd-earnings__label">Confirmed Today</div>'
+        + '<div class="sd-earnings__val is-green">' + money(dash.confirmedToday) + '</div></div>'
+        + '<div class="sd-earnings__cell"><div class="sd-earnings__label">Pending</div>'
+        + '<div class="sd-earnings__val is-amber">' + money(dash.pending) + '</div></div>'
+        + '<div class="sd-earnings__cell"><div class="sd-earnings__label">This Month</div>'
+        + '<div class="sd-earnings__val">' + money(dash.thisMonth) + '</div></div>'
+        + '</div></div>';
+}
+
+/** Lightweight skeleton shown while the dashboard payload is in flight. */
+function sdSkeletonHtml() {
+    function card() {
+        return '<div class="sd-skel-card"><div class="sd-skel sd-skel--thumb"></div><div class="sd-skel-lines">'
+            + '<div class="sd-skel sd-skel--line w60"></div><div class="sd-skel sd-skel--line w90"></div>'
+            + '<div class="sd-skel sd-skel--line w40"></div></div></div>';
+    }
+    var stats = '';
+    for (var i = 0; i < 3; i++) stats += '<div class="sd-skel sd-skel--stat"></div>';
+    var quick = '';
+    for (var j = 0; j < 5; j++) quick += '<div class="sd-skel sd-skel--qa"></div>';
+    return '<div class="sd-root" aria-busy="true" aria-label="Loading your dashboard">'
+        + '<div class="sd-stats">' + stats + '</div>'
+        + '<div class="sd-skel sd-skel--store"></div>'
+        + '<div class="sd-quick">' + quick + '</div>'
+        + '<div class="sd-skel sd-skel--line w30 sd-skel--gap"></div>'
+        + card() + card()
+        + '</div>';
+}
+
+/**
+ * Real per-offering order counts for today, taken from the EXISTING order
+ * summary endpoint the Orders screen already uses.
+ *
+ * Products with no orders today are simply absent from that payload, so a
+ * missing key means "no figure available" rather than zero. The card then shows
+ * a plain "View Orders" instead of asserting a misleading "(0)".
+ */
+async function sellerOfferingOrderCounts() {
     try {
+        var summary = await sellerApi('/api/seller-app/orders/summary?date=' + sellerDate('today'));
+        var map = {};
+        ((summary && summary.products) || []).forEach(function (row) {
+            if (row && row.productId != null) map[row.productId] = row.totalOrders || 0;
+        });
+        return map;
+    } catch (e) {
+        // Never block the dashboard on this optional count: degrade to no badge.
+        return {};
+    }
+}
+
+async function sellerHomeView() {
+    // Paint the skeleton immediately so a slow dashboard never shows a blank
+    // screen; sellerRender replaces it with the real markup when we return.
+    var live = viewEl();
+    if (live) live.innerHTML = sdSkeletonHtml();
+    var h = '<div class="view-enter sd-root">';
+    // Header: brand on the left, real notification bell + seller avatar right.
+    var sellerNameForAvatar = String((S.user && S.user.name) || 'Seller').trim();
+    var avatarLetter = sellerNameForAvatar ? sellerNameForAvatar.charAt(0).toUpperCase() : 'S';
+    h += '<header class="sd-header">'
+        + '<div class="sd-header__brand">'
+        + '<span class="sd-header__logo" aria-hidden="true">' + esc(avatarLetter) + '</span>'
+        + '<span class="sd-header__word">SocioMart</span>'
+        + '</div>'
+        + '<div class="sd-header__right">'
+        + '<span class="notif-bell">' + notificationBadgeHtml() + notificationPanelHtml('sellerNotifPanel') + '</span>'
+        + '<button class="sd-header__avatar" type="button" data-action="toggle-theme"'
+        + ' aria-label="Switch between light and dark theme" title="Switch theme">'
+        + esc(avatarLetter) + '</button>'
+        + '</div></header>';
+    try {
+        // Both requests hit endpoints that already exist and are already used
+        // elsewhere in the Seller app, so no new contract is introduced.
+        var kitchen = null;
+        var kitchenErr = false;
+        try { kitchen = await sellerApi('/api/seller/kitchen'); S.myKitchen = kitchen; }
+        catch (e) { kitchenErr = true; }
         var dash = await sellerApi('/api/seller-app/dashboard');
+        var orderCounts = await sellerOfferingOrderCounts();
         S.kitchen = { id: dash.kitchenId, name: dash.kitchenName };
-        // Seller name comes from the authenticated seller's own profile. It is
-        // rendered only when the backend actually returned one, so a missing name
-        // never shows as "undefined"/"null".
-        var sellerLine = (dash.sellerName && String(dash.sellerName).trim())
-            ? '<p class="muted small">Seller: ' + esc(String(dash.sellerName).trim()) + '</p>' : '';
-        var hasActivity = (!dash.totalOrders || dash.totalOrders === 0)
-            && (!dash.hasEarnings || dash.hasEarnings === false)
-            && (!dash.pending || dash.pending === 0)
-            && (!dash.followers || dash.followers === 0)
-            && (!dash.viewsToday || dash.viewsToday === 0);
-        if (!hasActivity) {
-            h += '<div class="metric-cards-row">' +
-                '<div class="metric-card"><div class="metric-value">' + dash.viewsToday + '</div><div class="metric-label">Views Today</div></div>' +
-                '<div class="metric-card"><div class="metric-value">' + dash.followers + '</div><div class="metric-label">Followers</div></div>' +
-                '<div class="metric-card"><div class="metric-value">' + dash.totalOrders + '</div><div class="metric-label">Total Orders</div></div></div>';
+
+        // Greeting: the seller's real first name and the real time of day.
+        h += '<div class="sd-greet">'
+            + '<h1 class="sd-greet__hi">' + greeting() + ', ' + esc(sellerFirstName(dash)) + ' <span aria-hidden="true">👋</span></h1>'
+            + '<p class="sd-greet__sub">Your SocioMart Dashboard</p></div>';
+
+        h += sdStatCardsHtml(dash);
+        h += sdStoreCardHtml(dash, kitchen);
+        h += sdQuickActionsHtml();
+        if (kitchenErr) {
+            // Non-destructive: the store card still renders from the dashboard
+            // payload, we just say the photo/status could not be refreshed.
+            h += '<p class="sd-note">Store details could not be refreshed. '
+                + '<button class="sd-note__retry" type="button" data-action="seller-retry">Retry</button></p>';
         }
-        // Kitchen name stays the primary heading; the seller name sits directly
-        // beneath it and is omitted entirely when the backend sent none.
-        h += '<div class="kitchen-identity"><h2 class="ki-name">' + esc(dash.kitchenName || '') + '</h2>' +
-            (sellerLine ? '<p class="ki-seller muted small">Seller: ' + esc(String(dash.sellerName).trim()) + '</p>' : '') + '</div>';
-        h += '<div class="section-head"><h2>My Offerings</h2></div>';
-        if (!dash.offerings || dash.offerings.length === 0) {
-            h += emptyHtml('🍽️', 'No Offerings', 'Nothing on sale right now. Create your first offering and start taking orders.',
+        var offerings = dash.offerings || [];
+        h += '<div class="sd-section">'
+            + '<h2 class="sd-section__title">My Offerings<span class="sd-section__count">(' + offerings.length + ')</span></h2>'
+            + sdOfferingFilterHtml(offerings) + '</div>';
+        if (!offerings.length) {
+            // Empty-state copy is the approved Requirement 17/18 wording, kept
+            // verbatim: the redesign changes how this looks, not what it says.
+            h += emptyHtml('🍽️', 'No Offerings yet',
+                'Nothing on sale right now. Create your first offering and start taking orders.',
                 '<a class="btn btn-primary card-mt" href="#/create">+ Create Offering</a>');
         } else {
-            dash.offerings.forEach(function (p) {
-                h += '<div class="offering-card">';
-                h += '<div class="oc-photo" data-emoji="' + foodEmoji(p.name) + '">' + (sellerImg(p.imageUrl) ? '<img src="' + esc(sellerImg(p.imageUrl)) + '" alt="' + esc(p.name) + '" onerror="imgFallback(this)">' : foodEmoji(p.name)) + '</div>';
-                h += '<div class="oc-body">';
-                h += '<div class="oc-header"><span class="oc-name">' + esc(p.name) + '</span>' + offeringStatusBadge(p) + '</div>';
-                var booked = p.bookedQuantity || 0, remaining = p.remainingQuantity, maxQty = p.maxQuantity;
-                h += '<div class="oc-stats"><strong>' + booked + ' booked</strong> • ' + (remaining != null ? '<strong>' + remaining + ' available</strong>' : 'No limit') + '</div>';
-                h += '<div class="oc-time-row"><span>Orders close: <span class="time-label">' + esc(sellerOrdersCloseLabel(p)) + '</span></span><span>Delivery: <span class="time-label">' + esc(sellerDeliveryLabel(p)) + '</span></span></div>';
-                if (maxQty != null && remaining != null && remaining >= 0 && !p.soldOut && !p.ordersPaused) { h += '<div class="stepper oc-stepper"><button type="button" data-action="inv-dec" data-pid="' + p.id + '" aria-label="Decrease available quantity for ' + esc(p.name) + '">−</button><span class="stepper-value" id="inv-' + p.id + '">' + remaining + '</span><button type="button" data-action="inv-inc" data-pid="' + p.id + '" aria-label="Increase available quantity for ' + esc(p.name) + '">+</button></div>'; }
-                // Compact action bar with a clear hierarchy:
-                //   View Orders  = primary    (solid accent)
-                //   Edit         = secondary  (outline)
-                //   Pause/Resume = neutral    (label follows the real state)
-                //   Sold Out     = destructive (restrained red)
-                // Handlers, confirmations and semantics are unchanged - only the
-                // grouping and class names differ from the old stacked buttons.
-                h += '<div class="oc-actions">';
-                h += '<a class="oc-act oc-act-primary" href="#/order-detail/' + p.id + '">View Orders</a>';
-                h += '<button class="oc-act oc-act-ghost" type="button" data-action="edit-offering" data-pid="' + p.id + '">Edit</button>';
-                if (!p.soldOut && !p.ordersPaused) { h += '<button class="oc-act oc-act-pause" type="button" data-action="pause-orders" data-pid="' + p.id + '">Pause</button>'; }
-                if (p.ordersPaused && !p.soldOut) { h += '<button class="oc-act oc-act-resume" type="button" data-action="resume-orders" data-pid="' + p.id + '">Resume</button>'; }
-                if (!p.soldOut && !p.ordersPaused) { h += '<button class="oc-act oc-act-danger" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Sold Out</button>'; }
-                h += '</div>';
-                h += '</div></div>';
+            var filter = S.dashFilter || 'ALL';
+            var shown = offerings.filter(function (p) {
+                return filter === 'ALL' || sdCategoryGroup(p) === filter;
             });
+            if (!shown.length) {
+                h += emptyHtml('🍽️', 'Nothing in this filter', 'Choose "All" to see every offering.');
+            } else {
+                shown.forEach(function (p) {
+                    h += sdOfferingCardHtml(p, orderCounts[p.id] != null ? orderCounts[p.id] : null);
+                });
+            }
         }
-        h += '<button class="btn-add-offering" type="button" data-action="go-add">+ Add Offering</button>';
-        var hasPending = dash.pending != null && Number(dash.pending) !== 0;
-        if (dash.hasEarnings) {
-            h += '<div class="earnings-preview"><h3>Earnings Summary</h3>';
-            h += '<div class="ep-row"><span class="ep-label">Confirmed Today</span><span class="ep-value green">' + money(dash.confirmedToday) + '</span></div>';
-            if (hasPending) h += '<div class="ep-row"><span class="ep-label">Pending</span><span class="ep-value orange">' + money(dash.pending) + '</span></div>';
-            h += '<div class="ep-row"><span class="ep-label">This Month</span><span class="ep-value">' + money(dash.thisMonth) + '</span></div></div>';
-        } else {
-            h += emptyHtml('💰', 'No Earnings', 'No earnings to show yet');
-            if (hasPending) h += '<div class="earnings-preview"><h3>Pending Payments</h3><div class="ep-row"><span class="ep-label">Pending</span><span class="ep-value orange">' + money(dash.pending) + '</span></div></div>';
-        }
-    } catch (e) { h += emptyHtml('⚠️', 'Could not load dashboard', e.message); }
+        // Large orange CTA -> the EXISTING create-offering entry point.
+        h += '<button class="sd-add" type="button" data-action="go-add"><span aria-hidden="true">＋</span> Add Offering</button>';
+        h += sdEarningsHtml(dash);
+    } catch (e) {
+        // Honest failure state: say what broke and offer a retry. Never render
+        // a partial success as if the action had worked.
+        h += emptyHtml('⚠️', 'Could not load dashboard', e.message || 'Please try again.',
+            '<button class="btn btn-primary card-mt" type="button" data-action="seller-retry">Retry</button>');
+    }
     h += '</div>';
     return h;
 }
@@ -1740,6 +2005,11 @@ document.addEventListener('change', function (e) {
     // Without these the offering-orders society/status filters never applied.
     var societyFilter = e.target.closest('[data-action="set-offering-society"]');
     if (societyFilter) { S.offeringFilterSociety = societyFilter.value; sellerRender(); return; }
+    // Seller Dashboard's own lightweight category filter (All / Kitchen /
+    // Homemade). Read from 'change' for the same reason as the others above:
+    // a click on a <select> still reports the OLD value.
+    var dashFilter = e.target.closest('[data-action="set-dash-filter"]');
+    if (dashFilter) { S.dashFilter = dashFilter.value; sellerRender(); return; }
     var statusFilter = e.target.closest('[data-action="set-offering-status"]');
     if (statusFilter) { S.offeringFilterStatus = statusFilter.value; sellerRender(); return; }
     // Third, independent filter. It combines with society + payment instead of

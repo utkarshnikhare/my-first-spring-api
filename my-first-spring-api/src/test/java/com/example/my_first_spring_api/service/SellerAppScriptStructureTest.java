@@ -355,9 +355,15 @@ class SellerAppScriptStructureTest {
 
     @Test
     void offeringCardActionsKeepTheirHandlersAndGainACompactHierarchy() {
-        int start = sellerJs.indexOf("async function sellerHomeView(");
+        // The dashboard was redesigned to the approved Stitch reference. The
+        // offering card markup now lives in the reusable sdOfferingCardHtml()
+        // component that sellerHomeView() calls, so this slice starts at that
+        // component instead of at sellerHomeView itself. Every BEHAVIOURAL
+        // guarantee below is unchanged - only the CSS class names moved from the
+        // old oc-act-* vocabulary to the new sd-btn--* design tokens.
+        int start = sellerJs.indexOf("function sdOfferingCardHtml(");
         int end = sellerJs.indexOf("async function sellerHistoryView(");
-        assertThat(start).as("sellerHomeView must exist").isGreaterThanOrEqualTo(0);
+        assertThat(start).as("sdOfferingCardHtml must exist").isGreaterThanOrEqualTo(0);
         assertThat(end).isGreaterThan(start);
         String home = sellerJs.substring(start, end);
 
@@ -370,11 +376,21 @@ class SellerAppScriptStructureTest {
         // View Orders still routes by the offering id.
         assertThat(home).contains("href=\"#/order-detail/' + p.id + '\"");
         // Compact hierarchy classes replace the stacked full-width buttons.
-        assertThat(home).contains("oc-actions").contains("oc-act-primary")
-                .contains("oc-act-ghost").contains("oc-act-pause")
-                .contains("oc-act-resume").contains("oc-act-danger");
+        assertThat(home).contains("sd-card__actions").contains("sd-btn--primary")
+                .contains("sd-btn--edit").contains("sd-btn--pause")
+                .contains("sd-btn--resume").contains("sd-btn--soldout");
         // Pause is still only offered when the offering is actually pausable.
-        assertThat(home).contains("if (!p.soldOut && !p.ordersPaused) { h += '<button class=\"oc-act oc-act-pause\"");
+        assertThat(home).contains("if (!p.soldOut && !p.ordersPaused) h += '<button class=\"sd-btn sd-btn--pause\"");
+        // The operational figures the seller relies on must stay on the card.
+        assertThat(home)
+                .as("booked and available quantities")
+                .contains("booked").contains("available")
+                .as("order deadline and delivery time")
+                .contains("sellerOrdersCloseLabel(p)").contains("sellerDeliveryLabel(p)")
+                .as("real price")
+                .contains("money(p.price)")
+                .as("status badge is still the shared one, so states stay distinct")
+                .contains("offeringStatusBadge(p)");
     }
 
     /**
