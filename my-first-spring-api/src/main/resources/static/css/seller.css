@@ -2488,5 +2488,251 @@ html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #3321
     .so-root .order-product-card:hover { transform: none; }
 }
 
+/* ============================================================
+   SELLER EARNINGS (SCREEN 8) — approved "Earnings" mockup.
+
+   Every rule is scoped to `.er-root`, and that class is only ever rendered
+   together with `.sd-root`, so the screen reuses the shared warm-orange
+   design tokens (light AND dark) without restyling any other Seller screen.
+   The base `.earnings-header-card` / `.ehc-*` / `.earning-item` rules above
+   stay untouched: they are simply no longer rendered by the redesigned view.
+   ============================================================ */
+
+.er-root {
+    /* Layout comes from .sd-root (column + gap + overflow-x clip); only this
+       screen's own spacing is adjusted here. */
+    gap: 14px;
+    padding-top: 4px;
+}
+
+/* Screen-reader-only text: the mockup distinguishes confirmed vs pending by
+   colour alone visually, so each amount carries a hidden text label instead. */
+.er-vh {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ---------- Header ---------- */
+
+.er-head { padding: 4px 2px 0; }
+.er-title {
+    margin: 0;
+    font-size: 1.45rem;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: var(--sd-text);
+}
+
+/* ---------- Earnings summary card ---------- */
+
+.er-summary {
+    position: relative;
+    overflow: hidden;
+    padding: 18px 18px 16px;
+    border: 1px solid var(--sd-border);
+    border-radius: 20px;
+    background: var(--sd-card);
+    box-shadow: var(--sd-shadow);
+    min-width: 0;
+}
+/* The faint corner arc from the mockup, kept behind the content. */
+.er-summary::after {
+    content: "";
+    position: absolute;
+    top: -42px;
+    right: -42px;
+    width: 124px;
+    height: 124px;
+    border-radius: 50%;
+    background: var(--sd-orange-soft);
+    opacity: .8;
+    pointer-events: none;
+}
+.er-summary > * { position: relative; z-index: 1; }
+
+.er-label {
+    font-size: .7rem;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--sd-muted);
+}
+.er-hero {
+    margin-top: 4px;
+    font-size: 2.4rem;
+    line-height: 1.05;
+    font-weight: 800;
+    color: var(--sd-orange);
+    overflow-wrap: anywhere;
+}
+.er-hero--pending { font-size: 1.5rem; }
+.er-hero-block { min-width: 0; }
+.er-sum-rest {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--sd-border);
+}
+.er-sub-block { min-width: 0; }
+.er-pending {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--amber);
+    overflow-wrap: anywhere;
+}
+.er-month {
+    margin-top: 4px;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--sd-text);
+    overflow-wrap: anywhere;
+}
+.er-clock { font-size: 1rem; line-height: 1; flex: 0 0 auto; }
+
+/* ---------- Section heading ---------- */
+
+.er-section {
+    margin: 6px 0 0;
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -.01em;
+    color: var(--sd-text);
+}
+
+/* ---------- Item-wise breakdown cards ---------- */
+
+.er-list { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.er-item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius);
+    background: var(--sd-card);
+    box-shadow: var(--sd-shadow);
+    min-width: 0;
+}
+.er-item-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.er-item-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 46px;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: var(--sd-orange-soft);
+    font-size: 1.3rem;
+    overflow: hidden;
+}
+.er-item-icon img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.er-item-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.er-item-name {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--sd-text);
+    overflow-wrap: anywhere;
+}
+.er-item-orders { font-size: .8rem; color: var(--sd-muted); }
+.er-item-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--sd-border);
+    min-width: 0;
+}
+.er-item-confirmed {
+    font-size: .95rem;
+    font-weight: 800;
+    color: var(--green);
+    overflow-wrap: anywhere;
+}
+.er-item-pending {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: rgba(180, 83, 9, .12);
+    color: var(--amber);
+    font-size: .82rem;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+}
+
+/* ---------- View full history (outlined button) ---------- */
+
+.er-foot { display: flex; }
+.er-history {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 52px;
+    padding: 0 20px;
+    border: 1.5px solid var(--sd-orange);
+    border-radius: var(--sd-radius-sm);
+    background: var(--sd-card);
+    color: var(--sd-orange);
+    font-size: .86rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    text-decoration: none;
+}
+@media (hover: hover) {
+    .er-history:hover { background: var(--sd-orange); color: #fff; }
+}
+.er-history:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+
+/* ---------- Loading skeleton ---------- */
+
+.er-skel-summary { height: 196px; border-radius: 20px; }
+
+/* ---------- Responsive ---------- */
+
+/* Small phones: shrink the hero amount and the item card so a long figure or
+   a long offering name can never force horizontal scrolling. */
+@media (max-width: 380px) {
+    .er-hero { font-size: 2rem; }
+    .er-item { padding: 12px 14px; }
+    .er-item-icon { flex: 0 0 42px; width: 42px; height: 42px; font-size: 1.2rem; }
+}
+
+/* Tablet / desktop: keep the phone-first column but widen the breakdown into
+   a grid rather than stretching one card across the whole page. */
+@media (min-width: 768px) {
+    .er-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+}
+@media (min-width: 1280px) {
+    .er-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
 
 

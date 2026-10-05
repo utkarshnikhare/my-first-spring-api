@@ -1048,21 +1048,98 @@ async function sellerKitchenView() {
 }
 
 // SCREEN 8: EARNINGS
+/**
+ * Loading skeleton for the Earnings screen (Screen 8).
+ *
+ * <p>Painted by {@link sellerEarningsView} before its request resolves - the
+ * same pattern the Dashboard and Orders screens use - so a slow connection
+ * never shows a blank page. It is purely presentational: no figure is
+ * invented, every block is an empty shell that the real
+ * /api/seller-app/earnings payload replaces.</p>
+ */
+function erSkeletonHtml() {
+    function item() {
+        return '<div class="sd-skel-card"><div class="sd-skel sd-skel--thumb"></div><div class="sd-skel-lines">'
+            + '<div class="sd-skel sd-skel--line w60"></div><div class="sd-skel sd-skel--line w90"></div>'
+            + '<div class="sd-skel sd-skel--line w40"></div></div></div>';
+    }
+    return '<div class="sd-root er-root" role="status" aria-busy="true" aria-label="Loading earnings">'
+        + '<div class="sd-skel er-skel-summary"></div>'
+        + '<div class="sd-skel sd-skel--line w40"></div>'
+        + item() + item() + item()
+        + '</div>';
+}
+
+/**
+ * Screen 8 - approved Earnings mockup (presentation only).
+ *
+ * <p>Every figure still comes from the EXISTING /api/seller-app/earnings
+ * payload, and the wording stays the app's own: Confirmed Today / Pending /
+ * This Month are order values grouped by payment status - NOT settled bank
+ * revenue. The full-history link keeps pointing at the existing
+ * #/my-offerings route. No new screen, endpoint or financial calculation was
+ * introduced, and no sample figure from the mockup is hard-coded.</p>
+ */
 async function sellerEarningsView() {
-    var h = '<div class="view-enter"><div class="page-head"><h1>Earnings</h1></div>';
+    // Paint a content-shaped skeleton immediately so a slow payload never shows
+    // a blank screen; sellerRender replaces it with the real markup when we
+    // return. Purely presentational - every figure still comes from the API.
+    var live = viewEl();
+    if (live) live.innerHTML = erSkeletonHtml();
+    var h = '<div class="view-enter sd-root er-root">';
+    h += '<header class="er-head"><h1 class="er-title">Earnings</h1></header>';
     try {
         var e = await sellerApi('/api/seller-app/earnings');
         if (!e.hasEarnings) {
             h += emptyHtml('💰', 'No Earnings', 'No earnings to show yet');
+            // Same behaviour as before: a non-zero pending value is still shown
+            // even when nothing has confirmed yet today.
             if (e.pending != null && Number(e.pending) !== 0) {
-                h += '<div class="earnings-header-card"><div class="ehc-label">PENDING PAYMENTS</div><div class="ehc-main">' + money(e.pending) + '</div></div>';
+                h += '<section class="er-summary" aria-label="Pending payments summary">'
+                    + '<div class="er-hero-block"><div class="er-label">Pending Payments</div>'
+                    + '<div class="er-hero er-hero--pending"><span class="er-clock" aria-hidden="true">🕐</span>' + money(e.pending) + '</div>'
+                    + '</div></section>';
             }
         } else {
-            h += '<div class="earnings-header-card"><div class="ehc-label">CONFIRMED TODAY</div><div class="ehc-main">' + money(e.confirmedToday) + '</div>';
-            h += '<div class="ehc-row"><div class="ehc-item"><div class="ehc-val orange">' + money(e.pending) + '</div><div class="ehc-sub">PENDING</div></div><div class="ehc-item"><div class="ehc-val">' + money(e.thisMonth) + '</div><div class="ehc-sub">THIS MONTH</div></div></div></div>';
-            if (e.items && e.items.length) e.items.forEach(function (item) { h += '<div class="earning-item"><span class="ei-icon">🍽️</span><span class="ei-body"><span class="ei-name">' + esc(item.productName) + '</span><span class="ei-orders">' + item.totalOrders + ' orders</span></span><span class="ei-revenue"><span class="ei-confirmed">' + money(item.confirmedRevenue) + '</span><br><span class="ei-pending">' + money(item.pendingRevenue) + '</span></span></div>'; });
+            // Summary card: the mockup's large confirmed figure, then the two
+            // supporting real values. Nothing here is sample data.
+            h += '<section class="er-summary" aria-label="Earnings summary">';
+            h += '<div class="er-hero-block"><div class="er-label">Confirmed Today</div>'
+                + '<div class="er-hero">' + money(e.confirmedToday) + '</div></div>';
+            h += '<div class="er-sum-rest">'
+                + '<div class="er-sub-block"><div class="er-label">Pending</div>'
+                + '<div class="er-pending"><span class="er-clock" aria-hidden="true">🕐</span>' + money(e.pending) + '</div></div>'
+                + '<div class="er-sub-block"><div class="er-label">This Month</div>'
+                + '<div class="er-month">' + money(e.thisMonth) + '</div></div>'
+                + '</div>';
+            h += '</section>';
+            if (e.items && e.items.length) {
+                h += '<h2 class="er-section">Item-wise Breakdown</h2>';
+                h += '<div class="er-list">';
+                e.items.forEach(function (item) {
+                    var img = item.imageUrl || '';
+                    h += '<article class="er-item">';
+                    h += '<div class="er-item-head">';
+                    h += '<span class="er-item-icon">'
+                        + (img ? '<img src="' + esc(img) + '" alt="" data-emoji="' + foodEmoji(item.productName) + '" onerror="imgFallback(this)">' : foodEmoji(item.productName))
+                        + '</span>';
+                    h += '<span class="er-item-body"><span class="er-item-name">' + esc(item.productName) + '</span>'
+                        + '<span class="er-item-orders">' + item.totalOrders + ' orders</span></span>';
+                    h += '</div>';
+                    // The visible colours follow the mockup, so each amount also
+                    // carries a screen-reader label: meaning is never colour-only.
+                    h += '<div class="er-item-foot">'
+                        + '<span class="er-item-confirmed"><span class="er-vh">Confirmed </span>' + money(item.confirmedRevenue) + '</span>'
+                        + '<span class="er-item-pending"><span class="er-vh">Pending </span><span class="er-clock" aria-hidden="true">🕐</span>' + money(item.pendingRevenue) + '</span>'
+                        + '</div>';
+                    h += '</article>';
+                });
+                h += '</div>';
+            }
         }
-        h += '<a class="btn btn-secondary btn-block" href="#/my-offerings">VIEW FULL HISTORY</a>';
+        // The mockup's outlined closing button, wired to the exact route the
+        // screen always used - no new screen and no new endpoint were created.
+        h += '<div class="er-foot"><a class="er-history" href="#/my-offerings">View full history <span aria-hidden="true">→</span></a></div>';
     } catch (err) { h += emptyHtml('⚠️', 'Could not load earnings', err.message); }
     h += '</div>';
     return h;
