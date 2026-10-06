@@ -616,15 +616,20 @@ async function sellerHomeView() {
 
 // SCREEN 5: MY OFFERINGS (formerly "History")
 async function sellerHistoryView() {
-    var h = '<div class="view-enter"><div class="page-head"><h1>My Offerings</h1>' +
-        '<p class="muted small">Create a new offering, or revisit the ones you have already run.</p></div>';
+    // sd-root wrapper + sd-greet/sd-section chrome reuses the approved Dashboard
+    // language. The history-card list itself is intentionally untouched: its
+    // classes and copy are pinned by regression tests (responsive fix + content).
+    var h = '<div class="view-enter sd-root"><div class="sd-greet"><h1 class="sd-greet__hi">My Offerings</h1>' +
+        '<p class="sd-greet__sub">Create a new offering, or revisit the ones you have already run.</p></div>';
     // Primary action sits above the history so it is reachable without scrolling.
     // It reuses the existing Add Offering screen (#/add -> the same create flow).
     // Plain anchor on the existing #/add route: navigating by hash means the SPA
     // router handles it exactly like every other in-app link (a data-action here
     // would also fire sellerNavigate and render the view twice).
-    h += '<a class="btn btn-primary btn-block btn-mt-sm" href="#/add">+ Add Offering</a>';
-    h += '<div class="section-head"><h2>Offering History</h2></div>';
+    // sd-add is the Dashboard CTA token; the "+ Add Offering" wording and #/add
+    // target are unchanged so the existing flow is reused verbatim.
+    h += '<a class="sd-add" href="#/add">+ Add Offering</a>';
+    h += '<div class="sd-section"><h2 class="sd-section__title">Offering History</h2></div>';
     h += '<p class="muted small mb-2">Previous offerings listed here...</p>';
     try {
         var items = await sellerApi('/api/seller-app/history');

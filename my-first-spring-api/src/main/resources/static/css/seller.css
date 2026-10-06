@@ -1245,6 +1245,14 @@
     width: auto;
 }
 
+/* ---------- My Offerings (Screen 5) ---------- */
+
+/* Screen 5 reuses the Dashboard sd-* chrome (sd-root/sd-greet/sd-section/sd-add).
+   The history-card list keeps its own pinned layout rules above; these additions
+   only align the surrounding chrome and let the CTA be a plain #/add anchor. */
+.sd-root a.sd-add { text-decoration: none; }
+.sd-root .sd-greet__hi { overflow-wrap: anywhere; }
+
 /* ---------- Kitchen ---------- */
 
 /* Kitchen identity block: the kitchen name stays the primary heading, with the
