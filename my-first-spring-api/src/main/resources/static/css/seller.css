@@ -2998,5 +2998,192 @@ html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #3321
     .od-title { font-size: 1.5rem; }
 }
 
+/* ============================================================
+   SELLER INDIVIDUAL ORDER (SCREEN 7C) — same visual language as
+   the approved Offering Orders (Screen 7B) above.
+   There is no separate mockup for this drill-down, so it reuses the
+   7B header, summary-card, badge and touch-target treatment instead of
+   inventing a new design. Every rule is scoped to `.oic-root`, and that
+   class is only ever rendered together with `.sd-root`, so no other
+   Seller screen (and neither Buyer nor Admin) can be restyled. The
+   legacy `.odc-*` and `.ei-*` hooks stay untouched because existing
+   actions, tests and tooling rely on them.
+   ============================================================ */
+
+.oic-root {
+    gap: 14px;
+    padding-top: 4px;
+}
+
+.oic-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 2px 0;
+    min-width: 0;
+}
+
+/* Back control: same circular treatment Screen 7B gets. Scoped sizing also
+   beats the phone-wide `.icon-btn { height: 42px }` rule so the tap target
+   stays at the 44px guideline. */
+.oic-root .od-back {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    color: var(--sd-text);
+    box-shadow: none;
+}
+.oic-root .od-back:hover {
+    transform: none;
+    border-color: var(--sd-orange);
+    color: var(--sd-orange);
+    box-shadow: none;
+}
+.oic-root .od-back:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+
+.oic-root .drilldown-header.oic-summary {
+    margin-bottom: 0;
+    padding: 18px;
+    text-align: left;
+    border: 1px solid var(--sd-border);
+    border-radius: 20px;
+    background: var(--sd-card);
+    box-shadow: var(--sd-shadow);
+}
+
+.oic-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+}
+
+.oic-num {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: -.01em;
+    color: var(--sd-text);
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+
+.oic-root .oic-top .status-dot {
+    flex: 0 0 auto;
+    margin-top: 5px;
+}
+
+.oic-total {
+    margin: 6px 0 0;
+    font-size: .92rem;
+    font-weight: 600;
+    color: var(--sd-muted);
+    overflow-wrap: anywhere;
+}
+
+.oic-buyer {
+    margin: 6px 0 0;
+    font-size: .95rem;
+    font-weight: 700;
+    color: var(--sd-text);
+    overflow-wrap: anywhere;
+}
+
+/* Dot + readable-text badges, exactly like the approved 7B treatment. */
+.oic-root .oic-summary .dtc-badges,
+.oic-root .oic-summary .oic-badges {
+    justify-content: flex-start;
+    gap: 8px 16px;
+    margin-top: 12px;
+}
+
+.oic-root .oic-summary .dtc-badge,
+.oic-root .oic-summary .dtc-badge.green,
+.oic-root .oic-summary .dtc-badge.orange,
+.oic-root .oic-summary .dtc-badge.red {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    background: none;
+    font-size: .84rem;
+    font-weight: 700;
+    color: var(--sd-text);
+}
+
+.oic-root .oic-summary .dtc-dot {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 9px;
+    border-radius: 50%;
+}
+
+.oic-root .oic-summary .dtc-badge.green .dtc-dot { background: var(--green); }
+.oic-root .oic-summary .dtc-badge.orange .dtc-dot { background: var(--amber); }
+.oic-root .oic-summary .dtc-badge.red .dtc-dot { background: var(--danger); }
+
+/* Buyer / items card: keep the legacy card shape, align it with the new
+   tokens so it reads as one flow with the summary above. */
+.oic-root .oic-card {
+    margin-bottom: 0;
+    border: 1px solid var(--sd-border);
+    border-radius: 20px;
+    background: var(--sd-card);
+    box-shadow: var(--sd-shadow);
+}
+
+.oic-root .oic-card .odc-buyer-row,
+.oic-root .oic-card .odc-address,
+.oic-root .oic-card .odc-remark,
+.oic-root .oic-card .odc-item {
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+
+.oic-root .oic-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.oic-root .oic-items .odc-item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+}
+
+/* Actions keep the existing buttons; only the tap height is guaranteed. */
+.oic-root .oic-act { min-height: 44px; }
+.oic-root .oic-act:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+
+/* ---------- Loading skeleton ---------- */
+
+.oic-skel-head { padding: 4px 2px 0; }
+.oic-skel-card { height: 190px; border-radius: 20px; }
+.oic-skel-card--sm { height: 150px; }
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 380px) {
+    .oic-num { font-size: 1.1rem; }
+    .oic-root .drilldown-header.oic-summary { padding: 14px; }
+    .oic-root .oic-card { padding: 14px; }
+}
+
+@media (min-width: 768px) {
+    .oic-root { max-width: 760px; margin: 0 auto; width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .oic-root .oic-act { transition: none; }
+}
+
 
 

@@ -1482,16 +1482,70 @@ async function saveDeliveryToggle(input) {
     refreshDeliveryBlock();
 }
 
-// SCREEN 7C: INDIVIDUAL ORDER DETAIL
+/**
+ * Loading skeleton for the Individual Order screen (Screen 7C).
+ *
+ * <p>Painted by {@link sellerOrderDetailByOrderView} before its request
+ * resolves - the same pattern the Offering Orders / Dashboard / Orders /
+ * Earnings screens use - so a slow connection never shows a blank page. It is
+ * purely presentational: every block is an empty shell that the real
+ * /api/seller/orders/{id} payload replaces.</p>
+ */
+function oicSkeletonHtml() {
+    return '<div class="sd-root oic-root" role="status" aria-busy="true" aria-label="Loading order details">'
+        + '<div class="oic-skel-head"><div class="sd-skel sd-skel--line w40"></div></div>'
+        + '<div class="sd-skel oic-skel-card"></div>'
+        + '<div class="sd-skel sd-skel--line w60"></div>'
+        + '<div class="sd-skel oic-skel-card oic-skel-card--sm"></div>'
+        + '</div>';
+}
+
+/**
+ * Screen 7C - individual order detail (presentation only).
+ *
+ * <p>There is no separate approved mockup for this drill-down: it reuses the
+ * approved Offering Orders (Screen 7B) visual language - the same back
+ * control, the same summary-card treatment, the same dot + readable-text
+ * status badges, the same touch targets - so the two order screens read as
+ * one flow. Every figure still comes from the EXISTING
+ * /api/seller/orders/{id} payload, both existing actions (Cancel Order,
+ * Mark as Paid) keep their exact data-action hooks, and the loading / error
+ * states stay honest: a skeleton while the payload is in flight, a retry
+ * when it fails. No new screen, endpoint, route or business rule was
+ * introduced, and no sample figure is hard-coded.</p>
+ */
 // SCREEN 7C: INDIVIDUAL ORDER DETAIL
 async function sellerOrderDetailByOrderView(orderId) {
-    var h = '<div class="view-enter"><div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button><h2 class="flex-1">Order Details</h2></div>';
+    // Content-shaped skeleton while the payload is in flight - the same
+    // pattern the sibling screens use. Purely presentational:
+    // sellerRender replaces it with the string we return once we resolve.
+    var live = viewEl();
+    if (live) live.innerHTML = oicSkeletonHtml();
+    var h = '<div class="view-enter sd-root oic-root">';
+    h += '<header class="od-head oic-head"><button class="icon-btn od-back" type="button" data-action="go-back" aria-label="Back">←</button>'
+        + '<h1 class="od-title">Order Details</h1></header>';
     try {
         var order = await sellerApi('/api/seller/orders/' + orderId);
-        h += '<div class="card pad card-mb">';
-        h += '<div class="top-row"><div class="font-700">#' + esc(order.orderNumber) + '</div>';
+        // Summary card: order number + amount, then the buyer. All from the
+        // payload, never sample figures.
+        h += '<section class="drilldown-header oic-summary" aria-label="Order summary">';
+        h += '<div class="oic-top"><h2 class="oic-num">#' + esc(order.orderNumber) + '</h2>';
         var statusClass = order.orderStatus === 'CANCELLED' ? 'cancelled' : (order.paymentStatus === 'PAID' ? 'paid' : 'pending');
-        h += '<span class="status-dot ' + statusClass + '"></span></div>';
+        h += '<span class="status-dot ' + statusClass + '" aria-hidden="true"></span></div>';
+        h += '<p class="dd-stats oic-total">' + money(order.totalAmount) + '</p>';
+        if (order.buyer) {
+            h += '<p class="odc-buyer oic-buyer">' + esc(order.buyer.name || 'Unknown') + '</p>';
+        }
+        // Same treatment the approved 7B screen gives its badges: the
+        // coloured dot carries state, the label stays readable text.
+        var paymentStatus = order.paymentStatus || 'PENDING';
+        h += '<div class="dtc-badges oic-badges">';
+        h += '<span class="dtc-badge ' + (paymentStatus === 'PAID' ? 'green' : 'orange') + '"><span class="dtc-dot" aria-hidden="true"></span>Payment: ' + esc(paymentStatus) + '</span>';
+        h += '<span class="dtc-badge ' + (order.orderStatus === 'CANCELLED' ? 'red' : 'green') + '"><span class="dtc-dot" aria-hidden="true"></span>Order status: ' + esc(order.orderStatus || 'ORDERED') + '</span></div>';
+        h += '</section>';
+        // Buyer / delivery detail card. Class hooks the existing actions and
+        // tests rely on (odc-*, ei-*, data-action) are preserved verbatim.
+        h += '<section class="card pad card-mb oic-card" aria-label="Buyer and items">';
         if (order.buyer) {
             var addrParts = [];
             if (order.buyer.society) addrParts.push(order.buyer.society);
@@ -1505,25 +1559,25 @@ async function sellerOrderDetailByOrderView(orderId) {
         if (order.orderTime) { h += '<div class="tiny muted mt-1">Ordered: ' + prettyDateTime(order.orderTime) + '</div>'; }
         if (order.customInstructions) { h += '<div class="odc-remark">"' + esc(order.customInstructions) + '"</div>'; }
         if (order.items && order.items.length > 0) {
-            h += '<div class="mt-2">';
+            h += '<div class="mt-2 oic-items">';
             order.items.forEach(function (item) {
                 var itemTotal = item.price != null && item.quantity != null ? item.price * item.quantity : 0;
-                h += '<div class="odc-item"><span class="ei-name">' + esc(item.name) + '</span><span class="ei-orders">' + item.quantity + 'x ' + money(item.price) + ' = ' + money(itemTotal) + '</span></div>';
+                h += '<div class="odc-item"><span class="ei-name">' + esc(item.productName || item.name) + '</span><span class="ei-orders">' + item.quantity + 'x ' + money(item.price) + ' = ' + money(itemTotal) + '</span></div>';
             });
             h += '</div>';
         }
-        var paymentStatus = order.paymentStatus || 'PENDING';
-        h += '<div class="dtc-badges mt-2">';
-        h += '<span class="dtc-badge ' + (paymentStatus === 'PAID' ? 'green' : 'orange') + '">Payment: ' + esc(paymentStatus) + '</span>';
-        h += '<span class="dtc-badge ' + (order.orderStatus === 'CANCELLED' ? 'red' : 'green') + '">Order status: ' + esc(order.orderStatus || 'ORDERED') + '</span></div>';
+        h += '</section>';
+        // Actions keep their exact hooks and business rules.
         if (order.orderStatus && ['ORDERED', 'CONFIRMED', 'READY'].indexOf(order.orderStatus) >= 0) {
-            h += '<button class="btn btn-secondary btn-block mt-2" type="button" data-action="cancel-order" data-order-id="' + esc(order.id) + '">Cancel Order</button>';
+            h += '<button class="btn btn-secondary btn-block mt-2 oic-act" type="button" data-action="cancel-order" data-order-id="' + esc(order.id) + '">Cancel Order</button>';
         }
         if ((paymentStatus === 'PENDING' || paymentStatus === 'WILL_PAY_LATER') && order.orderStatus !== 'CANCELLED') {
-            h += '<button class="btn btn-primary btn-block mt-2" type="button" data-action="mark-paid" data-oid="' + esc(order.id) + '">Mark as Paid</button>';
+            h += '<button class="btn btn-primary btn-block mt-2 oic-act" type="button" data-action="mark-paid" data-oid="' + esc(order.id) + '">Mark as Paid</button>';
         }
-        h += '</div>';
-    } catch (e) { h += emptyHtml('⚠️', 'Could not load details', e.message); }
+    } catch (e) {
+        h += emptyHtml('⚠️', 'Could not load details', e.message,
+            '<button class="btn btn-primary card-mt" type="button" data-action="seller-retry">Retry</button>');
+    }
     h += '</div>';
     return h;
 }
