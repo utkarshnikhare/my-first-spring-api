@@ -7,8 +7,10 @@ Current handover for the merged Recurring Offerings V2 and Seller Dashboard V3 r
 - GitHub PR #7 merged normally to `main`.
 - Merge commit: `755e98922e16bc9b412b2eb653ed0517def14a42`.
 - Post-merge GitHub Actions CI passed.
+- PostgreSQL preparation PR #10 merged normally; current `main` is `89e57ade5bbabfe2eecd3cdddfe8d401ac1a741f`.
+- Post-merge CI on the preparation commit passed all 589 tests, including the native PostgreSQL Testcontainers migration test.
 - Existing Render service: `sociomart-demo`, connected to `main`.
-- Render deployment `dep-db4e7uu0tbcc73e38o7g` reported **DEPLOYED** for the merge commit.
+- Render deployment `dep-db4e7uu0tbcc73e38o7g` remains **DEPLOYED** for the V2/V3 merge commit `755e989`; the later database-preparation code was not deployed.
 - Live URL: https://sociomart-demo.onrender.com
 - Render auto-deploy remains disabled. Future deploys require an explicit manual action.
 
@@ -33,7 +35,7 @@ The current branch `copilot/persistent-database-migration` prepares a `postgres-
 
 The local migration passed against H2 PostgreSQL mode and Hibernate validated all mapped tables. The actual PostgreSQL Testcontainers test is committed to the branch but could not run on this machine because Docker is unavailable; GitHub Actions is expected to run it on its Docker-enabled runner. No free or paid provider has been provisioned and no Render environment variables or deploy settings changed.
 
-Current branch: `copilot/persistent-database-migration`, based on main commit `484171d72dc81ace7b965090a4698894e02f0903`. It is preparation only and still requires a normal PR/CI review before merge. Render remains on the already deployed H2 demo release.
+The preparation is merged to `main` in PR #10 / commit `89e57ade5bbabfe2eecd3cdddfe8d401ac1a741f`. Render remains on the already deployed H2 demo release.
 
 ### Preservation blocker
 
@@ -45,7 +47,7 @@ The deployed service still has in-memory H2. A read-only visit to its H2 Console
 - **Supabase Free** offers 500 MB database storage. Low activity can pause a project after seven days; paused projects can be restored for up to a year, but Free has no automatic daily backups/PITR. It requires manual exports and resume operations.
 - **Render Free Postgres** has 1 GB but expires after 30 days, with a 14-day upgrade grace period and no automated backups; it is not suitable for the requested preserved dataset.
 
-No provider is selected or provisioned. Before switching the existing Render service, require a safe full export, verified native PostgreSQL CI, an owner-approved free provider, and a tested count/relationship comparison.
+No provider is selected or provisioned. Before switching the existing Render service, require a safe full export, verified native PostgreSQL CI, an owner-approved free provider, and a tested count/relationship comparison. The PostgreSQL code preparation is merged; the existing service intentionally remains unchanged.
 
 ## Live verification
 
