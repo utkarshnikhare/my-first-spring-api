@@ -41,6 +41,8 @@ The preparation is merged to `main` in PR #10 / commit `89e57ade5bbabfe2eecd3cdd
 
 The deployed service still has in-memory H2. A read-only visit to its H2 Console returned “remote connections are disabled,” and the application exposes no complete database dump endpoint. I did not bypass that setting, restart the service, or replace the database. A full export must be obtained through an owner-controlled live-process path or supplied by the service owner before any cutover; standard REST listing/export endpoints do not prove that all entity data, IDs, relationships, and sequence state were preserved.
 
+Render's official documentation confirms that Free web services do not provide Shell/SSH. Enabling H2 `webAllowOthers` would require a runtime change/restart and is neither safe nor useful for recovering an in-memory DB that would disappear on restart. Under the current $0 plan and preservation requirement, there is no supported complete export route. Keep H2 live and do not cut over unless the owner supplies a complete export captured through a separately approved, non-restarting mechanism.
+
 ### Zero-cost provider comparison
 
 - **Neon Free** is the first candidate to evaluate: official limits list 1 GB/project, 100 CU-hours/project/month, 5 GB public transfer, and compute scale-to-zero after five minutes. Compute/transfer exhaustion suspends connections until quota resets; stored data remains. Cold starts, public-network dependence, quotas, and lack of paid-tier guarantees remain.

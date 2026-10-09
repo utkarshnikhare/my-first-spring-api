@@ -7,6 +7,7 @@
 - Render runs the `sociomart-demo` web service with `SPRING_PROFILES_ACTIVE=demo`.
 - The demo uses in-memory H2 and reseeds on application startup. Any non-seed runtime data is ephemeral and cannot be assumed to survive a restart or redeploy.
 - The public H2 Console reports that remote connections are disabled. There is no complete read-only export endpoint, so the current live database has not been safely snapshotted.
+- Render's official docs state that Free web services have no Shell/SSH access. Enabling H2 remote-console access requires a runtime configuration change and cannot safely be done while preserving an in-memory database.
 - `main` now contains a separate `postgres-demo` profile, PostgreSQL/Flyway dependencies, and an initial schema migration. The profile is not selected by Render.
 - Authentication is demo-only. The demo login uses a mobile number and is not an identity system for real customers.
 - OpenAPI/Swagger routes are permitted by the current security configuration and must be gated or disabled before production.
@@ -37,7 +38,7 @@ No free provider has been provisioned or connected. The current service remains 
 
 ## Migration sequence
 
-1. **Preserve data first.** Do not restart or redeploy the current H2-backed service. Its Console refuses remote connections and no full read-only dump route was found. Obtain a safe export from an owner-controlled live-process mechanism or an owner-provided export before continuing.
+1. **Preserve data first.** Do not restart or redeploy the current H2-backed service. Its Console refuses remote connections, the Render Free service has no Shell/SSH, and no full read-only dump route exists. Only an owner-provided complete export or a separately approved live-process export mechanism can unblock preservation.
 2. **Review V1 migration.** Verify every current model, FK, index, enum, identity sequence and date/time type on a native PostgreSQL instance. H2 compatibility is only a fallback check.
 3. **Run GitHub CI.** The Testcontainers PostgreSQL migration/ORM validation passed on the Docker-enabled GitHub Actions runner for `89e57ade5bbabfe2eecd3cdddfe8d401ac1a741f`.
 4. **Select a $0 provider only after review.** Compare its data retention, SLA, connection/egress limits, region, and backup/export tools. Do not use Render’s expiring free Postgres for data the user asked to preserve.
@@ -58,7 +59,7 @@ No free provider has been provisioned or connected. The current service remains 
 
 The approved operating ceiling is **₹0/month**. Paid database/web plans, storage, backups, and billable add-ons are out of scope unless separately approved. Free usage is quota-bound; an external free Postgres database may also add cold-start latency and internet-egress dependence to the Render free web service.
 
-Sources checked on 2026-10-09: [Neon Free limits](https://neon.com/faqs/free-plan-limits-and-quotas), [Supabase billing quotas](https://supabase.com/docs/guides/platform/billing-on-supabase), [Supabase inactivity pause](https://supabase.com/docs/guides/platform/free-project-pausing), [Supabase backup policy](https://supabase.com/docs/guides/platform/backups), and [Render free limits](https://render.com/docs/free).
+Sources checked on 2026-10-09: [Neon Free limits](https://neon.com/faqs/free-plan-limits-and-quotas), [Supabase billing quotas](https://supabase.com/docs/guides/platform/billing-on-supabase), [Supabase inactivity pause](https://supabase.com/docs/guides/platform/free-project-pausing), [Supabase backup policy](https://supabase.com/docs/guides/platform/backups), [Render free limits](https://render.com/docs/free), [Render Shell/SSH availability](https://render.com/docs/ssh-shell-access), and [H2 remote console settings](https://h2database.com/html/advanced.html).
 
 ## Approval required before implementation
 
