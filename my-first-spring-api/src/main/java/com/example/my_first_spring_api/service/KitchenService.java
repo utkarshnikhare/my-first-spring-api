@@ -33,6 +33,9 @@ public class KitchenService {
     private final ProductRepository productRepository;
     private final QuickPostRepository quickPostRepository;
     private final AnalyticsService analyticsService;
+    /** Recurring projection: today's resolved occurrence values on buyer DTOs (V2 §14). Field-injected so manually-constructed instances in tests keep working. */
+    @Autowired
+    private RecurringScheduleService recurringScheduleService;
 
     @Autowired
     public KitchenService(KitchenRepository kitchenRepository, ProductRepository productRepository,
@@ -94,10 +97,17 @@ public class KitchenService {
         List<ProductDto> all = productRepository.findByKitchen(kitchen).stream()
                 .map(this::toProductDto).collect(Collectors.toList());
         List<ProductDto> preorder = all.stream()
-                .filter(p -> Boolean.TRUE.equals(p.getIsPreorder()))
+                .filter(p -> Boolean.TRUE.equals(p.getIsPreorder())
+                        || (Boolean.TRUE.equals(p.getRecurring()) && p.getNextOccurrenceDate() != null
+                            && p.getNextOccurrenceDate().isAfter(LocalDate.now())))
                 .collect(Collectors.toList());
         List<ProductDto> today = all.stream()
-                .filter(p -> !Boolean.TRUE.equals(p.getIsPreorder()) && Boolean.TRUE.equals(p.getAvailableToday()))
+                .filter(p -> !Boolean.TRUE.equals(p.getIsPreorder()) && Boolean.TRUE.equals(p.getAvailableToday())
+                        // A recurring offering whose schedule starts on a future
+                        // date is orderable ahead of that date (V2 §14 future
+                        // occurrence), so it must not vanish from the storefront.
+                        || (Boolean.TRUE.equals(p.getRecurring()) && p.getNextOccurrenceDate() != null
+                            && !p.getNextOccurrenceDate().isAfter(LocalDate.now())))
                 .collect(Collectors.toList());
         KitchenDetailDto dto = new KitchenDetailDto(kitchenDto, today);
         dto.setPreorderProducts(preorder);
@@ -205,6 +215,13 @@ public class KitchenService {
         String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(), java.time.LocalTime.now());
         dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
+        // Recurring: project today's resolved occurrence (or the next
+        // occurrence's date) so the buyer sees the real per-day values and
+        // the "Pre-order + delivery date" context without knowing the engine.
+        // Guarded: some tests construct this service manually without a
+        // recurring bean, in which case decoration is skipped (one-time only
+        // paths).
+        if (recurringScheduleService != null) recurringScheduleService.decorateProductDto(product, dto);
         return dto;
     }
 }

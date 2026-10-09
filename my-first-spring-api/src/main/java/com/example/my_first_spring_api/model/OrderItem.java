@@ -34,6 +34,10 @@ public class OrderItem {
     @Column(name = "scheduled_slot")
     private String scheduledSlot;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "occurrence_id")
+    private Occurrence occurrence;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -73,6 +77,8 @@ public class OrderItem {
     public void setScheduledDate(LocalDate scheduledDate) { this.scheduledDate = scheduledDate; }
     public String getScheduledSlot() { return scheduledSlot; }
     public void setScheduledSlot(String scheduledSlot) { this.scheduledSlot = scheduledSlot; }
+    public Occurrence getOccurrence() { return occurrence; }
+    public void setOccurrence(Occurrence occurrence) { this.occurrence = occurrence; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

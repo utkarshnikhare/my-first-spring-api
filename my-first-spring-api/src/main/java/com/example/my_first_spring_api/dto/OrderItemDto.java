@@ -12,6 +12,7 @@ public class OrderItemDto {
     private BigDecimal price;
     private LocalDate scheduledDate;
     private String scheduledSlot;
+    private Long occurrenceId;
 
     public OrderItemDto() {}
 
@@ -41,5 +42,7 @@ public class OrderItemDto {
     public void setScheduledDate(LocalDate scheduledDate) { this.scheduledDate = scheduledDate; }
     public String getScheduledSlot() { return scheduledSlot; }
     public void setScheduledSlot(String scheduledSlot) { this.scheduledSlot = scheduledSlot; }
+    public Long getOccurrenceId() { return occurrenceId; }
+    public void setOccurrenceId(Long occurrenceId) { this.occurrenceId = occurrenceId; }
 }
 

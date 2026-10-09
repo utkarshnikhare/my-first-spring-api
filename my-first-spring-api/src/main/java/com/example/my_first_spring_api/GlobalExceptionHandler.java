@@ -128,6 +128,7 @@ public class GlobalExceptionHandler {
             MethodArgumentTypeMismatchException.class,
             HttpMessageNotReadableException.class})
     public ResponseEntity<ApiErrorDto> handleBadRequestWeb(Exception ex) {
+        logger.error("Bad request body binding: ", ex);
         return new ResponseEntity<>(new ApiErrorDto("BAD_REQUEST", "Invalid request. Please check the submitted data.", 400), HttpStatus.BAD_REQUEST);
     }
 

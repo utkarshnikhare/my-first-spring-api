@@ -7,6 +7,7 @@ import com.example.my_first_spring_api.dto.OrderDto;
 import com.example.my_first_spring_api.dto.SellerOrderSummaryRowDto;
 import com.example.my_first_spring_api.dto.ProductCreateDto;
 import com.example.my_first_spring_api.dto.ProductDto;
+import com.example.my_first_spring_api.dto.RecurringScheduleDto;
 import com.example.my_first_spring_api.dto.ProductUpdateDto;
 import com.example.my_first_spring_api.dto.SellerOfferingEditDto;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
@@ -42,6 +43,7 @@ public class SellerService {
     private final FeatureService featureService;
     private final SocietyDirectory societyDirectory;
     private final LocationService locationService;
+    private final RecurringScheduleService recurringScheduleService;
 
     @Autowired
     public SellerService(KitchenRepository kitchenRepository,
@@ -50,7 +52,8 @@ public class SellerService {
                          OrderService orderService,
                          FeatureService featureService,
                          SocietyDirectory societyDirectory,
-                         LocationService locationService) {
+                         LocationService locationService,
+                         RecurringScheduleService recurringScheduleService) {
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
         this.orderItemRepository = orderItemRepository;
@@ -58,6 +61,19 @@ public class SellerService {
         this.featureService = featureService;
         this.societyDirectory = societyDirectory;
         this.locationService = locationService;
+        this.recurringScheduleService = recurringScheduleService;
+    }
+
+    /** Compatibility constructor for existing focused unit tests. Production uses constructor injection above. */
+    public SellerService(KitchenRepository kitchenRepository,
+                         ProductRepository productRepository,
+                         OrderItemRepository orderItemRepository,
+                         OrderService orderService,
+                         FeatureService featureService,
+                         SocietyDirectory societyDirectory,
+                         LocationService locationService) {
+        this(kitchenRepository, productRepository, orderItemRepository, orderService, featureService,
+                societyDirectory, locationService, null);
     }
 
     public KitchenDto createKitchen(KitchenCreateDto dto, User seller) {
@@ -169,9 +185,10 @@ public class SellerService {
         Kitchen kitchen = getOwnedKitchen(kitchenId, seller);
         LocalDate offeringDate = dto.getAvailableDate();
         LocalDate today = java.time.LocalDate.now();
-        boolean preorder = dto.getIsPreorder() != null
-                ? dto.getIsPreorder() : offeringDate != null && offeringDate.isAfter(today);
-        if (offeringDate != null && offeringDate.isAfter(today) && !preorder) {
+        boolean recurringRequest = dto.getRecurringSchedule() != null;
+        boolean preorder = !recurringRequest && (dto.getIsPreorder() != null
+                ? dto.getIsPreorder() : offeringDate != null && offeringDate.isAfter(today));
+        if (!recurringRequest && offeringDate != null && offeringDate.isAfter(today) && !preorder) {
             throw new IllegalArgumentException("Future offerings must be pre-orders.");
         }
         if (preorder && !offeringDate.isAfter(today)) {
@@ -183,6 +200,12 @@ public class SellerService {
         String orderWindowEnd = OfferingTiming.requireOrdersClose(dto.getOrderWindowEnd());
         String readyByTime = dto.getReadyByTime() == null ? null : dto.getReadyByTime().trim();
         Integer maxQuantity = dto.getMaxQuantity();
+        if (recurringRequest) {
+            RecurringScheduleDto rule = dto.getRecurringSchedule();
+            orderWindowEnd = OfferingTiming.requireOrdersClose(rule.getDefaultOrderCloseTime());
+            readyByTime = rule.getDefaultReadyByTime() == null ? null : rule.getDefaultReadyByTime().trim();
+            maxQuantity = rule.getDefaultQuantity();
+        }
         if (maxQuantity != null && maxQuantity < 0) {
             throw new IllegalArgumentException("Quantity Available cannot be negative; leave blank for unlimited.");
         }
@@ -192,8 +215,15 @@ public class SellerService {
         // Server-side enforcement of the Create Offering timing rules so
         // impossible combinations are never persisted, even if the client
         // validation is bypassed.
-        OfferingTiming.validateNewOffering(dto.getAvailableDate(), preorder,
-                orderWindowStart, orderWindowEnd, readyByTime);
+        if (recurringRequest) {
+            OfferingTiming.validateWindowPair(orderWindowStart, orderWindowEnd);
+            if (readyByTime == null || readyByTime.isBlank()) {
+                throw new IllegalArgumentException("Default Delivery / Ready By is required.");
+            }
+        } else {
+            OfferingTiming.validateNewOffering(dto.getAvailableDate(), preorder,
+                    orderWindowStart, orderWindowEnd, readyByTime);
+        }
         assertFeatureCompliance(seller, preorder, offeringDate, dto.getName());
         Product product = new Product(kitchen, dto.getName(), dto.getDescription(), dto.getPrice(), dto.getImageUrl());
         product.setPriceUnit(dto.getPriceUnit());
@@ -209,7 +239,24 @@ public class SellerService {
         product.setIsPreorder(preorder);
         product.setReadyByTime(readyByTime);
         product.setCategory(joinCategories(dto.getCategories()));
-        return toProductDto(productRepository.save(product));
+
+        // Persist the product first so the recurring schedule's product foreign
+        // key is valid. The recurring schedule + occurrences are created in the
+        // SAME atomic transaction.
+        Product savedProduct = productRepository.save(product);
+
+        RecurringScheduleDto recurring = dto.getRecurringSchedule();
+        if (recurring != null) {
+            LocalDate recurringStart = recurring.getStartDate() != null
+                    ? recurring.getStartDate() : savedProduct.getAvailableDate();
+            recurringScheduleService.createSchedule(savedProduct, recurringStart,
+                    recurring.getEndDate(),
+                    recurring.getRecurrenceWeekdays(), recurring.getDefaultQuantity(),
+                    recurring.getDefaultOrderCloseTime(), recurring.getDefaultReadyByTime(),
+                    Boolean.TRUE.equals(recurring.getOngoing()));
+        }
+
+        return toProductDto(savedProduct);
     }
 
     public ProductDto updateProduct(Long productId, ProductUpdateDto dto, User seller) {

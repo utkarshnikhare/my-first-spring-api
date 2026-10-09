@@ -1120,6 +1120,20 @@
     resize: vertical;
     margin-bottom: 14px;
 }
+.qp-counter-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: -10px;
+    margin-bottom: 14px;
+}
+.qp-counter {
+    font-size: .74rem;
+    font-weight: 700;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+/* Over-limit state: the seller must see the overflow named, never lose text. */
+.qp-counter.over { color: var(--danger); }
 .parse-result-box {
     background: var(--accent-soft);
     border: 1px solid var(--accent);
@@ -1230,6 +1244,14 @@
     flex: 1 1 100%;
     width: auto;
 }
+
+/* ---------- My Offerings (Screen 5) ---------- */
+
+/* Screen 5 reuses the Dashboard sd-* chrome (sd-root/sd-greet/sd-section/sd-add).
+   The history-card list keeps its own pinned layout rules above; these additions
+   only align the surrounding chrome and let the CTA be a plain #/add anchor. */
+.sd-root a.sd-add { text-decoration: none; }
+.sd-root .sd-greet__hi { overflow-wrap: anywhere; }
 
 /* ---------- Kitchen ---------- */
 
@@ -1830,3 +1852,1372 @@
 @media (max-width: 400px) {
     .del-progress-top { flex-direction: column; align-items: flex-start; }
 }
+
+/* ============================================================
+   SELLER DASHBOARD - Stitch visual system (sd-* scoped)
+   ------------------------------------------------------------
+   Self-contained design tokens + components for the redesigned
+   Seller Dashboard. Every selector is scoped to `.sd-root`, so
+   nothing here can restyle the other Seller screens or the
+   Buyer/Admin apps. Values mirror the approved reference:
+   warm orange primary, soft cream background, pastel stat cards,
+   white rounded cards with a soft border and a light shadow.
+   ============================================================ */
+
+.sd-root {
+    /* Design tokens (reusable visual language for future Seller screens) */
+    --sd-orange: #C64F00;
+    --sd-orange-deep: #9E3D00;
+    --sd-orange-soft: #FFF1E6;
+    --sd-bg: #FCF9F5;
+    --sd-card: #FFFFFF;
+    --sd-text: #091D2E;
+    --sd-muted: #6B6B7B;
+    --sd-border: #EFE3D8;
+    --sd-radius: 18px;
+    --sd-radius-sm: 12px;
+    --sd-gap: 14px;
+    --sd-shadow: 0 1px 2px rgba(9, 29, 46, .04), 0 6px 18px rgba(9, 29, 46, .06);
+    --sd-tap: 44px; /* comfortable touch target */
+
+    display: flex;
+    flex-direction: column;
+    gap: var(--sd-gap);
+    /* Never allow a wide child (long product name, big price) to force a
+       horizontal scrollbar on a phone. */
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
+}
+
+html[data-theme="dark"] .sd-root {
+    --sd-orange: #E8792B;
+    --sd-orange-deep: #F59E5B;
+    --sd-orange-soft: #3A2412;
+    --sd-bg: #1A1410;
+    --sd-card: #241C17;
+    --sd-text: #F1EDF9;
+    --sd-muted: #A79FC0;
+    --sd-border: #3D2F26;
+    --sd-shadow: 0 2px 10px rgba(0, 0, 0, .4);
+}
+
+/* ---------- Header ---------- */
+
+.sd-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 2px 2px;
+}
+.sd-header__brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sd-header__logo {
+    width: 40px; height: 40px;
+    flex: 0 0 40px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--sd-orange), var(--sd-orange-deep));
+    color: #fff; font-weight: 800; font-size: 1.05rem;
+}
+.sd-header__word {
+    font-size: 1.4rem; font-weight: 800; letter-spacing: -.02em;
+    color: var(--sd-orange);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sd-header__right { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.sd-header__avatar {
+    width: 40px; height: 40px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    border: 1px solid var(--sd-border);
+    background: var(--sd-card);
+    color: var(--sd-orange); font-weight: 800; font-size: .95rem;
+    cursor: pointer;
+}
+.sd-header__avatar:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+
+/* ---------- Greeting ---------- */
+
+.sd-greet { padding: 2px 2px 0; }
+.sd-greet__hi {
+    margin: 0;
+    font-size: 1.35rem; font-weight: 800; letter-spacing: -.02em;
+    color: var(--sd-text);
+    overflow-wrap: anywhere;
+}
+.sd-greet__sub { margin: 2px 0 0; color: var(--sd-muted); font-size: .92rem; }
+
+/* ---------- Summary stat cards ---------- */
+
+.sd-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.sd-stat {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 14px 6px;
+    border-radius: var(--sd-radius);
+    border: 1px solid var(--sd-border);
+    min-width: 0; text-align: center;
+}
+.sd-stat--peach { background: #FDEDE3; border-color: #F7DCCB; }
+.sd-stat--pink  { background: #FCE7EF; border-color: #F6D5E1; }
+.sd-stat--blue  { background: #E6EFFB; border-color: #D3E2F7; }
+html[data-theme="dark"] .sd-stat { border-color: var(--sd-border); }
+html[data-theme="dark"] .sd-stat--peach { background: #3A2417; }
+html[data-theme="dark"] .sd-stat--pink  { background: #3A1E28; }
+html[data-theme="dark"] .sd-stat--blue  { background: #1B2740; }
+.sd-stat__icon { font-size: 1.15rem; line-height: 1; }
+.sd-stat__value {
+    font-size: 1.5rem; font-weight: 800; color: var(--sd-text);
+    line-height: 1.15; overflow-wrap: anywhere;
+}
+.sd-stat__label {
+    font-size: .74rem; font-weight: 600; color: var(--sd-muted);
+    overflow-wrap: anywhere;
+}
+
+/* ---------- Store profile card ---------- */
+
+.sd-store {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius);
+    box-shadow: var(--sd-shadow);
+    min-width: 0;
+}
+.sd-store__photo {
+    width: 58px; height: 58px; flex: 0 0 58px;
+    display: grid; place-items: center;
+    border-radius: var(--sd-radius-sm); overflow: hidden;
+    background: var(--sd-orange-soft);
+    font-size: 1.6rem;
+}
+.sd-store__photo img { width: 100%; height: 100%; object-fit: cover; }
+.sd-store__main { flex: 1 1 auto; min-width: 0; }
+.sd-store__nameline { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.sd-store__name {
+    font-size: 1.05rem; font-weight: 800; color: var(--sd-text);
+    text-decoration: none;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.sd-store__chev { color: var(--sd-muted); text-decoration: none; font-size: 1.1rem; flex: 0 0 auto; }
+.sd-store__status {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    margin-top: 3px; font-size: .82rem; font-weight: 700;
+}
+.sd-store__sep { color: var(--sd-muted); }
+/* Status is always spelled out in text as well as colour. */
+.is-active  { color: var(--green); }
+.is-paused  { color: var(--amber); }
+.sd-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: 0 0 8px; }
+.sd-flag { font-size: .7rem; letter-spacing: .04em; }
+.sd-store__view, .sd-store__edit {
+    flex: 0 0 auto;
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: 38px; padding: 0 14px;
+    border-radius: 999px;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    color: var(--sd-text); font-weight: 700; font-size: .85rem;
+    text-decoration: none;
+    cursor: pointer;
+}
+.sd-store__view:hover, .sd-store__edit:hover { border-color: var(--sd-orange); color: var(--sd-orange); }
+
+/* ---------- Quick actions ---------- */
+
+.sd-quick {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+    padding: 12px;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius);
+    box-shadow: var(--sd-shadow);
+}
+.sd-qa {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    min-height: var(--sd-tap);
+    padding: 10px 4px;
+    border: 0; border-radius: var(--sd-radius-sm);
+    background: var(--sd-orange-soft);
+    color: var(--sd-orange);
+    font: inherit; text-decoration: none; cursor: pointer;
+}
+.sd-qa:hover { background: var(--sd-orange); color: #fff; }
+.sd-qa:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+.sd-qa__icon { font-size: 1.2rem; line-height: 1; }
+.sd-qa__label {
+    font-size: .68rem; font-weight: 700; line-height: 1.2;
+    text-align: center; overflow-wrap: anywhere; word-break: break-word;
+}
+
+/* ---------- Section heading + filter ---------- */
+
+.sd-section { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.sd-section__title { margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--sd-text); }
+.sd-section__count { color: var(--sd-muted); font-weight: 700; }
+.sd-filter select {
+    min-height: 38px; padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid var(--sd-border);
+    background: var(--sd-card);
+    color: var(--sd-text); font-weight: 700; font-size: .82rem;
+}
+.sd-filter select:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 1px; }
+
+/* ---------- Offering card ---------- */
+
+.sd-card {
+    display: flex; gap: 12px;
+    padding: 12px;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius);
+    box-shadow: var(--sd-shadow);
+    min-width: 0;
+}
+.sd-card__photo {
+    width: 82px; height: 82px; flex: 0 0 82px;
+    display: grid; place-items: center;
+    border-radius: var(--sd-radius-sm); overflow: hidden;
+    background: var(--sd-orange-soft);
+    font-size: 2rem;
+}
+.sd-card__photo img { width: 100%; height: 100%; object-fit: cover; }
+.sd-card__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.sd-card__top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+/* Long offering names wrap instead of destroying the row layout. */
+.sd-card__name {
+    font-size: 1.02rem; font-weight: 800; color: var(--sd-text);
+    min-width: 0; overflow-wrap: anywhere;
+}
+.sd-card__qty { font-size: .82rem; color: var(--sd-muted); }
+.sd-card__times {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: .78rem; color: var(--sd-muted);
+}
+.sd-card__tdiv { opacity: .5; }
+.sd-tv { color: var(--sd-text); font-weight: 700; }
+.sd-card__price { font-size: 1.05rem; font-weight: 800; color: var(--sd-text); }
+.sd-card__unit { font-size: .78rem; font-weight: 600; color: var(--sd-muted); }
+.sd-card__stepper { margin-top: 2px; }
+
+.sd-card__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }
+.sd-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 40px; padding: 0 14px;
+    border-radius: 12px; border: 1px solid transparent;
+    font: inherit; font-size: .82rem; font-weight: 700;
+    text-decoration: none; cursor: pointer; white-space: normal; text-align: center;
+}
+.sd-btn:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+.sd-btn:active { transform: scale(.97); }
+.sd-btn--primary {
+    grid-column: 1 / -1;
+    background: var(--sd-orange); color: #fff;
+    box-shadow: 0 4px 12px rgba(198, 79, 0, .25);
+}
+.sd-btn--primary:hover { background: var(--sd-orange-deep); color: #fff; }
+.sd-btn--edit    { background: var(--danger-soft); color: var(--danger); }
+.sd-btn--pause   { background: var(--amber-soft);  color: var(--amber); }
+.sd-btn--resume  { background: var(--green-soft);  color: var(--green); }
+.sd-btn--soldout { background: var(--danger-soft); color: var(--danger); }
+.sd-btn--danger { background: var(--danger-soft); color: var(--danger); }
+.sd-btn--sm { min-height: 36px; padding: 0 12px; font-size: .78rem; }
+.sd-btn--edit:hover, .sd-btn--soldout:hover { filter: brightness(.96); }
+.sd-btn--pause:hover { filter: brightness(.96); }
+
+/* ---------- Add Offering CTA ---------- */
+
+.sd-add {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; min-height: 52px;
+    border: 0; border-radius: var(--sd-radius);
+    background: var(--sd-orange); color: #fff;
+    font: inherit; font-size: 1rem; font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(198, 79, 0, .35);
+}
+.sd-add:hover { background: var(--sd-orange-deep); }
+.sd-add:active { transform: scale(.98); }
+.sd-add:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+
+/* ---------- Earnings summary ---------- */
+
+.sd-earnings {
+    padding: 16px;
+    background: linear-gradient(135deg, #FDEDE3, #FCE7EF);
+    border: 1px solid #F3DCCF;
+    border-radius: var(--sd-radius);
+}
+html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #33210F, #2C1A20); border-color: var(--sd-border); }
+.sd-earnings__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.sd-earnings__title { display: flex; align-items: center; gap: 8px; font-size: 1.05rem; font-weight: 800; color: var(--sd-text); }
+.sd-earnings__more {
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: 36px; padding: 0 14px;
+    border-radius: 999px; background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    color: var(--sd-text); font-weight: 700; font-size: .8rem; text-decoration: none;
+}
+.sd-earnings__grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    margin-top: 12px; padding: 12px;
+    background: var(--sd-card); border-radius: var(--sd-radius-sm);
+}
+.sd-earnings__cell { text-align: center; min-width: 0; padding: 0 4px; border-left: 1px solid var(--sd-border); }
+.sd-earnings__cell:first-child { border-left: 0; }
+.sd-earnings__label { font-size: .74rem; font-weight: 600; color: var(--sd-muted); overflow-wrap: anywhere; }
+.sd-earnings__val { font-size: 1.1rem; font-weight: 800; color: var(--sd-text); overflow-wrap: anywhere; }
+.sd-earnings__val.is-green { color: var(--green); }
+.sd-earnings__val.is-amber { color: var(--amber); }
+
+.sd-recurring-card {
+    padding: 16px;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius);
+}
+.sd-recurring-card__name { color: var(--sd-text); font-size: 1rem; font-weight: 800; }
+.sd-recurring-card p { margin: 6px 0; }
+.sd-dot.is-unknown { background: var(--sd-muted); }
+.sd-store__status .is-unknown, .sd-flag.is-unknown { color: var(--sd-muted); }
+
+/* ---------- Note / retry ---------- */
+
+.sd-note { margin: 0; font-size: .8rem; color: var(--sd-muted); text-align: center; }
+.sd-note__retry {
+    border: 0; background: none; padding: 0 2px;
+    color: var(--sd-orange); font: inherit; font-weight: 700;
+    text-decoration: underline; cursor: pointer;
+}
+
+/* ---------- Skeleton loading ---------- */
+
+.sd-skel { background: var(--sd-border); border-radius: 8px; }
+.sd-skel--stat { height: 92px; border-radius: var(--sd-radius); }
+.sd-skel--store { height: 88px; border-radius: var(--sd-radius); }
+.sd-skel--qa { height: 64px; border-radius: var(--sd-radius-sm); }
+.sd-skel--thumb { width: 82px; height: 82px; flex: 0 0 82px; border-radius: var(--sd-radius-sm); }
+.sd-skel--line { height: 11px; border-radius: 999px; }
+.sd-skel--gap { margin-top: 8px; }
+.w30 { width: 30%; } .w40 { width: 40%; } .w60 { width: 60%; } .w90 { width: 90%; }
+.sd-skel-card {
+    display: flex; gap: 12px; padding: 12px;
+    background: var(--sd-card); border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius);
+}
+.sd-skel-lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
+
+/* ---------- Responsive ---------- */
+
+/* Small phones: keep everything readable, let the action buttons wrap. */
+@media (max-width: 360px) {
+    .sd-stat__value { font-size: 1.3rem; }
+    .sd-stat__label { font-size: .68rem; }
+    .sd-quick { grid-template-columns: repeat(5, 1fr); gap: 6px; padding: 10px 8px; }
+    .sd-qa__label { font-size: .6rem; }
+    .sd-card__photo { width: 66px; height: 66px; flex: 0 0 66px; font-size: 1.6rem; }
+    .sd-btn { padding: 0 10px; font-size: .78rem; }
+    .sd-store { flex-wrap: wrap; }
+    .sd-store__main { min-width: calc(100% - 74px); }
+    .sd-store__view, .sd-store__edit { flex: 1 1 calc(50% - 6px); justify-content: center; }
+    .sd-card { align-items: flex-start; flex-wrap: wrap; }
+    .sd-card__body { min-width: 100%; }
+    .sd-earnings__grid { grid-template-columns: 1fr; }
+    .sd-earnings__cell { border-left: 0; border-top: 1px solid var(--sd-border); padding: 8px 4px; }
+    .sd-earnings__cell:first-child { border-top: 0; }
+}
+
+.sd-root > .date-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.sd-root > .date-tabs .date-tab { width: 100%; }
+
+/* Tablets / desktop: keep the phone-first column but stop it stretching. */
+@media (min-width: 768px) {
+    .sd-header__word { font-size: 1.55rem; }
+    .sd-card__photo { width: 96px; height: 96px; flex: 0 0 96px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sd-btn:active, .sd-add:active { transform: none; }
+}
+/* Visually hidden but exposed to screen readers (filter label). */
+.sd-root .visually-hidden {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0);
+    white-space: nowrap; border: 0;
+}
+
+/* ============================================================
+   SELLER ORDERS (SCREEN 7A) — approved "Order Summary" mockup.
+
+   Every rule is scoped to `.so-root`, and that class is only ever rendered
+   together with `.sd-root`, so the screen reuses the shared warm-orange
+   design tokens (light AND dark) without restyling any other Seller screen.
+   The base `.date-tab*`, `.dtc-*` and `.order-product-card` rules above stay
+   untouched because `.dtc-badges` / `.dtc-badge` are also used by the
+   per-offering drill-down, which is deliberately left exactly as it was.
+   ============================================================ */
+
+.so-root {
+    /* Layout comes from .sd-root (column + gap + overflow-x clip); only this
+       screen's own spacing is adjusted here. */
+    gap: 14px;
+    padding-top: 4px;
+}
+
+/* ---------- Header ---------- */
+
+.so-head { padding: 4px 2px 0; }
+.so-title {
+    margin: 0;
+    font-size: 1.45rem;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: var(--sd-text);
+}
+
+/* ---------- Date tabs (the screen's existing filter, restyled only) ---------- */
+
+.so-root .date-tabs { margin-bottom: 0; gap: 8px; }
+.so-root .date-tab {
+    min-height: 40px;
+    padding: 9px 16px;
+    border: 1px solid var(--sd-border);
+    border-radius: 999px;
+    background: var(--sd-card);
+    color: var(--sd-muted);
+    font-size: .84rem;
+    font-weight: 700;
+}
+@media (hover: hover) {
+    .so-root .date-tab:hover { transform: none; border-color: var(--sd-orange); color: var(--sd-orange); }
+}
+.so-root .date-tab:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+.so-root .date-tab.active {
+    border-color: var(--sd-orange);
+    background: var(--sd-orange);
+    color: #fff;
+    box-shadow: 0 4px 10px rgba(198, 79, 0, .22);
+}
+
+/* ---------- Summary card ---------- */
+
+.so-root .daily-total-card {
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 0;
+    padding: 18px 18px 16px;
+    text-align: left;
+    border: 1px solid var(--sd-border);
+    border-radius: 20px;
+    background: var(--sd-card);
+    box-shadow: var(--sd-shadow);
+}
+/* The faint corner arc from the mockup, kept behind the content. */
+.so-root .daily-total-card::after {
+    content: "";
+    position: absolute;
+    top: -42px; right: -42px;
+    width: 124px; height: 124px;
+    border-radius: 50%;
+    background: var(--sd-orange-soft);
+    opacity: .8;
+    pointer-events: none;
+}
+.so-root .daily-total-card > * { position: relative; z-index: 1; }
+
+.so-root .dtc-eyebrow {
+    font-size: .7rem;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--sd-muted);
+}
+.so-root .daily-total-card .dtc-headline {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+    margin-top: 2px;
+}
+.so-root .daily-total-card .dtc-number {
+    font-size: 2.6rem;
+    line-height: 1.05;
+    color: var(--sd-orange);
+}
+.so-root .daily-total-card .dtc-label {
+    margin-bottom: 0;
+    font-size: .95rem;
+    font-weight: 700;
+}
+.so-root .dtc-badges { justify-content: flex-start; gap: 8px 16px; margin-top: 12px; }
+.so-root .dtc-badge,
+.so-root .dtc-badge.green,
+.so-root .dtc-badge.orange,
+.so-root .dtc-badge.red {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    background: none;
+    font-size: .84rem;
+    font-weight: 700;
+    color: var(--sd-text);
+}
+.so-root .dtc-dot { width: 9px; height: 9px; flex: 0 0 9px; border-radius: 50%; }
+.so-root .dtc-badge.green  .dtc-dot { background: var(--green); }
+.so-root .dtc-badge.orange .dtc-dot { background: var(--amber); }
+.so-root .dtc-badge.red    .dtc-dot { background: var(--danger); }
+
+/* ---------- Section heading ---------- */
+
+.so-root .so-section {
+    margin: 4px 0 0;
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: -.01em;
+    color: var(--sd-text);
+}
+
+/* ---------- Order (offering) cards ---------- */
+
+.so-list { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.so-root .order-product-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius);
+    background: var(--sd-card);
+    box-shadow: var(--sd-shadow);
+}
+.so-root .order-product-card .opc-header {
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 0;
+}
+.so-root .opc-thumb {
+    display: grid;
+    place-items: center;
+    flex: 0 0 46px;
+    width: 46px; height: 46px;
+    border-radius: 14px;
+    background: var(--sd-orange-soft);
+    font-size: 1.3rem;
+    overflow: hidden;
+}
+.so-root .opc-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.so-root .opc-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.so-root .order-product-card .opc-name {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--sd-text);
+}
+.so-root .order-product-card .opc-meta { color: var(--sd-muted); }
+.so-root .order-product-card .opc-revenue {
+    margin-left: auto;
+    max-width: 46%;
+    text-align: right;
+    font-size: 1.02rem;
+    font-weight: 800;
+    color: var(--sd-orange);
+}
+.so-root .opc-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--sd-border);
+    min-width: 0;
+}
+.so-root .opc-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 2px;
+    margin-left: auto;
+    color: var(--sd-orange);
+    font-size: .88rem;
+    font-weight: 800;
+    text-decoration: none;
+    white-space: nowrap;
+}
+@media (hover: hover) {
+    .so-root .opc-link:hover { color: var(--sd-orange-deep); text-decoration: underline; }
+}
+.so-root .opc-link:focus-visible {
+    outline: 2px solid var(--sd-orange);
+    outline-offset: 3px;
+    border-radius: 6px;
+    color: var(--sd-orange-deep);
+}
+
+/* ---------- Closing pill ---------- */
+
+.so-foot { display: flex; justify-content: center; }
+.so-history {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 24px;
+    border: 1px solid var(--sd-border);
+    border-radius: 999px;
+    background: var(--sd-card);
+    color: var(--sd-text);
+    font-size: .9rem;
+    font-weight: 700;
+    text-decoration: none;
+}
+@media (hover: hover) {
+    .so-history:hover { border-color: var(--sd-orange); color: var(--sd-orange); }
+}
+.so-history:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+
+/* ---------- Loading skeleton ---------- */
+
+.so-skel-summary { height: 132px; border-radius: 20px; }
+
+/* ---------- Responsive ---------- */
+
+/* Small phones: shrink the count and thumbnail, and stack the card footer so
+   status text and the action link can never collide or overlap. */
+@media (max-width: 380px) {
+    .so-root .daily-total-card .dtc-number { font-size: 2.1rem; }
+    .so-root .opc-thumb { flex: 0 0 40px; width: 40px; height: 40px; border-radius: 12px; font-size: 1.15rem; }
+    .so-root .order-product-card { padding: 12px 14px; }
+    .so-root .opc-foot { flex-direction: column; align-items: flex-start; }
+    .so-root .opc-link { margin-left: 0; }
+}
+
+/* Tablet / desktop: keep the phone-first column but widen into a grid rather
+   than stretching one card across the whole page. No horizontal scrolling. */
+@media (min-width: 768px) {
+    .so-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+}
+@media (min-width: 1280px) {
+    .so-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .so-root .order-product-card { transition: none; }
+    .so-root .order-product-card:hover { transform: none; }
+}
+
+/* ============================================================
+   SELLER EARNINGS (SCREEN 8) — approved "Earnings" mockup.
+
+   Every rule is scoped to `.er-root`, and that class is only ever rendered
+   together with `.sd-root`, so the screen reuses the shared warm-orange
+   design tokens (light AND dark) without restyling any other Seller screen.
+   The base `.earnings-header-card` / `.ehc-*` / `.earning-item` rules above
+   stay untouched: they are simply no longer rendered by the redesigned view.
+   ============================================================ */
+
+.er-root {
+    /* Layout comes from .sd-root (column + gap + overflow-x clip); only this
+       screen's own spacing is adjusted here. */
+    gap: 14px;
+    padding-top: 4px;
+}
+
+/* Screen-reader-only text: the mockup distinguishes confirmed vs pending by
+   colour alone visually, so each amount carries a hidden text label instead. */
+.er-vh {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ---------- Header ---------- */
+
+.er-head { padding: 4px 2px 0; }
+.er-title {
+    margin: 0;
+    font-size: 1.45rem;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: var(--sd-text);
+}
+
+/* ---------- Earnings summary card ---------- */
+
+.er-summary {
+    position: relative;
+    overflow: hidden;
+    padding: 18px 18px 16px;
+    border: 1px solid var(--sd-border);
+    border-radius: 20px;
+    background: var(--sd-card);
+    box-shadow: var(--sd-shadow);
+    min-width: 0;
+}
+/* The faint corner arc from the mockup, kept behind the content. */
+.er-summary::after {
+    content: "";
+    position: absolute;
+    top: -42px;
+    right: -42px;
+    width: 124px;
+    height: 124px;
+    border-radius: 50%;
+    background: var(--sd-orange-soft);
+    opacity: .8;
+    pointer-events: none;
+}
+.er-summary > * { position: relative; z-index: 1; }
+
+.er-label {
+    font-size: .7rem;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--sd-muted);
+}
+.er-hero {
+    margin-top: 4px;
+    font-size: 2.4rem;
+    line-height: 1.05;
+    font-weight: 800;
+    color: var(--sd-orange);
+    overflow-wrap: anywhere;
+}
+.er-hero--pending { font-size: 1.5rem; }
+.er-hero-block { min-width: 0; }
+.er-sum-rest {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--sd-border);
+}
+.er-sub-block { min-width: 0; }
+.er-pending {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--amber);
+    overflow-wrap: anywhere;
+}
+.er-month {
+    margin-top: 4px;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--sd-text);
+    overflow-wrap: anywhere;
+}
+.er-clock { font-size: 1rem; line-height: 1; flex: 0 0 auto; }
+
+/* ---------- Section heading ---------- */
+
+.er-section {
+    margin: 6px 0 0;
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -.01em;
+    color: var(--sd-text);
+}
+
+/* ---------- Item-wise breakdown cards ---------- */
+
+.er-list { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.er-item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius);
+    background: var(--sd-card);
+    box-shadow: var(--sd-shadow);
+    min-width: 0;
+}
+.er-item-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.er-item-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 46px;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: var(--sd-orange-soft);
+    font-size: 1.3rem;
+    overflow: hidden;
+}
+.er-item-icon img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.er-item-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.er-item-name {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--sd-text);
+    overflow-wrap: anywhere;
+}
+.er-item-orders { font-size: .8rem; color: var(--sd-muted); }
+.er-item-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--sd-border);
+    min-width: 0;
+}
+.er-item-confirmed {
+    font-size: .95rem;
+    font-weight: 800;
+    color: var(--green);
+    overflow-wrap: anywhere;
+}
+.er-item-pending {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: rgba(180, 83, 9, .12);
+    color: var(--amber);
+    font-size: .82rem;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+}
+
+/* ---------- View full history (outlined button) ---------- */
+
+.er-foot { display: flex; }
+.er-history {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 52px;
+    padding: 0 20px;
+    border: 1.5px solid var(--sd-orange);
+    border-radius: var(--sd-radius-sm);
+    background: var(--sd-card);
+    color: var(--sd-orange);
+    font-size: .86rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    text-decoration: none;
+}
+@media (hover: hover) {
+    .er-history:hover { background: var(--sd-orange); color: #fff; }
+}
+.er-history:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+
+/* ---------- Loading skeleton ---------- */
+
+.er-skel-summary { height: 196px; border-radius: 20px; }
+
+/* ---------- Responsive ---------- */
+
+/* Small phones: shrink the hero amount and the item card so a long figure or
+   a long offering name can never force horizontal scrolling. */
+@media (max-width: 380px) {
+    .er-hero { font-size: 2rem; }
+    .er-item { padding: 12px 14px; }
+    .er-item-icon { flex: 0 0 42px; width: 42px; height: 42px; font-size: 1.2rem; }
+}
+
+/* Tablet / desktop: keep the phone-first column but widen the breakdown into
+   a grid rather than stretching one card across the whole page. */
+@media (min-width: 768px) {
+    .er-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+}
+@media (min-width: 1280px) {
+    .er-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* ============================================================
+   SELLER OFFERING ORDERS / ORDER DETAIL (SCREEN 7B) — approved
+   "Offering Orders Summary" mockup.
+
+   Every rule is scoped to `.od-root`, and that class is only ever
+   rendered together with `.sd-root`, so the screen reuses the shared
+   warm-orange design tokens (light AND dark) without restyling any
+   other Seller screen. The base `.drilldown-header`, `.customer-row`,
+   `.oc-*` and `.del-*` rules above stay untouched because they also
+   serve screens and states outside this drill-down.
+   ============================================================ */
+
+.od-root {
+    /* Layout comes from .sd-root (column + gap + overflow-x clip); only this
+       screen's own spacing is adjusted here. */
+    gap: 14px;
+    padding-top: 4px;
+}
+
+/* ---------- Header (back control + title, mockup top bar) ---------- */
+
+.od-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 2px 0;
+    min-width: 0;
+}
+.od-root .od-back {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    color: var(--sd-text);
+    box-shadow: none;
+}
+.od-root .od-back:hover {
+    transform: none;
+    border-color: var(--sd-orange);
+    color: var(--sd-orange);
+    box-shadow: none;
+}
+.od-root .od-back:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+.od-title {
+    margin: 0;
+    min-width: 0;
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: var(--sd-text);
+    overflow-wrap: anywhere;
+}
+.od-kitchen { margin: -4px 0 0; overflow-wrap: anywhere; }
+
+/* ---------- Summary card (mockup: name · orders · plates · amount) ---------- */
+
+.od-root .drilldown-header.od-summary {
+    margin-bottom: 0;
+    padding: 18px;
+    text-align: left;
+    border: 1px solid var(--sd-border);
+    border-radius: 20px;
+    background: var(--sd-card);
+    box-shadow: var(--sd-shadow);
+}
+.od-sum-name {
+    margin: 0 0 6px;
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -.01em;
+    color: var(--sd-text);
+    overflow-wrap: anywhere;
+}
+.od-root .drilldown-header .dd-stats {
+    margin: 0;
+    font-size: .92rem;
+    font-weight: 600;
+    color: var(--sd-muted);
+    overflow-wrap: anywhere;
+}
+/* Same treatment the approved Orders screen gives its badges: the coloured
+   dot carries the state colour, the label stays fully readable text - status
+   is never colour-only, in either theme. */
+.od-root .od-summary .dtc-badges {
+    justify-content: flex-start;
+    gap: 8px 16px;
+    margin-top: 12px;
+}
+.od-root .od-summary .dtc-badge,
+.od-root .od-summary .dtc-badge.green,
+.od-root .od-summary .dtc-badge.orange,
+.od-root .od-summary .dtc-badge.red {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    background: none;
+    font-size: .84rem;
+    font-weight: 700;
+    color: var(--sd-text);
+}
+.od-root .od-summary .dtc-dot {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 9px;
+    border-radius: 50%;
+}
+.od-root .od-summary .dtc-badge.green  .dtc-dot { background: var(--green); }
+.od-root .od-summary .dtc-badge.orange .dtc-dot { background: var(--amber); }
+.od-root .od-summary .dtc-badge.red    .dtc-dot { background: var(--danger); }
+.od-booked { margin-top: -2px; overflow-wrap: anywhere; }
+
+/* ---------- Filters (the screen's existing three axes, restyled) ---------- */
+
+/* NOTE: no flex shorthand here on purpose. Below 400px the base rule stacks
+   .oc-filters into a COLUMN, where any flex-basis would become the control's
+   HEIGHT; keeping the base flex values makes the pills row- or column-shaped
+   correctly at every width while this rule only restyles their skin. */
+.od-root .od-filters { gap: 8px; margin: 0; }
+.od-root .oc-filters .oc-filter-select {
+    min-height: 44px;
+    padding: 0 14px;
+    border: 1px solid var(--sd-border);
+    border-radius: 999px;
+    background: var(--sd-card);
+    color: var(--sd-text);
+    font-size: .84rem;
+    font-weight: 700;
+}
+.od-root .oc-filters .oc-filter-select:focus-visible {
+    outline: 2px solid var(--sd-orange);
+    outline-offset: 1px;
+}
+.od-showing { margin-top: -2px; overflow-wrap: anywhere; }
+
+/* ---------- Delivery progress block ---------- */
+
+.od-root .del-progress {
+    margin: 0;
+    padding: 14px;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    border-radius: 16px;
+    box-shadow: var(--sd-shadow);
+}
+.od-root .del-progress-title { color: var(--sd-text); }
+.od-root .del-progress-count { color: var(--sd-orange); }
+.od-root .del-bar { background: var(--sd-border); }
+.od-root .del-bar-fill { background: var(--sd-orange); }
+.od-root .del-done-note { color: var(--green); }
+.od-root .del-mark-all {
+    min-height: 44px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--sd-orange);
+    color: #fff;
+    font-weight: 800;
+    box-shadow: 0 4px 12px rgba(198, 79, 0, .25);
+}
+.od-root .del-mark-all:hover { background: var(--sd-orange-deep); color: #fff; }
+.od-root .del-mark-all:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+
+/* ---------- Order rows (mockup list) ---------- */
+
+.od-list { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+.od-root .customer-row.oc-row {
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 0;
+    padding: 12px 14px;
+    min-height: 56px;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    border-radius: 14px;
+    box-shadow: var(--sd-shadow);
+    transition: border-color .15s ease, box-shadow .15s ease, transform .12s ease;
+}
+.od-root .customer-row.oc-row:hover {
+    transform: translateY(-1px);
+    border-color: var(--sd-orange);
+    box-shadow: var(--sd-shadow);
+}
+.od-root .customer-row.oc-row:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+.od-root .customer-row.oc-row .status-dot { margin-top: 5px; }
+.od-root .customer-row.oc-row .cr-qty {
+    font-size: .95rem;
+    font-weight: 800;
+    color: var(--sd-text);
+}
+.od-root .customer-row.oc-row .cr-loc { font-size: .8rem; color: var(--sd-muted); }
+
+/* Mockup row tints: pending = warm peach, cancelled = quiet background. The
+   explicit PAID / PENDING / CANCELLED text pill keeps the meaning visible
+   without relying on the tint. */
+.od-root .customer-row.oc-row.oc-row--pending { background: var(--sd-orange-soft); }
+.od-root .customer-row.oc-row.oc-row--cancelled { background: var(--sd-bg); }
+.od-root .customer-row.oc-row.oc-row--cancelled .cr-qty { color: var(--sd-muted); }
+
+.od-root .customer-row .cr-status { font-size: .7rem; }
+
+/* Remark control: mockup's trailing bubble, sized to a comfortable tap
+   target and visible on keyboard focus. */
+.od-root .customer-row .remark-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: transparent;
+    border-color: transparent;
+    font-size: 1.05rem;
+}
+.od-root .customer-row .remark-icon:hover { background: var(--sd-orange-soft); }
+.od-root .customer-row .remark-icon:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+.od-root .oc-row-chevron { color: var(--sd-muted); font-size: 1.25rem; }
+
+/* Delivered toggle pill */
+.od-root .oc-delivered {
+    min-height: 36px;
+    border: 1px solid var(--sd-border);
+    background: var(--sd-card);
+    color: var(--sd-muted);
+}
+.od-root .oc-delivered:hover { border-color: var(--sd-orange); }
+.od-root .oc-delivered.on {
+    background: var(--green-soft);
+    border-color: var(--green);
+    color: var(--green);
+}
+.od-root .oc-delivered:focus-within { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+.od-root .oc-delivered-static { background: var(--sd-border); color: var(--sd-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+    .od-root .customer-row.oc-row,
+    .od-root .customer-row.oc-row:hover { transition: none; transform: none; }
+}
+
+/* ---------- Loading skeleton ---------- */
+
+.od-skel-head { padding: 4px 2px 0; }
+.od-skel-summary { height: 150px; border-radius: 20px; }
+.od-skel-row { align-items: center; }
+.od-skel-dot { width: 14px; height: 14px; flex: 0 0 14px; border-radius: 50%; }
+
+/* ---------- Responsive ---------- */
+
+/* Small phones: shrink the heading and summary so a long offering name or a
+   long society name can never force horizontal scrolling. */
+@media (max-width: 380px) {
+    .od-title { font-size: 1.2rem; }
+    .od-sum-name { font-size: 1.15rem; }
+    .od-root .drilldown-header.od-summary { padding: 14px; }
+    .od-root .customer-row.oc-row { padding: 10px 12px; }
+    .od-root .customer-row .remark-icon { width: 40px; height: 40px; }
+}
+
+/* Tablet / desktop: keep the phone-first column but stop it stretching across
+   a very wide window. */
+@media (min-width: 768px) {
+    .od-root { max-width: 760px; margin: 0 auto; width: 100%; }
+    .od-title { font-size: 1.5rem; }
+}
+
+/* ============================================================
+   SELLER INDIVIDUAL ORDER (SCREEN 7C) — same visual language as
+   the approved Offering Orders (Screen 7B) above.
+   There is no separate mockup for this drill-down, so it reuses the
+   7B header, summary-card, badge and touch-target treatment instead of
+   inventing a new design. Every rule is scoped to `.oic-root`, and that
+   class is only ever rendered together with `.sd-root`, so no other
+   Seller screen (and neither Buyer nor Admin) can be restyled. The
+   legacy `.odc-*` and `.ei-*` hooks stay untouched because existing
+   actions, tests and tooling rely on them.
+   ============================================================ */
+
+.oic-root {
+    gap: 14px;
+    padding-top: 4px;
+}
+
+.oic-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 2px 0;
+    min-width: 0;
+}
+
+/* Back control: same circular treatment Screen 7B gets. Scoped sizing also
+   beats the phone-wide `.icon-btn { height: 42px }` rule so the tap target
+   stays at the 44px guideline. */
+.oic-root .od-back {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    color: var(--sd-text);
+    box-shadow: none;
+}
+.oic-root .od-back:hover {
+    transform: none;
+    border-color: var(--sd-orange);
+    color: var(--sd-orange);
+    box-shadow: none;
+}
+.oic-root .od-back:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+
+.oic-root .drilldown-header.oic-summary {
+    margin-bottom: 0;
+    padding: 18px;
+    text-align: left;
+    border: 1px solid var(--sd-border);
+    border-radius: 20px;
+    background: var(--sd-card);
+    box-shadow: var(--sd-shadow);
+}
+
+.oic-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+}
+
+.oic-num {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: -.01em;
+    color: var(--sd-text);
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+
+.oic-root .oic-top .status-dot {
+    flex: 0 0 auto;
+    margin-top: 5px;
+}
+
+.oic-total {
+    margin: 6px 0 0;
+    font-size: .92rem;
+    font-weight: 600;
+    color: var(--sd-muted);
+    overflow-wrap: anywhere;
+}
+
+.oic-buyer {
+    margin: 6px 0 0;
+    font-size: .95rem;
+    font-weight: 700;
+    color: var(--sd-text);
+    overflow-wrap: anywhere;
+}
+
+/* Dot + readable-text badges, exactly like the approved 7B treatment. */
+.oic-root .oic-summary .dtc-badges,
+.oic-root .oic-summary .oic-badges {
+    justify-content: flex-start;
+    gap: 8px 16px;
+    margin-top: 12px;
+}
+
+.oic-root .oic-summary .dtc-badge,
+.oic-root .oic-summary .dtc-badge.green,
+.oic-root .oic-summary .dtc-badge.orange,
+.oic-root .oic-summary .dtc-badge.red {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    background: none;
+    font-size: .84rem;
+    font-weight: 700;
+    color: var(--sd-text);
+}
+
+.oic-root .oic-summary .dtc-dot {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 9px;
+    border-radius: 50%;
+}
+
+.oic-root .oic-summary .dtc-badge.green .dtc-dot { background: var(--green); }
+.oic-root .oic-summary .dtc-badge.orange .dtc-dot { background: var(--amber); }
+.oic-root .oic-summary .dtc-badge.red .dtc-dot { background: var(--danger); }
+
+/* Buyer / items card: keep the legacy card shape, align it with the new
+   tokens so it reads as one flow with the summary above. */
+.oic-root .oic-card {
+    margin-bottom: 0;
+    border: 1px solid var(--sd-border);
+    border-radius: 20px;
+    background: var(--sd-card);
+    box-shadow: var(--sd-shadow);
+}
+
+.oic-root .oic-card .odc-buyer-row,
+.oic-root .oic-card .odc-address,
+.oic-root .oic-card .odc-remark,
+.oic-root .oic-card .odc-item {
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+
+.oic-root .oic-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.oic-root .oic-items .odc-item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+}
+
+/* Actions keep the existing buttons; only the tap height is guaranteed. */
+.oic-root .oic-act { min-height: 44px; }
+.oic-root .oic-act:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+
+/* ---------- Loading skeleton ---------- */
+
+.oic-skel-head { padding: 4px 2px 0; }
+.oic-skel-card { height: 190px; border-radius: 20px; }
+.oic-skel-card--sm { height: 150px; }
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 380px) {
+    .oic-num { font-size: 1.1rem; }
+    .oic-root .drilldown-header.oic-summary { padding: 14px; }
+    .oic-root .oic-card { padding: 14px; }
+}
+
+@media (min-width: 768px) {
+    .oic-root { max-width: 760px; margin: 0 auto; width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .oic-root .oic-act { transition: none; }
+}
+

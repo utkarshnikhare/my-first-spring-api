@@ -34,6 +34,26 @@ public class ProductDto {
     private Boolean ordersClosed;
     private String lifecycleState;
     private java.time.LocalDateTime createdAt;
+    /**
+     * V2 recurring engine: true when this product is governed by an ACTIVE
+     * recurring schedule. Seller dashboard uses it for the RECURRING badge and
+     * contextual LIVE-card actions; buyers use it to present the next
+     * orderable occurrence (badge + delivery date) without needing to know
+     * about the schedule engine itself.
+     */
+    private Boolean recurring;
+    /**
+     * First orderable occurrence date for a recurring product (today when
+     * today is a selling date, otherwise the next scheduled date). Null for
+     * one-time offerings and for schedules with nothing orderable left.
+     */
+    private LocalDate nextOccurrenceDate;
+    /**
+     * Occurrence id backing the current/next selling date of a recurring
+     * product. The seller dashboard uses it for occurrence-scoped actions
+     * (Edit Today / Edit This Date / Sold Out Today / View Orders for date).
+     */
+    private Long occurrenceId;
 
     public ProductDto() {}
 
@@ -109,4 +129,11 @@ public class ProductDto {
     public void setLifecycleState(String lifecycleState) { this.lifecycleState = lifecycleState; }
     public java.time.LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(java.time.LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public Boolean getRecurring() { return recurring; }
+    public void setRecurring(Boolean recurring) { this.recurring = recurring; }
+    public boolean isRecurring() { return Boolean.TRUE.equals(recurring); }
+    public LocalDate getNextOccurrenceDate() { return nextOccurrenceDate; }
+    public void setNextOccurrenceDate(LocalDate nextOccurrenceDate) { this.nextOccurrenceDate = nextOccurrenceDate; }
+    public Long getOccurrenceId() { return occurrenceId; }
+    public void setOccurrenceId(Long occurrenceId) { this.occurrenceId = occurrenceId; }
 }

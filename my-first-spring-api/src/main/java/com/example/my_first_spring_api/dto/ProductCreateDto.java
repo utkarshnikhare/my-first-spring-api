@@ -37,6 +37,11 @@ public class ProductCreateDto {
     @Size(min = 1, message = "Select at least one category")
     private List<String> categories;
 
+    /** Optional recurring-schedule config; when present, the new product is
+     * provisioned with a full recurring schedule whose occurrences are
+     * materialised in the same atomic transaction. */
+    private RecurringScheduleDto recurringSchedule;
+
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public String getDescription() { return description; }
@@ -65,4 +70,7 @@ public class ProductCreateDto {
     public void setIsPreorder(Boolean isPreorder) { this.isPreorder = isPreorder; }
     public List<String> getCategories() { return categories; }
     public void setCategories(List<String> categories) { this.categories = categories; }
+
+    public RecurringScheduleDto getRecurringSchedule() { return recurringSchedule; }
+    public void setRecurringSchedule(RecurringScheduleDto recurringSchedule) { this.recurringSchedule = recurringSchedule; }
 }

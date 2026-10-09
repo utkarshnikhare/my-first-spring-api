@@ -10,6 +10,12 @@
 var FAV_CACHE = null; // Set of favourited kitchen ids; null = not loaded yet
 var FAV_FULL_CACHE = null; // Full FavouriteDto list from last /api/favourites call; null = not loaded/failed
 
+function todayDate() {
+    var now = new Date();
+    var offset = now.getTimezoneOffset();
+    return new Date(now.getTime() - offset * 60000).toISOString().slice(0, 10);
+}
+
 function favSet() {
     return FAV_CACHE && FAV_CACHE.size ? FAV_CACHE : new Set();
 }
@@ -415,8 +421,11 @@ async function homemadeStoreView(hash) {
             var areas = k.serviceAreas.split(',').map(function (a) { return a.trim(); }).filter(Boolean);
             h += '<div class="mb-2"><span class="muted small">Serves: ' + esc(areas.join(', ')) + '</span></div>';
         }
-        var today = (detail.products || []).filter(function (p) { return !p.isPreorder && p.availableToday; });
-        var preorder = (detail.preorderProducts && detail.preorderProducts.length) ? detail.preorderProducts : [];
+        var today = (detail.products || []).filter(function (p) {
+            return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate()) && p.availableToday;
+        });
+        var preorder = (detail.preorderProducts && detail.preorderProducts.length) ? detail.preorderProducts :
+            (detail.products || []).filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
         if (today.length) {
             h += '<h3 class="mb-2">Available Now</h3><div class="products-grid">';
             today.forEach(function (p) {
@@ -484,10 +493,12 @@ async function kitchenPageView(hash) {
         // confirmed viewable, so a kitchen the buyer is not allowed to open never
         // counts as traffic. Analytics must never block or fail the page.
         recordAnalyticsView('HOMEMADE_STOREFRONT_VIEW', k && k.id);
-        var today = (detail.products || []).filter(function (p) { return !p.isPreorder; });
+        var today = (detail.products || []).filter(function (p) {
+            return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate());
+        });
         var preorder = (detail.preorderProducts && detail.preorderProducts.length)
             ? detail.preorderProducts
-            : (detail.products || []).filter(function (p) { return p.isPreorder; });
+            : (detail.products || []).filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
 
         // Hero — banner, avatar, identity, tags, socials (no kitchen-level
         // "Orders Open" indicator; item-level timing lives on each offering card)
@@ -598,14 +609,22 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
     var paused = !!p.ordersPaused;
     var ordersClosed = !!p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED';
     var isPre = !!p.isPreorder || !!isPreorderSection;
+    // V2 §14: a recurring offering whose next selling date is in the future
+    // presents exactly like a pre-order WITH its delivery date. Today's
+    // occurrence (or a one-time item) keeps the normal "Today" presentation.
+    var nowD = new Date();
+    var todayIso = nowD.getFullYear() + '-' + String(nowD.getMonth() + 1).padStart(2, '0') + '-' + String(nowD.getDate()).padStart(2, '0');
+    var isNextOcc = !isPre && !!p.recurring && !!p.nextOccurrenceDate && p.nextOccurrenceDate !== todayIso;
+    var isPreOrNext = isPre || isNextOcc;
     var kitchenJson = encodeURIComponent(JSON.stringify({ id: kitchen.id, displayName: kitchen.displayName }));
     var timingHtml;
-    if (isPre) {
+    if (isPreOrNext) {
+        var timingDate = isPre ? p.availableDate : p.nextOccurrenceDate;
         // "Order by" / "Delivery by" read from the same persisted cutoff and
         // delivery data the seller configured - only the Buyer-facing wording changed.
-        var orderBy = p.availableDate ? prettyDate(p.availableDate) : '';
+        var orderBy = timingDate ? prettyDate(timingDate) : '';
         if (p.cutoffTime) orderBy = (orderBy ? orderBy + ', ' : '') + prettyTime(p.cutoffTime);
-        var deliverBy = p.availableDate ? prettyDate(p.availableDate) : '';
+        var deliverBy = timingDate ? prettyDate(timingDate) : '';
         if (p.readyByTime) deliverBy = (deliverBy ? deliverBy + ', ' : '') + p.readyByTime;
         timingHtml = '<p class="oc-timing">⏰ <strong>Order by:</strong> ' + esc(orderBy || '—') + '</p>' +
             '<p class="oc-timing">📅 <strong>Delivery by:</strong> ' + esc(deliverBy || '—') + '</p>';
@@ -614,11 +633,11 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
         var t2 = p.readyByTime ? (' · Ready ' + p.readyByTime) : '';
         timingHtml = '<p class="oc-timing">⏰ ' + esc(t1 + t2) + '</p>';
     }
-    return '<div class="offering-card' + (soldOut ? ' sold-out' : '') + (paused ? ' paused' : '') + (isPre ? ' is-preorder' : '') + '">' +
+    return '<div class="offering-card' + (soldOut ? ' sold-out' : '') + (paused ? ' paused' : '') + (isPreOrNext ? ' is-preorder' : '') + '">' +
         dishImg('oc-photo', emojiFor(p.name), usableImageUrl(p.imageUrl) ? p.imageUrl : '', p.name) +
         '<div class="oc-body">' +
         '<div class="oc-name-row"><span class="oc-name">' + esc(p.name) + '</span>' +
-        (isPre ? '<span class="oc-preorder-badge">🔮 Pre-order</span>' : '') + '</div>' +
+        (isPreOrNext ? '<span class="oc-preorder-badge">🔮 Pre-order</span>' : '') + '</div>' +
         '<p class="oc-desc">' + esc((p.description || '').slice(0, 70)) +
         ((p.description || '').length > 70 ? '… <button class="oc-more" type="button" data-action="read-more" data-full="' + encodeURIComponent(p.description) + '">More →</button>' : '') + '</p>' +
         '<div class="oc-price">' + money(p.price) + ' <span class="unit">/ ' + esc(p.priceUnit || 'serving') + '</span></div>' +
@@ -633,9 +652,9 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
             : ordersClosed
             ? '<div class="oc-footer"><span class="pill pill-red">🔒 ORDERS CLOSED</span>' +
               '<button class="btn btn-outline btn-sm" disabled>Orders closed</button></div>'
-            : '<div class="oc-footer"><span class="pill ' + (isPre ? 'pill-blue">🔵 Pre-order' : 'pill-green">🟢 Today') + '</span>' +
+            : '<div class="oc-footer"><span class="pill ' + (isPre ? 'pill-blue">🔵 Pre-order' : isNextOcc ? 'pill-blue">🔵 Pre-order · ' + esc(prettyDate(p.nextOccurrenceDate)) : 'pill-green">🟢 Today') + '</span>' +
               '<button class="btn btn-primary btn-sm" type="button" data-action="open-order-sheet" data-product="' + encodeURIComponent(JSON.stringify(p)) + '" data-kitchen="' + kitchenJson + '">' +
-              (isPre ? 'PRE-ORDER' : 'ORDER') + '</button></div>') +
+              (isPreOrNext ? 'PRE-ORDER' : 'ORDER') + '</button></div>') +
         '</div></div>';
 }
 
@@ -771,7 +790,8 @@ function sheetAdd() {
         productId: p.id, name: p.name, price: p.price, unit: p.priceUnit || 'serving', qty: sheet.qty,
         isPreorder: !!p.isPreorder, preorderType: p.preorderType || null,
         readyBy: p.readyByTime || null, cutoff: p.cutoffTime || null,
-        scheduledDate: p.isPreorder ? (sheet.date || p.availableDate || null) : null,
+        scheduledDate: p.isPreorder ? (sheet.date || p.availableDate || null)
+            : (p.recurring && p.nextOccurrenceDate ? p.nextOccurrenceDate : null),
         scheduledSlot: p.isPreorder ? sheet.slot : null
     };
     addToCart(item, k, function (committed) {
@@ -1595,4 +1615,3 @@ async function profileView() {
     h += '</div>';
     return h;
 }
-

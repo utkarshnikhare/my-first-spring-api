@@ -123,7 +123,9 @@ class BuyerSellerUiUpdateTest {
     @Test
     void soldOutStillUsesTheExistingAuthoritativeRule() {
         int start = buyerJs.indexOf("function offeringCardHtml(");
-        String card = buyerJs.substring(start, start + 2500);
+        // Window widened from 2500 when the V2 §14 next-occurrence presentation
+        // block grew the card header; the assertion itself is unchanged.
+        String card = buyerJs.substring(start, start + 3100);
         assertThat(card).contains("p.remainingQuantity != null && p.remainingQuantity <= 0");
         assertThat(card).contains("Sold out");
     }
@@ -143,7 +145,7 @@ class BuyerSellerUiUpdateTest {
     @Test
     void orderByAndDeliveryByReadThePersistedSellerConfiguredTimes() {
         String card = buyerJs.substring(buyerJs.indexOf("function offeringCardHtml("),
-                buyerJs.indexOf("function offeringCardHtml(") + 2500);
+                buyerJs.indexOf("function offeringCardHtml(") + 3100);
         // Same persisted fields the seller configured; only the wording changed.
         assertThat(card).as("order-closing time from the seller's cutoff field")
                 .contains("p.cutoffTime");
