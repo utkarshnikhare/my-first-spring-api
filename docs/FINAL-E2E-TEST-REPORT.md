@@ -1,7 +1,7 @@
 # SocioMart Final E2E Test Report
 
-Date: 2026-10-09. All live requests below were read-only. No order, schedule, payment, database, environment
-variable, or Render deployment was created or changed.
+Date: 2026-10-09. The local automated suite uses isolated test data. Live checks below were read-only; no
+order, schedule, delivery, payment, environment, or database write was submitted.
 
 ## Automated application-flow evidence
 
@@ -9,64 +9,53 @@ Command: `.\mvnw.cmd -B clean verify` from `my-first-spring-api`.
 
 | Scenario | Evidence | Result |
 |---|---|---|
-| Create new kitchen, explicit society coverage, create offerings, discover kitchen, place a multi-item order, persist order, deduct stock, and expose order to Buyer/Seller | `DemoMarketplaceE2ETest` | 3 tests passed in the final full suite |
-| Invalid/valid quantities and stock correctness | `DemoMarketplaceE2ETest.inventoryQuantityCorrectness` | Passed |
-| Authorization boundaries | `DemoMarketplaceE2ETest.authorizationBoundaries` and security integration tests | Passed |
-| Recurring occurrence selection and date-separated orders | `RecurringBuyerOrderFlowTest` | Passed |
-| Recurring creation and HTTP schedule actions | `RecurringScheduleCreateProductIntegrationTest`, `RecurringScheduleHttpTest` | Passed |
-| Per-date quantity/time override and history retention | `RecurringFoundationPersistenceTest` | Passed, including the Wednesday/Friday acceptance scenario |
-| Delivery update, occurrence scope and buyer-visible state | recurring/order/delivery service tests | Passed at service/controller integration level |
-| PostgreSQL schema migration | H2 PostgreSQL-mode migration test | Passed locally; native PostgreSQL Testcontainers case skipped locally because Docker is unavailable |
+| Kitchen setup, explicit service coverage, offering creation/discovery, multi-item buyer order, persisted order and stock decrement | `DemoMarketplaceE2ETest` | Passed in the full suite |
+| Invalid quantity, stale stock and authorization boundaries | `DemoMarketplaceE2ETest`, `OrderServiceValidationTest` and security integration tests | Passed in the full suite |
+| Recurring schedule creation, date-specific overrides, history retention and occurrence-separated orders | `RecurringScheduleCreateProductIntegrationTest`, `RecurringScheduleHttpTest`, `RecurringFoundationPersistenceTest`, `RecurringBuyerOrderFlowTest` | Passed in the full suite |
+| Delivery status, occurrence scope, summaries and buyer-visible state | `SellerDeliveryCompletionServiceTest`, `SellerDeliveryProgressSummaryTest`, `SellerOrderDetailUiTest` | Passed in the full suite |
+| Cancellation stock restoration | `InventoryRestorationIntegrationTest` | Passed in the full suite |
+| Admin filters, recorded value, location management, audit, exports, role scope and retention safeguards | `AdminV1ScopeTest`, `AdminV2HandoverTest`, `AdminHandoverGapTest`, `AdminLocationsManagementTest` | Passed in the full suite |
+| H2 PostgreSQL-mode migration and JPA validation | Maven verification | Passed locally |
+| Full backend and packaged build | Maven verification | **589 tests, 0 failures, 0 errors, 1 skipped; BUILD SUCCESS** |
 
-The backend tests use isolated test databases and test fixtures. They are not a real browser payment submission.
+The skipped test is the native PostgreSQL Testcontainers test because Docker is unavailable locally. This
+suite does not prove every browser flow or simulate simultaneous live buyers; those remain separately tracked
+in the [requirements audit](./FINAL-REQUIREMENTS-AUDIT.md).
 
-## Read-only live browser and API checks
+## Read-only live browser/API checks
 
 | Page / flow | Observation | Status |
 |---|---|---|
-| Buyer `/` | Buyer home loaded and rendered location, Food & Kitchens, Homemade Products and navigation | LIVE SMOKE |
-| Buyer `/#/food` | Food & Kitchens loaded categories/items. No Pre-order section/item appeared in the observed data | LIVE SMOKE; no preorder sample |
-| Seller `/seller.html` | Seller dashboard loaded with LIVE and RECURRING tabs, summary cards and earnings section | LIVE SMOKE |
-| Seller RECURRING tab | Tab rendered schedule-management copy and an empty state; no schedule was created | LIVE SMOKE |
-| Admin `/admin.html` | Admin sign-in form rendered | Route smoke only; authorized Admin workflows NOT TESTED |
-| `GET /api/kitchens` | HTTP 200 (`application/json`) | PASS |
-| Buyer occurrence checkout | No suitable live recurring/preorder item was available; no order was submitted | NOT TESTED |
-| Live payment | No real or simulated public payment transaction was submitted | NOT TESTED |
-| Live database preservation | No database snapshot/import/restart performed | BLOCKED |
+| Buyer `/` | Buyer landing page loaded | LIVE SMOKE |
+| Seller `/seller.html` | Seller entry/dashboard loaded | LIVE SMOKE |
+| Admin `/admin.html` | Admin sign-in route loaded; no authorized session used | ROUTE SMOKE ONLY |
+| `GET /api/kitchens` | HTTP 200; 16 seeded kitchens returned | LIVE PASS |
+| `GET /api/auth/config` | HTTP 200; demo login enabled | LIVE PASS |
+| Seller LIVE/RECURRING tabs | Both rendered; RECURRING showed an empty state | LIVE SMOKE |
+| Buyer preorder comparison | Search for `Puran Poli (Pre-order)` rendered one Aarti Kitchen offer, dated 2026-10-12, at ₹70/piece | LIVE PASS |
+| Buyer discovery API | Exact preorder query returned HTTP 200 with one `PRE_ORDER` result for kitchen ID 1 | LIVE PASS |
+| Buyer occurrence-specific checkout | No order was submitted | NOT TESTED |
+| Seller order processing / delivery | No public order or delivery state was changed | NOT TESTED |
+| Admin operational actions | No authorized Admin session was used | NOT TESTED |
+| Live payment | No real or simulated public payment was submitted | NOT TESTED |
 
-The browser recorded anonymous Buyer `401` responses for protected profile requests and a failed request for
-an external example image URL on the Seller page. The Buyer home still rendered; this report does not infer
-that protected-profile responses are a server defect or that every configured image URL is valid.
+The first preorder page snapshot showed its loading state. After the response completed, the comparison card
+and matching API result appeared; this corrected the earlier premature “no offer” observation. The card's
+external example image request was blocked by the browser, but the text and offer details rendered.
 
-## Responsive measurements
+## Responsive and browser limits
 
-Measured using Playwright `page.setViewportSize` and page DOM metrics for Buyer, Seller and Admin pages.
-Integrated browser `devicePixelRatio` was approximately `0.75`, so requested physical sizes were scaled to
-produce the specified CSS viewport. At the 390x844 target, the browser reported 391x844 CSS px; exact 390px
-certification is therefore inconclusive. No horizontal overflow was observed at the measured CSS widths.
+Earlier local headless-browser measurements covered Buyer, Seller and Admin document widths at the listed
+desktop/mobile targets; the 390px request measured 391 CSS pixels, so exact 390px certification remains
+inconclusive. These measurements do not prove keyboard accessibility, all control touch targets, all images,
+or Safari/Firefox behavior.
 
-| Requested CSS viewport | Buyer | Seller | Admin |
-|---|---|---|---|
-| 360x800 | exact; no horizontal overflow | exact; no horizontal overflow | exact; no horizontal overflow |
-| 375x812 | exact; no horizontal overflow | exact; no horizontal overflow | exact; no horizontal overflow |
-| 390x844 | measured 391x844; no overflow | measured 391x844; no overflow | measured 391x844; no overflow |
-| 412x915 | exact; no horizontal overflow | exact; no horizontal overflow | exact; no horizontal overflow |
-| 768x1024 | exact; no horizontal overflow | exact; no horizontal overflow | exact; no horizontal overflow |
-| 1024x768 | exact; no horizontal overflow | exact; no horizontal overflow | exact; no horizontal overflow |
-| 1440x900 | exact; no horizontal overflow | exact; no horizontal overflow | exact; no horizontal overflow |
-| 1920x1080 | exact; no horizontal overflow | exact; no horizontal overflow | exact; no horizontal overflow |
+## Not tested
 
-These measurements establish document width only. They do not certify every control's touch target, keyboard
-accessibility, clipping, overlap, image quality, or cross-browser behavior. Persistent screenshot files were
-not saved in this run.
-
-## Not tested or blocked
-
-- No complete browser-based local Buyer/Seller/Admin recurring-order journey was replayed in this run.
-- No live Seller schedule or Buyer order was created because that would alter the public demo.
-- No authorized Admin session was used.
-- No Safari/WebKit or Firefox run, load test, performance benchmark, or image-storage test was run.
-- Original DOCX specifications are absent; only the repository's extracted text was available.
-
-See [the acceptance matrix](./FINAL-V2-V3-ACCEPTANCE-MATRIX.md) and
-[the regression report](./FINAL-REGRESSION-REPORT.md) for additional evidence.
+- A complete live order/stock/seller-fulfilment/buyer-history journey; public business writes were avoided.
+- Simultaneous buyers competing for the final unit; code uses database locking, but no concurrent acceptance
+  test was found in the reviewed evidence.
+- Live Admin workflows with authorized credentials.
+- Production authentication, persistent-database migration, payment gateway, load/performance, or restore.
+- Original specification DOCX binaries; the seven extracted user-provided text sources were reviewed from
+  session scratch and are not committed as project data.

@@ -2,7 +2,9 @@
 
 Verification snapshot: 2026-10-09. Scope is the extracted V2/V3 specifications and current automated
 coverage. The original DOCX files are not present in the workspace; requirements not represented in the
-extracted text cannot be certified.
+extracted text cannot be certified. This V2/V3-specific matrix is supplemented by the
+[seven-document final requirements audit](./FINAL-REQUIREMENTS-AUDIT.md), which records the current Render
+deployment and broader onboarding/Admin requirements.
 
 Status terms: **PASS (automated)** means current implementation is covered by tests/source-contract checks;
 it does not imply live Render transaction acceptance. **LIVE SMOKE** is read-only browser/API evidence.
@@ -60,10 +62,12 @@ it does not imply live Render transaction acceptance. **LIVE SMOKE** is read-onl
 | Buyer entry route | Live Buyer home rendered in browser | LIVE SMOKE |
 | Seller entry route and tabs | Live Seller dashboard rendered; LIVE and RECURRING were visible; RECURRING showed its empty state | LIVE SMOKE |
 | Admin entry route | Admin sign-in page rendered; no authorized Admin workflow was exercised | NOT TESTED |
-| Buyer pre-order discovery | Live Food & Kitchens loaded; no Pre-order section/item was present in the observed view | NOT TESTED (no live sample) |
+| Buyer pre-order discovery | The comparison route and exact read-only discovery API query returned one Aarti Kitchen `Puran Poli (Pre-order)` occurrence for 2026-10-12 | LIVE SMOKE |
 | Occurrence-specific live order/checkout | No live recurring/preorder write was attempted | NOT TESTED |
 | Responsive widths | Buyer/Seller/Admin were measured at the eight requested sizes; see `FINAL-E2E-TEST-REPORT.md`. The 390px target measured 391 CSS px under browser DPR 0.75 | PARTIAL |
 | Original DOCX coverage | DOCX files are absent; extracted specifications were used | NOT VERIFIED beyond extracts |
 
-The current demo was not modified for acceptance. A green automated matrix does not imply the unavailable
-live buyer occurrence flow, authorized Admin workflows, or production readiness has passed.
+No live order or schedule was created for acceptance. A green automated matrix does not imply that the live
+buyer occurrence checkout, authorized Admin workflows, or production readiness has passed. Current commit,
+deployment, health and data-reset evidence is in the
+[final GitHub/Render status](./FINAL-GITHUB-RENDER-STATUS.md).

@@ -1,10 +1,10 @@
 # SocioMart Recurring Offerings V2 / Seller Dashboard V3 Verification Matrix
 
-Verification date: 2026-10-09
+Verification date: 2026-10-09 (final demo release audit)
 
-Source limitation: the two original DOCX binaries are not present under `C:\project`. Their extracted specification text is available at `docs/REQ1_recurring_v2.txt` and `docs/REQ2_dashboard_ui_v3.txt`; this matrix maps every requirement in those extracts plus the takeover acceptance list. No requirement was inferred beyond those sources.
+Source limitation: seven user-provided specification documents were reviewed from read-only text extracts in session scratch; their original DOCX files are not committed in this repository. This matrix retains the detailed V2/V3 mapping. The cross-document inventory, overlap decisions, source IDs and status counts are in [the final requirements audit](../docs/FINAL-REQUIREMENTS-AUDIT.md).
 
-Latest local full Maven verification (2026-10-09): **589 tests, 0 failures, 0 errors, 1 skipped, BUILD SUCCESS**. The native PostgreSQL Testcontainers case was skipped locally because Docker is unavailable; the H2 PostgreSQL-mode migration/JPA validation test passed. The latest main workflow, run `37962564417` on `58932f565b98e833cb9140b48ee3eeb4d18236a4`, succeeded. PR #13's check, run `37962316067`, also passed. Native PostgreSQL Testcontainers validation previously passed on the Docker-enabled GitHub runner for PR #10. Original V2/V3 release baseline: **587 tests, 0 failures, 0 errors, 0 skipped**. Latest focused recurring/dashboard regression run: **66 tests, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS** (25.7 seconds). `node --check` passed for all six tracked frontend JavaScript files.
+Latest local full Maven verification (2026-10-09): **589 tests, 0 failures, 0 errors, 1 skipped, BUILD SUCCESS**. The native PostgreSQL Testcontainers case was skipped locally because Docker is unavailable; the H2 PostgreSQL-mode migration/JPA validation test passed. GitHub `main` CI run `37963266688` succeeded on application commit `d9bb8782ff58719a68df01236c09e9e0990c5bf4`. The deployed Render application was independently verified at the same commit; the current service and acceptance limits are recorded in the final audit/status documents.
 
 Status meanings: **PASS** = implemented and covered by executable or direct source-contract evidence. **UI VERIFIED** = additionally exercised in a supported headless browser. **LIVE SMOKE** = read-only browser/API check against the deployed demo. **NOT VERIFIED** = evidence could not be produced in this environment.
 
@@ -104,7 +104,7 @@ Status meanings: **PASS** = implemented and covered by executable or direct sour
 | Existing Render data export | BLOCKED | Render demo uses in-memory H2. The public H2 Console refuses remote connections, and no complete read-only export endpoint exists. The existing service was not restarted, its environment was not changed, and no external database was provisioned. |
 | Persistent demo profile | PREPARED, NOT DEPLOYED | `postgres-demo` uses Flyway, Hibernate validation, explicit JDBC environment values, no automatic seed, and demo auth. Render remains on its original H2 `demo` profile. |
 
-## Post-release Live Verification (2026-10-09)
+## Earlier V2/V3 Verification Snapshot (superseded by the final demo deployment check below)
 
 | Check | Status | Evidence |
 |---|---|---|
@@ -130,9 +130,12 @@ Status meanings: **PASS** = implemented and covered by executable or direct sour
 
 | Check | Status | Evidence |
 |---|---|---|
-| Buyer/Seller/Admin entry routes | LIVE SMOKE | Buyer home, Seller dashboard and Admin sign-in page rendered in the browser. |
-| API health | LIVE SMOKE | `GET /api/kitchens` returned HTTP 200. |
-| Seller dashboard tabs | LIVE SMOKE | LIVE and RECURRING tabs rendered; the public RECURRING view showed no schedules. |
-| Buyer pre-order item | NOT TESTED | The observed Food & Kitchens view had no Pre-order item; no live order was created. |
+| Render service / deployed commit | PASS | Existing Free service `sociomart-demo`; deployment `dep-db4i1rqj9qps73alfiug`; deployed commit `d9bb8782ff58719a68df01236c09e9e0990c5bf4`. |
+| Buyer/Seller/Admin entry routes | LIVE SMOKE | Buyer home, Seller app and Admin sign-in routes returned/loaded successfully. Admin operations were not exercised. |
+| API health and demo configuration | LIVE PASS | `GET /api/kitchens` and `GET /api/auth/config` returned HTTP 200; 16 seed kitchens were present and demo login was enabled. |
+| Seller dashboard tabs | LIVE SMOKE | LIVE displayed seeded offerings; RECURRING opened with an empty state. No schedule was created. |
+| Buyer pre-order discovery | LIVE PASS | UI comparison route and exact read-only API query returned one Aarti Kitchen `Puran Poli (Pre-order)` offer for 2026-10-12. |
+| Buyer occurrence checkout | NOT TESTED | No live order or payment was submitted. |
 | Admin operations | NOT TESTED | No authorized Admin session was used. |
-| Responsive exact 390 CSS-pixel width | NOT VERIFIED | Browser DPR was approximately 0.75; a requested 390px width measured 391px. Other target widths were measured without horizontal document overflow. |
+| Responsive exact 390 CSS-pixel width | NOT VERIFIED | Earlier browser DPR was approximately 0.75; a requested 390px width measured 391px. Other target widths were measured without horizontal document overflow. |
+| Demo data / infrastructure | PASS within authorized scope | Owner accepted loss of non-seed in-memory H2 records; seed data returned. The service remains Free and no paid resource was provisioned. |
