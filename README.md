@@ -1,14 +1,22 @@
 ﻿# SocioMart
 
-**A society-level marketplace connecting buyers with home-kitchen and homemade sellers - covering storefronts, locations, orders, seller-recorded delivery tracking, and an internal Admin operations console.**
+**A society-level marketplace connecting buyers with home-kitchen and homemade sellers. The demo includes Buyer, Seller and Admin apps, recurring offerings, date-specific occurrence overrides, seller-recorded delivery, and an operations console.**
+
+> **Project status:** Recurring Offerings V2 and Seller Dashboard V3 are implemented and covered by the automated suite. SocioMart remains a demo, not a production-ready service. In particular, authentication is demo-only, payments are simulated/manual, and the deployed demo uses ephemeral in-memory H2.
 
 ## 🔗 Quick Links
 
 | | |
 |---|---|
-| 🌐 **Live Demo** | https://sociomart-demo.onrender.com |
-| 📚 **API Documentation** | https://sociomart-demo.onrender.com/swagger-ui/index.html |
+| 🌐 **Live Demo / Buyer app** | https://sociomart-demo.onrender.com/ |
+| 🏪 **Seller app** | https://sociomart-demo.onrender.com/seller.html |
+| 🛡️ **Admin app** | https://sociomart-demo.onrender.com/admin.html |
 | 💻 **GitHub Repository** | https://github.com/utkarshnikhare/my-first-spring-api |
+| 📋 **V2/V3 requirements matrix** | [requirements_matrix.md](./my-first-spring-api/requirements_matrix.md) |
+| 🗃️ **PostgreSQL preparation and limits** | [Production readiness plan](./docs/PRODUCTION-READINESS-PLAN.md) |
+| 🚦 **GitHub / Render release status** | [Final synchronization report](./docs/FINAL-GITHUB-RENDER-STATUS.md) |
+
+The generated OpenAPI/Swagger route is intentionally not linked here: the demo currently allows public access to it, and that exposure must be reviewed before any production use.
 
 ---
 
@@ -67,6 +75,8 @@ conversion rate with no recorded views), the UI says so rather than inventing a 
 - **Three apps** - buyer, seller, admin
 - **Storefronts** - a seller may run a Kitchen and/or a Homemade storefront, and serves multiple societies
 - **Offerings** - today's items and pre-orders, with quantity limits and cut-offs
+- **Recurring offerings** - repeat schedules with independent per-date occurrences and overrides
+- **Seller Dashboard V3** - LIVE and RECURRING views with schedule-aware actions
 - **Orders** - real order lifecycle, totals, and stock reservation
 - **Payment status** - recorded, independent of delivery
 - **Seller-recorded delivery** - per-order checkbox plus offering-level bulk completion
@@ -110,6 +120,7 @@ requires `SUPER_ADMIN`. Hiding a menu item is never the protection.
 - **Favourites** - saved stores, with a per-buyer limit enforced safely under concurrency
 - **Enquiries** - contact a seller about custom requests
 - **Notifications** - order and payment updates
+- **Simulated checkout options** - Demo UPI, Demo Card and Cash on Delivery; no real payment is processed
 
 ---
 
@@ -121,6 +132,11 @@ requires `SUPER_ADMIN`. Hiding a menu item is never the protection.
   own catalogue and its own delivery state
 - **Service coverage** - choose which societies the storefront serves. This is what makes it discoverable;
   a new society is **never** automatically added to existing sellers
+- **Kitchen/store setup** - authenticated sellers edit the storefront profile, choose Area/Society coverage,
+  and manage its public availability. Seller accounts are provisioned and moderated; this demo does not
+  provide a public self-service seller sign-up flow
+- **Shareable Kitchen page** - the seller's View/Preview action opens the buyer-facing
+  `/#/kitchen/{id}` page, which can be shared directly
 - **Offerings / items** - create, edit, price, quantity limits, sold-out, pause/resume, and republish from
   history
 - **Saved templates and quick posts** - publish a repeat offering quickly; WhatsApp quick-post parsing
@@ -128,6 +144,47 @@ requires `SUPER_ADMIN`. Hiding a menu item is never the protection.
 - **Payment visibility** - record whether an order is paid; independent of delivery
 - **Delivery tracking** - see the dedicated section below
 - **Dashboard, earnings and history** - per-day summary and per-dish figures
+
+---
+
+## 🔁 Recurring Offerings and Pre-orders (V2)
+
+The existing Create Offering flow supports one-time items and repeating schedules. A schedule stores its
+weekday pattern and defaults; each selling date is materialized as a separate occurrence with its own
+quantity, order window, ready/delivery time, status and order bucket.
+
+- Choose weekdays and an end rule; **Ongoing** is capped at 90 days and can be extended.
+- Blank default quantity means **No limit**.
+- **Edit Today / Edit This Date** changes only that occurrence. **Manage Schedule** changes the rule and
+  future defaults; it does not silently overwrite past or explicitly overridden dates.
+- Per-date quantity, close-time and ready-time overrides are resolved independently. Existing orders remain
+  attached to their occurrence.
+- Buyers see an orderable future occurrence as a **Pre-order** with its date; checkout revalidates the
+  selected date, cutoff and remaining quantity on the server.
+- Seller LIVE actions operate on the selected occurrence; RECURRING is for managing schedules, not orders.
+
+The detailed extracted V2 specification and test evidence are in
+[REQ1_recurring_v2.txt](./docs/REQ1_recurring_v2.txt) and
+[requirements_matrix.md](./my-first-spring-api/requirements_matrix.md). The original DOCX source is not in
+this workspace, so coverage against content absent from the extracted text is not independently verified.
+
+## 📈 Seller Dashboard (V3)
+
+The Seller home page has three data-backed summary cards (Views Today, Followers and Total Orders), a
+compact Kitchen/Store card, and only two offering tabs:
+
+- **LIVE** is the default and shows what can be ordered now, including applicable one-time, recurring and
+  pre-order items.
+- **RECURRING** shows the repeating rules, defaults and next dates, with Manage Schedule / End Schedule
+  actions.
+- Contextual actions distinguish one-time offerings from a specific recurring occurrence. There is no
+  generic pause or sold-out action on a schedule.
+- Earnings are displayed as Confirmed Today, Pending Today and This Month, using stored order/payment data;
+  they are not claims of marketplace revenue or settlement.
+
+The dashboard keeps the existing Orders filters (Society, Payment and Delivery) and navigation. See the
+[extracted V3 specification](./docs/REQ2_dashboard_ui_v3.txt) and the
+[requirements matrix](./my-first-spring-api/requirements_matrix.md).
 
 ---
 
@@ -381,7 +438,7 @@ flowchart TB
     end
 
     subgraph Data["Persistence"]
-        DB[("H2 in-memory<br/>jdbc:h2:mem:sociomartdb")]
+        DB[("Default/demo: in-memory H2<br/>Postgres demo: Flyway + PostgreSQL")]
     end
 
     B --> SEC
@@ -399,13 +456,13 @@ flowchart TB
 | Layer | Responsibility |
 |---|---|
 | **Frontend** | Three static HTML/CSS/JS apps served from `src/main/resources/static`. No UI framework, no build step |
-| **Controllers** | 14 REST controllers under `/api/**`. Validate input, delegate, shape the response |
-| **Services** | 21 services. Own all business rules, transactions and authorisation checks |
+| **Controllers** | 15 REST controllers under `/api/**`. Validate input, delegate, shape the response |
+| **Services** | 22 services. Own business rules, transactions and authorisation checks |
 | **Repositories** | Spring Data JPA repositories over the entity model |
-| **Persistence** | H2 in-memory, Hibernate `ddl-auto=update`, re-seeded on every boot |
+| **Persistence** | In-memory H2 for default/demo; file H2 for dev/prod; opt-in PostgreSQL/Flyway preparation |
 | **Security** | Session authentication, role rules, CSRF via a JS-readable cookie |
 | **Error handling** | A single `GlobalExceptionHandler` produces one consistent error shape |
-| **Tests** | JUnit 5 + Spring Security Test, 502 tests |
+| **Tests** | JUnit 5 + Spring Security Test; latest local verification: 589 tests, 1 skipped |
 | **CI** | GitHub Actions running `mvn -B clean verify` |
 | **Deployment** | Render, Docker runtime, `demo` profile |
 
@@ -419,8 +476,8 @@ flowchart TB
 | Security | `spring-boot-starter-security` - session auth, role rules, CSRF |
 | Persistence | `spring-boot-starter-data-jpa` (Hibernate) |
 | Validation | `spring-boot-starter-validation` (Jakarta Bean Validation) |
-| Database | **H2** - in-memory for `demo`/default, file-based for `dev`/`prod` |
-| API docs | **springdoc-openapi 3.1.0** (Swagger UI / OpenAPI 3) |
+| Database | **H2** for default/demo/dev/prod configurations; isolated `postgres-demo` profile prepared but not deployed |
+| API docs | **springdoc-openapi 3.1.0**; Swagger is enabled in the demo and should be restricted before production |
 | H2 console | `spring-boot-h2console` |
 | Frontend | **Vanilla HTML / CSS / JavaScript** - no framework, no bundler, no build step |
 | Tests | **JUnit 5**, `spring-boot-starter-test`, `spring-security-test` |
@@ -476,7 +533,7 @@ Responses travel back the same way and always use the same error shape.
         │           ├── index.html, seller.html, admin.html
         │           ├── css/     # styles.css, seller.css, admin.css
         │           └── js/      # app, buyer, common, seller, admin, config
-        └── test/java/.../service/  # 63 test classes, 502 tests
+        └── test/java/.../          # JUnit 5 tests; see latest results below
 ```
 
 **Files worth knowing**
@@ -485,6 +542,7 @@ Responses travel back the same way and always use the same error shape.
 |---|---|
 | `service/AdminService.java` | The Admin console backend - dashboard, filters, approvals, audit, retention, Area Admin scope |
 | `service/OrderService.java` | Order lifecycle, totals, inventory and **delivery state** |
+| `service/RecurringScheduleService.java` | Recurring schedules, occurrences, per-date overrides and extension rules |
 | `service/RetentionService.java` | Configurable retention window and the guarded purge |
 | `service/KitchenVisibility.java` | The single source of truth for "is this storefront publicly active" |
 | `static/js/admin.js` | The whole Admin console frontend |
@@ -502,7 +560,8 @@ Responses travel back the same way and always use the same error shape.
 | `Kitchen` | A **storefront** - seller, `SellerType`, service areas, served societies, availability |
 | `Product` | An **offering** - price, quantity limits, lifecycle state, availability |
 | `Order` | A buyer order - totals, payment status, order status and **delivery state** |
-| `OrderItem` | A line - offering, quantity, and the unit price captured at order time |
+| `OrderItem` | A line - offering, quantity, occurrence/date, and unit price captured at order time |
+| `RecurringSchedule`, `Occurrence`, `OccurrenceOverride` | Repeating defaults, one selling date, and date-specific field overrides |
 | `OrderDailyAggregate` | Long-lived daily rollup that outlives any detailed-order purge |
 | `AdminAuditLog` | Append-only record of every consequential Admin action |
 | `AnalyticsEvent` | Traffic and lifecycle events used to compute real analytics |
@@ -530,7 +589,8 @@ erDiagram
 
 ## 🔌 API Overview
 
-Full, always-current reference is in the **API Documentation** link at the top. Representative endpoints:
+Representative endpoint groups (the generated public Swagger page is not linked because it is currently
+enabled on the demo and needs production hardening):
 
 **Authentication** - `/api/auth`, `/api/seller-app`
 
@@ -634,6 +694,28 @@ curl "http://localhost:8081/api/admin/dashboard?date=today" \
 
 ---
 
+## 🗄️ Database Profiles and Limitations
+
+| Profile | Database and behavior | Release status |
+|---|---|---|
+| Default | In-memory H2; Hibernate creates/updates schema | Local default; not durable |
+| `demo` | In-memory H2 with demo seed data | Used by Render; restart can lose non-seed data |
+| `dev` | File-based H2 for local development | Local-only convenience; not a production database |
+| `prod` | File-based H2 with schema validation and demo seeding disabled | Not production-ready |
+| `postgres-demo` | PostgreSQL, Flyway V1, Hibernate validation, no automatic demo seed | Prepared and tested, but not selected by Render or connected to a provider |
+
+The PostgreSQL profile reads `SOCIOMART_DB_JDBC_URL`, `SOCIOMART_DB_USERNAME` and
+`SOCIOMART_DB_PASSWORD`. Configure these only in an approved local/provider environment; never put values in
+source control. The native PostgreSQL Testcontainers test requires Docker and is skipped when Docker is
+unavailable locally.
+
+**Live-data preservation blocker:** the current Render database is in-memory H2, remote H2 Console access is
+disabled, and no complete supported export has been verified. A service restart/redeploy could lose non-seed
+data. Do not deploy the PostgreSQL profile or restart the current service until an owner-controlled complete
+export and restore have been verified.
+
+---
+
 ## 🛑 Current Demo Limitations
 
 SocioMart is a **demonstration build**. The following are deliberately out of scope, and the README does not
@@ -644,6 +726,8 @@ claim otherwise:
 - **No real authentication.** Sign-in is a **demo mobile-number login**. There is **no OTP delivery**, no
   password, no email verification and no account recovery. A `PasswordEncoder` (BCrypt) bean is configured but
   **no password is ever stored or verified** - any mobile number resolves to a session.
+- There is no public self-service seller account registration flow. Demo seller accounts are provisioned and
+  moderated; authenticated sellers create/manage their Kitchen or Homemade storefront in the Seller app.
 - **Demo endpoints are profile-gated.** `/api/auth/demo-login`, `/api/seller-app/demo-login` and the H2 console
   are only reachable when the app runs with a non-`prod` profile.
 - **CSRF is disabled outside `prod` only.** Under `demo`, `dev` and the default profile
@@ -652,8 +736,9 @@ claim otherwise:
 
 **Commerce and money**
 
-- **No payment gateway and no payment processing.** Payment status is a **manually recorded fact**
-  (`PENDING` / `PAID` / `WILL_PAY_LATER`), not a transaction.
+- Checkout shows Demo UPI, Demo Card and Cash on Delivery. These are simulated/manual demo options only;
+  **no gateway, card collection or real payment processing** exists. Payment status
+  (`PENDING` / `PAID` / `WILL_PAY_LATER`) is not proof of settlement.
 - This is why the dashboard says **Recorded Order Value** rather than revenue.
 
 **Delivery**
@@ -665,16 +750,20 @@ claim otherwise:
 **Data and infrastructure**
 
 - **In-memory H2** (`jdbc:h2:mem:sociomartdb`), re-seeded on **every boot**. Nothing persists across a restart;
-  demo data is regenerated each time. There is **no production database**.
-- The `prod` profile still points at **file-based H2 with `ddl-auto=validate`** and is **not a supported
-  production configuration** - the real datasource is left commented out in `application-prod.properties`.
-- **H2 console is enabled outside `prod`** and must be disabled before any real exposure.
+  demo data is regenerated each time. The `postgres-demo` profile is migration preparation, not a live or
+  production database.
+- The `prod` profile points at **file-based H2 with `ddl-auto=validate`** and is **not production-ready**.
+- H2 Console is local/demo-only and disabled by the PostgreSQL profile. Do not expose it to the public internet.
+- No production backup/restore or persistent database has been selected or verified.
 
 **Deployment**
 
 - Render runs the **`demo` profile** with **`autoDeploy: false`** (see `render.yaml`). A merge to `main`
   therefore **does not deploy anything by itself** - a deploy is an explicit manual action.
 - The free-tier service **sleeps after inactivity**; the first request after a sleep takes roughly 60-90s.
+- Render's last independently observed successful deployment is commit
+  `755e98922e16bc9b412b2eb653ed0517def14a42` (PR #7). Later `main` includes PostgreSQL profile/migration
+  changes that are not deployed. The current service remains unchanged because safe H2 export is blocked.
 
 ---
 
@@ -719,14 +808,19 @@ cd my-first-spring-api
 .\mvnw.cmd clean verify
 ```
 
-**Latest verified result**
+**Latest local result** (`.\mvnw.cmd -B clean verify`, 2026-10-09)
 
 ```text
-Tests run: 502, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 589, Failures: 0, Errors: 0, Skipped: 1
 BUILD SUCCESS
 ```
 
-**Coverage across 63 test classes**
+The skipped test is the native PostgreSQL Testcontainers case when Docker is unavailable locally; the H2
+PostgreSQL-mode migration/schema validation runs locally. GitHub Actions' Docker-enabled runner provides the
+native PostgreSQL gate. The [release status report](./docs/FINAL-GITHUB-RENDER-STATUS.md) tracks the verified
+main workflow and the current PR check; do not merge a pending or failing check.
+
+**Coverage**
 
 | Area | What is covered |
 |---|---|
@@ -769,23 +863,37 @@ cd my-first-spring-api
 | http://localhost:8081/ | Buyer app |
 | http://localhost:8081/seller.html | Seller app |
 | http://localhost:8081/admin.html | Admin console |
-| http://localhost:8081/swagger-ui/index.html | API documentation |
-| http://localhost:8081/h2-console | H2 console (dev/demo only) |
+| http://localhost:8081/h2-console | Local H2 console (default/dev/demo only; do not expose publicly) |
 
 The port honours a `PORT` environment variable and defaults to **8081** - which is also what Render injects.
 The database is **in-memory H2**, seeded on every boot, so there is nothing to install and no data to clean up.
 
 > On Windows use `.\mvnw.cmd`; on macOS/Linux use `./mvnw`.
 
-**Demo access** - authentication is a **mobile-number sign-in**, not a password:
+**Demo access** - sign-in is mobile-number based and is not a real identity system. This README does not
+publish demo account identifiers; use only locally authorized demo/test fixtures. No real customer account
+or payment credentials should be used.
 
-| Role | How to sign in |
-|---|---|
-| Buyer | Buyer app, sign in with a demo buyer mobile (for example `9876500016`) |
-| Seller | Seller app, **demo sign-in** button (signs in as the seeded seller `9100000001`) |
-| Admin | Admin console, sign in with `9000000001` (Super Admin) or `9000000002` (Admin) |
+## 🚦 Development Status and Roadmap
 
-`POST /api/auth/demo-login` with `{"mobileNumber":"9000000001"}` does the same over HTTP.
-These are **demo identifiers only** - not credentials for anything real.
+**Implemented in the current codebase:** Buyer, Seller and Admin apps; society-scoped discovery; kitchen and
+homemade storefront management; order/inventory lifecycle; seller-recorded delivery; recurring schedules,
+per-occurrence overrides and buyer pre-order selection; Seller Dashboard V3; and opt-in PostgreSQL/Flyway
+migration preparation.
+
+**Not production-ready:** persistent storage/backups, safe export of the live H2 dataset, real authentication,
+real payment processing, production-safe Swagger exposure, external image storage/retention, operational
+monitoring, and load/performance certification.
+
+**Roadmap (not represented as completed):**
+
+1. Obtain and restore-verify a complete, owner-approved live H2 export.
+2. Evaluate/approve a durable free-tier database within the ₹0/month cap; document quota and backup limits.
+3. Import and compare the preserved data before any existing-service cutover.
+4. Replace demo identity/payment behavior and harden public API documentation before real users.
+5. Define image storage, backups/recovery, monitoring and performance acceptance.
+
+See [the final release readiness report](./docs/FINAL-RELEASE-READINESS.md) and
+[the GitHub/Render status report](./docs/FINAL-GITHUB-RENDER-STATUS.md) for current blockers and owner actions.
 
 ---

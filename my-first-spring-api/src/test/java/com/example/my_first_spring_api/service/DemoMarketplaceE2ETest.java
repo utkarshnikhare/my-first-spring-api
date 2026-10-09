@@ -28,7 +28,6 @@ import org.springframework.mock.web.MockHttpSession;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -100,28 +99,9 @@ class DemoMarketplaceE2ETest {
         return sellerService.createKitchen(dto, seller);
     }
 
-    /**
-     * A brand-new offering with a known stock level.
-     *
-     * <p>The order window is derived from the REAL current clock rather than hardcoded,
-     * because the backend correctly refuses an order once today's cutoff has passed
-     * ("Orders Close must not already have passed"). Close = now + 2h, delivery =
-     * now + 4h, which keeps the offering genuinely orderable at the moment it is created.</p>
-     */
+    /** A brand-new same-day offering with a known stock level and an all-day test window. */
     private ProductDto newProduct(User seller, Long kitchenId, String name, int stock) {
-        LocalDateTime now = LocalDateTime.now();
-        int nowMin = now.getHour() * 60 + now.getMinute();
-        // The close window is now + 2h, capped at 22:00 so the offering stays
-        // orderable. When the cap is reached exactly at the current minute (or
-        // we are past 22:00), the offering cannot be created for today; move it
-        // to tomorrow so the window stays open at creation time.
         LocalDate offeringDate = LocalDate.now();
-        int closeMin = Math.min(nowMin + 120, 22 * 60);
-        if (closeMin <= nowMin) {
-            offeringDate = LocalDate.now().plusDays(1);
-            closeMin = 22 * 60;
-        }
-        int readyMin = Math.min(nowMin + 240, 23 * 60);
         ProductCreateDto dto = new ProductCreateDto();
         dto.setName(name);
         dto.setPrice(new BigDecimal("120.00"));
@@ -129,16 +109,8 @@ class DemoMarketplaceE2ETest {
         dto.setAvailableToday(Boolean.TRUE);
         dto.setMaxQuantity(stock);
         dto.setRemainingQuantity(stock);
-        dto.setOrderWindowEnd(String.format("%02d:%02d", closeMin / 60, closeMin % 60));
-        // The ready time must land on/after the offering date. For today's
-        // offerings the legacy HH:mm format is anchored to today, so it is fine;
-        // for tomorrow's offerings we pass a full date-time so the ready date
-        // lands on the offering date instead of today.
-        String readyBy = String.format("%02d:%02d", readyMin / 60, readyMin % 60);
-        if (offeringDate.isAfter(LocalDate.now())) {
-            readyBy = offeringDate.atTime(readyMin / 60, readyMin % 60).toString();
-        }
-        dto.setReadyByTime(readyBy);
+        dto.setOrderWindowEnd("23:59");
+        dto.setReadyByTime(offeringDate.plusDays(1).atTime(0, 1).toString());
         dto.setCategories(List.of("LUNCH"));
         return sellerService.createProduct(kitchenId, dto, seller);
     }
