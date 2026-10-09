@@ -163,8 +163,8 @@ class RecurringBuyerOrderFlowTest {
     void todaysOverrideIsReflectedInTheBuyerFacingDto() {
         ProductDto product = createRecurring("Poha", LocalDate.now(), null, 14);
         Occurrence today = occurrenceOf(product.getId(), LocalDate.now());
-        // Wednesday-style override: 25 plates, close 20:00, ready 19:00.
-        scheduleService.updateOccurrenceOverride(today.getId(), 25, "20:00", "19:00", null, null, null);
+        // Keep the target occurrence open regardless of the time the suite runs.
+        scheduleService.updateOccurrenceOverride(today.getId(), 25, "23:59", "19:00", null, null, null);
 
         KitchenDetailDto detail = kitchenService.getKitchenDetailById(kitchen.getId(), buyer);
         ProductDto shown = detail.getProducts().stream()
@@ -173,8 +173,8 @@ class RecurringBuyerOrderFlowTest {
         assertThat(shown.getRecurring()).isTrue();
         assertThat(shown.getOccurrenceId()).isEqualTo(today.getId());
         assertThat(shown.getMaxQuantity()).isEqualTo(25);      // override wins
-        assertThat(shown.getOrderWindowEnd()).isEqualTo("20:00");
-        assertThat(shown.getCutoffTime()).isEqualTo("20:00");
+        assertThat(shown.getOrderWindowEnd()).isEqualTo("23:59");
+        assertThat(shown.getCutoffTime()).isEqualTo("23:59");
         assertThat(shown.getReadyByTime()).isEqualTo("19:00");
         assertThat(shown.getOrdersClosed()).isFalse();
 

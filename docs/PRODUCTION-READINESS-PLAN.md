@@ -1,56 +1,71 @@
 # SocioMart Production Readiness Plan
 
-**Status:** Proposal only. This plan does not change the running demo or provision infrastructure.
+**Status:** Persistence preparation is implemented on `copilot/persistent-database-migration`; it is not merged or deployed. No database was provisioned and no billable service was enabled.
 
 ## Current baseline
 
 - Render runs the `sociomart-demo` web service with `SPRING_PROFILES_ACTIVE=demo`.
 - The demo uses in-memory H2 and reseeds on application startup. Any non-seed runtime data is ephemeral and cannot be assumed to survive a restart or redeploy.
-- The production properties file also uses local H2 and `ddl-auto=validate`; there is no checked-in schema migration or PostgreSQL driver.
+- The public H2 Console reports that remote connections are disabled. There is no complete read-only export endpoint, so the current live database has not been safely snapshotted.
+- The branch now contains a separate `postgres-demo` profile, PostgreSQL/Flyway dependencies, and an initial schema migration. The profile is not selected by Render.
 - Authentication is demo-only. The demo login uses a mobile number and is not an identity system for real customers.
 - OpenAPI/Swagger routes are permitted by the current security configuration and must be gated or disabled before production.
 
-## Recommended target
+## Persistence-preparation implementation
 
-Use **managed PostgreSQL** for a persistent pilot. It fits the existing relational JPA model, foreign-key relationships, transactions, uniqueness constraints, and occurrence-level inventory locking. Introduce schema ownership through Flyway (or another explicitly selected migration tool) and set Hibernate to `validate` after migrations have created the schema.
+- `postgres-demo` reads `SOCIOMART_DB_JDBC_URL`, `SOCIOMART_DB_USERNAME`, and `SOCIOMART_DB_PASSWORD`; it runs Flyway from `classpath:db/migration`, sets Hibernate to `validate`, disables H2 Console, and keeps demo login enabled.
+- Its Flyway V1 migration creates the 23 mapped tables/join table, current declared indexes, unique constraints, and entity relationship foreign keys.
+- Demo data seeders are not enabled in `postgres-demo`, preventing startup seed rows from being mixed into a restored dataset.
+- The H2 PostgreSQL-mode migration test passes and Hibernate validated the full JPA schema against it.
+- A Testcontainers PostgreSQL test is included for GitHub Actions. It was skipped locally because Docker is unavailable; native PostgreSQL execution is not yet verified.
 
-This is a recommendation, not an approval to create a database or change the Render service.
+This preparation does not create, connect, or migrate any database. It does not change Render settings.
+
+## Free-tier PostgreSQL alternatives (checked 2026-10-09)
+
+| Option | Published free allowance / behavior | Risks for this demo |
+|---|---|---|
+| **Neon Free — first candidate to evaluate** | 1 GB storage per project, 100 CU-hours/project/month, 5 GB network transfer/project/month; compute scales to zero after 5 minutes; compute/network quotas suspend service until reset, while stored data is not deleted by quota exhaustion. | External database traffic from Render; cold start after scale-to-zero; monthly compute/egress ceilings; no paid-plan SLA or support. Render warns that unusually high service-initiated external traffic can suspend a free web service. Must monitor quotas and take independent exports. |
+| **Supabase Free** | 500 MB database; free projects can be paused after 7 days of low activity; paused projects can be restored for up to one year. Free plan has no automatic daily backup/PITR. | More restrictive storage; manual resume can interrupt the demo; exports/backups must be operated by the project owner. Supabase APIs/Auth/Storage are not needed by the current app. |
+| **Render Free Postgres** | 1 GB storage, but database expires after 30 days, followed by a 14-day upgrade grace period; no automated backups. | Unsuitable as a lasting zero-budget database for data that must be retained. |
+
+### Recommendation within the ₹0/month limit
+
+**Neon Free is the most plausible zero-cost evaluation candidate**, because its documented free database has no 30-day expiration and its monthly compute quota suspension does not delete stored data. This is not equivalent to reliable/production hosting: an exhausted quota, cold start, network cap, provider outage, or account-policy change can make the app unavailable. Supabase Free is a secondary option if its larger platform feature set is desired, but its 500 MB limit and inactivity pause are less suitable for an always-accessible demo. Render Free Postgres is not recommended for preserved data because it expires after 30 days.
+
+No free provider has been provisioned or connected. The current service remains unchanged until its live H2 data is safely exported and the owner approves the selected external provider and public-network database connection. Before connecting an external provider, verify Render's account spend controls so database egress cannot cause charges under the ₹0/month ceiling.
 
 ## Migration sequence
 
-1. **Decide what data must survive.** The live demo currently runs in-memory H2. Before any further restart/cutover, the service owner must decide whether the target should start from the documented demo seed or preserve the currently running instance's non-seed data. Do not assume that a redeploy or re-seed is acceptable.
-2. **Model the schema.** Create an initial versioned migration for the current entities, indexes, unique constraints, and foreign keys. Review identity/sequence behavior, enum values, date/time storage, and lazy relationship constraints against PostgreSQL.
-3. **Keep migration and application deployment separate.** Add the PostgreSQL JDBC driver and migration dependency in a feature PR. Apply additive migrations first; configure the application to validate the migrated schema rather than create/alter it automatically.
-4. **Test on an isolated PostgreSQL instance.** Run a fresh-schema migration, upgrade-path tests, persistence/rollback checks, and recurring occurrence/order tests on PostgreSQL. Keep H2 tests for fast feedback, but do not treat H2 as proof of PostgreSQL compatibility.
-5. **Provision only after approval.** Create a managed database in the same Render region as the web service. Configure the connection through Render environment variables or a service-linked environment group; never commit credentials or paste them into chat.
-6. **Cut over with a verified dataset.** If seed-only is approved, load the controlled demo seed. If data must be preserved, export and validate it before cutover, compare entity/relationship counts, and run non-mutating smoke checks before switching traffic.
-7. **Set safe production schema behavior.** Use migrations for schema changes and `spring.jpa.hibernate.ddl-auto=validate`. Keep demo seeding and demo login disabled for any future real-customer profile.
+1. **Preserve data first.** Do not restart or redeploy the current H2-backed service. Its Console refuses remote connections and no full read-only dump route was found. Obtain a safe export from an owner-controlled live-process mechanism or an owner-provided export before continuing.
+2. **Review V1 migration.** Verify every current model, FK, index, enum, identity sequence and date/time type on a native PostgreSQL instance. H2 compatibility is only a fallback check.
+3. **Run GitHub CI.** The added Testcontainers PostgreSQL test should run on a Docker-enabled GitHub Actions runner and must pass before any deployment.
+4. **Select a $0 provider only after review.** Compare its data retention, SLA, connection/egress limits, region, and backup/export tools. Do not use Render’s expiring free Postgres for data the user asked to preserve.
+5. **Make a manual export and validate counts.** Keep the export outside Git, protect its PII, and do not put database credentials or row contents in logs or chat.
+6. **Create/import the external database only after explicit provider approval.** Configure service secrets through the dashboard; do not commit JDBC credentials.
+7. **Cut over only after comparison.** Compare row counts and important relationships, verify sequence counters and login/order flows, and have a rollback target before changing the existing Render service.
 
 ## Backup, recovery, and rollback
 
-- Before a persistent cutover, take a database snapshot/export and test restoring it into a separate instance.
-- Prefer a paid database plan with point-in-time recovery and logical backups; define retention and periodically test restoration.
+- Before any persistent cutover, take a complete export of the live H2 state and test importing/restoring it into an isolated PostgreSQL instance. No export has been captured because the public H2 Console refuses remote connections.
+- Free PostgreSQL tiers do not provide the paid backup/PITR guarantees. Define a manual `pg_dump` export cadence and an owner-controlled backup destination before cutover; do not commit dumps or credentials.
+- Test a restore from that manual export. If the free provider's retention/snapshot features are insufficient, remain on the current H2 demo until the owner explicitly approves a paid plan.
 - Use backward-compatible, additive migrations during rollout. Keep the prior application image available for rollback.
 - If rollback follows writes on the new schema, restore to a separate database and validate it before switching the service. Do not drop the migrated database or overwrite it with an H2 seed.
 - The current in-memory H2 configuration has no durable snapshot to restore after a process restart. If non-seed data is still present in a live process, it must be exported before that process is restarted; this plan does not authorize such an export or migration.
 
-## Capacity and indicative Render cost
+## Cost and capacity under the ₹0/month constraint
 
-Official Render pricing and free-tier documentation were checked on **2026-10-09**:
+The approved operating ceiling is **₹0/month**. Paid database/web plans, storage, backups, and billable add-ons are out of scope unless separately approved. Free usage is quota-bound; an external free Postgres database may also add cold-start latency and internet-egress dependence to the Render free web service.
 
-- Free Postgres includes 1 GB but expires after 30 days, has a 14-day upgrade grace period, and does not provide backups; it is unsuitable for long-lived pilot data.
-- The listed smallest paid Postgres option is **$6/month** (256 MB RAM, 100 connections, 1 GB included storage). The listed 1 GB RAM tier is **$19/month**. Additional Postgres storage is listed at **$0.30/GB/month**.
-- The listed smallest paid web-service compute is **$7/month** (512 MB RAM). A minimal paid web service plus the smallest paid Postgres tier is therefore about **$13/month**, before additional storage, bandwidth, any workspace-plan fee, and taxes. A 1 GB RAM Postgres tier plus that web tier is about **$26/month** before those additions.
-- For the stated pilot target (about 100 buyers, 50 sellers, 100 orders/day, and 100 active menu items), 1 GB is only a starting capacity, not a validated sizing recommendation. No load test, row-size measurement, image-storage measurement, or retention analysis has been performed. Measure order items, analytics/audit retention, indexes, and backups before choosing a paid tier.
-
-Sources: [Render pricing](https://render.com/pricing.md), [Render free-instance limitations](https://render.com/docs/free), and [Render Postgres backups and recovery](https://render.com/docs/postgresql-backups). Pricing and plan limits may change; verify them in the account before provisioning.
+Sources checked on 2026-10-09: [Neon Free limits](https://neon.com/faqs/free-plan-limits-and-quotas), [Supabase billing quotas](https://supabase.com/docs/guides/platform/billing-on-supabase), [Supabase inactivity pause](https://supabase.com/docs/guides/platform/free-project-pausing), [Supabase backup policy](https://supabase.com/docs/guides/platform/backups), and [Render free limits](https://render.com/docs/free).
 
 ## Approval required before implementation
 
-1. Confirm whether non-seed data in the live demo must be retained or whether a fresh demo seed is acceptable.
-2. Approve a database provider/plan and recurring budget; the indicative minimum above is not a capacity guarantee.
-3. Authorize creation of the managed database and its Render service-linked secret configuration.
+1. Provide or authorize an owner-controlled, complete H2 export path that does not restart the current service; preserve non-seed data as instructed.
+2. Review the free-tier comparison and explicitly select a provider before any external database project is created or service environment is changed.
+3. Approve how periodic exports and restoration will be handled on the selected free tier.
 4. Approve a migration window and rollback owner.
 5. Approve a production identity design separately; demo authentication must not be presented as production authentication.
 
-Until those decisions and resources exist, keep the current service demo-only. Do not silently migrate, reset, or change its environment variables.
+Until these requirements are satisfied, keep the current service on its existing H2 demo configuration. Do not migrate, reset, restart, change environment variables, or activate an external database.

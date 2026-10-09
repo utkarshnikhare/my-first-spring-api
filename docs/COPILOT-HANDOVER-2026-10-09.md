@@ -18,12 +18,34 @@ The merged application contains Recurring Offerings V2 and Seller Dashboard V3. 
 
 ## Test evidence
 
-- Complete Maven suite: **587 tests, 0 failures, 0 errors, 0 skipped**.
+- Original V2/V3 release suite: **587 tests, 0 failures, 0 errors, 0 skipped**.
+- Current persistence-preparation branch: `mvn -B verify` completed with **589 tests, 0 failures, 0 errors, 1 skipped, BUILD SUCCESS**. The new H2 PostgreSQL-mode migration test passed; the native PostgreSQL Testcontainers case was skipped locally because Docker is unavailable.
 - Post-merge focused recurring/dashboard regression run: **66 tests, 0 failures, 0 errors, 0 skipped**.
 - The focused run covered `RecurringFoundationPersistenceTest`, `RecurringScheduleCreateProductIntegrationTest`, `RecurringBuyerOrderFlowTest`, `RecurringScheduleHttpTest`, `SellerDashboardUiTest`, and `BuyerSellerUiUpdateTest`.
+- One time-sensitive recurring buyer assertion was made stable by keeping its test occurrence open until 23:59; the application behavior was not changed.
 - GitHub Actions passed for the merge commit.
 - `node --check` passed for all six tracked frontend JavaScript files.
-- The previous 588-test figure in `requirements_matrix.md` was a reporting error; the verified total is 587.
+- The old matrix's 588 figure was a reporting error for the original release; the current 589 figure includes two persistence-migration test cases, with the native PostgreSQL case skipped locally because Docker is unavailable.
+
+## Zero-budget database preparation
+
+The current branch `copilot/persistent-database-migration` prepares a `postgres-demo` profile with Flyway V1, PostgreSQL/JDBC dependencies, and Hibernate schema validation. The existing H2 demo remains the default. `postgres-demo` does not run demo seeders, so an imported dataset is not mixed with fresh sample rows. Demo login remains enabled only for that explicitly selected demo profile.
+
+The local migration passed against H2 PostgreSQL mode and Hibernate validated all mapped tables. The actual PostgreSQL Testcontainers test is committed to the branch but could not run on this machine because Docker is unavailable; GitHub Actions is expected to run it on its Docker-enabled runner. No free or paid provider has been provisioned and no Render environment variables or deploy settings changed.
+
+Current branch: `copilot/persistent-database-migration`, based on main commit `484171d72dc81ace7b965090a4698894e02f0903`. It is preparation only and still requires a normal PR/CI review before merge. Render remains on the already deployed H2 demo release.
+
+### Preservation blocker
+
+The deployed service still has in-memory H2. A read-only visit to its H2 Console returned “remote connections are disabled,” and the application exposes no complete database dump endpoint. I did not bypass that setting, restart the service, or replace the database. A full export must be obtained through an owner-controlled live-process path or supplied by the service owner before any cutover; standard REST listing/export endpoints do not prove that all entity data, IDs, relationships, and sequence state were preserved.
+
+### Zero-cost provider comparison
+
+- **Neon Free** is the first candidate to evaluate: official limits list 1 GB/project, 100 CU-hours/project/month, 5 GB public transfer, and compute scale-to-zero after five minutes. Compute/transfer exhaustion suspends connections until quota resets; stored data remains. Cold starts, public-network dependence, quotas, and lack of paid-tier guarantees remain.
+- **Supabase Free** offers 500 MB database storage. Low activity can pause a project after seven days; paused projects can be restored for up to a year, but Free has no automatic daily backups/PITR. It requires manual exports and resume operations.
+- **Render Free Postgres** has 1 GB but expires after 30 days, with a 14-day upgrade grace period and no automated backups; it is not suitable for the requested preserved dataset.
+
+No provider is selected or provisioned. Before switching the existing Render service, require a safe full export, verified native PostgreSQL CI, an owner-approved free provider, and a tested count/relationship comparison.
 
 ## Live verification
 
@@ -59,14 +81,15 @@ The original V2/V3 DOCX files were unavailable in the workspace. Coverage was ch
 
 ## Deferred production-readiness checklist
 
-These are not demo-release blockers and were not implemented:
+These are not V2/V3 demo release blockers:
 
-1. Select and provision a durable database; define migration ownership and schema compatibility.
-2. Plan and test backup/restore and rollback before moving any data.
-3. Replace demo mobile-number login with an approved production identity flow before handling real user data.
-4. Restrict or disable public OpenAPI/Swagger exposure for production.
-5. Define production logging, monitoring, upload storage/retention, and recovery requirements.
-6. Benchmark the intended pilot workload and review database query/pagination behavior.
-7. Add concurrency and duplicate-submission tests where pilot workload requires them.
+1. Obtain a full, safe export of current in-memory H2 data without restarting the service.
+2. Select a free PostgreSQL provider after reviewing quotas, pause/retention behavior, backups, latency, and uptime limitations.
+3. Run the PostgreSQL Testcontainers test in CI and compare preserved data after import before any cutover.
+4. Replace demo mobile-number login with an approved production identity flow before handling real customer data.
+5. Restrict or disable public OpenAPI/Swagger exposure for production.
+6. Define production logging, monitoring, upload storage/retention, and recovery requirements.
+7. Benchmark the intended pilot workload and review database query/pagination behavior.
+8. Add concurrency and duplicate-submission tests where pilot workload requires them.
 
 Do not repeat the V2/V3 implementation. For future code changes, branch from current `main`, preserve unrelated untracked files, run the full Maven suite, and use a normal PR/CI/merge path. Documentation-only changes do not require redeploying the app; Render auto-deploy is disabled.
