@@ -94,10 +94,11 @@ those unrelated passes.
 | Blocked by approved release scope | 16 |
 | Automated tests | 589 total; 0 failures; 0 errors; 1 Docker-gated skip; BUILD SUCCESS |
 | Live read-only smoke checks | 5; no full live business-order journey |
-| Latest GitHub `main` commit | `39116ce55273cc0ae5174173a3f89254a4bf2039` (documentation-only PR #15 merge) |
+| Latest GitHub `main` commit at this audit snapshot | `b70d13239776fc9221dfa6dfdca0de1910afd982` (documentation-only PR #16 merge) |
 | Runtime source commit on `main` | `d9bb8782ff58719a68df01236c09e9e0990c5bf4` |
 | Render deployed commit | `d9bb8782ff58719a68df01236c09e9e0990c5bf4` |
-| GitHub/Render runtime synchronized | YES; latest GitHub change is documentation-only |
+| Latest main CI | PASS; run `37973393842` on the PR #16 merge commit |
+| GitHub/Render runtime synchronized | YES; latest GitHub changes are documentation-only |
 | Monthly infrastructure budget | ₹0/month; existing Render Free plan, no paid resources |
 | Overall completion | **PARTIAL** |
 
