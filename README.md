@@ -764,7 +764,8 @@ claim otherwise:
 - Existing service `sociomart-demo` is on Render's **Free** plan. Its last verified deployment is
   `d9bb8782ff58719a68df01236c09e9e0990c5bf4` (deployment `dep-db4i1rqj9qps73alfiug`), matching GitHub
   application code at the time of verification. GitHub `main` later advanced through documentation-only
-  PR #15 to `39116ce55273cc0ae5174173a3f89254a4bf2039`; runtime source is unchanged, so no redeploy was needed.
+  PRs #15 and #16 to `b70d13239776fc9221dfa6dfdca0de1910afd982` at the audit snapshot; runtime source is
+  unchanged, so no redeploy was needed.
   The owner authorized loss of disposable non-seed demo records for that deployment; seeded demo data was
   available afterward.
 - The demo uses ephemeral in-memory H2. A restart/redeploy can erase non-seed data; do not treat the
