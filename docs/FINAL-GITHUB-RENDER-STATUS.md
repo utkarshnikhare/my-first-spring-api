@@ -7,20 +7,21 @@ deployment, restart, environment change, database reset or live write was perfor
 
 | Item | Status | Evidence |
 |---|---|---|
-| Latest main at start of this report | `85c58bf5534dcd1390821250727b97e79d081c4b` | `gh api .../commits/main`; PR #12 merge commit |
-| Local branch baseline | `copilot/final-github-render-status`, based on `origin/main` | Working tree's tracked tree matched `origin/main` before the isolated test-fixture change |
-| Prior release PRs | #7, #8, #9, #10, #11 and #12 merged | GitHub PR list verified; #7 is V2/V3, #10 PostgreSQL prep |
-| Main CI | PASS | [Actions run 37957633235](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37957633235) succeeded on `85c58bf` |
-| Current documentation/test-fix PR | In preparation | Contains README, acceptance/release reports and isolated E2E test-fixture stabilization; it must pass its own Actions run before merge |
-| README | Updated in current branch | Buyer/Seller/Admin routes, implemented V2/V3, stack, profiles, local/test instructions, limitations, demo/deployment status and roadmap |
+| Latest verified main commit before this report refresh | `58932f565b98e833cb9140b48ee3eeb4d18236a4` | PR #13 merge commit; report refresh is documentation-only |
+| Prior release PRs | #7 through #13 merged | PR #7 delivered V2/V3; #10 PostgreSQL preparation; #13 README, acceptance docs and test-fixture stabilization |
+| PR #13 CI | PASS | [PR Actions run 37962316067](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37962316067) succeeded on head `b1dc83a` |
+| Latest main CI | PASS | [Actions run 37962564417](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37962564417) succeeded on `58932f5` |
+| PR #13 merge | MERGED | [PR #13](https://github.com/utkarshnikhare/my-first-spring-api/pull/13), merge commit `58932f565b98e833cb9140b48ee3eeb4d18236a4` |
+| README | Updated and merged in PR #13 | Buyer/Seller/Admin routes, implemented V2/V3, stack, profiles, local/test instructions, limitations, demo/deployment status and roadmap |
 | GitHub About | PASS | Description now reflects a Spring Boot + vanilla JavaScript demo and its implemented features |
 | Repository homepage | PASS | `https://sociomart-demo.onrender.com/` verified via `gh repo view` |
 | Repository topics | PASS | Existing topics retained; `postgresql`, `flyway`, `recurring-offerings`, `seller-dashboard` added and verified |
 | API documentation link | Intentionally omitted | Swagger/OpenAPI is enabled on the demo and is not yet hardened for production exposure |
 
-The GitHub main SHA above is the verified baseline before the current PR. The final merged documentation/test
-commit will become the newer `main` tip; follow the linked
-[main commit history](https://github.com/utkarshnikhare/my-first-spring-api/commits/main) for its exact SHA.
+The main SHA above is the latest verified application/release commit at the time of this report refresh.
+Any later documentation-only status update may advance `main` without changing the application runtime.
+Follow the linked [main commit history](https://github.com/utkarshnikhare/my-first-spring-api/commits/main)
+for subsequent commits.
 
 ## Link and app route checks
 

@@ -13,7 +13,8 @@ test-fixture stabilization in `DemoMarketplaceE2ETest`; runtime application beha
 | Frontend syntax | `node --check` for `admin.js`, `app.js`, `buyer.js`, `common.js`, `config.js`, `seller.js` | **6/6 passed** |
 | H2/PostgreSQL-mode Flyway + JPA validation | Included in Maven verification | Passed |
 | Native PostgreSQL Testcontainers | Local machine without Docker | Skipped locally; prior Docker-enabled GitHub Actions run passed the native migration test |
-| GitHub Actions baseline | Main run [37957633235](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37957633235) at `85c58bf` | Success; current PR still requires its own green CI |
+| GitHub Actions PR check | [Run 37962316067](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37962316067) on PR #13 head `b1dc83a` | Success |
+| GitHub Actions merged-main check | [Run 37962564417](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37962564417) at `58932f5` | Success |
 
 The initial full-suite attempt at 22:02 had three errors in `DemoMarketplaceE2ETest`: its helper capped the
 same-day cutoff at 22:00 and moved a late run to a future pre-order date, which was blocked by the test
@@ -40,5 +41,5 @@ concurrency under load, pilot-scale performance, external image storage and rest
 The suite's security tests are automated role/ownership checks; this is not a formal penetration test.
 Swagger/OpenAPI is currently enabled for the demo and must be restricted before production use.
 
-The full suite ran against the current branch after the test-fixture fix. GitHub CI for this branch/PR is the
-release gate and must pass before merge.
+The full suite ran against the release branch after the test-fixture fix. PR #13 passed GitHub CI and merged;
+the resulting `main` push workflow also passed.
