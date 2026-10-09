@@ -1,13 +1,13 @@
 # SocioMart Production Readiness Plan
 
-**Status:** Persistence preparation is implemented on `copilot/persistent-database-migration`; it is not merged or deployed. No database was provisioned and no billable service was enabled.
+**Status:** Persistence preparation is merged to `main` in `89e57ade5bbabfe2eecd3cdddfe8d401ac1a741f`. It is not deployed to Render. No database was provisioned, no billable service enabled, and no existing environment variable changed.
 
 ## Current baseline
 
 - Render runs the `sociomart-demo` web service with `SPRING_PROFILES_ACTIVE=demo`.
 - The demo uses in-memory H2 and reseeds on application startup. Any non-seed runtime data is ephemeral and cannot be assumed to survive a restart or redeploy.
 - The public H2 Console reports that remote connections are disabled. There is no complete read-only export endpoint, so the current live database has not been safely snapshotted.
-- The branch now contains a separate `postgres-demo` profile, PostgreSQL/Flyway dependencies, and an initial schema migration. The profile is not selected by Render.
+- `main` now contains a separate `postgres-demo` profile, PostgreSQL/Flyway dependencies, and an initial schema migration. The profile is not selected by Render.
 - Authentication is demo-only. The demo login uses a mobile number and is not an identity system for real customers.
 - OpenAPI/Swagger routes are permitted by the current security configuration and must be gated or disabled before production.
 
@@ -17,7 +17,7 @@
 - Its Flyway V1 migration creates the 23 mapped tables/join table, current declared indexes, unique constraints, and entity relationship foreign keys.
 - Demo data seeders are not enabled in `postgres-demo`, preventing startup seed rows from being mixed into a restored dataset.
 - The H2 PostgreSQL-mode migration test passes and Hibernate validated the full JPA schema against it.
-- A Testcontainers PostgreSQL test is included for GitHub Actions. It was skipped locally because Docker is unavailable; native PostgreSQL execution is not yet verified.
+- A Testcontainers PostgreSQL test passed on GitHub Actions for the merge commit; it is skipped locally because Docker is unavailable.
 
 This preparation does not create, connect, or migrate any database. It does not change Render settings.
 
@@ -39,7 +39,7 @@ No free provider has been provisioned or connected. The current service remains 
 
 1. **Preserve data first.** Do not restart or redeploy the current H2-backed service. Its Console refuses remote connections and no full read-only dump route was found. Obtain a safe export from an owner-controlled live-process mechanism or an owner-provided export before continuing.
 2. **Review V1 migration.** Verify every current model, FK, index, enum, identity sequence and date/time type on a native PostgreSQL instance. H2 compatibility is only a fallback check.
-3. **Run GitHub CI.** The added Testcontainers PostgreSQL test should run on a Docker-enabled GitHub Actions runner and must pass before any deployment.
+3. **Run GitHub CI.** The Testcontainers PostgreSQL migration/ORM validation passed on the Docker-enabled GitHub Actions runner for `89e57ade5bbabfe2eecd3cdddfe8d401ac1a741f`.
 4. **Select a $0 provider only after review.** Compare its data retention, SLA, connection/egress limits, region, and backup/export tools. Do not use Render’s expiring free Postgres for data the user asked to preserve.
 5. **Make a manual export and validate counts.** Keep the export outside Git, protect its PII, and do not put database credentials or row contents in logs or chat.
 6. **Create/import the external database only after explicit provider approval.** Configure service secrets through the dashboard; do not commit JDBC credentials.

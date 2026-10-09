@@ -4,7 +4,7 @@ Verification date: 2026-10-09
 
 Source limitation: the two original DOCX binaries are not present under `C:\project`. Their extracted specification text is available at `docs/REQ1_recurring_v2.txt` and `docs/REQ2_dashboard_ui_v3.txt`; this matrix maps every requirement in those extracts plus the takeover acceptance list. No requirement was inferred beyond those sources.
 
-Latest complete Maven verification on the persistence-preparation branch: **589 tests, 0 failures, 0 errors, 1 skipped, BUILD SUCCESS**. The PostgreSQL Testcontainers case was skipped locally because Docker is unavailable; the H2 PostgreSQL-mode migration/JPA validation test passed. Original V2/V3 release baseline: **587 tests, 0 failures, 0 errors, 0 skipped**. Latest focused recurring/dashboard regression run: **66 tests, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS** (25.7 seconds). `node --check` passed for all six tracked frontend JavaScript files.
+Latest local full Maven verification: **589 tests, 0 failures, 0 errors, 1 skipped, BUILD SUCCESS**. The native PostgreSQL Testcontainers case was skipped locally because Docker is unavailable; the H2 PostgreSQL-mode migration/JPA validation test passed. GitHub Actions on main commit `89e57ade5bbabfe2eecd3cdddfe8d401ac1a741f` ran **589 tests, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS**, including the native PostgreSQL Testcontainers test. Original V2/V3 release baseline: **587 tests, 0 failures, 0 errors, 0 skipped**. Latest focused recurring/dashboard regression run: **66 tests, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS** (25.7 seconds). `node --check` passed for all six tracked frontend JavaScript files.
 
 Status meanings: **PASS** = implemented and covered by executable or direct source-contract evidence. **UI VERIFIED** = additionally exercised in a supported headless browser. **LIVE SMOKE** = read-only browser/API check against the deployed demo. **NOT VERIFIED** = evidence could not be produced in this environment.
 
@@ -100,7 +100,7 @@ Status meanings: **PASS** = implemented and covered by executable or direct sour
 | Check | Status | Evidence |
 |---|---|---|
 | Isolated H2/PostgreSQL-mode schema migration | PASS | Flyway V1 ran on an isolated in-memory H2 database; Hibernate `ddl-auto=validate` verified the migration against all JPA entities; table and foreign-key checks passed. |
-| Native PostgreSQL migration test | NOT VERIFIED locally | Testcontainers test is included and configured to run when Docker is available; this Windows environment has no Docker executable/daemon. |
+| Native PostgreSQL migration test | PASS (GitHub CI) | Testcontainers started PostgreSQL on the Docker-enabled GitHub runner; V1 applied and Hibernate validated the JPA schema. Docker is unavailable locally, so the local run skipped this test. |
 | Existing Render data export | BLOCKED | Render demo uses in-memory H2. The public H2 Console refuses remote connections, and no complete read-only export endpoint exists. The existing service was not restarted, its environment was not changed, and no external database was provisioned. |
 | Persistent demo profile | PREPARED, NOT DEPLOYED | `postgres-demo` uses Flyway, Hibernate validation, explicit JDBC environment values, no automatic seed, and demo auth. Render remains on its original H2 `demo` profile. |
 
