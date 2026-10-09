@@ -9,7 +9,10 @@ not staged.
 - PRs #7 through #12 are merged. PR #7 introduced the V2/V3 release and remains the last observed Render
   runtime deployment; PR #10 prepared an opt-in PostgreSQL/Flyway profile; PRs #11/#12 documented migration
   and H2 export constraints.
-- GitHub main CI run 37957633235 succeeded at `85c58bf`.
+- PR #13 merged the README, final acceptance/release reports and the isolated E2E fixture stabilization as
+  `58932f565b98e833cb9140b48ee3eeb4d18236a4`.
+- PR #13 CI run 37962316067 and merged-main CI run 37962564417 both succeeded.
+- Current verified GitHub main is `58932f565b98e833cb9140b48ee3eeb4d18236a4`.
 - Current full local Maven verification passed: 589 tests, 0 failures, 0 errors, 1 local Docker-gated skip.
 - Fixed one time-dependent `DemoMarketplaceE2ETest` fixture issue; targeted 3-test class and full suite pass.
 - All six tracked frontend JavaScript files pass `node --check`.
@@ -17,7 +20,7 @@ not staged.
 - Seller LIVE/RECURRING UI and the RECURRING empty state were observed. Responsive document-width checks were
   run at the eight requested sizes; the browser DPR caused 390px to measure as 391px.
 - GitHub About description, homepage and relevant topics were updated and re-read through `gh repo view`.
-- README and final acceptance/regression/release reports are being synchronized through a normal PR.
+- README and final acceptance/regression/release reports were merged through PR #13's normal workflow.
 
 ## Remaining / not verified
 
@@ -33,13 +36,13 @@ not staged.
 
 ## Exact next steps
 
-1. Review and merge the current documentation/test-fixture PR only after its GitHub Actions check succeeds.
-2. Confirm `main`'s resulting commit and CI run; do not deploy this documentation/test-only release.
-3. Keep the existing Render service/data unchanged.
-4. Ask the owner for a complete non-restarting H2 export and isolated restore evidence.
-5. After data preservation is demonstrated, obtain explicit owner approval for a free-tier provider and a
+1. Merge this documentation-only status refresh only after its GitHub Actions check succeeds; it does not alter
+   application runtime.
+2. Keep the existing Render service/data unchanged; the current main commit is verified and green.
+3. Ask the owner for a complete non-restarting H2 export and isolated restore evidence.
+4. After data preservation is demonstrated, obtain explicit owner approval for a free-tier provider and a
    cutover plan. Preserve the ₹0/month limit.
-6. Only after those approvals, plan a separate deployment and live verification of Buyer, Seller, Admin,
+5. Only after those approvals, plan a separate deployment and live verification of Buyer, Seller, Admin,
    recurring discovery and occurrence-specific order flows.
 
 Detailed status: [GitHub / Render synchronization](./FINAL-GITHUB-RENDER-STATUS.md),

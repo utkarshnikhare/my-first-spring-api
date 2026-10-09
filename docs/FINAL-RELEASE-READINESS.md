@@ -9,8 +9,8 @@ production migration, paid service, database reset or live restart.
 |---|---|---|
 | V2/V3 implementation | PASS (automated) | Detailed mapping in [acceptance matrix](./FINAL-V2-V3-ACCEPTANCE-MATRIX.md) |
 | Local automated regression | PASS | `mvnw -B clean verify`: 589 tests, 0 failures, 0 errors, 1 Docker-gated skip |
-| Current branch GitHub CI | PENDING | Must pass before PR merge |
-| Existing GitHub main CI | PASS | Run 37957633235 succeeded on baseline `85c58bf` |
+| PR #13 GitHub CI | PASS | PR check run 37962316067 passed on `b1dc83a`; the PR was merged |
+| Latest GitHub main CI | PASS | Push run 37962564417 succeeded on merge commit `58932f5` |
 | Existing Render service / health | LIVE SMOKE | Existing service and old deployed commit observed; `GET /api/kitchens` returned HTTP 200 |
 | Newer main vs Render | DIFFERENT | Main includes PostgreSQL profile/migration preparation; Render remains on PR #7 runtime commit |
 | Live Buyer occurrence flow | NOT TESTED | No live preorder item; public writes avoided |
