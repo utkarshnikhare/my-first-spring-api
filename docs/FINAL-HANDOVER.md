@@ -1,17 +1,17 @@
 # SocioMart Final Handover
 
-Snapshot: 2026-10-09. Application release commit: `d9bb8782ff58719a68df01236c09e9e0990c5bf4`.
-The documentation-only acceptance refresh is being prepared on `copilot/requirement-audit-status`; it does
-not change the deployed application.
+Snapshot: 2026-10-09. Latest GitHub `main` commit: `39116ce55273cc0ae5174173a3f89254a4bf2039` (documentation-only PR #15).
+Runtime release and Render deployed commit: `d9bb8782ff58719a68df01236c09e9e0990c5bf4`.
 
 ## Completed and verified
 
-- PRs #7 through #14 are merged through normal GitHub workflows.
-- GitHub `main` CI run [37963266688](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37963266688)
-  succeeded on `d9bb8782ff58719a68df01236c09e9e0990c5bf4`.
+- PRs #7 through #15 are merged through normal GitHub workflows. PR #15 contains only documentation changes.
+- GitHub `main` CI run [37972517277](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37972517277)
+  succeeded on `39116ce55273cc0ae5174173a3f89254a4bf2039`; PR #15 CI run [37972344315](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37972344315) also passed.
 - The full local Maven verification passed: 589 tests, 0 failures, 0 errors, 1 Docker-gated skip.
 - The existing Render service `sociomart-demo` (`srv-dad5lfajnfac73ei06s0`) remains on the Free plan.
-  Deployment `dep-db4i1rqj9qps73alfiug` is deployed at the same application SHA as GitHub `main`.
+  Deployment `dep-db4i1rqj9qps73alfiug` remains at runtime SHA `d9bb8782ff58719a68df01236c09e9e0990c5bf4`;
+  PR #15 changed documentation only, so no redeployment was needed.
 - The owner authorized loss of disposable non-seed in-memory H2 records. The service restarted and 16 seeded
   kitchens were available afterward. No PostgreSQL resource, paid plan/add-on, duplicate service, production
   environment change, or payment transaction was introduced.
@@ -39,8 +39,7 @@ not change the deployed application.
 
 ## Next authorized work
 
-The documentation/requirements refresh should merge only through a normal PR after its CI is green. It is
-documentation-only; Render does not need another deployment. Further work on OTP onboarding or production
+The documentation/requirements refresh is merged and verified. Further work on OTP onboarding or production
 identity requires a separate owner-approved scope. Live Admin acceptance requires an authorized Admin session;
 live write-based E2E requires explicit owner approval for the specific test data and cleanup plan. Maintain the
 ₹0/month budget and do not provision PostgreSQL or paid resources without explicit approval.

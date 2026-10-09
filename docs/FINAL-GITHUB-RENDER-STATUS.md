@@ -8,18 +8,21 @@ payment, or production authentication migration was introduced.
 
 | Item | Status | Evidence |
 |---|---|---|
-| Latest verified application `main` commit | `d9bb8782ff58719a68df01236c09e9e0990c5bf4` | Commit deployed to the existing demo |
-| Latest `main` CI | PASS | [Actions run 37963266688](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37963266688) succeeded on `d9bb8782ff58719a68df01236c09e9e0990c5bf4` |
-| Release PRs | #7 through #14 merged | Normal GitHub PR workflow; no force-push or protection bypass |
-| README | Current update pending PR | This report/README audit refresh is documentation-only until merged |
+| Latest GitHub `main` commit | `39116ce55273cc0ae5174173a3f89254a4bf2039` | PR #15 merge commit; documentation-only |
+| Latest application/runtime commit on `main` | `d9bb8782ff58719a68df01236c09e9e0990c5bf4` | Runtime source is unchanged by PR #15 and matches the deployed application |
+| Latest `main` CI | PASS | [Actions run 37972517277](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37972517277) succeeded on the merge commit |
+| PR #15 CI | PASS | [Actions run 37972344315](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37972344315); PR merged normally |
+| Release PRs | #7 through #15 merged | Normal GitHub PR workflow; no force-push or protection bypass |
+| README and audit documentation | PASS | Updated in PR #15 and merged to `main` |
 | GitHub About description | PASS | Verified with `gh repo view`; describes Spring Boot + vanilla JavaScript and demo scope |
 | Repository homepage | PASS | `https://sociomart-demo.onrender.com/`, verified with `gh repo view` |
 | Repository topics | PASS | Existing topics retained; `flyway`, `postgresql`, `recurring-offerings`, and `seller-dashboard` present |
 | Public Quick Links | PASS | Buyer, Seller, Admin, repository, and requirements-matrix links return/load as expected |
 | API documentation Quick Link | Intentionally omitted | Swagger/OpenAPI remains unsuitable as a public production link until hardened |
 
-The documentation refresh in this branch does not change application runtime. If it is merged, GitHub `main`
-will advance to a documentation commit while Render remains on the application commit listed below.
+PR #15 merged the documentation refresh as commit `39116ce55273cc0ae5174173a3f89254a4bf2039`.
+It changed documentation only; no Render redeployment was required. GitHub `main` now has that documentation
+commit while the runtime application remains at `d9bb8782ff58719a68df01236c09e9e0990c5bf4`.
 
 ## Render
 
@@ -29,7 +32,7 @@ will advance to a documentation commit while Render remains on the application c
 | Plan / budget | PASS | Render dashboard showed **Free**; no paid plan/add-on or external database provisioned |
 | Deployed commit | PASS | `d9bb8782ff58719a68df01236c09e9e0990c5bf4` |
 | Deployment | PASS | `dep-db4i1rqj9qps73alfiug` shown as the last successful deployment |
-| GitHub/Render runtime synchronization | YES | Render deployed commit equals the verified GitHub application `main` commit |
+| GitHub/Render runtime synchronization | YES (runtime) | The latest `main` change is documentation-only; runtime source on `main` and Render remain at `d9bb8782ff58719a68df01236c09e9e0990c5bf4` |
 | Health/config endpoints | PASS | `GET /api/kitchens` and `GET /api/auth/config` returned HTTP 200 |
 | Seed data after restart | PASS | `/api/kitchens` returned 16 kitchens after deployment; demo login remained enabled |
 | Buyer pre-order discovery | PASS (read-only) | Search route and `/api/discovery/offers?item=Puran%20Poli%20%28Pre-order%29` returned one Aarti Kitchen preorder for 2026-10-12 |
