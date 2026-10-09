@@ -98,7 +98,7 @@ public class SecurityConfig {
     }
 
     public static boolean isDemoEnvironment(Environment environment) {
-        return environment.matchesProfiles("!prod & (demo | dev | default)");
+        return environment.matchesProfiles("!prod & (demo | dev | default | postgres-demo)");
     }
 
     @Bean
