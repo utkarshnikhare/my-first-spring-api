@@ -2012,7 +2012,7 @@ html[data-theme="dark"] .sd-stat--blue  { background: #1B2740; }
 .is-paused  { color: var(--amber); }
 .sd-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: 0 0 8px; }
 .sd-flag { font-size: .7rem; letter-spacing: .04em; }
-.sd-store__edit {
+.sd-store__view, .sd-store__edit {
     flex: 0 0 auto;
     display: inline-flex; align-items: center; gap: 6px;
     min-height: 38px; padding: 0 14px;
@@ -2021,8 +2021,9 @@ html[data-theme="dark"] .sd-stat--blue  { background: #1B2740; }
     border: 1px solid var(--sd-border);
     color: var(--sd-text); font-weight: 700; font-size: .85rem;
     text-decoration: none;
+    cursor: pointer;
 }
-.sd-store__edit:hover { border-color: var(--sd-orange); color: var(--sd-orange); }
+.sd-store__view:hover, .sd-store__edit:hover { border-color: var(--sd-orange); color: var(--sd-orange); }
 
 /* ---------- Quick actions ---------- */
 
@@ -2102,18 +2103,18 @@ html[data-theme="dark"] .sd-stat--blue  { background: #1B2740; }
 .sd-card__unit { font-size: .78rem; font-weight: 600; color: var(--sd-muted); }
 .sd-card__stepper { margin-top: 2px; }
 
-.sd-card__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.sd-card__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }
 .sd-btn {
     display: inline-flex; align-items: center; justify-content: center;
     min-height: 40px; padding: 0 14px;
     border-radius: 12px; border: 1px solid transparent;
     font: inherit; font-size: .82rem; font-weight: 700;
-    text-decoration: none; cursor: pointer; white-space: nowrap;
+    text-decoration: none; cursor: pointer; white-space: normal; text-align: center;
 }
 .sd-btn:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
 .sd-btn:active { transform: scale(.97); }
 .sd-btn--primary {
-    flex: 1 1 130px;
+    grid-column: 1 / -1;
     background: var(--sd-orange); color: #fff;
     box-shadow: 0 4px 12px rgba(198, 79, 0, .25);
 }
@@ -2122,6 +2123,8 @@ html[data-theme="dark"] .sd-stat--blue  { background: #1B2740; }
 .sd-btn--pause   { background: var(--amber-soft);  color: var(--amber); }
 .sd-btn--resume  { background: var(--green-soft);  color: var(--green); }
 .sd-btn--soldout { background: var(--danger-soft); color: var(--danger); }
+.sd-btn--danger { background: var(--danger-soft); color: var(--danger); }
+.sd-btn--sm { min-height: 36px; padding: 0 12px; font-size: .78rem; }
 .sd-btn--edit:hover, .sd-btn--soldout:hover { filter: brightness(.96); }
 .sd-btn--pause:hover { filter: brightness(.96); }
 
@@ -2170,6 +2173,17 @@ html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #3321
 .sd-earnings__val.is-green { color: var(--green); }
 .sd-earnings__val.is-amber { color: var(--amber); }
 
+.sd-recurring-card {
+    padding: 16px;
+    background: var(--sd-card);
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius);
+}
+.sd-recurring-card__name { color: var(--sd-text); font-size: 1rem; font-weight: 800; }
+.sd-recurring-card p { margin: 6px 0; }
+.sd-dot.is-unknown { background: var(--sd-muted); }
+.sd-store__status .is-unknown, .sd-flag.is-unknown { color: var(--sd-muted); }
+
 /* ---------- Note / retry ---------- */
 
 .sd-note { margin: 0; font-size: .8rem; color: var(--sd-muted); text-align: center; }
@@ -2206,7 +2220,21 @@ html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #3321
     .sd-qa__label { font-size: .6rem; }
     .sd-card__photo { width: 66px; height: 66px; flex: 0 0 66px; font-size: 1.6rem; }
     .sd-btn { padding: 0 10px; font-size: .78rem; }
+    .sd-store { flex-wrap: wrap; }
+    .sd-store__main { min-width: calc(100% - 74px); }
+    .sd-store__view, .sd-store__edit { flex: 1 1 calc(50% - 6px); justify-content: center; }
+    .sd-card { align-items: flex-start; flex-wrap: wrap; }
+    .sd-card__body { min-width: 100%; }
+    .sd-earnings__grid { grid-template-columns: 1fr; }
+    .sd-earnings__cell { border-left: 0; border-top: 1px solid var(--sd-border); padding: 8px 4px; }
+    .sd-earnings__cell:first-child { border-top: 0; }
 }
+
+.sd-root > .date-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.sd-root > .date-tabs .date-tab { width: 100%; }
 
 /* Tablets / desktop: keep the phone-first column but stop it stretching. */
 @media (min-width: 768px) {
@@ -3192,6 +3220,4 @@ html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #3321
 @media (prefers-reduced-motion: reduce) {
     .oic-root .oic-act { transition: none; }
 }
-
-
 

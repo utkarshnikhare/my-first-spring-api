@@ -372,7 +372,13 @@ class SellerAppScriptStructureTest {
         assertThat(home).contains("data-action=\"pause-orders\"");
         assertThat(home).contains("data-action=\"resume-orders\"");
         assertThat(home).contains("data-action=\"edit-offering\"");
-        assertThat(home).contains("data-action=\"inv-inc\"").contains("data-action=\"inv-dec\"");
+        // V3 §11 supersedes the earlier "stepper is preserved" pin: the inline
+        // quantity +/- stepper is removed from dashboard cards (inverted pin,
+        // so it can never quietly return).
+        assertThat(home)
+                .as("no inline stock stepper on the dashboard card")
+                .doesNotContain("data-action=\"inv-inc\"")
+                .doesNotContain("data-action=\"inv-dec\"");
         // View Orders still routes by the offering id.
         assertThat(home).contains("href=\"#/order-detail/' + p.id + '\"");
         // Compact hierarchy classes replace the stacked full-width buttons.
@@ -406,7 +412,9 @@ class SellerAppScriptStructureTest {
     void theOfferingOrderFiltersAreHandledOnChangeNotOnlyOnClick() {
         int ch = sellerJs.indexOf("document.addEventListener('change'");
         assertThat(ch).as("a change listener must exist").isGreaterThanOrEqualTo(0);
-        String changeListener = sellerJs.substring(ch, ch + 1200);
+        int end = sellerJs.indexOf("// Live Quick Post character feedback", ch);
+        assertThat(end).as("the change listener end marker must exist").isGreaterThan(ch);
+        String changeListener = sellerJs.substring(ch, end);
 
         assertThat(changeListener)
                 .as("society filter must react to change")

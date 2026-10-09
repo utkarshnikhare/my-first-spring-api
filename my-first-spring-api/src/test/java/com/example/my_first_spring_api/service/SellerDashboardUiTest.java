@@ -130,9 +130,62 @@ class SellerDashboardUiTest {
                 .as("Sold Out remains a separate action from Pause")
                 .contains("data-action=\"mark-soldout\"")
                 .as("Add Offering still enters the existing create flow")
-                .contains("data-action=\"go-add\"")
-                .as("stock stepper is preserved")
-                .contains("data-action=\"inv-inc\"").contains("data-action=\"inv-dec\"");
+                .contains("data-action=\"go-add\"");
+        // V3 §11 + acceptance checklist: "Quantity +/- stepper is removed from
+        // dashboard." The earlier pin (stepper preserved) is superseded by the
+        // approved V3 change request, so the pin is inverted: the dashboard
+        // card may never grow an inline stock stepper again.
+        assertThat(sellerJs)
+                .as("no inline quantity stepper may be rendered on dashboard cards")
+                .doesNotContain("sd-card__stepper")
+                .doesNotContain("data-action=\"inv-inc\"")
+                .doesNotContain("data-action=\"inv-dec\"");
+    }
+
+    /**
+     * V2 §8 / V3 §8: a recurring offering on the LIVE tab must offer
+     * occurrence-scoped actions (Edit Today / Sold Out Today / Close Orders
+     * Today) instead of the generic one-time controls, and Recurring must be
+     * a card badge rather than a dashboard tab.
+     */
+    @Test
+    void recurringLiveCardsUseOccurrenceActionsAndBadges() {
+        assertThat(sellerJs)
+                .as("Edit Today / Edit This Date operate on one occurrence")
+                .contains("data-action=\"edit-today\"")
+                .contains("data-action=\"edit-this-date\"")
+                .as("per-day Sold Out / Close Orders actions hit the occurrence routes")
+                .contains("data-action=\"occ-sold-out\"")
+                .contains("data-action=\"occ-close\"")
+                .contains("/sold-out'")
+                .contains("/pause'")
+                .as("RECURRING is a badge on the card")
+                .contains("RECURRING • LIVE")
+                .as("an occurrence edit can never write the product or the rule")
+                .contains("S.editOccurrenceId")
+                .contains("/api/seller/schedules/occurrences/' + occId, { method: 'PATCH'");
+    }
+
+    /**
+     * V3 §3.1: the complete Total Orders card opens the existing Orders
+     * screen; V2 §15: a capped Ongoing schedule prompts the seller to extend.
+     */
+    @Test
+    void totalOrdersCardIsClickableAndOngoingSchedulesPromptToExtend() {
+        assertThat(sellerJs)
+                .as("Total Orders card links to the existing Orders screen")
+                .contains("label: 'Total Orders', href: '#/orders'")
+                .as("near-expiry Ongoing schedules prompt for extension")
+                .contains("data-action=\"extend-schedule\"")
+                .contains("This ongoing schedule ends")
+                .contains("/extend'")
+                .as("new ongoing schedules must tell the server to own the 90-day horizon")
+                .contains("ongoing: duration === 'ongoing'")
+                .as("Manage Schedule must understand serialized DayOfWeek names")
+                .contains("MONDAY: 1").contains("SUNDAY: 7");
+        assertThat(sellerJs)
+                .as("the removed quick-action row must not leave loading placeholders behind")
+                .doesNotContain("sd-skel--qa");
     }
 
     /**

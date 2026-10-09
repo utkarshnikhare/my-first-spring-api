@@ -1,7 +1,7 @@
 /**
  * SocioMart Seller App v1.0 - 5-tab SPA
  */
-var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFilterDelivery: '', offeringProductId: '', deliverySaving: {}, deliveryBlockRequestId: 0, bulkDelivering: false, offeringFor: 'today', quickPostRequestId: null, editOffering: null, dashFilter: 'ALL' };
+var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFilterDelivery: '', offeringProductId: '', deliverySaving: {}, deliveryBlockRequestId: 0, bulkDelivering: false, offeringFor: 'today', quickPostRequestId: null, editOffering: null, dashFilter: 'ALL', offeringsTab: 'history', recurringSchedules: [], recurringDetail: null, offeringMode: 'today', recurringDuration: 'thisweek', dashTab: 'live', offeringSubmitting: false, editOccurrenceId: null };
 var sellerRoutes = {
     '#/home': sellerHomeView, '#/add': sellerAddView, '#/create': sellerCreateView,
     '#/edit-offering': sellerEditOfferingView,
@@ -106,6 +106,8 @@ function sellerAuthErrorHtml() {
 
 async function sellerRender() {
     var hash = location.hash || '#/home';
+    if (hash === '#/home' && S.lastRouteHash !== '#/home') S.dashTab = 'live';
+    S.lastRouteHash = hash;
     var route = sellerResolveRoute(hash);
     var view = viewEl();
     view.innerHTML = '<div class="page-loading"><div class="spinner"></div></div>';
@@ -186,6 +188,8 @@ function offeringStatusBadge(p) {
     if (p.ordersPaused) return '<span class="oc-badge paused">PAUSED</span>';
     if (p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED') return '<span class="oc-badge closed">ORDERS CLOSED</span>';
     if (p.isPreorder || p.lifecycleState === 'PRE_ORDER') return '<span class="oc-badge live">PRE-ORDER • LIVE</span>';
+    // V2 §7.1 / V3 §6.1: Recurring is a badge on the card, never a tab.
+    if (p.recurring) return '<span class="oc-badge live">RECURRING • LIVE</span>';
     return '<span class="oc-badge live">LIVE</span>';
 }
 /** "Orders close" value for a dashboard offering card: pretty time, plus the
@@ -313,14 +317,19 @@ function sdStatCardsHtml(dash) {
     var cards = [
         { icon: '👁️', cls: 'peach', value: dash.viewsToday || 0, label: 'Views Today' },
         { icon: '💗', cls: 'pink', value: dash.followers || 0, label: 'Followers' },
-        { icon: '📦', cls: 'blue', value: dash.totalOrders || 0, label: 'Total Orders' }
+        { icon: '📦', cls: 'blue', value: dash.totalOrders || 0, label: 'Total Orders', href: '#/orders', action: 'open-all-orders' }
     ];
     return '<div class="sd-stats">' + cards.map(function (c) {
-        return '<div class="sd-stat sd-stat--' + c.cls + '">'
+        // V3 §3.1: the complete Total Orders card opens the EXISTING Orders
+        // screen (All Orders) - no dashboard-only orders page exists.
+        var tag = c.href ? 'a' : c.action ? 'button' : 'div';
+        var hrefAttr = c.href ? ' href="' + c.href + '"' : '';
+        var actionAttr = c.action ? ' type="button" data-action="' + c.action + '"' : '';
+        return '<' + tag + ' class="sd-stat sd-stat--' + c.cls + '"' + hrefAttr + actionAttr + '>'
             + '<span class="sd-stat__icon" aria-hidden="true">' + c.icon + '</span>'
             + '<span class="sd-stat__value">' + esc(String(c.value)) + '</span>'
             + '<span class="sd-stat__label">' + esc(c.label) + '</span>'
-            + '</div>';
+            + '</' + tag + '>';
     }).join('') + '</div>';
 }
 
@@ -330,13 +339,15 @@ function sdStatCardsHtml(dash) {
  * and a paused kitchen reads PAUSED instead. Both seller types share this one
  * component, so no Kitchen-only assumption is baked in.
  */
-function sdStoreCardHtml(dash, kitchen) {
+function sdStoreCardHtml(dash, kitchen, unavailable) {
     var img = kitchen ? sellerImg(kitchen.imageUrl) : '';
     var name = (kitchen && kitchen.displayName) || dash.kitchenName || 'Your Store';
     var paused = !!(kitchen && kitchen.paused);
     var homemade = !!(kitchen && kitchen.sellerType === 'HOMEMADE_PRODUCTS');
     var ph = homemade ? '🧺' : '🍽️';
-    var state = paused ? 'is-paused' : 'is-active';
+    var state = unavailable ? 'is-unknown' : (paused ? 'is-paused' : 'is-active');
+    var stateLabel = unavailable ? 'Status unavailable' : (paused ? 'Paused' : 'Active');
+    var stateFlag = unavailable ? 'UNKNOWN' : (paused ? 'PAUSED' : 'LIVE');
     return '<div class="sd-store">'
         + '<div class="sd-store__photo" data-emoji="' + ph + '">'
         + (img ? '<img src="' + esc(img) + '" alt="' + esc(name) + '" onerror="imgFallback(this)">' : ph)
@@ -348,10 +359,11 @@ function sdStoreCardHtml(dash, kitchen) {
         + '</div>'
         + '<div class="sd-store__status">'
         + '<span class="sd-dot ' + state + '" aria-hidden="true"></span>'
-        + '<span class="' + state + '">' + (paused ? 'Paused' : 'Active') + '</span>'
+        + '<span class="' + state + '">' + stateLabel + '</span>'
         + '<span class="sd-store__sep">•</span>'
-        + '<span class="sd-flag ' + state + '">' + (paused ? 'PAUSED' : 'LIVE') + '</span>'
+        + '<span class="sd-flag ' + state + '">' + stateFlag + '</span>'
         + '</div></div>'
+        + '<button class="sd-store__view" type="button" data-action="preview-kitchen"><span aria-hidden="true">👁️</span> View</button>'
         + '<a class="sd-store__edit" href="#/kitchen"><span aria-hidden="true">✏️</span> Edit</a>'
         + '</div>';
 }
@@ -448,23 +460,43 @@ function sdOfferingCardHtml(p, orderCount) {
         h += '<div class="sd-card__price">' + money(p.price)
             + (p.priceUnit ? ' <span class="sd-card__unit">/ ' + esc(p.priceUnit) + '</span>' : '') + '</div>';
     }
-    // Inline stock adjust stays available for limited-quantity offerings.
-    if (maxQty != null && remaining != null && remaining >= 0 && !p.soldOut && !p.ordersPaused) {
-        h += '<div class="stepper oc-stepper sd-card__stepper">'
-            + '<button type="button" data-action="inv-dec" data-pid="' + p.id + '" aria-label="Decrease available quantity for ' + esc(p.name) + '">−</button>'
-            + '<span class="stepper-value" id="inv-' + p.id + '">' + remaining + '</span>'
-            + '<button type="button" data-action="inv-inc" data-pid="' + p.id + '" aria-label="Increase available quantity for ' + esc(p.name) + '">+</button></div>';
-    }
+    // V3 §11: the inline quantity +/- stepper is REMOVED from the dashboard -
+    // quantity changes happen through Edit / Edit Today, never by an inline
+    // stock hack on the card.
     h += '<div class="sd-card__actions">';
     // View Orders (N) uses the existing #/order-detail/{productId} route. The
     // count is appended only when the app returned a real one.
-    h += '<a class="sd-btn sd-btn--primary" href="#/order-detail/' + p.id + '">View Orders'
-        + (orderCount != null ? ' (' + esc(String(orderCount)) + ')' : '') + '</a>';
-    h += '<button class="sd-btn sd-btn--edit" type="button" data-action="edit-offering" data-pid="' + p.id + '">Edit</button>';
-    // Pause stays reversible and is never conflated with Sold Out.
-    if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--pause" type="button" data-action="pause-orders" data-pid="' + p.id + '">Pause</button>';
-    if (p.ordersPaused && !p.soldOut) h += '<button class="sd-btn sd-btn--resume" type="button" data-action="resume-orders" data-pid="' + p.id + '">Resume</button>';
-    if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Sold Out</button>';
+    if (p.recurring && p.occurrenceId != null) {
+        h += '<button class="sd-btn sd-btn--primary" type="button" data-action="open-offering-orders-date" data-pid="'
+            + esc(p.id) + '" data-date="' + esc(p.nextOccurrenceDate || sellerDate('today')) + '">View Orders'
+            + (orderCount != null ? ' (' + esc(String(orderCount)) + ')' : '') + '</button>';
+    } else {
+        h += '<a class="sd-btn sd-btn--primary" href="#/order-detail/' + p.id + '">View Orders'
+            + (orderCount != null ? ' (' + esc(String(orderCount)) + ')' : '') + '</a>';
+    }
+    if (p.recurring && p.occurrenceId != null) {
+        // V2 §8 / V3 §8: occurrence-specific actions only. No generic Pause /
+        // Edit / Sold Out here - their scope would be ambiguous on a rule that
+        // repeats across dates.
+        var occToday = p.nextOccurrenceDate === sellerDate('today');
+        h += '<button class="sd-btn sd-btn--edit" type="button" data-action="edit-today" data-oid="'
+            + esc(p.occurrenceId) + '">' + (occToday ? 'Edit Today' : 'Edit This Date') + '</button>';
+        var dayLimited = p.maxQuantity != null || p.remainingQuantity != null;
+        if (dayLimited) {
+            h += '<button class="sd-btn sd-btn--soldout" type="button" data-action="occ-sold-out" data-oid="'
+                + esc(p.occurrenceId) + '">' + (occToday ? 'Sold Out Today' : 'Sold Out This Date') + '</button>';
+        } else {
+            h += '<button class="sd-btn sd-btn--pause" type="button" data-action="occ-close" data-oid="'
+                + esc(p.occurrenceId) + '">' + (occToday ? 'Close Orders Today' : 'Close Orders This Date') + '</button>';
+        }
+    } else if (!p.recurring) {
+        h += '<button class="sd-btn sd-btn--edit" type="button" data-action="edit-offering" data-pid="' + p.id + '">Edit</button>';
+        var oneTimeLimited = p.maxQuantity != null || p.remainingQuantity != null;
+        // Unlimited offerings close orders rather than pretending to sell out.
+        if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--pause" type="button" data-action="pause-orders" data-pid="' + p.id + '">' + (oneTimeLimited ? 'Pause' : 'Close Orders') + '</button>';
+        if (p.ordersPaused && !p.soldOut) h += '<button class="sd-btn sd-btn--resume" type="button" data-action="resume-orders" data-pid="' + p.id + '">Resume</button>';
+        if (oneTimeLimited && !p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Sold Out</button>';
+    }
     h += '</div></div></div>';
     return h;
 }
@@ -484,7 +516,7 @@ function sdEarningsHtml(dash) {
         + '<div class="sd-earnings__grid">'
         + '<div class="sd-earnings__cell"><div class="sd-earnings__label">Confirmed Today</div>'
         + '<div class="sd-earnings__val is-green">' + money(dash.confirmedToday) + '</div></div>'
-        + '<div class="sd-earnings__cell"><div class="sd-earnings__label">Pending</div>'
+        + '<div class="sd-earnings__cell"><div class="sd-earnings__label">Pending Today</div>'
         + '<div class="sd-earnings__val is-amber">' + money(dash.pending) + '</div></div>'
         + '<div class="sd-earnings__cell"><div class="sd-earnings__label">This Month</div>'
         + '<div class="sd-earnings__val">' + money(dash.thisMonth) + '</div></div>'
@@ -500,12 +532,11 @@ function sdSkeletonHtml() {
     }
     var stats = '';
     for (var i = 0; i < 3; i++) stats += '<div class="sd-skel sd-skel--stat"></div>';
-    var quick = '';
-    for (var j = 0; j < 5; j++) quick += '<div class="sd-skel sd-skel--qa"></div>';
+    // V3 §5: the quick-action row is gone from the dashboard, so its skeleton
+    // placeholders are gone too - the loading state must match the real layout.
     return '<div class="sd-root" aria-busy="true" aria-label="Loading your dashboard">'
         + '<div class="sd-stats">' + stats + '</div>'
         + '<div class="sd-skel sd-skel--store"></div>'
-        + '<div class="sd-quick">' + quick + '</div>'
         + '<div class="sd-skel sd-skel--line w30 sd-skel--gap"></div>'
         + card() + card()
         + '</div>';
@@ -570,35 +601,47 @@ async function sellerHomeView() {
             + '<p class="sd-greet__sub">Your SocioMart Dashboard</p></div>';
 
         h += sdStatCardsHtml(dash);
-        h += sdStoreCardHtml(dash, kitchen);
-        h += sdQuickActionsHtml();
+        h += sdStoreCardHtml(dash, kitchen, kitchenErr);
+        // LIVE is the default every time the seller opens the dashboard; RECURRING
+        // is the schedule-management tab. The "Quick actions" row is removed per
+        // the approved V3 design: View + Edit + bottom navigation cover those roles.
+        h += '<div class="date-tabs">'
+            + '<button class="date-tab' + (S.dashTab !== 'recurring' ? ' active' : '') + '" type="button" data-action="set-dash-tab" data-tab="live">LIVE</button>'
+            + '<button class="date-tab' + (S.dashTab === 'recurring' ? ' active' : '') + '" type="button" data-action="set-dash-tab" data-tab="recurring">RECURRING</button>'
+            + '</div>';
         if (kitchenErr) {
             // Non-destructive: the store card still renders from the dashboard
             // payload, we just say the photo/status could not be refreshed.
             h += '<p class="sd-note">Store details could not be refreshed. '
                 + '<button class="sd-note__retry" type="button" data-action="seller-retry">Retry</button></p>';
         }
-        var offerings = dash.offerings || [];
-        h += '<div class="sd-section">'
-            + '<h2 class="sd-section__title">My Offerings<span class="sd-section__count">(' + offerings.length + ')</span></h2>'
-            + sdOfferingFilterHtml(offerings) + '</div>';
-        if (!offerings.length) {
-            // Empty-state copy is the approved Requirement 17/18 wording, kept
-            // verbatim: the redesign changes how this looks, not what it says.
-            h += emptyHtml('🍽️', 'No Offerings yet',
-                'Nothing on sale right now. Create your first offering and start taking orders.',
-                '<a class="btn btn-primary card-mt" href="#/create">+ Create Offering</a>');
+        var offerings = (dash.offerings || []).filter(function (p) {
+            return !p.ordersClosed && !p.ordersPaused && !p.soldOut;
+        });
+        // LIVE is the default tab: what can customers order right now?
+        if (S.dashTab === 'recurring') {
+            h += await sellerRecurringHtml();
         } else {
-            var filter = S.dashFilter || 'ALL';
-            var shown = offerings.filter(function (p) {
-                return filter === 'ALL' || sdCategoryGroup(p) === filter;
-            });
-            if (!shown.length) {
-                h += emptyHtml('🍽️', 'Nothing in this filter', 'Choose "All" to see every offering.');
+            var shown = offerings;
+            if (S.dashFilter && S.dashFilter !== 'ALL') {
+                shown = offerings.filter(function (p) { return sdCategoryGroup(p) === S.dashFilter; });
+            }
+            h += '<div class="sd-section">'
+                + '<h2 class="sd-section__title">My Offerings<span class="sd-section__count">(' + shown.length + ')</span></h2>'
+                + sdOfferingFilterHtml(offerings)
+                + '</div>';
+            if (!offerings.length) {
+                h += emptyHtml('🍽️', 'No Offerings yet',
+                    'Nothing on sale right now. Create your first offering and start taking orders.',
+                    '<a class="btn btn-primary card-mt" href="#/create">+ Create Offering</a>');
             } else {
-                shown.forEach(function (p) {
-                    h += sdOfferingCardHtml(p, orderCounts[p.id] != null ? orderCounts[p.id] : null);
-                });
+                if (!shown.length) {
+                    h += emptyHtml('🍽️', 'Nothing in this filter', 'Choose "All" to see every offering.');
+                } else {
+                    shown.forEach(function (p) {
+                        h += sdOfferingCardHtml(p, orderCounts[p.id] != null ? orderCounts[p.id] : null);
+                    });
+                }
             }
         }
         // Large orange CTA -> the EXISTING create-offering entry point.
@@ -617,7 +660,7 @@ async function sellerHomeView() {
 // SCREEN 5: MY OFFERINGS (formerly "History")
 async function sellerHistoryView() {
     // sd-root wrapper + sd-greet/sd-section chrome reuses the approved Dashboard
-    // language. The history-card list itself is intentionally untouched: its
+    // language. The history card list itself is intentionally untouched: its
     // classes and copy are pinned by regression tests (responsive fix + content).
     var h = '<div class="view-enter sd-root"><div class="sd-greet"><h1 class="sd-greet__hi">My Offerings</h1>' +
         '<p class="sd-greet__sub">Create a new offering, or revisit the ones you have already run.</p></div>';
@@ -629,6 +672,13 @@ async function sellerHistoryView() {
     // sd-add is the Dashboard CTA token; the "+ Add Offering" wording and #/add
     // target are unchanged so the existing flow is reused verbatim.
     h += '<a class="sd-add" href="#/add">+ Add Offering</a>';
+    // Minimal recurring surface: two pinned-history-safe tab buttons that swap
+    // between the untouched history list and the recurring schedule cards. The
+    // tab words are lower-case in the markup only via CSS; the literal text
+    // keeps the capitalised form the tests pin elsewhere.
+    h += '<div class="date-tabs"><button class="date-tab' + (S.offeringsTab !== 'recurring' ? ' active' : '') + '" type="button" data-action="set-offerings-tab" data-tab="history">History</button>' +
+        '<button class="date-tab' + (S.offeringsTab === 'recurring' ? ' active' : '') + '" type="button" data-action="set-offerings-tab" data-tab="recurring">Recurring</button></div>';
+    if (S.offeringsTab === 'recurring') return h + await sellerRecurringHtml() + '</div>';
     h += '<div class="sd-section"><h2 class="sd-section__title">Offering History</h2></div>';
     h += '<p class="muted small mb-2">Previous offerings listed here...</p>';
     try {
@@ -650,6 +700,92 @@ async function sellerHistoryView() {
     } catch (e) { h += emptyHtml('⚠️', 'Could not load history', e.message); }
     h += '</div>';
     return h;
+}
+
+/**
+ * Minimal RECURRING tab (per-day overrides only, no create/editor UI).
+ *
+ * <p>Kept deliberately separate from sellerHistoryView so the pinned history
+ * markup above stays byte-identical: the history-card list, the "+ Add
+ * Offering" CTA order, and the empty/error copy are untouched. Each schedule
+ * renders its own resolved per-day rows; saving one date PATCHes exactly that
+ * occurrence, so a Wednesday edit can never touch Monday or Friday.
+ */
+async function sellerRecurringHtml() {
+    var h = '<div class="sd-section"><h2 class="sd-section__title">Recurring schedules</h2></div>';
+    h += '<p class="muted small mb-2">One row per selling date. Editing a date changes only that date.</p>';
+    var schedules = [];
+    try {
+        schedules = await sellerApi('/api/seller/schedules') || [];
+        S.recurringSchedules = schedules;
+    } catch (e) { return emptyHtml('⚠️', 'Could not load recurring schedules', e.message); }
+    if (!schedules.length) {
+        return h + emptyHtml('🔁', 'No recurring schedules yet', 'Create one from an offering to repeat it weekly.');
+    }
+    for (var i = 0; i < schedules.length; i++) {
+        h += await sellerRecurringCardHtml(schedules[i]);
+    }
+    return h;
+}
+
+async function sellerRecurringCardHtml(card) {
+    var h = '<div class="sd-recurring-card"><div class="sd-recurring-card__name">' + esc(card.productName || 'Offering') + '</div>';
+    h += '<p class="muted small">' + esc(card.startDate || '') + ' → ' + esc(card.endDate || '') +
+        ' · Repeats ' + esc(sellerRecurringDaysText(card.recurrenceWeekdays)) + '</p>';
+    h += '<p class="muted small">Default quantity: ' + esc(sellerRecurringQtyText(card.defaultQuantity)) + '</p>';
+    // V2 §7.2: the card shows the schedule's defaults and next useful date.
+    h += '<p class="muted small">Orders close ' + esc(card.defaultOrderCloseTime || '—') +
+        ' · Delivery ' + esc(card.defaultReadyByTime || '—') +
+        (card.nextOccurrenceDate ? ' · Next occurrence: ' + esc(prettyDate(card.nextOccurrenceDate)) : '') + '</p>';
+    // V2 §15: an Ongoing schedule is capped at 90 days; near expiry the seller
+    // is prompted to extend rather than letting the schedule silently lapse.
+    if (card.ongoing && card.endDate) {
+        var msLeft = (new Date(card.endDate + 'T23:59:59') - new Date()) / 86400000;
+        if (msLeft <= 14) {
+            h += '<div class="info-box">⏳ This ongoing schedule ends ' + esc(prettyDate(card.endDate)) +
+                '. Extend it to keep future dates active.' +
+                ' <button class="btn btn-secondary btn-sm" type="button" data-action="extend-schedule" data-schedule-id="' +
+                esc(card.scheduleId) + '">Extend Schedule</button></div>';
+        }
+    }
+    h += '<div class="sd-card__actions">'
+        + '<button class="sd-btn sd-btn--primary sd-btn--sm" type="button" data-action="manage-schedule" data-schedule-id="' + esc(card.scheduleId) + '">Manage Schedule</button>'
+        + '<button class="sd-btn sd-btn--danger sd-btn--sm" type="button" data-action="end-schedule" data-schedule-id="' + esc(card.scheduleId) + '">End Schedule</button>'
+        + '</div>';
+    h += '</div>';
+    return h;
+}
+
+/** One resolved selling-date row with its own per-day override form. */
+function sellerRecurringRowHtml(card, o) {
+    var h = '<div class="history-card"><span class="hc-body"><span class="hc-name">' + esc(prettyDate(o.date)) + '</span>' +
+        '<span class="hc-meta">' + esc(sellerRecurringQtyText(o.quantity)) + ' · closes ' + esc(o.orderCloseTime || '—') +
+        ' · ' + esc(o.readyByTime || '') + (o.soldOut ? ' · Sold out' : '') + (o.ordersPaused ? ' · Orders paused' : '') + '</span></span>';
+    h += '<span class="hc-price">' + esc(o.status || '') + '</span>';
+    h += '<form data-recurring-form="' + esc(o.id) + '">' +
+        '<div class="form-group"><label class="form-label">Quantity for this date</label>' +
+        '<input class="form-input" name="quantity" type="number" min="1" step="1" value="' + esc(o.quantity == null ? '' : o.quantity) + '" placeholder="Blank for unlimited"></div>' +
+        '<div class="form-group"><label class="form-label">Orders Close for this date (HH:mm)</label>' +
+        '<input class="form-input" name="orderCloseTime" value="' + esc(o.orderCloseTime || '') + '" placeholder="e.g. 13:00"></div>' +
+        '<div class="form-group"><label class="form-label">Ready By for this date</label>' +
+        '<input class="form-input" name="readyByTime" value="' + esc(o.readyByTime || '') + '"></div>' +
+        '<label class="checkbox-option"><input type="checkbox" name="soldOut"' + (o.soldOut ? ' checked' : '') + '> Sold out (this date only)</label>' +
+        '<label class="checkbox-option"><input type="checkbox" name="ordersPaused"' + (o.ordersPaused ? ' checked' : '') + '> Orders paused (this date only)</label>' +
+        '<button class="btn btn-primary btn-block" type="button" data-action="save-recurring-day" data-oid="' + esc(o.id) + '">Save this date only</button>'
+        + '<button class="btn btn-secondary btn-block" type="button" data-action="edit-this-date" data-oid="' + esc(o.id) + '">Edit This Date</button>'
+        + '<button class="btn btn-sm btn-ghost" type="button" data-action="view-orders-date" data-oid="' + esc(o.id) + '">View Orders</button>'
+        + '</div>';
+    return h;
+}
+
+function sellerRecurringDaysText(days) {
+    if (!days || !days.length) return 'No repeat days';
+    var names = { MONDAY: 'Mon', TUESDAY: 'Tue', WEDNESDAY: 'Wed', THURSDAY: 'Thu', FRIDAY: 'Fri', SATURDAY: 'Sat', SUNDAY: 'Sun' };
+    return days.map(function (d) { return names[d] || d; }).join(', ');
+}
+
+function sellerRecurringQtyText(qty) {
+    return qty == null ? 'No limit' : qty + ' available';
 }
 
 // SCREEN 4: QUICK POST — Today only
@@ -780,6 +916,146 @@ function offeringForMode(isoDate) {
 }
 
 /**
+ * End date for a repeat duration, computed from the schedule START date.
+ *  thisweek -> the coming Sunday (the schedule always contains its start day),
+ *  onemonth -> start + 1 month,
+ *  ongoing  -> 90 inclusive calendar days (start + 89 days; Requirement 15),
+ *              no unbounded "forever" option anywhere in the client),
+ *  dated    -> caller supplies the date itself, so it is not computed here.
+ */
+function computeRecurringEnd(startIso, duration) {
+    var s = new Date(startIso + 'T00:00:00');
+    if (isNaN(s.getTime())) return '';
+    if (duration === 'onemonth') {
+        var m = new Date(s.getTime());
+        m.setMonth(m.getMonth() + 1);
+        return localDateStr(m);
+    }
+    if (duration === 'ongoing') {
+        return localDateStr(new Date(s.getTime() + 89 * 86400000));
+    }
+    // This week: through the coming Sunday (getDay: 0 = Sunday).
+    var daysLeft = (7 - s.getDay()) % 7;
+    return localDateStr(new Date(s.getTime() + daysLeft * 86400000));
+}
+
+/**
+ * Keeps the End Date field in step with the chosen Repeat Duration:
+ * "Until a date" hands the field back to the seller (editable, cleared if it
+ * held a computed value), every other duration auto-computes and locks it so
+ * the visible range can never disagree with what gets submitted.
+ */
+function syncRecurringEndDate() {
+    var endInput = $('#recurringEndDateMain');
+    if (!endInput) return;
+    if (S.recurringDuration === 'dated') {
+        endInput.readOnly = false;
+        endInput.removeAttribute('readonly');
+        return;
+    }
+    endInput.readOnly = true;
+    endInput.setAttribute('readonly', 'readonly');
+    var startInput = $('#recurringStartDate');
+    var start = startInput ? startInput.value : '';
+    endInput.value = start ? computeRecurringEnd(start, S.recurringDuration) : '';
+}
+
+/**
+ * Validates the REPEATING SCHEDULE block and returns the exact
+ * ProductCreateDto.recurringSchedule payload, or null after toasting the first
+ * problem. Weekdays travel as DayOfWeek enum names because that is how
+ * RecurringScheduleDto.recurrenceWeekdays deserialises; blank quantity means
+ * "No limit" (null), matching the one-time rule.
+ */
+function buildRecurringSchedule(vals, form) {
+    var start = (vals.recurringStartDate || '').trim();
+    if (!start) { toast('Schedule start date is required', 'error'); return null; }
+    if (start < sellerDate('today') && (!form || form.id !== 'manageScheduleForm')) {
+        toast('Schedule start date cannot be in the past', 'error'); return null;
+    }
+    var duration = vals.recurringDuration || 'thisweek';
+    var end = (vals.recurringEndDate || '').trim();
+    if (duration !== 'dated') end = computeRecurringEnd(start, duration);
+    if (!end) { toast('Choose an end date for the schedule', 'error'); return null; }
+    if (end < start) { toast('Schedule end date cannot be before the start date', 'error'); return null; }
+    var days = [];
+    $all('input[name="recurringWeekday"]:checked', form).forEach(function (cb) { days.push(Number(cb.value)); });
+    if (days.length === 0) { toast('Select at least one day to repeat on', 'error'); return null; }
+    var dayNames = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+    var weekdays = days.sort(function (a, b) { return a - b; }).map(function (n) { return dayNames[n - 1]; });
+    var qtyText = (vals.recurringDefaultQuantity || '').trim();
+    var qty = null;
+    if (qtyText !== '') {
+        var q = Number(qtyText);
+        if (!Number.isInteger(q) || q < 1) {
+            toast('Default quantity must be a whole number of at least 1, or blank for No limit', 'error');
+            return null;
+        }
+        qty = q;
+    }
+    var close = (vals.recurringDefaultOrderCloseTime || '').trim();
+    if (!close) { toast('Default Orders Close time is required for a repeating schedule', 'error'); return null; }
+    var ready = (vals.recurringDefaultReadyByTime || '').trim();
+    if (!ready) { toast('Default Delivery / Ready By is required for a repeating schedule', 'error'); return null; }
+    return {
+        startDate: start,
+        endDate: end,
+        recurrenceWeekdays: weekdays,
+        defaultQuantity: qty,
+        defaultOrderCloseTime: close,
+        defaultReadyByTime: ready,
+        ongoing: duration === 'ongoing'
+    };
+}
+
+/**
+ * Builds the Manage Schedule form markup from one resolved schedule card.
+ * Only the recurring defaults/pattern are editable here — the offering itself
+ * (name, price, offering date) is out of scope and untouched by Manage Schedule.
+ */
+function manageScheduleFormHtml(card) {
+    var start = card.startDate || sellerDate('today');
+    var end = card.endDate || '';
+    var dur = card.ongoing ? 'ongoing' : 'dated';
+    var days = card.recurrenceWeekdays || [];
+    var c = [0, 0, 0, 0, 0, 0, 0];
+    var dayNumbers = { MONDAY: 1, TUESDAY: 2, WEDNESDAY: 3, THURSDAY: 4, FRIDAY: 5, SATURDAY: 6, SUNDAY: 7 };
+    days.forEach(function (d) {
+        var n = typeof d === 'number' ? d : dayNumbers[String(d).toUpperCase()];
+        if (n >= 1 && n <= 7) c[n - 1] = 1;
+    });
+    var names = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    var h = '<form class="seller-form" id="manageScheduleForm">';
+    h += '<div class="form-group"><label class="form-label">Start Date <span class="req">*</span></label>';
+    h += '<input class="form-input" id="recurringStartDate" name="manageStartDate" type="date" value="' + esc(start) + '" min="' + esc(start) + '"></div>';
+    h += '<div class="form-group"><label class="form-label">End Date <span class="req">*</span></label>';
+    h += '<input class="form-input" id="recurringEndDateMain" name="manageEndDate" type="date" value="' + esc(end) + '" min="' + esc(start) + '"' + (dur === 'dated' ? '' : ' readonly') + '></div>';
+    h += '<div class="form-group"><label class="form-label">Repeat On <span class="req">*</span></label>'
+        + '<div class="weekday-checkbox-group">';
+    for (var i = 1; i <= 7; i++) {
+        h += '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="' + i + '"' + (c[i - 1] ? ' checked' : '') + '> ' + names[i - 1] + '</label>';
+    }
+    h += '</div></div>';
+    h += '<div class="form-group"><label class="form-label">Repeat Duration <span class="req">*</span></label><div class="radio-group">';
+    var durs = [['thisweek', 'This week'], ['onemonth', '1 month'], ['dated', 'Until a date'], ['ongoing', 'Ongoing (90 days)']];
+    durs.forEach(function (pair) {
+        h += '<label class="radio-option' + (pair[0] === dur ? ' selected' : '') + '" data-action="set-recurring-duration" data-duration="' + pair[0] + '">' + pair[1] + '</label>';
+    });
+    h += '</div><p class="muted small">Ongoing is internally capped at 90 days and can be extended later from Manage Schedule.</p></div>';
+    h += '<input type="hidden" name="recurringDuration" id="recurringDuration" value="' + esc(dur) + '">';
+    h += '<div class="form-group"><label class="form-label">Default Quantity per Occurrence (blank for No limit)</label>';
+    h += '<input class="form-input" name="manageDefaultQuantity" type="number" min="1" step="1" value="' + esc(card.defaultQuantity == null ? '' : card.defaultQuantity) + '" placeholder="Blank for unlimited"></div>';
+    h += '<div class="form-group"><label class="form-label">Default Orders Close (HH:mm)</label>';
+    h += '<input class="form-input" name="manageDefaultOrderCloseTime" type="time" value="' + esc(card.defaultOrderCloseTime || '') + '"></div>';
+    h += '<div class="form-group"><label class="form-label">Default Delivery / Ready By</label>';
+    h += '<input class="form-input" name="manageDefaultReadyByTime" type="text" value="' + esc(card.defaultReadyByTime || '') + '"></div>';
+    h += '<button class="btn btn-primary btn-block" type="submit">Save Schedule</button></form>';
+    return h;
+}
+
+
+
+/**
  * The offering form markup, shared by Create Offering (opts.edit false) and Edit
  * Offering (Requirement 5). With `opts.locked` the fields customers already
  * agreed to stay visible but can no longer be changed.
@@ -802,9 +1078,54 @@ function offeringFormHtml(t, opts) {
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Price (Rs) <span class="req">*</span></label><input class="form-input" name="price" type="number" value="' + (t.price || '') + '" placeholder="100" required' + lockAttr + '></div>';
     h += '<div class="form-group"><label class="form-label">Unit <span class="req">*</span></label><select class="form-select" name="priceUnit"' + lockAttr + '><option value="Per Piece"' + (selectedUnit === 'Per Piece' ? ' selected' : '') + '>Per Piece</option><option value="Per Plate"' + (selectedUnit === 'Per Plate' ? ' selected' : '') + '>Per Plate</option><option value="Per Box"' + (selectedUnit === 'Per Box' ? ' selected' : '') + '>Per Box</option></select></div></div>';
     h += '<input type="hidden" name="imageUrl" value="' + esc(t.imageUrl || '') + '">';
-    h += '<div class="form-group"><label class="form-label">Offering For <span class="req">*</span></label><div class="radio-group">' + availabilityOption('today', 'Today', mode, locked) + availabilityOption('tomorrow', 'Tomorrow', mode, locked) + availabilityOption('choose', 'Choose Date', mode, locked) + '</div></div>';
+    h += '<div class="form-group" id="offeringForGroup"><label class="form-label">Offering For <span class="req">*</span></label><div class="radio-group">' + availabilityOption('today', 'Today', mode, locked) + availabilityOption('tomorrow', 'Tomorrow', mode, locked) + availabilityOption('choose', 'Choose Date', mode, locked) + '</div></div>';
     h += '<input type="hidden" name="availableDate" id="availDate" value="' + esc(chosenDate) + '">';
     h += '<div class="form-group" id="chooseDateRow"' + (mode === 'choose' ? '' : ' hidden') + '><label class="form-label">Offering Date <span class="req">*</span></label><input type="date" class="form-input" name="chosenOfferingDate" min="' + todayIso + '" data-action="set-availability-date" value="' + esc(chosenDate) + '"' + lockAttr + '></div>';
+
+    // REPEATING SCHEDULE section (Requirement 3.2). Create Offering only:
+    // Edit Offering never edits the repeating rule (Manage Schedule does that),
+    // so the whole block is skipped in edit mode.
+    if (!isEdit) {
+        var recurMode = S.offeringMode === 'recurring' ? 'recurring' : 'today';
+        var dur = S.recurringDuration || 'thisweek';
+        h += '<div class="form-group" id="recurringScheduleSection">';
+        h += '<div class="font-700 mt-2 mb-1">AVAILABILITY <span class="small muted">(One time, or a repeating schedule)</span></div>';
+        h += '<div class="muted small mb-2">Choose <strong>ONE TIME</strong> to keep a single offering date, or <strong>REPEATING SCHEDULE</strong> to sell this item on selected days.</div>';
+        h += '<div class="row-actions">';
+        h += '<label class="radio-option ' + (recurMode === 'recurring' ? 'selected' : '') + '" data-action="set-offering-mode" data-mode="recurring">REPEATING SCHEDULE</label>';
+        h += '<label class="radio-option ' + (recurMode !== 'recurring' ? 'selected' : '') + '" data-action="set-offering-mode" data-mode="today">ONE TIME</label>';
+        h += '</div>';
+        // No native `required` on anything inside this container: a required input
+        // in a hidden container still blocks form submission with an invisible
+        // browser error. Validation happens in buildRecurringSchedule() on submit.
+        h += '<div class="mt-2" id="recurringScheduleFields"' + (recurMode === 'recurring' ? '' : ' hidden') + '>';
+        h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Start Date <span class="req">*</span></label><input class="form-input" id="recurringStartDate" name="recurringStartDate" type="date" min="' + todayIso + '"></div>';
+        h += '<div class="form-group"><label class="form-label">End Date <span class="req">*</span></label><input class="form-input" id="recurringEndDateMain" name="recurringEndDate" type="date" min="' + todayIso + '"' + (dur === 'dated' ? '' : ' readonly') + '></div></div>';
+
+        h += '<div class="form-group"><label class="form-label">Repeat On <span class="req">*</span></label><div class="weekday-checkbox-group">' +
+            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="1"> M</label>' +
+            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="2"> T</label>' +
+            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="3"> W</label>' +
+            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="4"> T</label>' +
+            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="5"> F</label>' +
+            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="6"> S</label>' +
+            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="7"> S</label></div></div>';
+
+        h += '<div class="form-group"><label class="form-label">Repeat Duration <span class="req">*</span></label><div class="radio-group">' +
+            '<label class="radio-option' + (dur === 'thisweek' ? ' selected' : '') + '" data-action="set-recurring-duration" data-duration="thisweek">This week</label>' +
+            '<label class="radio-option' + (dur === 'onemonth' ? ' selected' : '') + '" data-action="set-recurring-duration" data-duration="onemonth">1 month</label>' +
+            '<label class="radio-option' + (dur === 'dated' ? ' selected' : '') + '" data-action="set-recurring-duration" data-duration="dated">Until a date</label>' +
+            '<label class="radio-option' + (dur === 'ongoing' ? ' selected' : '') + '" data-action="set-recurring-duration" data-duration="ongoing">Ongoing (90 days)</label></div>' +
+            '<p class="muted small">Ongoing is internally capped at 90 days and can be extended later from Manage Schedule.</p></div>';
+        h += '<input type="hidden" name="recurringWeekdays" id="recurringWeekdays" value="">';
+        h += '<input type="hidden" name="recurringDuration" id="recurringDuration" value="' + esc(dur) + '">';
+        h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Default Quantity per Occurrence (blank for No limit)</label><input class="form-input" name="recurringDefaultQuantity" type="number" min="1" step="1" placeholder="Blank for unlimited"></div>';
+        h += '<div class="form-group"><label class="form-label">Default Orders Close (HH:mm)</label><input class="form-input" name="recurringDefaultOrderCloseTime" type="time"></div></div>';
+        h += '<div class="form-group"><label class="form-label">Default Delivery / Ready By</label><input class="form-input" name="recurringDefaultReadyByTime" type="text" placeholder="e.g. 1:00 PM"></div>';
+        h += '</div>';  // recurringScheduleFields
+        h += '</div>';  // recurringScheduleSection
+    }
+    h += '<input type="hidden" name="recurringSchedule" id="recurringScheduleHidden" value="">';
 
     var openValue = isEdit ? (t.orderWindowStart || '') : '';
     var closeValue = isEdit ? (t.orderWindowEnd || '') : '';
@@ -847,13 +1168,16 @@ function offeringFormHtml(t, opts) {
 
 // SCREEN 3: CREATE OFFERING (MANUAL FORM)
 async function sellerCreateView() {
-    // A new form always starts in Today mode; never inherit a previous choice.
-    S.offeringFor = 'today';
+    // A new form always starts in Today mode (ONE TIME); never inherit a previous choice.
+    S.offeringMode = 'today';
+    S.recurringDuration = 'thisweek';
+    S.recurringScheduleConfig = null;
     var t = S.draftOffering || {};
     var h = '<div class="view-enter">';
     h += '<div class="page-head"><h1>Create Offering</h1><p class="muted small">' +
         (S.republishSourceId ? 'Review the previous offering details, then set fresh timing and quantity.' : 'Fill in the details for your new dish.') + '</p></div>';
-    h += offeringFormHtml(t, { formId: 'createOfferingForm', mode: 'today' });
+    // Offering Mode toggle - blocking call handled by event delegation
+    h += offeringFormHtml(t, { formId: 'createOfferingForm', mode: S.offeringMode, edit: false, locked: false });
     h += '</div>';
     return h;
 }
@@ -919,19 +1243,21 @@ async function sellerOrdersView() {
     // can hold a picked ISO date, so labels come from sellerDate() rather than
     // from the tab key alone.
     var selDate = sellerDate(S.selectedDate);
-    var isToday = selDate === sellerDate('today');
+    var isAll = S.selectedDate === 'all';
+    var isToday = !isAll && selDate === sellerDate('today');
     var isTomorrow = !isToday && selDate === sellerDate('tomorrow');
-    var dayLabel = isToday ? 'Today' : isTomorrow ? 'Tomorrow' : prettyDate(selDate);
-    var listTitle = isToday ? 'Today\u2019s Orders' : isTomorrow ? 'Tomorrow\u2019s Orders' : prettyDate(selDate);
+    var dayLabel = isAll ? 'All Orders' : isToday ? 'Today' : isTomorrow ? 'Tomorrow' : prettyDate(selDate);
+    var listTitle = isAll ? 'All Orders' : isToday ? 'Today\u2019s Orders' : isTomorrow ? 'Tomorrow\u2019s Orders' : prettyDate(selDate);
     var h = '<div class="view-enter sd-root so-root">';
     h += '<header class="so-head"><h1 class="so-title">Orders</h1></header>';
     h += '<div class="date-tabs so-tabs" role="group" aria-label="Orders by day">'
+        + '<button class="date-tab' + (isAll ? ' active' : '') + '" type="button" data-action="set-date" data-date="all" aria-pressed="' + isAll + '">All Orders</button>'
         + '<button class="date-tab' + (S.selectedDate === 'today' ? ' active' : '') + '" type="button" data-action="set-date" data-date="today" aria-pressed="' + (S.selectedDate === 'today') + '">Today</button>'
         + '<button class="date-tab' + (S.selectedDate === 'tomorrow' ? ' active' : '') + '" type="button" data-action="set-date" data-date="tomorrow" aria-pressed="' + (S.selectedDate === 'tomorrow') + '">Tomorrow</button>'
-        + '<button class="date-tab' + (S.selectedDate !== 'today' && S.selectedDate !== 'tomorrow' ? ' active' : '') + '" type="button" data-action="set-date" data-date="pick" aria-pressed="' + (S.selectedDate !== 'today' && S.selectedDate !== 'tomorrow') + '">Pick date</button>'
+        + '<button class="date-tab' + (!isAll && S.selectedDate !== 'today' && S.selectedDate !== 'tomorrow' ? ' active' : '') + '" type="button" data-action="set-date" data-date="pick" aria-pressed="' + (!isAll && S.selectedDate !== 'today' && S.selectedDate !== 'tomorrow') + '">Pick date</button>'
         + '</div>';
     try {
-        var summary = await sellerApi('/api/seller-app/orders/summary?date=' + selDate);
+        var summary = await sellerApi('/api/seller-app/orders/summary?date=' + (isAll ? 'all' : selDate));
         var hasOrders = summary.totalOrderCount > 0;
         if (hasOrders) {
             // Summary card: eyebrow day, big real count, then the three real
@@ -968,7 +1294,8 @@ async function sellerOrdersView() {
                 h += '</div>';
                 h += '<div class="opc-foot">'
                     + '<span class="opc-meta"><span class="dot-green">●</span> ' + p.paidCount + ' paid · <span class="dot-orange">●</span> ' + p.pendingCount + ' pending</span>'
-                    + '<a class="opc-link" href="#/order-detail/' + p.productId + '">View Orders <span aria-hidden="true">→</span></a>'
+                    + (isAll ? '<span class="opc-meta">Choose a date above for order details</span>'
+                        : '<a class="opc-link" href="#/order-detail/' + p.productId + '">View Orders <span aria-hidden="true">→</span></a>')
                     + '</div>';
                 h += '</article>';
             });
@@ -1614,6 +1941,41 @@ async function submitOfferingEdit(form) {
     if (!o || !o.id) { toast('This offering is no longer available', 'error'); return; }
     var locked = !!o.hasOrders;
     var ev = formVals(form);
+    // V2 §10: Edit Today / Edit This Date saves an override for THIS DATE
+    // ONLY. Name, price, image, category, the offering date and the repeating
+    // rule are deliberately not writable here - they belong to the product or
+    // to Manage Schedule, and touching them would leak one day's edit into
+    // every other occurrence.
+    if (S.editOccurrenceId != null) {
+        var occId = S.editOccurrenceId;
+        var occBody = {};
+        var rawQty = String(ev.availableQuantity == null ? '' : ev.availableQuantity).trim();
+        if (rawQty === '') {
+            // Blank means "No limit" for this date - but only report a change
+            // when the occurrence was limited before.
+            if (o.maxQuantity != null) occBody.clearQuantity = true;
+        } else {
+            var occQty = Number(rawQty);
+            if (!Number.isInteger(occQty) || occQty < 1) {
+                toast('Quantity for this date must be a whole number of at least 1, or blank for No limit', 'error');
+                return;
+            }
+            if (occQty !== o.maxQuantity) occBody.quantity = occQty;
+        }
+        var occClose = parseOptionalHhmm(ev.orderWindowEnd, 'Orders Close');
+        if (!occClose) { toast('Orders Close is required', 'error'); return; }
+        if (occClose !== (o.orderWindowEnd || '')) occBody.orderCloseTime = occClose;
+        var occReady = String(ev.readyByTime || '').trim();
+        if (occReady && occReady !== (o.readyByTime || '')) occBody.readyByTime = occReady;
+        if (Object.keys(occBody).length === 0) { toast('No changes to save', 'info'); return; }
+        await sellerApi('/api/seller/schedules/occurrences/' + occId, { method: 'PATCH', body: occBody });
+        toast('Saved for this date only', 'success');
+        S.editOccurrenceId = null;
+        S.editOffering = null;
+        S.offeringFor = 'today';
+        sellerNavigate('#/home');
+        return;
+    }
     var payload = {};
     var booked = o.bookedQuantity || 0;
     var remainingNow = o.remainingQuantity == null ? 0 : o.remainingQuantity;
@@ -1708,6 +2070,10 @@ document.addEventListener('submit', async function (e) {
     e.preventDefault();
     try {
         if (form.id === 'createOfferingForm') {
+            if (S.offeringSubmitting) return; // guard against double submit
+            S.offeringSubmitting = true;
+            var publishBtn = form.querySelector('button[type="submit"]');
+            if (publishBtn) publishBtn.disabled = true;
             var vals = formVals(form);
             // Optional timing fields: blank means "not provided" -- never send
             // an invalid empty timestamp to the backend.
@@ -1717,7 +2083,15 @@ document.addEventListener('submit', async function (e) {
             var readyBy = (vals.readyByTime || '').trim();
             if (!readyBy) { toast('Delivery / Ready By is required', 'error'); return; }
             vals.readyByTime = readyBy;
-            if (S.offeringFor === 'choose') {
+            // Availability: ONE TIME keeps the existing Today/Tomorrow/Choose Date
+            // rules; REPEATING SCHEDULE replaces the single date with the schedule
+            // window (the product's date is its first occurrence). Requirement 3.
+            var recurringConfig = null;
+            if (S.offeringMode === 'recurring') {
+                recurringConfig = buildRecurringSchedule(vals, form);
+                if (!recurringConfig) return; // buildRecurringSchedule toasted
+                vals.availableDate = recurringConfig.startDate;
+            } else if (S.offeringFor === 'choose') {
                 vals.availableDate = vals.chosenOfferingDate || '';
                 if (!vals.availableDate) { toast('Choose an offering date', 'error'); return; }
             } else {
@@ -1753,6 +2127,19 @@ document.addEventListener('submit', async function (e) {
                 return;
             }
             vals.categories = categories;
+            // Raw schedule inputs never travel to the API; only the structured
+            // recurringSchedule object does (and only in recurring mode -- an
+            // empty string would fail Jackson's object deserialisation).
+            delete vals.recurringStartDate;
+            delete vals.recurringEndDate;
+            delete vals.recurringWeekdays;
+            delete vals.recurringDuration;
+            delete vals.recurringWeekday;
+            delete vals.recurringDefaultQuantity;
+            delete vals.recurringDefaultOrderCloseTime;
+            delete vals.recurringDefaultReadyByTime;
+            if (recurringConfig) vals.recurringSchedule = recurringConfig;
+            else delete vals.recurringSchedule;
             var saveFav = $('#favToggle') && $('#favToggle').classList.contains('on');
             if (saveFav) {
                 try {
@@ -1768,6 +2155,35 @@ document.addEventListener('submit', async function (e) {
             sellerNavigate('#/home');
         } else if (form.id === 'editOfferingForm') {
             await submitOfferingEdit(form);
+        } else if (form.id === 'manageScheduleForm') {
+            // Manage Schedule only edits the recurring rule — never touch the
+            // offering itself from here.
+            var sid = S.manageScheduleScheduleId;
+            if (!sid) { toast('No schedule selected', 'error'); return; }
+            var vals = formVals(form);
+            // Map the manage-schedule field names onto the recurring names the
+            // shared recurring validator reads.
+            vals.recurringStartDate = vals.manageStartDate;
+            vals.recurringEndDate = vals.manageEndDate;
+            vals.recurringDefaultQuantity = vals.manageDefaultQuantity;
+            vals.recurringDefaultOrderCloseTime = vals.manageDefaultOrderCloseTime;
+            vals.recurringDefaultReadyByTime = vals.manageDefaultReadyByTime;
+            vals.recurringDuration = vals.manageDuration || vals.recurringDuration;
+            var recurringConfig = buildRecurringSchedule(vals, form);
+            if (!recurringConfig) return;
+            recurringConfig.endDate = vals.manageEndDate || '';
+            recurringConfig.ongoing = vals.recurringDuration === 'ongoing';
+            if (!recurringConfig.startDate) recurringConfig.startDate = vals.manageStartDate || '';
+            try {
+                recurringConfig.clearDefaultQuantity = (vals.manageDefaultQuantity || '').trim() === '';
+                await sellerApi('/api/seller/schedules/' + sid, { method: 'PUT', body: recurringConfig });
+                toast('Schedule updated', 'success');
+                $('#modalRoot').hidden = true;
+                S.manageScheduleScheduleId = null;
+                await sellerRender();
+            } catch (err) {
+                toast(err.message || 'Could not update schedule', 'error');
+            }
         } else if (form.id === 'quickPostForm') {
             var message = (form.querySelector('[name="message"]').value || '').trim();
             if (!message) { toast('Paste a WhatsApp message first', 'error'); return; }
@@ -1883,6 +2299,13 @@ document.addEventListener('submit', async function (e) {
             toast('All changes saved', 'success');
         }
     } catch (err) { toast(err.message, 'error'); }
+    finally {
+        // Release the double-submit guard on every path: success navigates away,
+        // but a validation/transport failure leaves the same form on screen and
+        // must stay editable.
+        S.offeringSubmitting = false;
+        if (publishBtn) publishBtn.disabled = false;
+    }
 });
 
 // EVENT DELEGATION
@@ -1920,6 +2343,182 @@ document.addEventListener('click', async function (e) {
             case 'go-history': sellerNavigate('#/history'); break;
             case 'go-earnings': sellerNavigate('#/earnings'); break;
             case 'go-home': sellerNavigate('#/home'); break;
+            case 'open-all-orders': S.selectedDate = 'all'; sellerNavigate('#/orders'); break;
+            case 'set-offerings-tab': {
+                S.offeringsTab = t.dataset.tab === 'recurring' ? 'recurring' : 'history';
+                await sellerRender();
+                break;
+            }
+            case 'set-dash-tab': {
+                S.dashTab = t.dataset.tab === 'recurring' ? 'recurring' : 'live';
+                await sellerRender();
+                break;
+            }
+            case 'save-recurring-day': {
+                var oid = Number(t.dataset.oid);
+                var form = t.closest('form[data-recurring-form]');
+                if (!form) { toast('Could not find this date', 'error'); break; }
+                var qtyRaw = form.querySelector('[name="quantity"]');
+                var closeRaw = form.querySelector('[name="orderCloseTime"]');
+                var readyRaw = form.querySelector('[name="readyByTime"]');
+                var soldRaw = form.querySelector('[name="soldOut"]');
+                var pausedRaw = form.querySelector('[name="ordersPaused"]');
+                var qtyText = qtyRaw ? qtyRaw.value.trim() : '';
+                var body = {
+                    quantity: qtyText === '' ? null : Number(qtyText),
+                    clearQuantity: qtyText === '',
+                    orderCloseTime: closeRaw ? closeRaw.value : null,
+                    readyByTime: readyRaw ? readyRaw.value : null,
+                    soldOut: soldRaw ? !!soldRaw.checked : null,
+                    ordersPaused: pausedRaw ? !!pausedRaw.checked : null
+                };
+                if (body.quantity != null && (!Number.isInteger(body.quantity) || body.quantity < 1)) {
+                    toast('Quantity must be at least 1; leave blank for unlimited.', 'error');
+                    break;
+                }
+                t.disabled = true;
+                try {
+                    await sellerApi('/api/seller/schedules/occurrences/' + oid, { method: 'PATCH', body: body });
+                    toast('Saved for this date only', 'success');
+                    await sellerRender();
+                } catch (err) {
+                    t.disabled = false;
+                    toast(err.message || 'Could not save this date', 'error');
+                }
+                break;
+            }
+            case 'manage-schedule': {
+                var sid = Number(t.dataset.scheduleId);
+                // Re-render from the live row so the Manage Schedule form always
+                // shows the freshest schedule card (lazy product association).
+                try {
+                    var card = await sellerApi('/api/seller/schedules/' + sid);
+                    S.recurringScheduleConfig = card;
+                    S.manageScheduleScheduleId = sid;
+                    S.recurringDuration = card.ongoing ? 'ongoing' : 'dated';
+                    var h = '<div class="view-enter"><div class="page-head"><h1>Manage Schedule</h1>'
+                        + '<button class="icon-btn" type="button" data-action="go-back">←</button></div>'
+                        + manageScheduleFormHtml(card) + '</div>';
+                    $('#modalRoot').innerHTML = h;
+                    $('#modalRoot').hidden = false;
+                    S.manageScheduleDirty = false;
+                } catch (err) {
+                    toast(err.message || 'Could not load schedule', 'error');
+                }
+                break;
+            }
+            case 'end-schedule': {
+                var sid = Number(t.dataset.scheduleId);
+                if (!confirm('End this recurring schedule? Past occurrences and existing orders are preserved — the schedule simply stops activating future dates.')) break;
+                t.disabled = true;
+                try {
+                    await sellerApi('/api/seller/schedules/' + sid + '/end', { method: 'POST' });
+                    toast('Schedule ended. History and orders remain.', 'success');
+                    await sellerRender();
+                } catch (err) {
+                    t.disabled = false;
+                    toast(err.message || 'Could not end schedule', 'error');
+                }
+                break;
+            }
+            case 'edit-today':
+            case 'edit-this-date': {
+                // V2 §10: opens the existing Edit Offering UI pre-filled with
+                // THIS occurrence's values, but the save path (guarded by
+                // S.editOccurrenceId in submitOfferingEdit) writes an override
+                // for this date only - never the product or the rule.
+                var oid = Number(t.dataset.oid);
+                try {
+                    var occ = await sellerApi('/api/seller/schedules/occurrences/' + oid);
+                    S.editOccurrenceId = oid;
+                    S.editOffering = {
+                        id: occ.productId,
+                        name: occ.productName || '',
+                        availableDate: occ.date,
+                        bookedQuantity: 0,
+                        maxQuantity: occ.quantity,
+                        remainingQuantity: occ.quantity,
+                        orderWindowEnd: occ.orderCloseTime,
+                        readyByTime: occ.readyByTime,
+                        hasOrders: false,
+                        orderCount: 0,
+                        soldOut: occ.soldOut,
+                        ordersPaused: occ.ordersPaused,
+                        category: ''
+                    };
+                    sellerNavigate('#/edit-offering');
+                } catch (err) {
+                    toast(err.message || 'Could not load occurrence', 'error');
+                }
+                break;
+            }
+            case 'occ-sold-out': {
+                // V2 §11 / V3 §8: per-day Sold Out toggle - this date only.
+                var soldOid = Number(t.dataset.oid);
+                t.disabled = true;
+                try {
+                    await sellerApi('/api/seller/schedules/occurrences/' + soldOid + '/sold-out',
+                        { method: 'POST', body: { soldOut: true } });
+                    toast('Marked sold out for this date only', 'success');
+                    await sellerRender();
+                } catch (err) {
+                    t.disabled = false;
+                    toast(err.message || 'Could not mark sold out', 'error');
+                }
+                break;
+            }
+            case 'occ-close': {
+                // V2 §11 / V3 §8: per-day Close Orders toggle - this date only.
+                var closeOid = Number(t.dataset.oid);
+                t.disabled = true;
+                try {
+                    await sellerApi('/api/seller/schedules/occurrences/' + closeOid + '/pause',
+                        { method: 'POST', body: { paused: true } });
+                    toast('Orders closed for this date only', 'success');
+                    await sellerRender();
+                } catch (err) {
+                    t.disabled = false;
+                    toast(err.message || 'Could not close orders', 'error');
+                }
+                break;
+            }
+            case 'extend-schedule': {
+                // V2 §15: renewal path for a capped Ongoing schedule.
+                var extSid = Number(t.dataset.scheduleId);
+                t.disabled = true;
+                try {
+                    await sellerApi('/api/seller/schedules/' + extSid + '/extend', { method: 'POST' });
+                    toast('Schedule extended by another 90 days', 'success');
+                    await sellerRender();
+                } catch (err) {
+                    t.disabled = false;
+                    toast(err.message || 'Could not extend schedule', 'error');
+                }
+                break;
+            }
+            case 'view-orders-date': {
+                var oid = Number(t.dataset.oid);
+                try {
+                    var occ = await sellerApi('/api/seller/schedules/occurrences/' + oid);
+                    S.selectedDate = occ.date;
+                    S.offeringFilterSociety = '';
+                    S.offeringFilterStatus = '';
+                    S.offeringFilterDelivery = '';
+                    $('#modalRoot').hidden = true;
+                    sellerNavigate('#/order-detail/' + occ.productId);
+                } catch (err) {
+                    toast(err.message || 'Could not load occurrence orders', 'error');
+                }
+                break;
+            }
+            case 'open-offering-orders-date': {
+                S.selectedDate = t.dataset.date || sellerDate('today');
+                S.offeringFilterSociety = '';
+                S.offeringFilterStatus = '';
+                S.offeringFilterDelivery = '';
+                sellerNavigate('#/order-detail/' + t.dataset.pid);
+                break;
+            }
             case 'use-template': {
                 var tid = Number(t.dataset.tid);
                 var template = S.favTemplates.find(function (x) { return x.id === tid; });
@@ -2093,6 +2692,7 @@ document.addEventListener('click', async function (e) {
                 t.disabled = true;
                 try {
                     // Authoritative state (incl. whether orders already freeze fields).
+                    S.editOccurrenceId = null; // product edit, never an occurrence override
                     S.editOffering = await sellerApi('/api/seller/products/' + editPid);
                     sellerNavigate('#/edit-offering');
                 } catch (err) {
@@ -2208,7 +2808,10 @@ document.addEventListener('click', async function (e) {
                 break;
             }
              case 'set-availability': {
-                 $all('.radio-option').forEach(function (el) { el.classList.remove('selected'); });
+                 // Scoped clear: only the Offering For radios move. The REPEATING
+                 // SCHEDULE / ONE TIME and Repeat Duration radios live on the same
+                 // form and must keep their own selection.
+                 $all('#offeringForGroup .radio-option').forEach(function (el) { el.classList.remove('selected'); });
                  t.classList.add('selected');
                  S.offeringFor = t.dataset.val || 'today';
                  var cdr = $('#chooseDateRow');
@@ -2224,6 +2827,43 @@ document.addEventListener('click', async function (e) {
                  applyOfferingDatePicker(t);
                  break;
              }
+             case 'set-offering-mode': {
+                 // Availability toggle: ONE TIME vs REPEATING SCHEDULE (Req 3).
+                 // Selection is scoped to this pair so it can never clear the
+                 // Today/Tomorrow/Choose or Repeat Duration radios.
+                 S.offeringMode = t.dataset.mode === 'recurring' ? 'recurring' : 'today';
+                 $all('[data-action="set-offering-mode"]').forEach(function (el) { el.classList.remove('selected'); });
+                 t.classList.add('selected');
+                 var schedFields = $('#recurringScheduleFields');
+                 if (schedFields) schedFields.hidden = S.offeringMode !== 'recurring';
+                 // In recurring mode the schedule start date IS the offering date,
+                 // so the single-date "Offering For" chooser steps aside; in ONE
+                 // TIME mode it comes back with its previous choice intact.
+                 var forGroup = $('#offeringForGroup');
+                 if (forGroup) {
+                     forGroup.hidden = S.offeringMode === 'recurring';
+                     // Resync the single-date radios to the stored choice: the DOM
+                     // was rendered once, so a mode round-trip must not leave a
+                     // stale highlight over a different stored selection.
+                     $all('#offeringForGroup .radio-option').forEach(function (el) {
+                         el.classList.toggle('selected', (el.dataset.val || 'today') === S.offeringFor);
+                     });
+                 }
+                 var chooseRow2 = $('#chooseDateRow');
+                 if (chooseRow2 && S.offeringMode === 'recurring') chooseRow2.hidden = true;
+                 else if (chooseRow2) chooseRow2.hidden = S.offeringFor !== 'choose';
+                 if (S.offeringMode === 'recurring') syncRecurringEndDate();
+                 break;
+             }
+             case 'set-recurring-duration': {
+                 $all('[data-action="set-recurring-duration"]').forEach(function (el) { el.classList.remove('selected'); });
+                 t.classList.add('selected');
+                 S.recurringDuration = t.dataset.duration || 'thisweek';
+                 var durInput = $('#recurringDuration');
+                 if (durInput) durInput.value = S.recurringDuration;
+                 syncRecurringEndDate();
+                 break;
+             }
         }
     } catch (err) { toast(err.message, 'error'); }
 });
@@ -2231,6 +2871,23 @@ document.addEventListener('click', async function (e) {
 document.addEventListener('change', function (e) {
     var picker = e.target.closest('[data-action="set-availability-date"]');
     if (picker) { applyOfferingDatePicker(picker); return; }
+    // REPEATING SCHEDULE: keep the aggregated weekday list and the computed
+    // end date in step with what the seller just clicked. The payload itself is
+    // rebuilt from the live checkboxes at submit time, so these stay cosmetic.
+    var weekdayBox = e.target.closest('input[name="recurringWeekday"]');
+    if (weekdayBox) {
+        var hiddenDays = $('#recurringWeekdays');
+        if (hiddenDays) {
+            hiddenDays.value = $all('input[name="recurringWeekday"]:checked')
+                .map(function (cb) { return cb.value; }).join(',');
+        }
+        return;
+    }
+    var recStart = e.target.closest('#recurringStartDate');
+    if (recStart) {
+        if (S.recurringDuration !== 'dated') syncRecurringEndDate();
+        return;
+    }
     // A <select> reports the chosen option through 'change', not 'click' -
     // clicking the dropdown only fires 'click' with the OLD value still set.
     // Without these the offering-orders society/status filters never applied.

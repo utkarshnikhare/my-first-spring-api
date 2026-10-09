@@ -28,6 +28,13 @@ public class OrderService {
     private final AnalyticsService analyticsService;
     private final NotificationService notificationService;
     private final RetentionService retentionService;
+    /**
+     * Recurring engine (V2): occurrence-aware ordering. Injected as a field so
+     * the manually-constructed OrderService used by one unit test keeps
+     * working (it only exercises one-time offerings, where this stays null).
+     */
+    @Autowired
+    private RecurringScheduleService recurringScheduleService;
 
     public static final String DRAFT_ORDER_SESSION_KEY = "DRAFT_ORDER_ID";
     private static final String BUYER_SESSION_KEY = "BUYER_USER";
@@ -111,20 +118,42 @@ public class OrderService {
                 if (Boolean.TRUE.equals(product.getOrdersPaused())) {
                     throw new IllegalArgumentException("Orders are paused for '" + product.getName() + "'.");
                 }
-                if (Boolean.FALSE.equals(product.getAvailableToday()) && !Boolean.TRUE.equals(product.getIsPreorder())) {
+                boolean itemPreorder = Boolean.TRUE.equals(product.getIsPreorder());
+                // Recurring offerings are governed by their occurrence rows:
+                // today's selling date when one exists, otherwise the next
+                // scheduled date (a future-occurrence pre-order, V2 §14). This
+                // also releases the one-time "available today" gate, which is
+                // date-based and does not describe a repeating schedule.
+                OccurrenceDto recurringOcc = recurringSchedulesTarget(product, itemReq);
+                boolean recurring = recurringOcc != null;
+                if (recurringScheduleService != null && recurringOcc == null
+                        && recurringScheduleService.hasSchedule(product.getId())) {
+                    // A schedule exists but no live selling date (ended or
+                    // exhausted): V2 §12 - nothing further may be ordered.
+                    throw new IllegalArgumentException("'" + product.getName() + "' is not currently open for orders.");
+                }
+                if (Boolean.FALSE.equals(product.getAvailableToday()) && !itemPreorder && !recurring) {
                     throw new IllegalArgumentException("'" + product.getName() + "' is not available today.");
                 }
-                if (product.getRemainingQuantity() != null && product.getRemainingQuantity() <= 0) {
-                    throw new IllegalArgumentException("'" + product.getName() + "' is sold out.");
-                }
-                if (product.getRemainingQuantity() != null && qty > product.getRemainingQuantity()) {
-                    throw new IllegalArgumentException("Only " + product.getRemainingQuantity() + " left of '" + product.getName() + "'. Please reduce quantity.");
-                }
-                if (product.getMaxQuantity() != null && qty > product.getMaxQuantity()) {
-                    throw new IllegalArgumentException("At most " + product.getMaxQuantity() + " units of '" + product.getName() + "' per order.");
-                }
                 OrderItem orderItem = new OrderItem(product, qty, product.getPrice());
-                applyScheduling(product, itemReq, orderItem);
+                if (recurring) {
+                    validateRecurringOrder(product, recurringOcc, qty);
+                    // The fulfilment date IS the occurrence date, so each
+                    // selling date keeps its own order bucket (V2 §4/§13).
+                    orderItem.setScheduledDate(recurringOcc.getDate());
+                    orderItem.setOccurrence(recurringScheduleService.getOccurrence(recurringOcc.getId()));
+                } else {
+                    if (product.getRemainingQuantity() != null && product.getRemainingQuantity() <= 0) {
+                        throw new IllegalArgumentException("'" + product.getName() + "' is sold out.");
+                    }
+                    if (product.getRemainingQuantity() != null && qty > product.getRemainingQuantity()) {
+                        throw new IllegalArgumentException("Only " + product.getRemainingQuantity() + " left of '" + product.getName() + "'. Please reduce quantity.");
+                    }
+                    if (product.getMaxQuantity() != null && qty > product.getMaxQuantity()) {
+                        throw new IllegalArgumentException("At most " + product.getMaxQuantity() + " units of '" + product.getName() + "' per order.");
+                    }
+                    applyScheduling(product, itemReq, orderItem);
+                }
                 draft.addItem(orderItem);
             }
         }
@@ -185,6 +214,107 @@ public class OrderService {
     /** Enforces Offering For date plus Orders Open/Close on both draft and placement. */
     private void enforceCutoff(Product product, LocalDate cutoffDate, String context) {
         OfferingTiming.enforceOrderWindow(product, cutoffDate, context);
+    }
+
+    // ==================== RECURRING OCCURRENCE ORDERING (V2) ====================
+
+    /** Target occurrence for an ordering step; null for one-time offerings. */
+    private OccurrenceDto recurringSchedulesTarget(Product product, OrderItemRequest request) {
+        if (recurringScheduleService == null) return null;
+        if (request != null && request.getScheduledDate() != null && !request.getScheduledDate().isBlank()
+                && recurringScheduleService.hasSchedule(product.getId())) {
+            LocalDate requestedDate;
+            try {
+                requestedDate = LocalDate.parse(request.getScheduledDate().trim());
+            } catch (RuntimeException invalidDate) {
+                throw new IllegalArgumentException("Invalid recurring occurrence date for '" + product.getName() + "'.");
+            }
+            OccurrenceDto selected = recurringScheduleService.resolveOccurrenceForDate(product, requestedDate);
+            if (selected == null) {
+                throw new IllegalArgumentException("'" + product.getName()
+                        + "' is not open for orders on " + requestedDate + ".");
+            }
+            return selected;
+        }
+        return recurringScheduleService.resolveTargetOccurrence(product);
+    }
+
+    /** Strict HH:mm parse for window text; null when absent or unparseable. */
+    private LocalTime parseHhmmOrNull(String hhmm) {
+        if (hhmm == null || hhmm.isBlank()) return null;
+        try {
+            return LocalTime.parse(hhmm.trim());
+        } catch (RuntimeException unparseable) {
+            return null; // legacy free-text values cannot gate an order
+        }
+    }
+
+    /**
+     * Occurrence-scoped rules for ONE recurring order line (V2 §5/§8/§10):
+     * the per-day sold-out / closed flags, the occurrence's own Orders Close
+     * override on its selling date, the per-order quantity cap and the
+     * per-date bucket total ("14 plates" means 14 plates for that date).
+     */
+    private void validateRecurringOrder(Product product, OccurrenceDto occ, int qty) {
+        LocalDate today = LocalDate.now();
+        if (occ.getDate() == null || occ.getDate().isBefore(today)) {
+            throw new IllegalArgumentException("'" + product.getName() + "' is no longer scheduled for " + occ.getDate() + ".");
+        }
+        if (Boolean.TRUE.equals(occ.getSoldOut())) {
+            throw new IllegalArgumentException("'" + product.getName() + "' is sold out for " + occ.getDate() + ".");
+        }
+        if (Boolean.TRUE.equals(occ.getOrdersPaused())) {
+            throw new IllegalArgumentException("Orders are closed for '" + product.getName() + "' on " + occ.getDate() + ".");
+        }
+        // The product's opening time gates both same-day orders and advance
+        // recurring pre-orders. The occurrence close time is enforced only on
+        // its fulfilment date; future dates remain open until then.
+        LocalTime openAt = parseHhmmOrNull(product.getOrderWindowStart());
+        if (openAt != null && LocalTime.now().isBefore(openAt)) {
+            throw new IllegalArgumentException("Orders for '" + product.getName() + "' have not opened yet.");
+        }
+        if (occ.getDate().equals(today)) {
+            LocalTime closeAt = parseHhmmOrNull(occ.getOrderCloseTime());
+            if (closeAt != null && LocalTime.now().isAfter(closeAt)) {
+                throw new IllegalArgumentException("Orders for '" + product.getName() + "' are closed for " + occ.getDate() + ".");
+            }
+        }
+        Integer dayQty = occ.getQuantity();
+        if (dayQty != null) {
+            if (qty > dayQty) {
+                throw new IllegalArgumentException("At most " + dayQty + " of '" + product.getName()
+                        + "' per order for " + occ.getDate() + ".");
+            }
+            int booked = bookedPlatesOn(product, occ.getId());
+            if (booked + qty > dayQty) {
+                throw new IllegalArgumentException("Only " + Math.max(0, dayQty - booked) + " of '"
+                        + product.getName() + "' left for " + occ.getDate() + ".");
+            }
+        }
+    }
+
+    /**
+     * Plates of this product already committed to one fulfilment date. Orders
+     * carrying a scheduledDate bucket by that date; older rows without one
+     * bucket by their creation date (the day they were ordered). Drafts and
+     * cancelled orders hold no inventory, so they never count. Deliberately
+     * simple - the same kitchen-scoped scan the dashboard summary performs.
+     */
+    private int bookedPlatesOn(Product product, Long occurrenceId) {
+        if (product.getKitchen() == null || product.getId() == null || occurrenceId == null) return 0;
+        int total = 0;
+        for (Order order : orderRepository.findByKitchenOrderByCreatedAtDesc(product.getKitchen())) {
+            if (order.getOrderStatus() == OrderStatus.DRAFT || order.getOrderStatus() == OrderStatus.CANCELLED) {
+                continue;
+            }
+            for (OrderItem item : order.getItems()) {
+                if (item.getProduct() == null || !product.getId().equals(item.getProduct().getId())) continue;
+                if (item.getOccurrence() != null && occurrenceId.equals(item.getOccurrence().getId())) {
+                    total += item.getQuantity() == null ? 0 : item.getQuantity();
+                }
+            }
+        }
+        return total;
     }
 
     private List<String> parseSlots(String timeSlots) {
@@ -587,17 +717,14 @@ public class OrderService {
         // and "Mark All Delivered" did nothing at all.
         Kitchen kitchen = requireOwnedProduct(productId, seller).getKitchen();
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime start = date.atStartOfDay();
-        LocalDateTime end = date.plusDays(1).atStartOfDay();
-
         // The scope is measured BEFORE any write: this is the exact set the seller
         // confirmed, and the same set the rows below are drawn from.
-        DeliveryProgressDto before = computeDeliveryProgress(productId, date, kitchen, start, end);
+        DeliveryProgressDto before = computeDeliveryProgress(productId, date, kitchen);
         int confirmedScope = before.getBulkScopeOrderCount();
 
         int updated = 0;
-        for (Order order : orderRepository.findOfferingOrdersOnDateWithItems(kitchen, start, end)) {
-            if (!orderContainsProduct(order, productId)) continue;
+        for (Order order : orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen)) {
+            if (!orderContainsProductOnDate(order, productId, date)) continue;
             if (!order.isActiveForDelivery()) continue;
             if (order.isDelivered()) continue; // stays Delivered, original timestamp kept
             if (order.applyDeliveryStatus(DeliveryStatus.DELIVERED, seller, now)) {
@@ -613,7 +740,7 @@ public class OrderService {
         }
         // Progress is recomputed from the SAME rows just written, so the numbers
         // the caller receives always describe committed server state.
-        DeliveryProgressDto progress = computeDeliveryProgress(productId, date, kitchen, start, end);
+        DeliveryProgressDto progress = computeDeliveryProgress(productId, date, kitchen);
         if (updated != confirmedScope) {
             // Defensive: the scope measured BEFORE the write and the rows actually
             // changed must agree. A mismatch would mean the batch was only
@@ -637,18 +764,17 @@ public class OrderService {
         // progress the seller reads and the rows the bulk action changes are
         // always computed over the same storefront.
         Kitchen kitchen = requireOwnedProduct(productId, seller).getKitchen();
-        return computeDeliveryProgress(productId, date, kitchen, date.atStartOfDay(), date.plusDays(1).atStartOfDay());
+        return computeDeliveryProgress(productId, date, kitchen);
     }
 
     /** Shared counter used by the progress read AND the bulk write. */
-    private DeliveryProgressDto computeDeliveryProgress(Long productId, LocalDate date,
-                                                        Kitchen kitchen, LocalDateTime start, LocalDateTime end) {
+    private DeliveryProgressDto computeDeliveryProgress(Long productId, LocalDate date, Kitchen kitchen) {
         DeliveryProgressDto dto = new DeliveryProgressDto();
         dto.setProductId(productId);
         dto.setDate(date);
         int active = 0, delivered = 0;
-        for (Order order : orderRepository.findOfferingOrdersOnDateWithItems(kitchen, start, end)) {
-            if (!orderContainsProduct(order, productId)) continue;
+        for (Order order : orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen)) {
+            if (!orderContainsProductOnDate(order, productId, date)) continue;
             if (!order.isActiveForDelivery()) continue;
             active++;
             if (order.isDelivered()) delivered++;
@@ -677,6 +803,17 @@ public class OrderService {
         if (order.getItems() == null) return false;
         for (OrderItem item : order.getItems()) {
             if (item.getProduct() != null && productId.equals(item.getProduct().getId())) return true;
+        }
+        return false;
+    }
+
+    private boolean orderContainsProductOnDate(Order order, Long productId, LocalDate date) {
+        if (order.getItems() == null || date == null) return false;
+        for (OrderItem item : order.getItems()) {
+            if (item.getProduct() == null || !productId.equals(item.getProduct().getId())) continue;
+            LocalDate fulfilment = item.getScheduledDate();
+            if (fulfilment == null && order.getCreatedAt() != null) fulfilment = order.getCreatedAt().toLocalDate();
+            if (date.equals(fulfilment)) return true;
         }
         return false;
     }
@@ -821,6 +958,7 @@ public class OrderService {
                                 item.getQuantity(), item.getPrice());
                         itemDto.setScheduledDate(item.getScheduledDate());
                         itemDto.setScheduledSlot(item.getScheduledSlot());
+                        itemDto.setOccurrenceId(item.getOccurrence() == null ? null : item.getOccurrence().getId());
                         return itemDto;
                     })
                     .collect(Collectors.toList()));
@@ -874,6 +1012,30 @@ public class OrderService {
             if (Boolean.TRUE.equals(product.getOrdersPaused())) {
                 throw new IllegalArgumentException("Orders are paused for '" + product.getName() + "'.");
             }
+            int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
+            // Recurring lines re-validate against the occurrence the draft
+            // actually targets: the schedule (or its per-day override) may
+            // have changed between draft and placement. Everything else about
+            // the line was fixed at draft time by the same occurrence rules.
+            boolean recurringProduct = recurringScheduleService != null
+                    && recurringScheduleService.hasSchedule(product.getId());
+            if (recurringProduct) {
+                OccurrenceDto target = recurringScheduleService
+                        .resolveOccurrenceForDateForUpdate(product, item.getScheduledDate());
+                if (target == null) {
+                    throw new IllegalArgumentException("'" + product.getName()
+                            + "' is no longer scheduled for " + item.getScheduledDate() + ".");
+                }
+                if (item.getOccurrence() != null && !target.getId().equals(item.getOccurrence().getId())) {
+                    throw new IllegalArgumentException("The selected occurrence changed for '"
+                            + product.getName() + "'. Refresh and try again.");
+                }
+                if (item.getOccurrence() == null) {
+                    item.setOccurrence(recurringScheduleService.getOccurrence(target.getId()));
+                }
+                validateRecurringOrder(product, target, quantity);
+                continue;
+            }
             boolean preorder = Boolean.TRUE.equals(product.getIsPreorder());
             LocalDate orderingDate = LocalDate.now();
             if (preorder) {
@@ -890,7 +1052,6 @@ public class OrderService {
             if (!preorder && Boolean.FALSE.equals(product.getAvailableToday())) {
                 throw new IllegalArgumentException("'" + product.getName() + "' is no longer available today.");
             }
-            int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
             if (product.getRemainingQuantity() != null && product.getRemainingQuantity() <= 0) {
                 throw new IllegalArgumentException("'" + product.getName() + "' is sold out.");
             }
@@ -932,6 +1093,11 @@ public class OrderService {
         for (Map.Entry<Long, Integer> e : totals.entrySet()) {
             Product product = productRepository.findById(e.getKey()).orElse(null);
             if (product == null) continue;
+            if (recurringScheduleService != null && recurringScheduleService.hasSchedule(product.getId())) {
+                // Recurring capacity is occurrence/date scoped. Product stock is
+                // the one-time bucket and must not let Monday consume Friday.
+                continue;
+            }
             if (product.getRemainingQuantity() != null) {
                 if (product.getRemainingQuantity() < e.getValue()) {
                     throw new IllegalArgumentException("Only " + product.getRemainingQuantity() + " left of '" +
@@ -970,6 +1136,7 @@ public class OrderService {
             // updates are atomic/capped, so concurrent cancellations cannot lose stock.
             Product product = productRepository.findById(e.getKey()).orElse(null);
             if (product == null) continue;
+            if (recurringScheduleService != null && recurringScheduleService.hasSchedule(product.getId())) continue;
             if (product.getRemainingQuantity() != null) {
                 int restored = productRepository.restoreStock(e.getKey(), quantity);
                 if (restored == 0) {
@@ -1054,4 +1221,3 @@ public class OrderService {
         return sb.toString();
     }
 }
-

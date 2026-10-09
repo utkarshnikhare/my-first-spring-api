@@ -22,6 +22,7 @@ import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.OrderRepository;
 import com.example.my_first_spring_api.repository.ProductRepository;
 import com.example.my_first_spring_api.repository.QuickPostRepository;
+import com.example.my_first_spring_api.repository.RecurringScheduleRepository;
 import com.example.my_first_spring_api.repository.SellerTemplateRepository;
 import com.example.my_first_spring_api.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,11 +61,27 @@ public class SellerAppService {
     private final AnalyticsEventRepository analyticsEventRepository;
     private final FeatureService featureService;
     /**
+     * Recurring schedules (read-only here): a product with an ACTIVE schedule
+     * stays on the dashboard past its original availableDate while the schedule
+     * still has selling dates ahead — otherwise every recurring offering would
+     * vanish from LIVE/RECURRING the day after it started.
+     */
+    private final RecurringScheduleRepository recurringScheduleRepository;
+    /**
      * Delivery completion is a property of the shared Order aggregate, so its
      * rules live in OrderService and are reused here rather than duplicated. The
      * Seller app only decides WHERE the numbers are shown.
      */
     private final OrderService orderService;
+    /**
+     * Recurring projection for the LIVE dashboard: sets the recurring flag and
+     * today's resolved occurrence values (quantity cap / close / ready /
+     * per-day flags) on each offering card, plus the occurrence id the
+     * contextual Edit Today / Sold Out Today actions operate on (V2 §8).
+     * Field-injected so manually-constructed instances in tests keep working.
+     */
+    @Autowired
+    private RecurringScheduleService recurringScheduleService;
 
     @Autowired
     public SellerAppService(KitchenRepository kitchenRepository,
@@ -76,7 +93,8 @@ public class SellerAppService {
                             FavouriteRepository favouriteRepository,
                             AnalyticsEventRepository analyticsEventRepository,
                             FeatureService featureService,
-                            OrderService orderService) {
+                            OrderService orderService,
+                            RecurringScheduleRepository recurringScheduleRepository) {
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
         this.orderRepository = orderRepository;
@@ -87,6 +105,7 @@ public class SellerAppService {
         this.analyticsEventRepository = analyticsEventRepository;
         this.featureService = featureService;
         this.orderService = orderService;
+        this.recurringScheduleRepository = recurringScheduleRepository;
     }
 
     // ==================== INVENTORY CONTROL ====================
@@ -437,16 +456,48 @@ public class SellerAppService {
         dto.setSellerName(kitchen.getSeller() == null ? null : kitchen.getSeller().getName());
 
         List<Order> allOrders = orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen);
-        dto.setTotalOrders(allOrders.size());
+        dto.setTotalOrders((int) allOrders.stream()
+                .filter(o -> o.getOrderStatus() != OrderStatus.DRAFT).count());
         dto.setFollowers((int) favouriteRepository.countByKitchen(kitchen));
-        dto.setViewsToday((int) analyticsEventRepository
-                .countByEventTypeAndKitchenIdAndCreatedAtAfter(AnalyticsService.EV_MENU_VIEW, kitchen.getId(),
-                        LocalDate.now().atStartOfDay()));
+        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
+        long viewsToday = analyticsEventRepository.countByEventTypeAndKitchenIdAndCreatedAtAfter(
+                AnalyticsService.EV_MENU_VIEW, kitchen.getId(), todayStart)
+                + analyticsEventRepository.countByEventTypeAndKitchenIdAndCreatedAtAfter(
+                    AnalyticsService.EV_HOMEMADE_STOREFRONT_VIEW, kitchen.getId(), todayStart)
+                + analyticsEventRepository.countByEventTypeAndKitchenIdAndCreatedAtAfter(
+                    AnalyticsService.EV_PRODUCT_VIEW, kitchen.getId(), todayStart);
+        dto.setViewsToday((int) viewsToday);
 
         List<Product> products = productRepository.findByKitchen(kitchen);
+        LocalDate now = LocalDate.now();
+        // Recurring offerings stay on the dashboard while their schedule is
+        // ACTIVE and still has selling dates, even though their original
+        // availableDate (the schedule start) has passed.
+        Set<Long> recurringProductIds = new HashSet<>();
+        try {
+            recurringProductIds = recurringScheduleRepository
+                    .findByProduct_Kitchen_Seller_Id(seller.getId()).stream()
+                    .filter(s -> s.getStatus() == null
+                            || com.example.my_first_spring_api.model.RecurringScheduleStatus.ACTIVE.equals(s.getStatus()))
+                    .filter(s -> s.getEndDate() == null || !s.getEndDate().isBefore(now))
+                    .map(s -> s.getProduct() != null ? s.getProduct().getId() : null)
+                    .collect(Collectors.toSet());
+        } catch (RuntimeException ignored) {
+            // Dashboard must degrade to the one-time contract rather than fail:
+            // the seller's offerings still render exactly as before.
+        }
+        final Set<Long> recurringIds = recurringProductIds;
         dto.setOfferings(products.stream()
-                .filter(p -> p.getAvailableDate() == null || !p.getAvailableDate().isBefore(LocalDate.now()))
-                .map(this::toProductDto).collect(Collectors.toList()));
+                .filter(p -> p.getAvailableDate() == null || !p.getAvailableDate().isBefore(now)
+                        || (p.getId() != null && recurringIds.contains(p.getId())))
+                .map(p -> {
+                    ProductDto productDto = toProductDto(p);
+                    // Recurring flag + today's resolved occurrence values for
+                    // the contextual LIVE-card actions (V2 §8 / V3 §8).
+                    // Guarded for manually-constructed service instances in tests.
+                    if (recurringScheduleService != null) recurringScheduleService.decorateProductDto(p, productDto);
+                    return productDto;
+                }).collect(Collectors.toList()));
 
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
         LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
@@ -480,16 +531,13 @@ public class SellerAppService {
     @Transactional(readOnly = true)
     public SellerOrderSummaryDto getOrderSummary(User seller, LocalDate date) {
         Kitchen kitchen = getOwnedKitchen(seller);
-        LocalDateTime start = date.atStartOfDay();
-        LocalDateTime end = date.plusDays(1).atStartOfDay();
         // Draft orders are baskets the buyer never placed. They hold no inventory
         // reservation and are not customer orders, so they are excluded from every
         // counter here (the same rule the rest of the app applies) - otherwise
         // Paid + Pending + Cancelled could never add up to the total order count.
         List<Order> orders = new ArrayList<>();
-        for (Order o : orderRepository
-                .findByKitchenAndCreatedAtBetweenOrderByCreatedAtDesc(kitchen, start, end)) {
-            if (o.getOrderStatus() != OrderStatus.DRAFT) orders.add(o);
+        for (Order o : orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen)) {
+            if (o.getOrderStatus() != OrderStatus.DRAFT && (date == null || orderHasItemForDate(o, date))) orders.add(o);
         }
 
         SellerOrderSummaryDto dto = new SellerOrderSummaryDto();
@@ -509,7 +557,11 @@ public class SellerAppService {
             if (order.getPaymentStatus() == PaymentStatus.PAID) paidCount++;
             else if (order.getPaymentStatus() == PaymentStatus.PENDING
                     || order.getPaymentStatus() == PaymentStatus.WILL_PAY_LATER) pendingCount++;
-            BigDecimal amt = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
+            BigDecimal amt = order.getItems().stream()
+                    .filter(item -> itemMatchesDate(order, item, date))
+                    .map(item -> item.getPrice() == null ? BigDecimal.ZERO
+                            : item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity() == null ? 0 : item.getQuantity())))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
             totalRevenue = totalRevenue.add(amt);
 
             // Order-based counters must be incremented ONCE per distinct order per
@@ -517,6 +569,7 @@ public class SellerAppService {
             // returning its items twice) must still count as ONE order.
             Map<Long, Set<Long>> ordersCountedPerProduct = productOrdersSeen;
             for (OrderItem item : order.getItems()) {
+                if (!itemMatchesDate(order, item, date)) continue;
                 Product product = item.getProduct();
                 Long pid = product.getId();
                 SellerOrderSummaryDto.ProductOrderAggregate agg = productAgg.computeIfAbsent(pid, k -> {
@@ -590,15 +643,12 @@ public class SellerAppService {
         // to filter). Ownership is still proven by the check above.
         Kitchen kitchen = product.getKitchen();
 
-        LocalDateTime start = date.atStartOfDay();
-        LocalDateTime end = date.plusDays(1).atStartOfDay();
         // Same rule as Screen 7A: an unplaced draft basket is not a customer
         // order and reserves nothing, so it must never show up as a row here
         // (it would make the row count disagree with the booked inventory).
         List<Order> orders = new ArrayList<>();
-        for (Order o : orderRepository
-                .findByKitchenAndCreatedAtBetweenOrderByCreatedAtDesc(kitchen, start, end)) {
-            if (o.getOrderStatus() != OrderStatus.DRAFT) orders.add(o);
+        for (Order o : orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen)) {
+            if (o.getOrderStatus() != OrderStatus.DRAFT && orderContainsProductOnDate(o, productId, date)) orders.add(o);
         }
 
         OrderItemDetailDto dto = new OrderItemDetailDto();
@@ -630,7 +680,7 @@ public class SellerAppService {
             BigDecimal itemRevenue = BigDecimal.ZERO;
             OrderItem matchedItem = null;
             for (OrderItem item : order.getItems()) {
-                if (item.getProduct().getId().equals(productId)) {
+                if (item.getProduct().getId().equals(productId) && itemMatchesDate(order, item, date)) {
                     qtyForProduct += (item.getQuantity() != null ? item.getQuantity() : 0);
                     itemRevenue = itemRevenue.add(item.getPrice() != null
                             ? item.getPrice().multiply(BigDecimal.valueOf(
@@ -693,6 +743,25 @@ public class SellerAppService {
         // progress must describe the whole offering, not the visible subset.
         dto.setDeliveryProgress(orderService.getDeliveryProgress(productId, date, seller));
         return dto;
+    }
+
+    private boolean orderHasItemForDate(Order order, LocalDate date) {
+        return order.getItems() != null && order.getItems().stream()
+                .anyMatch(item -> itemMatchesDate(order, item, date));
+    }
+
+    private boolean orderContainsProductOnDate(Order order, Long productId, LocalDate date) {
+        return order.getItems() != null && order.getItems().stream()
+                .anyMatch(item -> item.getProduct() != null
+                        && productId.equals(item.getProduct().getId())
+                        && itemMatchesDate(order, item, date));
+    }
+
+    private boolean itemMatchesDate(Order order, OrderItem item, LocalDate date) {
+        if (date == null) return true;
+        LocalDate fulfilment = item.getScheduledDate();
+        if (fulfilment == null && order.getCreatedAt() != null) fulfilment = order.getCreatedAt().toLocalDate();
+        return date != null && date.equals(fulfilment);
     }
 
     private boolean matchesFilters(Order order, String society, String status, String delivery) {

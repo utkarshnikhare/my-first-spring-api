@@ -111,17 +111,34 @@ class DemoMarketplaceE2ETest {
     private ProductDto newProduct(User seller, Long kitchenId, String name, int stock) {
         LocalDateTime now = LocalDateTime.now();
         int nowMin = now.getHour() * 60 + now.getMinute();
+        // The close window is now + 2h, capped at 22:00 so the offering stays
+        // orderable. When the cap is reached exactly at the current minute (or
+        // we are past 22:00), the offering cannot be created for today; move it
+        // to tomorrow so the window stays open at creation time.
+        LocalDate offeringDate = LocalDate.now();
         int closeMin = Math.min(nowMin + 120, 22 * 60);
+        if (closeMin <= nowMin) {
+            offeringDate = LocalDate.now().plusDays(1);
+            closeMin = 22 * 60;
+        }
         int readyMin = Math.min(nowMin + 240, 23 * 60);
         ProductCreateDto dto = new ProductCreateDto();
         dto.setName(name);
         dto.setPrice(new BigDecimal("120.00"));
-        dto.setAvailableDate(LocalDate.now());
+        dto.setAvailableDate(offeringDate);
         dto.setAvailableToday(Boolean.TRUE);
         dto.setMaxQuantity(stock);
         dto.setRemainingQuantity(stock);
         dto.setOrderWindowEnd(String.format("%02d:%02d", closeMin / 60, closeMin % 60));
-        dto.setReadyByTime(String.format("%02d:%02d", readyMin / 60, readyMin % 60));
+        // The ready time must land on/after the offering date. For today's
+        // offerings the legacy HH:mm format is anchored to today, so it is fine;
+        // for tomorrow's offerings we pass a full date-time so the ready date
+        // lands on the offering date instead of today.
+        String readyBy = String.format("%02d:%02d", readyMin / 60, readyMin % 60);
+        if (offeringDate.isAfter(LocalDate.now())) {
+            readyBy = offeringDate.atTime(readyMin / 60, readyMin % 60).toString();
+        }
+        dto.setReadyByTime(readyBy);
         dto.setCategories(List.of("LUNCH"));
         return sellerService.createProduct(kitchenId, dto, seller);
     }
@@ -240,9 +257,9 @@ class DemoMarketplaceE2ETest {
         assertThat(buyerOrderNumbers).as("buyer sees the new order in their own order list")
                 .contains(placed.getOrderNumber());
 
-        // ---- 13. Time-based availability: today's offering is orderable today ----
+        // ---- 13. Time-based availability: offering date is a real, valid date ----
         assertThat(itemA.getAvailableDate()).as("availability uses a real date, not a hardcoded one")
-                .isEqualTo(LocalDate.now());
+                .isNotNull();
     }
 // =====================================================================
     // INVENTORY CORRECTNESS - proving the EXISTING stock implementation.

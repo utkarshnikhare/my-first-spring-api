@@ -23,6 +23,9 @@ public class MarketplaceService {
     private final KitchenRepository kitchenRepository;
     private final ProductRepository productRepository;
     private final AnalyticsService analyticsService;
+    /** Recurring projection: today's resolved occurrence values on buyer DTOs (V2 §14). Field-injected so manually-constructed instances in tests keep working. */
+    @Autowired
+    private RecurringScheduleService recurringScheduleService;
 
     @Autowired
     public MarketplaceService(KitchenRepository kitchenRepository, ProductRepository productRepository,
@@ -39,10 +42,12 @@ public class MarketplaceService {
                 .filter(k -> KitchenVisibility.isServiceAreaVisible(k, buyer))
                 .collect(Collectors.toList());
 
-        List<ProductDto> availableToday = productRepository.findByAvailableTodayTrueOrderByCreatedAtDesc().stream()
+        List<ProductDto> availableToday = productRepository.findAll().stream()
                 .filter(p -> !p.isOrdersPaused())
                 .filter(p -> p.getKitchen() == null || (KitchenVisibility.isPubliclyVisible(p.getKitchen()) && KitchenVisibility.isServiceAreaVisible(p.getKitchen(), buyer)))
-                .map(this::toProductDto).collect(Collectors.toList());
+                .map(this::toProductDto)
+                .filter(this::isCurrentlyOrderable)
+                .collect(Collectors.toList());
 
         List<ProductDto> newProducts = availableToday;
         List<ProductDto> popularProducts = availableToday.stream()
@@ -63,10 +68,11 @@ public class MarketplaceService {
     }
 
     public List<ProductDto> getAllAvailableItems(User buyer) {
-        return productRepository.findByAvailableTodayTrueOrderByCreatedAtDesc().stream()
+        return productRepository.findAll().stream()
                 .filter(p -> !p.isOrdersPaused())
                 .filter(p -> p.getKitchen() != null && KitchenVisibility.isPubliclyVisible(p.getKitchen()) && KitchenVisibility.isServiceAreaVisible(p.getKitchen(), buyer))
                 .map(this::toProductDto)
+                .filter(this::isCurrentlyOrderable)
                 .collect(Collectors.toList());
     }
 
@@ -105,6 +111,20 @@ public class MarketplaceService {
         String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(), java.time.LocalTime.now());
         dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
+        // Recurring projection (V2 §14): today's resolved occurrence values,
+        // or the next occurrence date for the buyer pre-order badge.
+        // Guarded: some tests construct this service manually without a
+        // recurring bean, in which case decoration is skipped.
+        if (recurringScheduleService != null) recurringScheduleService.decorateProductDto(product, dto);
         return dto;
+    }
+
+    private boolean isCurrentlyOrderable(ProductDto product) {
+        return !Boolean.TRUE.equals(product.getOrdersClosed())
+                && !Boolean.TRUE.equals(product.getOrdersPaused())
+                && !Boolean.TRUE.equals(product.getSoldOut())
+                && (Boolean.TRUE.equals(product.getAvailableToday())
+                    || Boolean.TRUE.equals(product.getIsPreorder())
+                    || Boolean.TRUE.equals(product.getRecurring()));
     }
 }

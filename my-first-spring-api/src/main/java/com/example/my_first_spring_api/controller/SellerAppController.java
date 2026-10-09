@@ -176,8 +176,8 @@ public class SellerAppController {
 
     @GetMapping("/orders/summary")
     public ResponseEntity<SellerOrderSummaryDto> getOrderSummary(@RequestParam(required = false) String date,
-                                                                  HttpSession session) {
-        LocalDate d = parseDate(date);
+                                                                   HttpSession session) {
+        LocalDate d = date != null && "all".equalsIgnoreCase(date.trim()) ? null : parseDate(date);
         return ResponseEntity.ok(sellerAppService.getOrderSummary(requireSeller(session), d));
     }
 
