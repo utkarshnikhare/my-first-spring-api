@@ -1,60 +1,57 @@
 # Final GitHub and Render Status
 
-Audit snapshot: 2026-10-09. This report separates repository synchronization from deployment. **No Render
-deployment, restart, environment change, database reset or live write was performed.**
+Audit snapshot: 2026-10-09. The demo deployment was explicitly authorized after the owner confirmed that
+non-seed H2 records were disposable. No paid resource, PostgreSQL database, duplicate Render service, real
+payment, or production authentication migration was introduced.
 
 ## GitHub
 
 | Item | Status | Evidence |
 |---|---|---|
-| Latest verified main commit before this report refresh | `58932f565b98e833cb9140b48ee3eeb4d18236a4` | PR #13 merge commit; report refresh is documentation-only |
-| Prior release PRs | #7 through #13 merged | PR #7 delivered V2/V3; #10 PostgreSQL preparation; #13 README, acceptance docs and test-fixture stabilization |
-| PR #13 CI | PASS | [PR Actions run 37962316067](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37962316067) succeeded on head `b1dc83a` |
-| Latest main CI | PASS | [Actions run 37962564417](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37962564417) succeeded on `58932f5` |
-| PR #13 merge | MERGED | [PR #13](https://github.com/utkarshnikhare/my-first-spring-api/pull/13), merge commit `58932f565b98e833cb9140b48ee3eeb4d18236a4` |
-| README | Updated and merged in PR #13 | Buyer/Seller/Admin routes, implemented V2/V3, stack, profiles, local/test instructions, limitations, demo/deployment status and roadmap |
-| GitHub About | PASS | Description now reflects a Spring Boot + vanilla JavaScript demo and its implemented features |
-| Repository homepage | PASS | `https://sociomart-demo.onrender.com/` verified via `gh repo view` |
-| Repository topics | PASS | Existing topics retained; `postgresql`, `flyway`, `recurring-offerings`, `seller-dashboard` added and verified |
-| API documentation link | Intentionally omitted | Swagger/OpenAPI is enabled on the demo and is not yet hardened for production exposure |
+| Latest verified application `main` commit | `d9bb8782ff58719a68df01236c09e9e0990c5bf4` | Commit deployed to the existing demo |
+| Latest `main` CI | PASS | [Actions run 37963266688](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37963266688) succeeded on `d9bb8782ff58719a68df01236c09e9e0990c5bf4` |
+| Release PRs | #7 through #14 merged | Normal GitHub PR workflow; no force-push or protection bypass |
+| README | Current update pending PR | This report/README audit refresh is documentation-only until merged |
+| GitHub About description | PASS | Verified with `gh repo view`; describes Spring Boot + vanilla JavaScript and demo scope |
+| Repository homepage | PASS | `https://sociomart-demo.onrender.com/`, verified with `gh repo view` |
+| Repository topics | PASS | Existing topics retained; `flyway`, `postgresql`, `recurring-offerings`, and `seller-dashboard` present |
+| Public Quick Links | PASS | Buyer, Seller, Admin, repository, and requirements-matrix links return/load as expected |
+| API documentation Quick Link | Intentionally omitted | Swagger/OpenAPI remains unsuitable as a public production link until hardened |
 
-The main SHA above is the latest verified application/release commit at the time of this report refresh.
-Any later documentation-only status update may advance `main` without changing the application runtime.
-Follow the linked [main commit history](https://github.com/utkarshnikhare/my-first-spring-api/commits/main)
-for subsequent commits.
-
-## Link and app route checks
-
-- Live Buyer homepage: https://sociomart-demo.onrender.com/ — rendered in browser.
-- Seller app: https://sociomart-demo.onrender.com/seller.html — rendered in browser.
-- Admin app: https://sociomart-demo.onrender.com/admin.html — sign-in route rendered; Admin workflows not tested.
-- `GET https://sociomart-demo.onrender.com/api/kitchens` — HTTP 200.
-- Repository and technical-document paths exist on GitHub; Markdown documentation uses repository-relative
-  links. Swagger is not published as a Quick Link because production exposure remains open.
+The documentation refresh in this branch does not change application runtime. If it is merged, GitHub `main`
+will advance to a documentation commit while Render remains on the application commit listed below.
 
 ## Render
 
 | Item | Status | Evidence |
 |---|---|---|
-| Existing service | `sociomart-demo` | Existing Render dashboard page; no duplicate service created |
-| Last independently observed deployed commit | `755e98922e16bc9b412b2eb653ed0517def14a42` (PR #7) | Render dashboard's “Last successfully deployed commit” link and live frontend |
-| Render application health | LIVE SMOKE | `GET /api/kitchens` HTTP 200; Buyer and Seller pages rendered |
-| Seller LIVE/RECURRING UI | LIVE SMOKE | Both tabs rendered; RECURRING showed no existing schedules |
-| Buyer pre-order/occurrence flow | NOT TESTED | No Pre-order item appeared in observed live Food & Kitchens; no live write submitted |
-| Admin operations | NOT TESTED | Admin sign-in page only; no authorized Admin session used |
-| Newer GitHub code deployed? | No | Main contains PR #10 PostgreSQL/Flyway runtime preparation; Render remains at PR #7 code |
-| Deployment status | BLOCKED | In-memory H2 data has no verified complete export/restore; redeploy could lose non-seed data |
-| Data preservation | BLOCKED for cutover | No export captured; existing data/service was left unchanged |
-| ₹0/month compliance | PASS for this work | Existing Free Render plan retained; no database, paid plan or billable add-on provisioned |
+| Existing service | PASS | `sociomart-demo`, service `srv-dad5lfajnfac73ei06s0`; no duplicate created |
+| Plan / budget | PASS | Render dashboard showed **Free**; no paid plan/add-on or external database provisioned |
+| Deployed commit | PASS | `d9bb8782ff58719a68df01236c09e9e0990c5bf4` |
+| Deployment | PASS | `dep-db4i1rqj9qps73alfiug` shown as the last successful deployment |
+| GitHub/Render runtime synchronization | YES | Render deployed commit equals the verified GitHub application `main` commit |
+| Health/config endpoints | PASS | `GET /api/kitchens` and `GET /api/auth/config` returned HTTP 200 |
+| Seed data after restart | PASS | `/api/kitchens` returned 16 kitchens after deployment; demo login remained enabled |
+| Buyer pre-order discovery | PASS (read-only) | Search route and `/api/discovery/offers?item=Puran%20Poli%20%28Pre-order%29` returned one Aarti Kitchen preorder for 2026-10-12 |
+| Seller LIVE/RECURRING tabs | LIVE SMOKE | LIVE displayed seeded offerings; RECURRING opened with an empty state |
+| Buyer occurrence checkout | NOT TESTED | No public order was submitted |
+| Admin operations | NOT TESTED | Admin sign-in route loaded; no authorized Admin workflow was exercised |
+| Application logs | PASS with non-fatal warnings | Startup completed on H2 demo profile; no startup/Flyway/database/authentication exception was observed in the checked logs |
+| Data preservation | PASS within authorized demo scope | Disposable non-seed in-memory H2 records could reset; seeded records were present afterward |
 
-## Required owner action
+The first Buyer comparison snapshot was still loading. After the live response completed, the page rendered
+the preorder card and the matching read-only API query returned one offer. This was a cold-start/loading delay,
+not a confirmed API/UI data mismatch. The example kitchen image URL was blocked by the browser; it did not
+prevent the offer card from rendering.
 
-Do not click **Manual Deploy** or restart the existing Render service yet. First provide a complete live H2
-export obtained through an approved non-restarting path and verified restore/count evidence. Then explicitly
-approve a free-tier provider and a cutover plan that preserves data and the ₹0/month cap. If that export path
-cannot be produced, keep the existing service running unchanged and accept that the PostgreSQL profile remains
-prepared but undeployed.
+## Remaining acceptance limits
 
-The detailed deployment gate and owner checklist are in
-[FINAL-RELEASE-READINESS.md](./FINAL-RELEASE-READINESS.md). No deployment was attempted, so a Render
-dashboard click is not currently the blocker; data-preservation evidence is.
+- No live order, cancellation, delivery update, schedule edit, or payment transaction was submitted.
+- No authorized Admin session was used for live operational testing.
+- Seller registration with OTP, a persisted pending-application flow, and stable reserved public kitchen slugs
+  are not part of the current demo authentication/routing implementation. They remain blocked from this release
+  by the explicit instruction not to undertake an authentication migration.
+- The demo remains H2/in-memory and is not production-persistent. A future storage migration needs a separate
+  owner-approved design and must preserve the ₹0/month ceiling.
+- The complete source-requirement reconciliation and evidence limits are in
+  [the final requirements audit](./FINAL-REQUIREMENTS-AUDIT.md).

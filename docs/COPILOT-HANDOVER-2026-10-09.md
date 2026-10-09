@@ -2,6 +2,11 @@
 
 Current handover for the merged Recurring Offerings V2 and Seller Dashboard V3 release, including verification evidence, live-demo boundaries, and production-readiness work that remains deferred.
 
+> Historical snapshot: this handover was written before the owner-authorized Render deployment of
+> `d9bb8782ff58719a68df01236c09e9e0990c5bf4`. Its earlier H2 export blocker and “no deployment” statements
+> are superseded by [FINAL-GITHUB-RENDER-STATUS.md](./FINAL-GITHUB-RENDER-STATUS.md) and
+> [FINAL-HANDOVER.md](./FINAL-HANDOVER.md). The remaining production-readiness cautions still apply.
+
 ## Release state
 
 - GitHub PR #7 merged normally to `main`.

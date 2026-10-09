@@ -1,50 +1,50 @@
 # SocioMart Final Handover
 
-Snapshot: 2026-10-09. Current checkout branch: `copilot/final-github-render-status`, based on
-`origin/main` at `85c58bf5534dcd1390821250727b97e79d081c4b`. Existing untracked files were preserved and
-not staged.
+Snapshot: 2026-10-09. Application release commit: `d9bb8782ff58719a68df01236c09e9e0990c5bf4`.
+The documentation-only acceptance refresh is being prepared on `copilot/requirement-audit-status`; it does
+not change the deployed application.
 
 ## Completed and verified
 
-- PRs #7 through #12 are merged. PR #7 introduced the V2/V3 release and remains the last observed Render
-  runtime deployment; PR #10 prepared an opt-in PostgreSQL/Flyway profile; PRs #11/#12 documented migration
-  and H2 export constraints.
-- PR #13 merged the README, final acceptance/release reports and the isolated E2E fixture stabilization as
-  `58932f565b98e833cb9140b48ee3eeb4d18236a4`.
-- PR #13 CI run 37962316067 and merged-main CI run 37962564417 both succeeded.
-- Current verified GitHub main is `58932f565b98e833cb9140b48ee3eeb4d18236a4`.
-- Current full local Maven verification passed: 589 tests, 0 failures, 0 errors, 1 local Docker-gated skip.
-- Fixed one time-dependent `DemoMarketplaceE2ETest` fixture issue; targeted 3-test class and full suite pass.
-- All six tracked frontend JavaScript files pass `node --check`.
-- Public Buyer, Seller and Admin entry routes were read-only checked; `GET /api/kitchens` returned HTTP 200.
-- Seller LIVE/RECURRING UI and the RECURRING empty state were observed. Responsive document-width checks were
-  run at the eight requested sizes; the browser DPR caused 390px to measure as 391px.
-- GitHub About description, homepage and relevant topics were updated and re-read through `gh repo view`.
-- README and final acceptance/regression/release reports were merged through PR #13's normal workflow.
+- PRs #7 through #14 are merged through normal GitHub workflows.
+- GitHub `main` CI run [37963266688](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37963266688)
+  succeeded on `d9bb8782ff58719a68df01236c09e9e0990c5bf4`.
+- The full local Maven verification passed: 589 tests, 0 failures, 0 errors, 1 Docker-gated skip.
+- The existing Render service `sociomart-demo` (`srv-dad5lfajnfac73ei06s0`) remains on the Free plan.
+  Deployment `dep-db4i1rqj9qps73alfiug` is deployed at the same application SHA as GitHub `main`.
+- The owner authorized loss of disposable non-seed in-memory H2 records. The service restarted and 16 seeded
+  kitchens were available afterward. No PostgreSQL resource, paid plan/add-on, duplicate service, production
+  environment change, or payment transaction was introduced.
+- Read-only `/api/kitchens` and `/api/auth/config` checks returned HTTP 200. Buyer, Seller, and Admin entry
+  routes loaded; Admin sign-in was not treated as Admin workflow verification.
+- Seller LIVE/RECURRING tabs rendered. Buyer search and its read-only API query both returned the seeded
+  `Puran Poli (Pre-order)` occurrence for 2026-10-12. No order was submitted.
+- GitHub About, homepage and repository topics were verified with `gh repo view`.
+- The seven supplied specification extracts were counted and reconciled in
+  [the final requirements audit](./FINAL-REQUIREMENTS-AUDIT.md): 130 source criteria, 117 unique outcomes,
+  87 fully verified, 12 partial, 2 not verified, and 16 blocked.
 
-## Remaining / not verified
+## Remaining acceptance boundaries
 
-- No browser transaction journey was executed against Render; no public schedule/order/payment writes were made.
-- The live demo had no visible preorder item; buyer occurrence checkout is not live-verified.
-- Admin operations are not live-verified because no authorized Admin session was used.
-- Live H2 export/restore is blocked. Render must not be restarted or deployed until a safe data-preserving path
-  is verified.
-- Native PostgreSQL test is skipped locally without Docker; previous Docker-enabled GitHub CI evidence passed.
-- The two original DOCX files are unavailable; exact coverage of requirements not in extracted text is unknown.
-- Real authentication/payment, persistent production database, recovery, image storage, performance and formal
-  penetration testing remain out of scope/not ready.
+- Buyer occurrence checkout, seller fulfilment/delivery and buyer order-history were not replayed as a live
+  Render business transaction. Local integration tests passed; no live writes were made.
+- Admin workflows were not tested with an authorized Admin browser session.
+- Seller Onboarding V1 remains blocked: OTP registration, complete pending-application/resubmission flow,
+  stable reserved public slugs, slug aliases and associated URL management are not implemented as specified.
+  The current release explicitly excludes authentication migration.
+- The simultaneous-final-unit acceptance test and scheduler/API outage scenarios lack dedicated test evidence.
+- The 390px responsive target previously measured 391 CSS pixels; exact 390px certification remains open.
+- Render's demo uses in-memory H2. It is not persistent or suitable for production data, despite the owner's
+  authorization to lose disposable non-seed demo rows during this deployment.
 
-## Exact next steps
+## Next authorized work
 
-1. Merge this documentation-only status refresh only after its GitHub Actions check succeeds; it does not alter
-   application runtime.
-2. Keep the existing Render service/data unchanged; the current main commit is verified and green.
-3. Ask the owner for a complete non-restarting H2 export and isolated restore evidence.
-4. After data preservation is demonstrated, obtain explicit owner approval for a free-tier provider and a
-   cutover plan. Preserve the ₹0/month limit.
-5. Only after those approvals, plan a separate deployment and live verification of Buyer, Seller, Admin,
-   recurring discovery and occurrence-specific order flows.
+The documentation/requirements refresh should merge only through a normal PR after its CI is green. It is
+documentation-only; Render does not need another deployment. Further work on OTP onboarding or production
+identity requires a separate owner-approved scope. Live Admin acceptance requires an authorized Admin session;
+live write-based E2E requires explicit owner approval for the specific test data and cleanup plan. Maintain the
+₹0/month budget and do not provision PostgreSQL or paid resources without explicit approval.
 
-Detailed status: [GitHub / Render synchronization](./FINAL-GITHUB-RENDER-STATUS.md),
-[release readiness](./FINAL-RELEASE-READINESS.md), [regressions](./FINAL-REGRESSION-REPORT.md), and
-[E2E evidence](./FINAL-E2E-TEST-REPORT.md).
+Detailed records: [GitHub / Render status](./FINAL-GITHUB-RENDER-STATUS.md),
+[release readiness](./FINAL-RELEASE-READINESS.md), [requirements audit](./FINAL-REQUIREMENTS-AUDIT.md),
+[regressions](./FINAL-REGRESSION-REPORT.md), and [E2E evidence](./FINAL-E2E-TEST-REPORT.md).

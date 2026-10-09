@@ -13,6 +13,7 @@
 | 🛡️ **Admin app** | https://sociomart-demo.onrender.com/admin.html |
 | 💻 **GitHub Repository** | https://github.com/utkarshnikhare/my-first-spring-api |
 | 📋 **V2/V3 requirements matrix** | [requirements_matrix.md](./my-first-spring-api/requirements_matrix.md) |
+| ✅ **Final requirements audit** | [FINAL-REQUIREMENTS-AUDIT.md](./docs/FINAL-REQUIREMENTS-AUDIT.md) |
 | 🗃️ **PostgreSQL preparation and limits** | [Production readiness plan](./docs/PRODUCTION-READINESS-PLAN.md) |
 | 🚦 **GitHub / Render release status** | [Final synchronization report](./docs/FINAL-GITHUB-RENDER-STATUS.md) |
 
@@ -760,10 +761,12 @@ claim otherwise:
 
 - Render runs the **`demo` profile** with **`autoDeploy: false`** (see `render.yaml`). A merge to `main`
   therefore **does not deploy anything by itself** - a deploy is an explicit manual action.
-- The free-tier service **sleeps after inactivity**; the first request after a sleep takes roughly 60-90s.
-- Render's last independently observed successful deployment is commit
-  `755e98922e16bc9b412b2eb653ed0517def14a42` (PR #7). Later `main` includes PostgreSQL profile/migration
-  changes that are not deployed. The current service remains unchanged because safe H2 export is blocked.
+- Existing service `sociomart-demo` is on Render's **Free** plan. Its last verified deployment is
+  `d9bb8782ff58719a68df01236c09e9e0990c5bf4` (deployment `dep-db4i1rqj9qps73alfiug`), matching GitHub
+  `main` at the time of verification. The owner authorized loss of disposable non-seed demo records for
+  that deployment; seeded demo data was available afterward.
+- The demo uses ephemeral in-memory H2. A restart/redeploy can erase non-seed data; do not treat the
+  deployed demo as persistent storage. No PostgreSQL database or paid resource is provisioned.
 
 ---
 

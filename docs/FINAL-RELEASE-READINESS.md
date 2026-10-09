@@ -1,43 +1,47 @@
 # SocioMart Final Release Readiness
 
-Status snapshot: 2026-10-09. This release concerns the existing demo only; it is not authorization for a
-production migration, paid service, database reset or live restart.
+Status snapshot: 2026-10-09. This is a demo release, not a real-customer production launch. The owner
+explicitly authorized losing disposable non-seed records in the existing in-memory H2 demo database.
 
 ## Readiness summary
 
 | Area | Status | Evidence / boundary |
 |---|---|---|
-| V2/V3 implementation | PASS (automated) | Detailed mapping in [acceptance matrix](./FINAL-V2-V3-ACCEPTANCE-MATRIX.md) |
-| Local automated regression | PASS | `mvnw -B clean verify`: 589 tests, 0 failures, 0 errors, 1 Docker-gated skip |
-| PR #13 GitHub CI | PASS | PR check run 37962316067 passed on `b1dc83a`; the PR was merged |
-| Latest GitHub main CI | PASS | Push run 37962564417 succeeded on merge commit `58932f5` |
-| Existing Render service / health | LIVE SMOKE | Existing service and old deployed commit observed; `GET /api/kitchens` returned HTTP 200 |
-| Newer main vs Render | DIFFERENT | Main includes PostgreSQL profile/migration preparation; Render remains on PR #7 runtime commit |
-| Live Buyer occurrence flow | NOT TESTED | No live preorder item; public writes avoided |
-| Live Admin workflows | NOT TESTED | No authorized Admin browser session |
-| Database preservation | BLOCKED | In-memory H2 export/restore not verified |
-| Persistent PostgreSQL | PREPARED, NOT DEPLOYED | Flyway profile and tests exist; no provider selected or provisioned |
-| Authentication readiness | NOT READY FOR REAL USERS | Demo-only mobile-number session login |
-| Payment readiness | NOT READY FOR REAL USERS | Demo UPI/card and Cash on Delivery are not a payment gateway |
-| ₹0/month infrastructure | PASS FOR THIS WORK | Render Free plan retained; no paid resource, database, plan, or add-on was provisioned |
-| Real-user pilot readiness | NOT READY | Persistence, identity, payment, backup/recovery, monitoring and performance gaps remain |
+| Recurring Offerings V2 | PASS (local automated) | Recurrence, date overrides, order separation, cutoffs and history covered by the full Maven suite |
+| Seller Dashboard V3 | PASS (local automated/UI) | Dashboard script/UI tests and responsive browser checks; live LIVE/RECURRING tabs loaded |
+| Full local verification | PASS | `.\mvnw.cmd -B clean verify`: 589 tests, 0 failures, 0 errors, 1 Docker-gated skip |
+| GitHub `main` CI | PASS | [Run 37963266688](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37963266688), commit `d9bb8782ff58719a68df01236c09e9e0990c5bf4` |
+| Existing Render demo | PASS | `sociomart-demo`, Free plan, deployment `dep-db4i1rqj9qps73alfiug` |
+| GitHub/Render application commit | PASS / synchronized | Both at `d9bb8782ff58719a68df01236c09e9e0990c5bf4` before this documentation-only refresh |
+| Buyer pre-order discovery | LIVE SMOKE | UI and API exposed one preorder occurrence for 2026-10-12; no order was created |
+| Buyer occurrence order lifecycle on Render | NOT VERIFIED | Live writes were intentionally avoided; local integration tests passed |
+| Admin live operations | NOT VERIFIED | Admin entry route loaded, but no authorized Admin session was used |
+| Seller onboarding V1 | PARTIAL / BLOCKED | No OTP registration, complete pending-application workflow, or reserved slug URL; auth migration is out of scope |
+| Database / persistence | DEMO LIMITATION | Render uses in-memory H2; non-seed state is disposable and is not guaranteed to survive restart |
+| PostgreSQL profile | PREPARED, NOT DEPLOYED | No provider or PostgreSQL resource provisioned |
+| ₹0/month infrastructure | PASS | Existing Render Free plan; no paid service/add-on/database enabled |
+| Real-user production readiness | NOT READY | Demo authentication/payments, persistence, recovery and live operational validation are not production-grade |
 
-## Deployment boundary
+## Deployment evidence
 
-Render's last observed deployed commit is `755e98922e16bc9b412b2eb653ed0517def14a42`, from PR #7. The
-current GitHub baseline is `85c58bf5534dcd1390821250727b97e79d081c4b`; it contains runtime PostgreSQL
-preparation from PR #10, but Render still uses the H2 `demo` profile. Deploying would restart the service.
-Because no complete live H2 export and restore has been verified, deployment is **BLOCKED**. No duplicate
-service or provider was created.
+Render dashboard identified the existing `sociomart-demo` service (`srv-dad5lfajnfac73ei06s0`) on the Free
+plan. The last successful deployment is `dep-db4i1rqj9qps73alfiug`, for
+`d9bb8782ff58719a68df01236c09e9e0990c5bf4`. It runs the `demo` profile with in-memory H2. The owner
+authorized loss of disposable non-seed demo rows, and seeded kitchens were available after deployment.
 
-## Owner actions required before any deployment
+Read-only checks returned HTTP 200 from `/api/kitchens` and `/api/auth/config`. The Buyer preorder search
+and matching discovery API both exposed one dated occurrence. Seller LIVE and RECURRING tabs loaded; the
+seeded seller had no recurring schedule. The Admin sign-in route loaded, but Admin workflows were not tested.
+No live order, schedule mutation, or payment transaction was submitted.
 
-1. Obtain a complete export of live H2 using an owner-controlled, supported method that does not restart the
-   service; verify row counts, relationships, identifiers and restore feasibility in an isolated database.
-2. Approve a specific zero-cost database provider only after reviewing its quota, pause, retention, backup and
-   network limits. No provider is selected by this report.
-3. Review and authorize the existing-service cutover only after a successful import/comparison and rollback plan.
-4. Provide an authorized Admin test session only if live Admin acceptance is required. No account identifiers
-   or credentials are included in this repository documentation.
+If the documentation refresh is merged, GitHub `main` will advance beyond the Render runtime commit. That
+difference is documentation-only; no redeploy is required for the documentation change.
 
-Until these gates are satisfied, leave Render, its environment, H2 database and existing demo data unchanged.
+## Acceptance boundary
+
+The [requirements audit](./FINAL-REQUIREMENTS-AUDIT.md) reports source counts, overlap decisions, per-area
+evidence, and the unverified/blocked criteria. This release is **PARTIAL** against all seven supplied
+specifications: local V2/V3 and most operational workflows have automated evidence, but Seller Onboarding V1
+and live end-to-end order/Admin acceptance are not complete.
+
+No paid infrastructure or production database/authentication migration is authorized by this release.
