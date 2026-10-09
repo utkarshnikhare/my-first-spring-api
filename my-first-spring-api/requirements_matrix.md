@@ -4,7 +4,7 @@ Verification date: 2026-10-09
 
 Source limitation: the two original DOCX binaries are not present under `C:\project`. Their extracted specification text is available at `docs/REQ1_recurring_v2.txt` and `docs/REQ2_dashboard_ui_v3.txt`; this matrix maps every requirement in those extracts plus the takeover acceptance list. No requirement was inferred beyond those sources.
 
-Latest local full Maven verification: **589 tests, 0 failures, 0 errors, 1 skipped, BUILD SUCCESS**. The native PostgreSQL Testcontainers case was skipped locally because Docker is unavailable; the H2 PostgreSQL-mode migration/JPA validation test passed. GitHub Actions on main commit `89e57ade5bbabfe2eecd3cdddfe8d401ac1a741f` ran **589 tests, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS**, including the native PostgreSQL Testcontainers test. Original V2/V3 release baseline: **587 tests, 0 failures, 0 errors, 0 skipped**. Latest focused recurring/dashboard regression run: **66 tests, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS** (25.7 seconds). `node --check` passed for all six tracked frontend JavaScript files.
+Latest local full Maven verification (2026-10-09): **589 tests, 0 failures, 0 errors, 1 skipped, BUILD SUCCESS**. The native PostgreSQL Testcontainers case was skipped locally because Docker is unavailable; the H2 PostgreSQL-mode migration/JPA validation test passed. The latest observed main workflow, run `37957633235` on `85c58bf5534dcd1390821250727b97e79d081c4b`, succeeded. Native PostgreSQL Testcontainers validation previously passed on the Docker-enabled GitHub runner for PR #10. The current PR additionally stabilizes a late-hour test fixture and must pass its own CI. Original V2/V3 release baseline: **587 tests, 0 failures, 0 errors, 0 skipped**. Latest focused recurring/dashboard regression run: **66 tests, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS** (25.7 seconds). `node --check` passed for all six tracked frontend JavaScript files.
 
 Status meanings: **PASS** = implemented and covered by executable or direct source-contract evidence. **UI VERIFIED** = additionally exercised in a supported headless browser. **LIVE SMOKE** = read-only browser/API check against the deployed demo. **NOT VERIFIED** = evidence could not be produced in this environment.
 
@@ -125,3 +125,14 @@ Status meanings: **PASS** = implemented and covered by executable or direct sour
 - Browser evidence is limited to local headless Chrome; cross-browser Safari/Firefox rendering is not verified.
 - Complete seller form submission and buyer payment submission were not automated through the browser; their API/service paths are covered by the green integration suite.
 - Render's demo profile uses in-memory H2. A service restart reseeds demo data; non-seed runtime data cannot be guaranteed to persist through a deploy. No explicit database reset or environment-variable change was made.
+
+## Current Read-only Live Check (2026-10-09)
+
+| Check | Status | Evidence |
+|---|---|---|
+| Buyer/Seller/Admin entry routes | LIVE SMOKE | Buyer home, Seller dashboard and Admin sign-in page rendered in the browser. |
+| API health | LIVE SMOKE | `GET /api/kitchens` returned HTTP 200. |
+| Seller dashboard tabs | LIVE SMOKE | LIVE and RECURRING tabs rendered; the public RECURRING view showed no schedules. |
+| Buyer pre-order item | NOT TESTED | The observed Food & Kitchens view had no Pre-order item; no live order was created. |
+| Admin operations | NOT TESTED | No authorized Admin session was used. |
+| Responsive exact 390 CSS-pixel width | NOT VERIFIED | Browser DPR was approximately 0.75; a requested 390px width measured 391px. Other target widths were measured without horizontal document overflow. |

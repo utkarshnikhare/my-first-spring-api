@@ -1,6 +1,6 @@
 # SocioMart Production Readiness Plan
 
-**Status:** Persistence preparation is merged to `main` in `89e57ade5bbabfe2eecd3cdddfe8d401ac1a741f`. It is not deployed to Render. No database was provisioned, no billable service enabled, and no existing environment variable changed.
+**Status:** Persistence preparation PR #10 was merged to `main` in `89e57ade5bbabfe2eecd3cdddfe8d401ac1a741f`; PRs #11/#12 followed, and the verified pre-documentation-PR main baseline is `85c58bf5534dcd1390821250727b97e79d081c4b`. PostgreSQL preparation is not deployed to Render. No database was provisioned, no billable service enabled, and no existing environment variable changed.
 
 ## Current baseline
 

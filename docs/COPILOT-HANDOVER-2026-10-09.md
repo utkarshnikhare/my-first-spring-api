@@ -7,8 +7,8 @@ Current handover for the merged Recurring Offerings V2 and Seller Dashboard V3 r
 - GitHub PR #7 merged normally to `main`.
 - Merge commit: `755e98922e16bc9b412b2eb653ed0517def14a42`.
 - Post-merge GitHub Actions CI passed.
-- PostgreSQL preparation PR #10 merged normally; current `main` is `89e57ade5bbabfe2eecd3cdddfe8d401ac1a741f`.
-- Post-merge CI on the preparation commit passed all 589 tests, including the native PostgreSQL Testcontainers migration test.
+- PostgreSQL preparation PR #10 merged normally as `89e57ade5bbabfe2eecd3cdddfe8d401ac1a741f`; PRs #11 and #12 followed.
+- The verified `main` baseline before this handover update is `85c58bf5534dcd1390821250727b97e79d081c4b`; GitHub Actions run `37957633235` succeeded.
 - Existing Render service: `sociomart-demo`, connected to `main`.
 - Render deployment `dep-db4e7uu0tbcc73e38o7g` remains **DEPLOYED** for the V2/V3 merge commit `755e989`; the later database-preparation code was not deployed.
 - Live URL: https://sociomart-demo.onrender.com
@@ -21,13 +21,15 @@ The merged application contains Recurring Offerings V2 and Seller Dashboard V3. 
 ## Test evidence
 
 - Original V2/V3 release suite: **587 tests, 0 failures, 0 errors, 0 skipped**.
-- Current persistence-preparation branch: `mvn -B verify` completed with **589 tests, 0 failures, 0 errors, 1 skipped, BUILD SUCCESS**. The new H2 PostgreSQL-mode migration test passed; the native PostgreSQL Testcontainers case was skipped locally because Docker is unavailable.
+- Local persistence-preparation validation: `mvn -B verify` completed with **589 tests, 0 failures, 0 errors, 1 skipped, BUILD SUCCESS**. The new H2 PostgreSQL-mode migration test passed; the native PostgreSQL Testcontainers case was skipped locally because Docker is unavailable.
 - Post-merge focused recurring/dashboard regression run: **66 tests, 0 failures, 0 errors, 0 skipped**.
 - The focused run covered `RecurringFoundationPersistenceTest`, `RecurringScheduleCreateProductIntegrationTest`, `RecurringBuyerOrderFlowTest`, `RecurringScheduleHttpTest`, `SellerDashboardUiTest`, and `BuyerSellerUiUpdateTest`.
 - One time-sensitive recurring buyer assertion was made stable by keeping its test occurrence open until 23:59; the application behavior was not changed.
 - GitHub Actions passed for the merge commit.
 - `node --check` passed for all six tracked frontend JavaScript files.
 - The old matrix's 588 figure was a reporting error for the original release; the current 589 figure includes two persistence-migration test cases, with the native PostgreSQL case skipped locally because Docker is unavailable.
+- A fresh local `mvn -B clean verify` run passed with the same 589/0/0/1 result after stabilizing the late-hour E2E test fixture. The current documentation/test-fixture PR must pass its own GitHub Actions check before merge.
+- Read-only live checks on 2026-10-09 confirmed the Buyer, Seller and Admin entry routes rendered and `GET /api/kitchens` returned HTTP 200. No live Buyer order or Admin operation was submitted.
 
 ## Zero-budget database preparation
 
