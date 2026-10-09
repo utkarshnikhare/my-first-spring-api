@@ -763,8 +763,10 @@ claim otherwise:
   therefore **does not deploy anything by itself** - a deploy is an explicit manual action.
 - Existing service `sociomart-demo` is on Render's **Free** plan. Its last verified deployment is
   `d9bb8782ff58719a68df01236c09e9e0990c5bf4` (deployment `dep-db4i1rqj9qps73alfiug`), matching GitHub
-  `main` at the time of verification. The owner authorized loss of disposable non-seed demo records for
-  that deployment; seeded demo data was available afterward.
+  application code at the time of verification. GitHub `main` later advanced through documentation-only
+  PR #15 to `39116ce55273cc0ae5174173a3f89254a4bf2039`; runtime source is unchanged, so no redeploy was needed.
+  The owner authorized loss of disposable non-seed demo records for that deployment; seeded demo data was
+  available afterward.
 - The demo uses ephemeral in-memory H2. A restart/redeploy can erase non-seed data; do not treat the
   deployed demo as persistent storage. No PostgreSQL database or paid resource is provisioned.
 
@@ -820,8 +822,9 @@ BUILD SUCCESS
 
 The skipped test is the native PostgreSQL Testcontainers case when Docker is unavailable locally; the H2
 PostgreSQL-mode migration/schema validation runs locally. GitHub Actions' Docker-enabled runner provides the
-native PostgreSQL gate. The [release status report](./docs/FINAL-GITHUB-RENDER-STATUS.md) tracks the verified
-main workflow and the current PR check; do not merge a pending or failing check.
+native PostgreSQL gate. The [release status report](./docs/FINAL-GITHUB-RENDER-STATUS.md) tracks the latest verified
+`main` workflow, merged source/documentation status, and current Render runtime commit; do not merge a pending
+or failing check.
 
 **Coverage**
 

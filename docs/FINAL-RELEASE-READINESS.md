@@ -10,9 +10,9 @@ explicitly authorized losing disposable non-seed records in the existing in-memo
 | Recurring Offerings V2 | PASS (local automated) | Recurrence, date overrides, order separation, cutoffs and history covered by the full Maven suite |
 | Seller Dashboard V3 | PASS (local automated/UI) | Dashboard script/UI tests and responsive browser checks; live LIVE/RECURRING tabs loaded |
 | Full local verification | PASS | `.\mvnw.cmd -B clean verify`: 589 tests, 0 failures, 0 errors, 1 Docker-gated skip |
-| GitHub `main` CI | PASS | [Run 37963266688](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37963266688), commit `d9bb8782ff58719a68df01236c09e9e0990c5bf4` |
+| GitHub `main` CI | PASS | [Run 37972517277](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37972517277), latest `main` merge commit `39116ce55273cc0ae5174173a3f89254a4bf2039` |
 | Existing Render demo | PASS | `sociomart-demo`, Free plan, deployment `dep-db4i1rqj9qps73alfiug` |
-| GitHub/Render application commit | PASS / synchronized | Both at `d9bb8782ff58719a68df01236c09e9e0990c5bf4` before this documentation-only refresh |
+| GitHub/Render runtime commit | PASS / synchronized | Runtime source on `main` and Render remain at `d9bb8782ff58719a68df01236c09e9e0990c5bf4`; PR #15 advanced `main` with documentation only |
 | Buyer pre-order discovery | LIVE SMOKE | UI and API exposed one preorder occurrence for 2026-10-12; no order was created |
 | Buyer occurrence order lifecycle on Render | NOT VERIFIED | Live writes were intentionally avoided; local integration tests passed |
 | Admin live operations | NOT VERIFIED | Admin entry route loaded, but no authorized Admin session was used |
@@ -34,8 +34,9 @@ and matching discovery API both exposed one dated occurrence. Seller LIVE and RE
 seeded seller had no recurring schedule. The Admin sign-in route loaded, but Admin workflows were not tested.
 No live order, schedule mutation, or payment transaction was submitted.
 
-If the documentation refresh is merged, GitHub `main` will advance beyond the Render runtime commit. That
-difference is documentation-only; no redeploy is required for the documentation change.
+Documentation PR #15 is merged as `39116ce55273cc0ae5174173a3f89254a4bf2039`, and CI passed on `main`.
+That merge changed documentation only; Render remains at runtime commit `d9bb8782ff58719a68df01236c09e9e0990c5bf4`,
+so no redeploy was required.
 
 ## Acceptance boundary
 

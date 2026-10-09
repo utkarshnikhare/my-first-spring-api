@@ -94,9 +94,10 @@ those unrelated passes.
 | Blocked by approved release scope | 16 |
 | Automated tests | 589 total; 0 failures; 0 errors; 1 Docker-gated skip; BUILD SUCCESS |
 | Live read-only smoke checks | 5; no full live business-order journey |
-| GitHub application `main` commit | `d9bb8782ff58719a68df01236c09e9e0990c5bf4` |
+| Latest GitHub `main` commit | `39116ce55273cc0ae5174173a3f89254a4bf2039` (documentation-only PR #15 merge) |
+| Runtime source commit on `main` | `d9bb8782ff58719a68df01236c09e9e0990c5bf4` |
 | Render deployed commit | `d9bb8782ff58719a68df01236c09e9e0990c5bf4` |
-| GitHub/Render synchronized at application release | YES |
+| GitHub/Render runtime synchronized | YES; latest GitHub change is documentation-only |
 | Monthly infrastructure budget | ₹0/month; existing Render Free plan, no paid resources |
 | Overall completion | **PARTIAL** |
 
@@ -116,9 +117,10 @@ and authentication scope. No completion percentage is reported.
   evidence of Admin workflow acceptance.
 - No live order, schedule edit, delivery mutation, or payment was submitted. The full Buyer → order → stock →
   seller fulfilment → buyer history lifecycle has local integration evidence, not live Render E2E evidence.
-- CI run [37963266688](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37963266688) passed
-  on the application commit. The local native PostgreSQL Testcontainers test was skipped because Docker is
-  unavailable.
+- The earlier application CI run [37963266688](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37963266688)
+  passed on the runtime commit; latest `main` CI [37972517277](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37972517277)
+  also passed on the documentation-only merge. The local native PostgreSQL Testcontainers test was skipped
+  because Docker is unavailable.
 
 ## Second independent pass
 
