@@ -1,10 +1,25 @@
 # SocioMart Final E2E Test Report
 
-## Current local feature-branch verification — 2026-10-10
+## Latest release verification — 2026-10-10
 
-The branch `copilot/demo-registration-e2e` is not yet merged or deployed. Local browser tests use the
-Playwright-managed demo-profile application and an in-memory H2 database. No live order, schedule, delivery,
-payment, Render environment, or live database write was submitted.
+PR #18 is merged to GitHub `main` at `0b3f1bc66f41c61e49a74138f8749bd32a88638e`; CI run
+[38029688055](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/38029688055) passed.
+The existing Render Free service deployed that exact commit. See the
+[GitHub and Render status](./FINAL-GITHUB-RENDER-STATUS.md) for deployment identity, health-endpoint limits,
+and the required owner-side rotation of the exposed demo Admin password values.
+
+In addition to the local tests below, a live disposable Buyer-to-Seller lifecycle passed through final
+delivery: direct Buyer registration/login without OTP, direct Seller registration with PENDING approval,
+Admin approval, Seller offering creation, Buyer discovery/checkout, single order creation, inventory reaching
+zero/sold-out, Seller receipt, delivery completion, and Buyer history showing `DELIVERED` with the original
+remark. Final Seller and Buyer reads agreed. The order remained `ORDERED` and payment `PENDING`; no payment
+was attempted. This is one live scenario, not evidence for recurring occurrence checkout, cancellation,
+concurrent buyers, or exhaustive Buyer/Seller/Admin coverage.
+
+## Local verification of merged implementation — 2026-10-10
+
+Local tests use the demo profile and in-memory H2. Docker is unavailable locally, so PostgreSQL/Testcontainers
+coverage is skipped.
 
 | Tier | Command / readiness | Result |
 |---|---|---|
@@ -30,9 +45,10 @@ if that occurs again. The targeted lifecycle rerun and the complete four-test br
 usable by the passing suite. Docker was unavailable because the executable was not installed; the
 PostgreSQL/Testcontainers test was skipped. Local H2 results do not certify PostgreSQL compatibility.
 
-Overall local validation is **PASS for the executed tests, PARTIAL for release acceptance**: recurring
-occurrence checkout/overrides, cancellation, simultaneous final-unit purchases, complete Admin workflows,
-and the full flow against live Render were not exercised by this browser suite. See the
+Overall local validation is **PASS for the executed tests, PARTIAL for the full requirements set**: recurring
+occurrence checkout/overrides, cancellation, simultaneous final-unit purchases, and complete Admin workflows
+were not exercised by the local browser suite. The single live lifecycle above is separately verified; it does
+not close those remaining coverage gaps. See the
 [requirements audit](./FINAL-REQUIREMENTS-AUDIT.md) for source-level status.
 
 ## Automated application-flow evidence

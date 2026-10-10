@@ -1,27 +1,36 @@
 # Final GitHub and Render Status
 
-## Current feature-branch gate — 2026-10-10
+## Latest release and live verification — 2026-10-10
 
-- Branch: `copilot/demo-registration-e2e`, based on GitHub `main` at
-  `702679c86d450318fce2c6f08a2ac63ab775206f`; local changes are not yet merged or deployed.
-- Latest local checks: Maven **592 tests, 0 failures, 0 errors, 1 skipped**; Playwright **4 passed** across
-  desktop and mobile. Docker is unavailable locally, so the PostgreSQL/Testcontainers test was skipped.
-- GitHub `main` CI before this branch passed in run
-  [37974143064](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37974143064).
-- Render dashboard confirms the existing `sociomart-demo` service is still on **Free**, with last successful
-  runtime commit `d9bb8782ff58719a68df01236c09e9e0990c5bf4`. No deployment was triggered.
-- The Render Environment page has neither `SOCIOMART_DEMO_ADMIN_PASSWORD` nor
-  `SOCIOMART_DEMO_SUPER_ADMIN_PASSWORD` configured. Source-controlled fallback credentials were removed;
-  deploying without owner-configured credentials would disable Admin/Super Admin sign-in. This is a deliberate
-  security gate, not a Render permission failure.
-- No Render environment value was changed, no duplicate service or paid resource was created, and the live H2
-  database was not restarted.
-
-**Owner action required before Render deployment:** In the Render dashboard open the existing
-`sociomart-demo` service, choose **Environment**, add `SOCIOMART_DEMO_ADMIN_PASSWORD` and
-`SOCIOMART_DEMO_SUPER_ADMIN_PASSWORD` with owner-chosen private values, then save. Do not put the values in
-GitHub, README files, or chat. Saving environment changes may restart the Free service and reset its
-disposable in-memory H2 records. Once configured, the deployment and live Admin verification can proceed.
+- PR #18 was merged normally. GitHub `main` is
+  `0b3f1bc66f41c61e49a74138f8749bd32a88638e`; its CI run
+  [38029688055](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/38029688055)
+  succeeded.
+- The existing Render service `sociomart-demo` (`srv-dad5lfajnfac73ei06s0`) remains on the **Free** plan.
+  Deployment `dep-db4un6942hec73f2rfbg` succeeded and reports the exact same source commit as GitHub `main`.
+  No duplicate service, paid resource, PostgreSQL database, or real payment was used.
+- Live Buyer, Seller, and Admin routes (`/`, `/seller.html`, `/admin.html`) returned HTTP 200. The public
+  auth configuration and kitchens endpoints returned HTTP 200; seeded listings, including the preorder,
+  were available. Seller LIVE and RECURRING tabs opened. Admin login/operations and role boundaries were
+  exercised; unauthorized Buyer/Seller access to Admin and Admin access to Super Admin were denied.
+- OTP-free Buyer registration/login and Seller registration were exercised. Duplicate Buyer registration was
+  rejected; the Seller remained PENDING until Admin approval. The approved Seller created a one-unit offering;
+  Buyer checkout created one order, inventory reached zero/sold-out, and Seller received the order and remark.
+- Seller API and Buyer order history both subsequently reported `deliveryStatus: DELIVERED`; Buyer history
+  displayed the delivery badge and preserved the remark. The separate `orderStatus` remained `ORDERED` and
+  payment remained `PENDING`; no payment was attempted. A preceding Seller read had still returned
+  `NOT_DELIVERED`, so only the later matching Seller and Buyer reads are treated as final verification.
+- `GET /actuator/health` returned HTTP 401. Therefore a successful public health-endpoint response is **not
+  verified**; HTTP 200 route/API checks and Render's successful deployment status are not a substitute for it.
+- The demo Admin and Super Admin password variables are configured in Render and were used for authorized
+  checks. Their values were exposed in prior tool output and must be rotated by the owner immediately. Open
+  the existing service's **Environment** page and replace both
+  `SOCIOMART_DEMO_ADMIN_PASSWORD` and `SOCIOMART_DEMO_SUPER_ADMIN_PASSWORD` with new private values.
+  Do not reuse the exposed values or share the replacements in chat, GitHub, or documentation. Saving may
+  restart the Free service and reset its disposable in-memory H2 records.
+- The full live order path above is verified for one disposable test order only. Recurring occurrence checkout,
+  cancellation, simultaneous final-unit buyers, and comprehensive Admin workflows remain unverified live.
+  Local test results and their limits are in the [E2E test report](./FINAL-E2E-TEST-REPORT.md).
 
 ## Historical snapshot — 2026-10-09
 
