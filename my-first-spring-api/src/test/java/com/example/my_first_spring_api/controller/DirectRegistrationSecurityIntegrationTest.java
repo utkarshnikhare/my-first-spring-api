@@ -15,6 +15,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -37,11 +39,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.jpa.open-in-view=false",
         "sociomart.demo.direct-auth-enabled=true",
-        "sociomart.demo.admin-password=test-admin-password",
-        "sociomart.demo.super-admin-password=test-super-admin-password"
 })
 @ActiveProfiles("test")
 class DirectRegistrationSecurityIntegrationTest {
+
+    private static final String BUYER_TEST_PASSWORD = newTestPassword();
+    private static final String SECOND_BUYER_TEST_PASSWORD = newTestPassword();
+    private static final String SELLER_TEST_PASSWORD = newTestPassword();
+    private static final String ADMIN_TEST_PASSWORD = newTestPassword();
+    private static final String SUPER_ADMIN_TEST_PASSWORD = newTestPassword();
+    private static final String WRONG_TEST_PASSWORD = newTestPassword();
+
+    @DynamicPropertySource
+    static void registerAdminPasswordProperties(DynamicPropertyRegistry registry) {
+        registry.add("sociomart.demo.admin-password", () -> ADMIN_TEST_PASSWORD);
+        registry.add("sociomart.demo.super-admin-password", () -> SUPER_ADMIN_TEST_PASSWORD);
+    }
+
+    private static String newTestPassword() {
+        return UUID.randomUUID().toString().replace("-", "") + "Aa1!";
+    }
 
     @Autowired private WebApplicationContext webApplicationContext;
     private MockMvc mvc;
@@ -69,7 +86,7 @@ class DirectRegistrationSecurityIntegrationTest {
         Map<String, Object> buyer = Map.of(
                 "name", "Buyer " + suffix,
                 "mobileNumber", mobile,
-                "password", "buyer-demo-password",
+                "password", BUYER_TEST_PASSWORD,
                 "flatHouseNumber", "B-204",
                 "building", "B Wing",
                 "areaId", areaId,
@@ -109,7 +126,7 @@ class DirectRegistrationSecurityIntegrationTest {
         Map<String, Object> secondBuyer = Map.of(
                 "name", "Second Buyer " + suffix,
                 "mobileNumber", secondMobile,
-                "password", "second-buyer-password",
+                "password", SECOND_BUYER_TEST_PASSWORD,
                 "flatHouseNumber", "C-302",
                 "building", "C Wing",
                 "areaId", areaId,
@@ -123,7 +140,7 @@ class DirectRegistrationSecurityIntegrationTest {
         MvcResult switched = mvc.perform(post("/api/auth/login").session(buyerSession)
                         .with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(Map.of(
-                                "mobileNumber", secondMobile, "password", "second-buyer-password"))))
+                                "mobileNumber", secondMobile, "password", SECOND_BUYER_TEST_PASSWORD))))
                 .andExpect(status().isOk())
                 .andReturn();
         assertThat(buyerSession.getAttribute(OrderService.DRAFT_ORDER_SESSION_KEY)).isNull();
@@ -138,13 +155,13 @@ class DirectRegistrationSecurityIntegrationTest {
         mvc.perform(post("/api/auth/login")
                         .with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(Map.of(
-                                "mobileNumber", mobile, "password", "incorrect-password"))))
+                                "mobileNumber", mobile, "password", WRONG_TEST_PASSWORD))))
                 .andExpect(status().isUnauthorized());
 
         MvcResult loggedIn = mvc.perform(post("/api/auth/login")
                         .with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(Map.of(
-                                "mobileNumber", mobile, "password", "buyer-demo-password"))))
+                                "mobileNumber", mobile, "password", BUYER_TEST_PASSWORD))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("BUYER"))
                 .andReturn();
@@ -166,7 +183,7 @@ class DirectRegistrationSecurityIntegrationTest {
         Map<String, Object> sellerRequest = Map.ofEntries(
                 Map.entry("sellerName", "Seller " + suffix),
                 Map.entry("mobileNumber", mobile),
-                Map.entry("password", "seller-demo-password"),
+                Map.entry("password", SELLER_TEST_PASSWORD),
                 Map.entry("whatsappNumber", uniqueMobile("8")),
                 Map.entry("alternateContact", uniqueMobile("9")),
                 Map.entry("kitchenName", "O'Reilly Kitchen " + suffix),
@@ -219,7 +236,7 @@ class DirectRegistrationSecurityIntegrationTest {
         MvcResult adminLogin = mvc.perform(post("/api/auth/login")
                         .with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(Map.of(
-                                "mobileNumber", admin.getMobileNumber(), "password", "test-admin-password"))))
+                                "mobileNumber", admin.getMobileNumber(), "password", ADMIN_TEST_PASSWORD))))
                 .andExpect(status().isOk())
                 .andReturn();
         MockHttpSession adminSession = (MockHttpSession) adminLogin.getRequest().getSession(false);
@@ -245,7 +262,7 @@ class DirectRegistrationSecurityIntegrationTest {
                         .with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(Map.of(
                                 "name", "Impersonator", "mobileNumber", admin.getMobileNumber(),
-                                "password", "buyer-demo-password",
+                                "password", BUYER_TEST_PASSWORD,
                                 "flatHouseNumber", "A-101", "building", "A Wing",
                                 "areaId", areaId, "societyId", societyId))))
                 .andExpect(status().isConflict());
@@ -253,13 +270,13 @@ class DirectRegistrationSecurityIntegrationTest {
         mvc.perform(post("/api/auth/login")
                         .with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(Map.of(
-                                "mobileNumber", admin.getMobileNumber(), "password", "wrong-password"))))
+                                "mobileNumber", admin.getMobileNumber(), "password", WRONG_TEST_PASSWORD))))
                 .andExpect(status().isUnauthorized());
 
         MvcResult adminLogin = mvc.perform(post("/api/auth/login")
                         .with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(Map.of(
-                                "mobileNumber", admin.getMobileNumber(), "password", "test-admin-password"))))
+                                "mobileNumber", admin.getMobileNumber(), "password", ADMIN_TEST_PASSWORD))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("ADMIN"))
                 .andReturn();
@@ -271,7 +288,7 @@ class DirectRegistrationSecurityIntegrationTest {
                         .with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(Map.of(
                                 "mobileNumber", superAdmin.getMobileNumber(),
-                                "password", "test-super-admin-password"))))
+                                "password", SUPER_ADMIN_TEST_PASSWORD))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("SUPER_ADMIN"))
                 .andReturn();

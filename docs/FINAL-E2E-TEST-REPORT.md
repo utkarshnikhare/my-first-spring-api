@@ -1,12 +1,36 @@
 # SocioMart Final E2E Test Report
 
+## Public health and inventory follow-up
+
+The current change adds a public `GET /api/health` response (`{"status":"UP"}`), permits it without
+authentication, and configures it as the Render health-check path. A security integration test verifies the
+public health response and confirms that an Admin API remains protected.
+
+Checkout tests now verify persisted order creation and stock decrement; cancellation tests verify persisted
+status and one-time inventory restoration; a synchronized two-buyer test verifies that exactly one buyer
+obtains the final unit and inventory never drops below zero. Authentication integration-test password values
+are generated at runtime rather than stored as literals.
+
+| Verification | Result |
+|---|---|
+| Live `GET /api/kitchens` | HTTP 200 |
+| Live `GET /api/auth/config` | HTTP 200 |
+| Live `GET /api/health` | HTTP 401; the current Render runtime does not yet contain this change |
+| Focused `DirectRegistrationSecurityIntegrationTest` | 3 passed; 0 failures/errors |
+| `.\mvnw.cmd -B clean verify` | BUILD SUCCESS; 597 tests, 0 failures, 0 errors, 1 skipped across 78 test classes |
+| PostgreSQL/Testcontainers | 1 test skipped because Docker is unavailable |
+
+The owner confirmed that the demo Admin and Super Admin passwords were rotated and the existing service was
+redeployed. No password was requested or used during this follow-up. The new health endpoint has passed its
+local security test but is not yet available on the live service; do not treat the current live 401 as a
+successful health check. No live order, cancellation, or concurrent-purchase test was performed.
+
 ## Latest release verification — 2026-10-10
 
 PR #18 is merged to GitHub `main` at `0b3f1bc66f41c61e49a74138f8749bd32a88638e`; CI run
 [38029688055](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/38029688055) passed.
 The existing Render Free service deployed that exact commit. See the
-[GitHub and Render status](./FINAL-GITHUB-RENDER-STATUS.md) for deployment identity, health-endpoint limits,
-and the required owner-side rotation of the exposed demo Admin password values.
+[GitHub and Render status](./FINAL-GITHUB-RENDER-STATUS.md) for deployment identity and health-endpoint limits.
 
 In addition to the local tests below, a live disposable Buyer-to-Seller lifecycle passed through final
 delivery: direct Buyer registration/login without OTP, direct Seller registration with PENDING approval,

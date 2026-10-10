@@ -1,5 +1,19 @@
 # Final GitHub and Render Status
 
+## Public health and inventory follow-up
+
+Local changes add a public `GET /api/health`, a matching public security rule and a Render health-check path,
+plus regression tests for health access, checkout persistence, cancellation restoration/idempotency, and
+simultaneous purchases of the final unit. The full Maven verification passed: 597 tests, 0 failures, 0 errors,
+and 1 Docker-dependent PostgreSQL/Testcontainers skip across 78 classes. The focused authentication security
+test also passed all 3 tests. The test-only Admin and Super Admin password fixtures are generated at runtime.
+
+Current live probes returned HTTP 200 from `/api/kitchens` and `/api/auth/config`, but `/api/health` still
+returns HTTP 401 because the live service has not yet received this source change. The owner confirmed that
+both demo Admin credentials were rotated and the existing service redeployed; their values were not requested
+or accessed for this work. No deployment of this follow-up change has been performed, and the live health
+endpoint must be checked again after the change is merged and deployed.
+
 ## Latest release and live verification — 2026-10-10
 
 - Runtime PR #18 was merged normally. Its application commit is
@@ -28,12 +42,8 @@
   `NOT_DELIVERED`, so only the later matching Seller and Buyer reads are treated as final verification.
 - `GET /actuator/health` returned HTTP 401. Therefore a successful public health-endpoint response is **not
   verified**; HTTP 200 route/API checks and Render's successful deployment status are not a substitute for it.
-- The demo Admin and Super Admin password variables are configured in Render and were used for authorized
-  checks. Their values were exposed in prior tool output and must be rotated by the owner immediately. Open
-  the existing service's **Environment** page and replace both
-  `SOCIOMART_DEMO_ADMIN_PASSWORD` and `SOCIOMART_DEMO_SUPER_ADMIN_PASSWORD` with new private values.
-  Do not reuse the exposed values or share the replacements in chat, GitHub, or documentation. Saving may
-  restart the Free service and reset its disposable in-memory H2 records.
+- The owner later confirmed rotating the demo Admin and Super Admin passwords and redeploying the existing
+  service. No password values were requested or accessed during this follow-up.
 - The full live order path above is verified for one disposable test order only. Recurring occurrence checkout,
   cancellation, simultaneous final-unit buyers, and comprehensive Admin workflows remain unverified live.
   Local test results and their limits are in the [E2E test report](./FINAL-E2E-TEST-REPORT.md).
@@ -94,9 +104,12 @@ prevent the offer card from rendering.
 - No live order, cancellation, delivery update, schedule edit, or payment transaction was submitted.
 - No authorized Admin session was used for live operational testing.
 - The current feature branch adds OTP-free direct Buyer/Seller registration and pending Seller approval, but
-  that behavior is not live until it is merged and deployed.
-- Live Admin/Super Admin sign-in is blocked until the owner configures the two role-specific Render environment
-  variables listed above.
+  that behavior was merged and deployed in the release described above; the latest live Buyer-to-Seller
+  lifecycle is recorded in the E2E report.
+- Admin/Super Admin credentials were not used for the current health/inventory follow-up; no claim is made
+  here about a fresh live Admin sign-in test.
+- The follow-up `/api/health` implementation is not live yet: its current live probe returned HTTP 401 while
+  `/api/kitchens` and `/api/auth/config` returned HTTP 200.
 - The demo remains H2/in-memory and is not production-persistent. A future storage migration needs a separate
   owner-approved design and must preserve the ₹0/month ceiling.
 - The complete source-requirement reconciliation and evidence limits are in
