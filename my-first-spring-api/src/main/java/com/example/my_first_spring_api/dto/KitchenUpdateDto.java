@@ -5,6 +5,7 @@ public class KitchenUpdateDto {
     private String displayName;
     private String description;
     private String shortDescription;
+    private String speciality;
     private String imageUrl;
     private String society;
     private String serviceAreas;
@@ -34,6 +35,8 @@ public class KitchenUpdateDto {
     public void setDescription(String description) { this.description = description; }
     public String getShortDescription() { return shortDescription; }
     public void setShortDescription(String shortDescription) { this.shortDescription = shortDescription; }
+    public String getSpeciality() { return speciality; }
+    public void setSpeciality(String speciality) { this.speciality = speciality; }
     public String getImageUrl() { return imageUrl; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
     public String getSociety() { return society; }

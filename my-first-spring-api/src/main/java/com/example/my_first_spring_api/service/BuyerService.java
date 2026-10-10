@@ -43,47 +43,7 @@ public class BuyerService {
         this.locationService = locationService;
     }
 
-    /**
-     * Demo login: authenticates a buyer/seller by mobile number only (no code step).
-     * For client demo so the app opens and operates with a mobile number only.
-     */
-    @Transactional
-    public User demoLoginAndAuthenticate(String mobileNumber, String name, String flatHouseNumber,
-                                          HttpSession session) {
-        if (mobileNumber == null || !mobileNumber.matches("[0-9]{10}")) {
-            throw new IllegalArgumentException("Enter a valid 10-digit mobile number.");
-        }
-        Optional<User> existing = userRepository.findByMobileNumber(mobileNumber);
-        User buyer;
-        if (existing.isPresent()) {
-            buyer = existing.get();
-            if (name != null && !name.isBlank()) {
-                buyer.setName(name);
-            }
-            if (flatHouseNumber != null && !flatHouseNumber.isBlank()) {
-                buyer.setFlatHouseNumber(flatHouseNumber);
-            }
-        } else {
-            buyer = new User(
-                    (name == null || name.isBlank()) ? "Buyer" : name,
-                    mobileNumber,
-                    flatHouseNumber,
-                    UserRole.BUYER
-            );
-        }
-        buyer = userRepository.save(buyer);
-        if (!java.util.Objects.equals(session.getAttribute(BUYER_SESSION_KEY), buyer.getId())) {
-            session.removeAttribute(OrderService.DRAFT_ORDER_SESSION_KEY);
-        }
-        session.setAttribute(BUYER_SESSION_KEY, buyer.getId());
-        boolean isNew = existing.isEmpty();
-        analyticsService.record(
-                isNew ? AnalyticsService.EV_USER_REGISTERED : AnalyticsService.EV_USER_LOGIN,
-                buyer.getId(), buyer.getMobileNumber(), null, buyer.getName());
-        return buyer;
-    }
-
-        @Transactional(readOnly = true)
+    @Transactional(readOnly = true)
     public User getCurrentBuyer(HttpSession session) {
         // Check session attribute first (reliable for REST), then SecurityContext
         if (session != null) {

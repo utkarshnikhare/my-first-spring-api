@@ -166,7 +166,7 @@ async function api(path, opts) {
     if (!res.ok) {
         var msg = (data && data.message) || (data && data.error) || ('HTTP ' + res.status);
         if (res.status === 403 && (msg === 'Forbidden' || msg === 'Access Denied')) {
-            msg = 'Your session is missing a security token. Please reload the page and sign in again.';
+            msg = 'This request is not permitted for the current session. Refresh the page and sign in with an authorized account.';
         }
         if (CONFIG.DEBUG) console.warn('API error:', path, msg);
         throw new ApiError(msg, res.status, data);
@@ -235,10 +235,19 @@ function updateNotificationUi(items) {
 async function loadUnreadNotifications() {
     if (!document.querySelector('[data-notification-badge], .notif-panel')) return;
     try {
+        var identity = await api('/api/auth/me');
+        if (!identity || identity.authenticated !== true ||
+                (identity.role !== 'BUYER' && identity.role !== 'SELLER') ||
+                (identity.role === 'SELLER' && identity.sellerApprovalStatus !== 'APPROVED')) {
+            updateNotificationUi([]);
+            return;
+        }
         updateNotificationUi(await api('/api/notifications'));
     } catch (err) {
-        if (err instanceof ApiError && err.status === 401) updateNotificationUi([]);
-        else updateNotificationUi([]);
+        updateNotificationUi([]);
+        if (!(err instanceof ApiError && err.status === 401)) {
+            toast('Could not load notifications: ' + err.message, 'error');
+        }
     }
 }
 
@@ -507,23 +516,81 @@ async function confirmSessionThen(onAuthenticated) {
     openAuthModal();
 }
 
+var buyerRegistrationOptions = null;
+
 function openAuthModal() {
     openModal(
         '<div class="modal-icon">🔐</div>' +
         '<h3>Login required</h3>' +
-        '<p>Enter your mobile number to continue. You can keep browsing freely.</p>' +
+        '<p>Sign in with your mobile number and demo password. You can keep browsing freely.</p>' +
         '<form id="authForm" class="mt-3">' +
         '<div class="form-group">' +
         '<label class="form-label" for="authMobile">Mobile number</label>' +
-        '<input class="form-input" id="authMobile" name="mobileNumber" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" required>' +
+        '<input class="form-input" id="authMobile" name="mobileNumber" inputmode="numeric" maxlength="10" autocomplete="tel" placeholder="10-digit mobile number" required>' +
+        '</div>' +
+        '<div class="form-group">' +
+        '<label class="form-label" for="authPassword">Password</label>' +
+        '<input class="form-input" id="authPassword" name="password" type="password" minlength="10" maxlength="72" autocomplete="current-password" required>' +
         '</div>' +
         '<button class="btn btn-primary btn-block" type="submit" id="authSubmit">Log in</button>' +
+        '<button class="btn btn-secondary btn-block mt-2" type="button" data-action="buyer-register">Create buyer account</button>' +
         '</form>'
     );
     $('#authForm').addEventListener('submit', function (e) {
         e.preventDefault();
         handleAuthLogin();
     });
+}
+
+async function openBuyerRegistrationModal() {
+    try {
+        if (!buyerRegistrationOptions) {
+            buyerRegistrationOptions = await api('/api/auth/registration-options');
+        }
+        var areaOptions = (buyerRegistrationOptions || []).map(function (area) {
+            return '<option value="' + esc(area.id) + '">' + esc(area.name) + '</option>';
+        }).join('');
+        openModal(
+            '<div class="modal-icon">👋</div>' +
+            '<h3>Create buyer account</h3>' +
+            '<p>Register directly for the demo. No OTP or SMS is required.</p>' +
+            '<form id="buyerRegistrationForm" class="mt-3">' +
+            '<div class="form-group"><label class="form-label" for="buyerRegName">Full name</label>' +
+            '<input class="form-input" id="buyerRegName" name="name" maxlength="120" required autocomplete="name"></div>' +
+            '<div class="form-group"><label class="form-label" for="buyerRegMobile">Mobile number</label>' +
+            '<input class="form-input" id="buyerRegMobile" name="mobileNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" required autocomplete="tel"></div>' +
+            '<div class="form-group"><label class="form-label" for="buyerRegPassword">Create password</label>' +
+            '<input class="form-input" id="buyerRegPassword" name="password" type="password" minlength="10" maxlength="72" required autocomplete="new-password">' +
+            '<small class="muted">Use at least 10 characters. This is demo sign-in, not production authentication.</small></div>' +
+            '<div class="form-group"><label class="form-label" for="buyerRegArea">Area</label>' +
+            '<select class="form-input" id="buyerRegArea" name="areaId" required><option value="">Select area</option>' + areaOptions + '</select></div>' +
+            '<div class="form-group"><label class="form-label" for="buyerRegSociety">Society</label>' +
+            '<select class="form-input" id="buyerRegSociety" name="societyId" required><option value="">Select society</option></select></div>' +
+            '<div class="form-group"><label class="form-label" for="buyerRegBuilding">Building / wing</label>' +
+            '<input class="form-input" id="buyerRegBuilding" name="building" maxlength="120" required autocomplete="address-line2"></div>' +
+            '<div class="form-group"><label class="form-label" for="buyerRegFlat">Flat / house number</label>' +
+            '<input class="form-input" id="buyerRegFlat" name="flatHouseNumber" maxlength="80" required autocomplete="address-line1"></div>' +
+            '<button class="btn btn-primary btn-block" type="submit" id="buyerRegSubmit">Create account</button>' +
+            '<button class="btn btn-secondary btn-block mt-2" type="button" data-action="buyer-login">Back to login</button>' +
+            '</form>'
+        );
+        var area = $('#buyerRegArea');
+        var society = $('#buyerRegSociety');
+        var renderSocieties = function () {
+            var selected = (buyerRegistrationOptions || []).find(function (entry) {
+                return String(entry.id) === String(area.value);
+            });
+            society.innerHTML = '<option value="">Select society</option>' +
+                ((selected && selected.societies) || []).map(function (row) {
+                    return '<option value="' + esc(row.id) + '">' + esc(row.name) + '</option>';
+                }).join('');
+        };
+        area.addEventListener('change', renderSocieties);
+        renderSocieties();
+        $('#buyerRegistrationForm').addEventListener('submit', handleBuyerRegistration);
+    } catch (err) {
+        toast('Could not load registration options: ' + err.message, 'error');
+    }
 }
 
 async function handleAuthLogin() {
@@ -537,13 +604,45 @@ async function handleAuthLogin() {
     btn.innerHTML = '<span class="btn-spinner"></span> Logging in...';
     var me;
     try {
-        me = await api('/api/auth/demo-login', { method: 'POST', body: { mobileNumber: mobile } });
+        me = await api('/api/auth/login', { method: 'POST', body: {
+            mobileNumber: mobile,
+            password: $('#authPassword').value
+        } });
     } catch (err) {
         btn.disabled = false;
         btn.textContent = 'Log in';
         toast('Login failed: ' + err.message, 'error');
         return;
     }
+    await finishBuyerAuthentication(me);
+}
+
+async function handleBuyerRegistration(event) {
+    event.preventDefault();
+    var form = $('#buyerRegistrationForm');
+    var btn = $('#buyerRegSubmit');
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spinner"></span> Creating account...';
+    try {
+        var me = await api('/api/auth/register/buyer', { method: 'POST', body: {
+            name: $('#buyerRegName').value.trim(),
+            mobileNumber: $('#buyerRegMobile').value.trim(),
+            password: $('#buyerRegPassword').value,
+            areaId: Number($('#buyerRegArea').value),
+            societyId: Number($('#buyerRegSociety').value),
+            building: $('#buyerRegBuilding').value.trim(),
+            flatHouseNumber: $('#buyerRegFlat').value.trim()
+        } });
+        await finishBuyerAuthentication(me);
+    } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Create account';
+        toast('Registration failed: ' + err.message, 'error');
+    }
+}
+
+async function finishBuyerAuthentication(me) {
     state.user = me;
     closeModal();
     toast('Welcome, ' + (me.name || 'neighbour') + '!', 'success');

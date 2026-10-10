@@ -479,11 +479,14 @@ function ineligibleKitchenHtml(e) {
 }
 
 async function kitchenPageView(hash) {
-    var id = hash.split('/')[2];
+    var id = decodeURIComponent(hash.split('/')[2] || '');
     var h = '<div class="view-enter">';
     await loadFavSet();
     try {
-        var detail = await api('/api/kitchens/id/' + id);
+        var detailPath = /^\d+$/.test(id)
+            ? '/api/kitchens/id/' + encodeURIComponent(id)
+            : '/api/kitchens/' + encodeURIComponent(id);
+        var detail = await api(detailPath);
         var k = detail.kitchen;
         if (k && k.paused) {
             h += emptyHtml('⏸️', 'This kitchen is currently closed.', 'Please check again later.');
@@ -945,23 +948,12 @@ async function rebuildDraftFromCart() {
 }
 
 /**
- * Re-establish THIS buyer's own server session after another same-origin login
- * (the Seller app's demo-login) replaced it.
- *
- * It uses the mobile number the server itself handed us for this buyer, so no
- * identity is hardcoded and the server still re-checks the persisted role. This
- * mirrors the Seller app's own session recovery. Returns false when it cannot.
+ * A session can be replaced by a different same-origin login. Do not restore it
+ * from a mobile number alone: ask the buyer to authenticate with their password.
  */
 async function restoreBuyerSession() {
-    var mobile = (state.user && state.user.mobileNumber) || '';
-    if (!/^\d{10}$/.test(mobile)) return false;
-    try {
-        var me = await api('/api/auth/demo-login', { method: 'POST', body: { mobileNumber: mobile } });
-        if (me && me.authenticated && me.role === 'BUYER') {
-            state.user = me;
-            return true;
-        }
-    } catch (e) { /* fall through */ }
+    state.user = null;
+    openAuthModal();
     return false;
 }
 

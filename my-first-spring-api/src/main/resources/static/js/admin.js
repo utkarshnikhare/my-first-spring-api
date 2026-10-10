@@ -8,7 +8,7 @@
  * developer link still resolves — they are simply not reachable from the normal
  * Admin navigation, which is the point of V1.
  */
-var A = { me: null, role: null, loginMobile: null, trafficPeriod: 'today', kitchenFilter: '', dashPeriod: 'today', buyerAreaId: '', buyerSocietyId: '' };
+var A = { me: null, role: null, authConfig: null, authConfigError: null, trafficPeriod: 'today', kitchenFilter: '', dashPeriod: 'today', buyerAreaId: '', buyerSocietyId: '' };
 // Resolved BEFORE the route table below. `adminAnalyticsView` used to be assigned
 // further down the file with `var`, and a `var` is not initialised until execution
 // reaches it - so while the route table was being built the '#/analytics' entry
@@ -62,6 +62,31 @@ function adminNormaliseHash() {
 }
 async function adminRender() {
     if (!A.role) { await adminGate(); return; }
+    var identity;
+    try {
+        identity = await api('/api/auth/me');
+    } catch (err) {
+        A.me = null;
+        A.role = null;
+        var errorContainer = viewEl();
+        if (errorContainer) errorContainer.innerHTML = adminErrorView(err);
+        return;
+    }
+    if (!identity || !identity.authenticated) {
+        A.me = null;
+        A.role = null;
+        renderLoginScreen();
+        return;
+    }
+    if (identity.role !== 'ADMIN' && identity.role !== 'SUPER_ADMIN') {
+        A.me = null;
+        A.role = null;
+        renderBlockedScreen(identity.role || 'UNKNOWN');
+        return;
+    }
+    A.me = identity;
+    A.role = identity.role;
+    showAdminApp();
     var hash = adminNormaliseHash();
     if (location.hash !== hash) {
         // replaceState avoids pushing a bogus entry onto the history stack.
@@ -199,6 +224,8 @@ function adminDate(iso) {
 async function adminGate() {
     var me = null;
     try { me = await api('/api/auth/me'); } catch (e) { me = null; }
+    try { A.authConfig = await api('/api/auth/config'); A.authConfigError = null; }
+    catch (configError) { A.authConfig = null; A.authConfigError = configError.message; }
     if (me && me.authenticated && (me.role === 'ADMIN' || me.role === 'SUPER_ADMIN')) {
         A.me = me; A.role = me.role;
         showAdminApp();
@@ -219,19 +246,39 @@ function showAdminApp() {
     if (badge) { badge.textContent = A.role; badge.classList.toggle('super', A.role === 'SUPER_ADMIN'); }
     if (nm) nm.textContent = A.me ? (A.me.name || A.me.mobileNumber || 'Admin') : 'Admin';
 }
+function hideAdminChrome() {
+    var top = $('#adminTopbar'), nav = $('#adminNav');
+    if (top) top.classList.add('hidden');
+    if (nav) nav.classList.add('hidden');
+    document.body.classList.remove('admin-authed');
+}
 function renderLoginScreen() {
+    hideAdminChrome();
+    var loginEnabled = !A.authConfig || (A.authConfig.directAuthEnabled &&
+        (A.authConfig.adminLoginConfigured || A.authConfig.superAdminLoginConfigured));
+    var configurationMessage = A.authConfig && !A.authConfig.directAuthEnabled
+        ? '<p class="admin-config-warning">Direct demo sign-in is disabled in this environment.</p>'
+        : A.authConfig && !loginEnabled
+            ? '<p class="admin-config-warning">Admin demo passwords are not configured. The owner must configure separate Admin and Super Admin secrets for this demo.</p>'
+            : A.authConfigError
+                ? '<p class="admin-config-warning">Could not verify demo sign-in configuration: ' + esc(A.authConfigError) + '</p>'
+                : '';
     viewEl().innerHTML =
         '<div class="login-wrap"><div class="admin-login">' +
         '<div class="al-brand-row"><div class="al-brand">🛡️ SocioMart Admin</div>' +
         '<button class="icon-btn" type="button" data-action="toggle-theme" aria-label="Toggle theme">🌓</button></div>' +
         '<h2>Admin Sign In</h2>' +
-        '<p class="muted small">Enter your mobile number to sign in. This console accepts ADMIN &amp; SUPER_ADMIN accounts.</p>' +
-        '<div class="form-group"><label for="alMobile">Mobile number</label><input id="alMobile" inputmode="numeric" maxlength="10" placeholder="10-digit mobile" autocomplete="tel"></div>' +
-        '<button class="btn btn-primary btn-block" type="button" data-action="admin-login">Sign In</button>' +
+        '<p class="muted small">Use the mobile number on your Admin account and its configured demo password. Admin and Super Admin passwords are separate.</p>' +
+        configurationMessage +
+        '<div class="form-group"><label for="alMobile">Mobile number</label><input id="alMobile" inputmode="numeric" maxlength="10" placeholder="10-digit mobile" autocomplete="username"></div>' +
+        '<div class="form-group"><label for="alPassword">Demo password</label><input id="alPassword" type="password" maxlength="72" autocomplete="current-password"></div>' +
+        '<p class="muted small">Demo-only authentication; not production-ready.</p>' +
+        '<button class="btn btn-primary btn-block" type="button" data-action="admin-login"' + (!loginEnabled ? ' disabled' : '') + '>Sign In</button>' +
         '<a class="al-back" href="/index.html">← Back to buyer app</a>' +
         '</div></div>';
 }
 function renderBlockedScreen(role) {
+    hideAdminChrome();
     viewEl().innerHTML =
         '<div class="blocked-wrap"><div class="admin-blocked">' +
         '<div class="ab-icon">🚫</div>' +
@@ -264,10 +311,11 @@ async function adminAction(action, t) {
     try {
         switch (action) {
             case 'admin-login': {
-                var mobile = A.loginMobile || ($('#alMobile') ? $('#alMobile').value : '');
+                var mobile = $('#alMobile') ? $('#alMobile').value.trim() : '';
                 if (!mobile || !/^[6-9]\d{9}$/.test(mobile)) throw new Error('Enter a valid 10-digit mobile number');
-                A.loginMobile = mobile;
-                var resp = await api('/api/auth/demo-login', { method: 'POST', body: { mobileNumber: mobile } });
+                var password = $('#alPassword') ? $('#alPassword').value : '';
+                if (!password) throw new Error('Enter your demo password');
+                var resp = await api('/api/auth/login', { method: 'POST', body: { mobileNumber: mobile, password: password } });
                 if (resp && resp.authenticated && (resp.role === 'ADMIN' || resp.role === 'SUPER_ADMIN')) {
                     A.me = resp; A.role = resp.role;
                     showAdminApp();
@@ -2381,7 +2429,7 @@ async function adminHealthView() {
     h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Application</h3>' +
         '<div class="sr-meta">Name: ' + esc(data.application || '—') + '</div>' +
         '<div class="sr-meta">Active profiles: ' + esc((data.activeProfiles || []).join(', ') || 'default') + '</div>' +
-        '<div class="sr-meta">Demo login enabled: ' + (data.demoLoginEnabled ? 'yes' : 'no') + '</div>' +
+        '<div class="sr-meta">Credential-based demo sign-in enabled: ' + (data.directAuthEnabled ? 'yes' : 'no') + '</div>' +
         '</div>';
 
     h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Database</h3>' +

@@ -48,8 +48,13 @@ public class UserSessionAuthorizationFilter extends OncePerRequestFilter {
                     if (user != null) {
                         // Always derive authorities from the DB so role changes
                         // (approval, demotion, ...) apply on the very next request.
+                        String role = user.getRole().name();
+                        if (user.getRole() == com.example.my_first_spring_api.model.UserRole.SELLER
+                                && !user.isApprovedSeller()) {
+                            role = "SELLER_PENDING";
+                        }
                         UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                                userId, null, List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name())));
+                                userId, null, List.of(new SimpleGrantedAuthority("ROLE_" + role)));
                         SecurityContextHolder.getContext().setAuthentication(auth);
                     } else {
                         SecurityContextHolder.getContext().setAuthentication(null);

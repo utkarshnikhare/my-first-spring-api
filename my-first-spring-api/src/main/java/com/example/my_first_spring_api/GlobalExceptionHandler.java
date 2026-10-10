@@ -3,6 +3,8 @@ package com.example.my_first_spring_api;
 import com.example.my_first_spring_api.dto.ApiErrorDto;
 import com.example.my_first_spring_api.exception.BuyerNotAuthenticatedException;
 import com.example.my_first_spring_api.exception.BuyerProfileIncompleteException;
+import com.example.my_first_spring_api.exception.AccountAlreadyExistsException;
+import com.example.my_first_spring_api.exception.InvalidCredentialsException;
 import com.example.my_first_spring_api.exception.InvalidKitchenSelectionException;
 import com.example.my_first_spring_api.exception.KitchenNotEligibleException;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -113,6 +116,23 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(new ApiErrorDto("FORBIDDEN", ex.getMessage(), 403), HttpStatus.FORBIDDEN);
     }
 
+    @ExceptionHandler(AccountAlreadyExistsException.class)
+    public ResponseEntity<ApiErrorDto> handleAccountAlreadyExists(AccountAlreadyExistsException ex) {
+        return new ResponseEntity<>(new ApiErrorDto("ACCOUNT_ALREADY_EXISTS", ex.getMessage(), 409), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ApiErrorDto> handleInvalidCredentials(InvalidCredentialsException ex) {
+        return new ResponseEntity<>(new ApiErrorDto("INVALID_CREDENTIALS", ex.getMessage(), 401), HttpStatus.UNAUTHORIZED);
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiErrorDto> handleResponseStatus(ResponseStatusException ex) {
+        HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
+        String message = ex.getReason() == null ? status.getReasonPhrase() : ex.getReason();
+        return new ResponseEntity<>(new ApiErrorDto("REQUEST_REJECTED", message, status.value()), status);
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiErrorDto> handleConflict(IllegalStateException ex) {
         return new ResponseEntity<>(new ApiErrorDto("CONFLICT", ex.getMessage(), 409), HttpStatus.CONFLICT);
@@ -153,4 +173,3 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(new ApiErrorDto("INTERNAL_ERROR", "An unexpected error occurred. Please try again.", 500), HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }
-

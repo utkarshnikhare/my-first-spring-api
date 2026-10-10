@@ -39,8 +39,8 @@ class PostgresSchemaMigrationTest {
     private Environment environment;
 
     @Test
-    void initialMigrationCreatesSchemaThatMatchesAllJpaEntities() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("1");
+    void migrationsCreateSchemaThatMatchesAllJpaEntities() {
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("2");
         assertThat(SecurityConfig.isDemoEnvironment(environment)).isTrue();
 
         Integer tableCount = jdbcTemplate.queryForObject(
@@ -57,5 +57,14 @@ class PostgresSchemaMigrationTest {
                 Integer.class);
         Assertions.assertNotNull(foreignKeyCount);
         assertThat(foreignKeyCount).isGreaterThanOrEqualTo(20);
+
+        Integer onboardingColumnCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'PUBLIC' "
+                        + "AND ((table_name = 'USERS' AND column_name IN "
+                        + "('PASSWORD_HASH', 'SELLER_WHATSAPP_NUMBER', 'SELLER_ALTERNATE_CONTACT', 'SELLER_CATEGORY')) "
+                        + "OR (table_name = 'KITCHENS' AND column_name = 'SPECIALITY'))",
+                Integer.class);
+        Assertions.assertNotNull(onboardingColumnCount);
+        assertThat(onboardingColumnCount).isEqualTo(5);
     }
 }

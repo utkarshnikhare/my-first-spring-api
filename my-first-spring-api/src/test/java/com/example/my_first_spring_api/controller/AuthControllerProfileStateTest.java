@@ -1,28 +1,24 @@
 package com.example.my_first_spring_api.controller;
 
 import com.example.my_first_spring_api.dto.AuthResponseDto;
-import com.example.my_first_spring_api.model.SellerApprovalStatus;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.model.UserRole;
 import com.example.my_first_spring_api.service.BuyerService;
-import com.example.my_first_spring_api.service.OrderService;
-import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.env.Environment;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.web.context.SecurityContextRepository;
+import com.example.my_first_spring_api.service.DemoAuthService;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
  * P0 DEMO BLOCKER regression (auth payload).
  *
- * /api/auth/me and /api/auth/demo-login build the client-side identity state
+ * /api/auth/me and credential-based /api/auth/login build the client-side identity state
  * (state.user). That payload MUST carry the buyer's persisted society/building.
  * When it did not, the buyer UI had no service area, the Profile screen fell
  * back to a hardcoded placeholder society, and saving it overwrote the real
@@ -40,7 +36,7 @@ class AuthControllerProfileStateTest {
     void setUp() {
         buyerService = mock(BuyerService.class);
         securityContextRepository = mock(SecurityContextRepository.class);
-        controller = new AuthController(buyerService, securityContextRepository, mock(Environment.class));
+        controller = new AuthController(buyerService, mock(DemoAuthService.class), securityContextRepository);
         request = new MockHttpServletRequest();
     }
 
@@ -61,20 +57,6 @@ class AuthControllerProfileStateTest {
         assertThat(dto).isNotNull();
         assertThat(dto.isAuthenticated()).isTrue();
         // These two fields are what the client renders and re-saves.
-        assertThat(dto.getSociety()).isEqualTo("Sunshine Society");
-        assertThat(dto.getBuilding()).isEqualTo("A Wing");
-    }
-
-    @Test
-    void demoLoginCarriesPersistedSocietyAndBuilding() {
-        when(buyerService.demoLoginAndAuthenticate(any(), any(), any(), any()))
-                .thenReturn(buyerWithProfile());
-
-        AuthResponseDto dto = controller.demoLogin(
-                java.util.Map.of("mobileNumber", "9876500001"), request,
-                new org.springframework.mock.web.MockHttpServletResponse()).getBody();
-
-        assertThat(dto).isNotNull();
         assertThat(dto.getSociety()).isEqualTo("Sunshine Society");
         assertThat(dto.getBuilding()).isEqualTo("A Wing");
     }

@@ -288,7 +288,7 @@ public class DiscoveryService {
     @Transactional(readOnly = true)
     public List<KitchenCard> getHomemadeStores(User buyer) {
         return kitchenRepository.findAll().stream()
-                .filter(k -> k.getSellerType() == com.example.my_first_spring_api.model.SellerType.HOMEMADE_PRODUCTS)
+                .filter(KitchenVisibility::isHomemadeStore)
                 .filter(KitchenVisibility::isPubliclyVisible)
                 .filter(k -> KitchenVisibility.isServiceAreaVisible(k, buyer))
                 .map(k -> {
@@ -304,7 +304,7 @@ public class DiscoveryService {
     @Transactional(readOnly = true)
     public KitchenDetailDto getHomemadeStoreDetail(String slug, User buyer) {
         Kitchen kitchen = kitchenRepository.findByName(slug).orElse(null);
-        if (kitchen == null || kitchen.getSellerType() != com.example.my_first_spring_api.model.SellerType.HOMEMADE_PRODUCTS) return null;
+        if (kitchen == null || !KitchenVisibility.isHomemadeStore(kitchen)) return null;
         if (!KitchenVisibility.isPubliclyVisible(kitchen)) return null;
         if (!KitchenVisibility.isServiceAreaVisible(kitchen, buyer)) return null;
         return kitchenService.getKitchenDetailById(kitchen.getId(), buyer);

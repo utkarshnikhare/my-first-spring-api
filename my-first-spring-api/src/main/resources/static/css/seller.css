@@ -22,6 +22,37 @@
     margin: 0 auto;
 }
 
+.seller-auth-card {
+    width: min(560px, calc(100% - 28px));
+    margin: 24px auto;
+    padding: 24px;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: var(--shadow-md);
+}
+.seller-auth-card h1,
+.seller-auth-card h2 { margin: 8px 0; }
+.seller-auth-card .al-brand { font-size: 1.2rem; font-weight: 800; margin-bottom: 18px; }
+.seller-registration-card {
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.seller-auth-card .form-group { margin: 14px 0; }
+.seller-auth-card .form-group label,
+.seller-reg-coverage legend { display: block; font-weight: 700; margin-bottom: 6px; }
+.seller-auth-card .form-input { width: 100%; }
+.seller-reg-coverage {
+    margin: 12px 0;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+.seller-reg-society { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.seller-auth-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+
 /* ---------- Header ---------- */
 
 .seller-header {
@@ -3220,4 +3251,3 @@ html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #3321
 @media (prefers-reduced-motion: reduce) {
     .oic-root .oic-act { transition: none; }
 }
-

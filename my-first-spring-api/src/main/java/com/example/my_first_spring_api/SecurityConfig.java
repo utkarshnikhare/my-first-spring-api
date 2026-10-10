@@ -53,13 +53,14 @@ public class SecurityConfig {
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .addFilterBefore(userSessionAuthorizationFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/demo-login", "/api/seller-app/demo-login", "/h2-console/**")
+                        .requestMatchers("/api/auth/demo-login", "/api/seller-app/demo-login").denyAll()
+                        .requestMatchers("/h2-console/**")
                             .access((authentication, context) -> new AuthorizationDecision(demo))
                         .requestMatchers("/api/superadmin/**").hasRole("SUPER_ADMIN")
                         .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers("/api/seller/**", "/api/seller-app/**").hasRole("SELLER")
                         .requestMatchers(
                                 "/api/auth/**",
-                                "/api/seller-app/demo-login",
                                 "/api/marketplace",
                                 "/api/items",
                                 "/api/search",
@@ -99,6 +100,11 @@ public class SecurityConfig {
 
     public static boolean isDemoEnvironment(Environment environment) {
         return environment.matchesProfiles("!prod & (demo | dev | default | postgres-demo)");
+    }
+
+    public static boolean isDirectAuthEnabled(Environment environment) {
+        return environment.getProperty("sociomart.demo.direct-auth-enabled", Boolean.class, false)
+                && !environment.matchesProfiles("prod");
     }
 
     @Bean

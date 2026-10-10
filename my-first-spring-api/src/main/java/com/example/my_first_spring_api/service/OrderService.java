@@ -417,7 +417,7 @@ public class OrderService {
         consumeStock(order);
         // Notify seller if any tracked offering newly sold out as a result of this order.
         notifyNewlySoldOut(order);
-        boolean isHomemade = order.getKitchen() != null && order.getKitchen().getSellerType() == SellerType.HOMEMADE_PRODUCTS;
+        boolean isHomemade = KitchenVisibility.isHomemadeStore(order.getKitchen());
         PaymentStatus effectivePaymentStatus = paymentStatus == null || paymentStatus == PaymentStatus.WILL_PAY_LATER
                 ? PaymentStatus.PENDING : paymentStatus;
         if (effectivePaymentStatus == PaymentStatus.PAID && !isHomemade) {

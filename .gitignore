@@ -36,3 +36,8 @@ login_buyer_b.json
 login_mobile.json
 login_seller_b.json
 login_superadmin.json
+
+# Isolated Playwright E2E package output
+**/node_modules/
+**/playwright-report/
+**/test-results/

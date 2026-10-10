@@ -77,12 +77,15 @@ public class SellerService {
     }
 
     public KitchenDto createKitchen(KitchenCreateDto dto, User seller) {
-        String slug = dto.getName().toLowerCase().replaceAll("[^a-z0-9]", "");
+        String slug = dto.getName().trim().toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
+        if (slug.isBlank()) throw new IllegalArgumentException("Choose a kitchen URL containing letters or numbers.");
         if (kitchenRepository.findByName(slug).isPresent()) {
             throw new IllegalArgumentException("A kitchen with this URL name already exists.");
         }
         Kitchen kitchen = new Kitchen(slug, dto.getDisplayName(), dto.getDescription(), dto.getImageUrl(), seller);
         kitchen.setShortDescription(dto.getShortDescription());
+        kitchen.setSpeciality(dto.getSpeciality());
         kitchen.setSociety(dto.getSociety());
         // The ID payload is authoritative when present: it replaces the kitchen's
         // COMPLETE coverage and rebuilds the display string from the saved records,
@@ -115,6 +118,7 @@ public class SellerService {
         if (dto.getDisplayName() != null && !dto.getDisplayName().isBlank()) kitchen.setDisplayName(dto.getDisplayName());
         if (dto.getDescription() != null) kitchen.setDescription(dto.getDescription());
         if (dto.getShortDescription() != null) kitchen.setShortDescription(dto.getShortDescription());
+        if (dto.getSpeciality() != null) kitchen.setSpeciality(dto.getSpeciality());
         if (dto.getImageUrl() != null) kitchen.setImageUrl(dto.getImageUrl());
         if (dto.getSocietyIds() != null) {
             // Coverage is authoritative by ID, so the ID set must follow this edit -
@@ -508,6 +512,7 @@ public class SellerService {
                 kitchen.getDescription(), kitchen.getImageUrl(), kitchen.getRating(),
                 kitchen.getAvailableToday(), kitchen.getSeller() != null ? kitchen.getSeller().getId() : null);
         dto.setShortDescription(kitchen.getShortDescription());
+        dto.setSpeciality(kitchen.getSpeciality());
         dto.setSociety(kitchen.getSociety());
         dto.setServiceAreas(kitchen.getServiceAreas());
         // Expose the authoritative ID coverage so the picker can restore the exact

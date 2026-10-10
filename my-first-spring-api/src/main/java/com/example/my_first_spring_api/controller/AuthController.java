@@ -1,17 +1,19 @@
 package com.example.my_first_spring_api.controller;
 
 import com.example.my_first_spring_api.dto.AuthResponseDto;
+import com.example.my_first_spring_api.dto.BuyerRegistrationRequestDto;
+import com.example.my_first_spring_api.dto.CredentialLoginRequestDto;
+import com.example.my_first_spring_api.dto.SellerRegistrationRequestDto;
 import com.example.my_first_spring_api.model.User;
-import com.example.my_first_spring_api.model.UserRole;
 import com.example.my_first_spring_api.service.BuyerService;
+import com.example.my_first_spring_api.service.DemoAuthService;
 import com.example.my_first_spring_api.service.OrderService;
-import com.example.my_first_spring_api.SecurityConfig;
-import org.springframework.core.env.Environment;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -20,6 +22,7 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -27,97 +30,111 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
-
     private final BuyerService buyerService;
+    private final DemoAuthService demoAuthService;
     private final SecurityContextRepository securityContextRepository;
-    private final Environment environment;
 
     @Autowired
-    public AuthController(BuyerService buyerService, SecurityContextRepository securityContextRepository, Environment environment) {
+    public AuthController(BuyerService buyerService, DemoAuthService demoAuthService,
+                          SecurityContextRepository securityContextRepository) {
         this.buyerService = buyerService;
+        this.demoAuthService = demoAuthService;
         this.securityContextRepository = securityContextRepository;
-        this.environment = environment;
     }
 
     @GetMapping("/config")
     public Map<String, Boolean> config() {
-        return Map.of("demoLoginEnabled", SecurityConfig.isDemoEnvironment(environment));
+        return Map.of(
+                "directAuthEnabled", demoAuthService.isDirectAuthEnabled(),
+                "demoRegistrationEnabled", demoAuthService.isDirectAuthEnabled(),
+                "adminLoginConfigured", demoAuthService.isAdminPasswordConfigured(),
+                "superAdminLoginConfigured", demoAuthService.isSuperAdminPasswordConfigured());
     }
 
-    /**
-     * Demo login: authenticates a buyer/seller by mobile number only (no code step).
-     * For client demo so the app opens and operates with a mobile number only.
-     */
-    @PostMapping("/demo-login")
-    public ResponseEntity<AuthResponseDto> demoLogin(@Valid @RequestBody Map<String, String> body,
-                                                      HttpServletRequest request,
-                                                      HttpServletResponse response) {
-        String mobileNumber = body.getOrDefault("mobileNumber", "");
-        String name = body.get("name");
-        String flatHouseNumber = body.get("flatHouseNumber");
+    @GetMapping("/registration-options")
+    public ResponseEntity<?> registrationOptions() {
+        return ResponseEntity.ok(demoAuthService.registrationOptions());
+    }
 
-        User buyer = buyerService.demoLoginAndAuthenticate(mobileNumber, name, flatHouseNumber, request.getSession(true));
-        request.changeSessionId();
+    @PostMapping("/register/buyer")
+    public ResponseEntity<AuthResponseDto> registerBuyer(@Valid @RequestBody BuyerRegistrationRequestDto request,
+                                                           HttpServletRequest servletRequest,
+                                                           HttpServletResponse response) {
+        User buyer = demoAuthService.registerBuyer(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(authenticate(buyer, "Registration successful",
+                servletRequest, response));
+    }
 
-        Authentication authentication = new UsernamePasswordAuthenticationToken(
-                buyer.getId(), null,
-                List.of(new SimpleGrantedAuthority("ROLE_" + buyer.getRole().name())));
-        SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(authentication);
-        SecurityContextHolder.setContext(context);
-        securityContextRepository.saveContext(context, request, response);
+    @PostMapping("/register/seller")
+    public ResponseEntity<AuthResponseDto> registerSeller(@Valid @RequestBody SellerRegistrationRequestDto request,
+                                                            HttpServletRequest servletRequest,
+                                                            HttpServletResponse response) {
+        DemoAuthService.SellerRegistration registration = demoAuthService.registerSeller(request);
+        AuthResponseDto result = authenticate(registration.user(), "Registration submitted for Admin approval",
+                servletRequest, response);
+        result.setKitchenSlug(registration.kitchenSlug());
+        result.setKitchenUrl("/index.html#/kitchen/" + registration.kitchenSlug());
+        return ResponseEntity.status(HttpStatus.CREATED).body(result);
+    }
 
-        AuthResponseDto dto = new AuthResponseDto(
-                true, "Logged in successfully",
-                buyer.getId(), buyer.getName(), buyer.getMobileNumber(),
-                buyer.getFlatHouseNumber(), buyer.getRole().name(), buyer.getSellerApprovalStatus(),
-                buyer.getSociety(), buyer.getBuilding());
-        dto.setArea(buyer.getArea());
-        return ResponseEntity.ok(dto);
+    @PostMapping("/login")
+    public ResponseEntity<AuthResponseDto> login(@Valid @RequestBody CredentialLoginRequestDto request,
+                                                  HttpServletRequest servletRequest,
+                                                  HttpServletResponse response) {
+        User user = demoAuthService.login(request);
+        return ResponseEntity.ok(authenticate(user, "Logged in successfully", servletRequest, response));
     }
 
     @GetMapping("/me")
     public ResponseEntity<AuthResponseDto> me(HttpServletRequest request) {
-        User buyer = buyerService.getCurrentBuyer(request.getSession(false));
-        if (buyer == null) {
+        User user = buyerService.getCurrentBuyer(request.getSession(false));
+        if (user == null) {
             return ResponseEntity.ok(new AuthResponseDto(false, "Not authenticated", null, null, null, null, null));
         }
-        AuthResponseDto dto = new AuthResponseDto(
-                true, "Authenticated", buyer.getId(), buyer.getName(),
-                buyer.getMobileNumber(), buyer.getFlatHouseNumber(), buyer.getRole().name(),
-                buyer.getSellerApprovalStatus(), buyer.getSociety(), buyer.getBuilding());
-        // The profile screen restores the Area dropdown from /api/auth/me, so the
-        // saved area has to travel with the session payload.
-        dto.setArea(buyer.getArea());
-        // Handover 7.3: a seller must be able to see WHY they are not yet
-        // approved instead of silently failing to publish. Null for buyers.
-        dto.setSellerStatusReason(buyer.getSellerStatusReason());
-        return ResponseEntity.ok(dto);
+        return ResponseEntity.ok(toAuthResponse(user, "Authenticated"));
     }
 
     @PostMapping("/become-seller")
-    public ResponseEntity<AuthResponseDto> becomeSeller(HttpServletRequest request, HttpServletResponse response) {
-        User user = buyerService.becomeSeller(request.getSession());
-        Authentication authentication = new UsernamePasswordAuthenticationToken(
-                user.getId(), null, List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name())));
-        SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(authentication);
-        SecurityContextHolder.setContext(context);
-        securityContextRepository.saveContext(context, request, response);
-        return ResponseEntity.ok(new AuthResponseDto(
-                true, "Seller account created — pending admin approval", user.getId(), user.getName(),
-                user.getMobileNumber(), user.getFlatHouseNumber(), user.getRole().name(),
-                user.getSellerApprovalStatus(), user.getSociety(), user.getBuilding()));
+    public ResponseEntity<Void> becomeSeller() {
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Complete seller registration to submit kitchen details and create a pending storefront.");
     }
 
     @PostMapping("/logout")
     public ResponseEntity<Map<String, String>> logout(HttpServletRequest request) {
-        var session = request.getSession(false);
+        HttpSession session = request.getSession(false);
         if (session != null) {
             buyerService.logout(session);
             session.invalidate();
         }
         SecurityContextHolder.clearContext();
         return ResponseEntity.ok(Map.of("message", "Logged out successfully"));
+    }
+
+    private AuthResponseDto authenticate(User user, String message, HttpServletRequest request,
+                                         HttpServletResponse response) {
+        HttpSession session = request.getSession(true);
+        if (!java.util.Objects.equals(session.getAttribute(BuyerService.BUYER_SESSION_KEY), user.getId())) {
+            session.removeAttribute(OrderService.DRAFT_ORDER_SESSION_KEY);
+        }
+        request.changeSessionId();
+        session.setAttribute(BuyerService.BUYER_SESSION_KEY, user.getId());
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                user.getId(), null,
+                List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name())));
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(authentication);
+        SecurityContextHolder.setContext(context);
+        securityContextRepository.saveContext(context, request, response);
+        return toAuthResponse(user, message);
+    }
+
+    private static AuthResponseDto toAuthResponse(User user, String message) {
+        AuthResponseDto dto = new AuthResponseDto(true, message, user.getId(), user.getName(),
+                user.getMobileNumber(), user.getFlatHouseNumber(), user.getRole().name(),
+                user.getSellerApprovalStatus(), user.getSociety(), user.getBuilding());
+        dto.setArea(user.getArea());
+        dto.setSellerStatusReason(user.getSellerStatusReason());
+        return dto;
     }
 }
