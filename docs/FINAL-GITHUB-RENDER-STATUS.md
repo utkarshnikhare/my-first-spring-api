@@ -2,10 +2,16 @@
 
 ## Latest release and live verification — 2026-10-10
 
-- PR #18 was merged normally. GitHub `main` is
+- Runtime PR #18 was merged normally. Its application commit is
   `0b3f1bc66f41c61e49a74138f8749bd32a88638e`; its CI run
   [38029688055](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/38029688055)
   succeeded.
+- Documentation PR #19 was subsequently merged normally at
+  `47e717d94bc6d89553bf358b7b57c9bf31793452`; post-merge CI run
+  [38036664879](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/38036664879)
+  succeeded. This documentation-only change did not alter application/runtime code. At that point GitHub
+  `main` was `47e717d94bc6d89553bf358b7b57c9bf31793452`, while the Render runtime remained at
+  `0b3f1bc66f41c61e49a74138f8749bd32a88638e`; the Render dashboard listed PR #18's deployment as Live.
 - The existing Render service `sociomart-demo` (`srv-dad5lfajnfac73ei06s0`) remains on the **Free** plan.
   Deployment `dep-db4un6942hec73f2rfbg` succeeded and reports the exact same source commit as GitHub `main`.
   No duplicate service, paid resource, PostgreSQL database, or real payment was used.
