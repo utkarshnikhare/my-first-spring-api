@@ -1,6 +1,7 @@
 # SocioMart Final Requirements Audit
 
-Audit date: 2026-10-09. This is a demo-release audit, not a production-readiness declaration.
+Audit date: 2026-10-10. This is a demo-release audit, not a production-readiness declaration. It includes a
+local feature-branch verification addendum; the branch is not yet merged or deployed.
 
 ## Scope and counting rule
 
@@ -35,7 +36,7 @@ not enough to merge requirements; separate actors, lifecycle states, or expected
 | Quantity V1 and recurring specifications | Capacity is occurrence-specific; a schedule's default quantity does not create shared weekly inventory. The three overlapping per-occurrence checks are one canonical outcome with all source IDs preserved. |
 | Delivery Tracking V2 and seller/admin order screens | Delivery is a separate persisted order state from payment. Seller occurrence filters and Admin monitoring remain distinct screens even where they expose the same status. |
 | Admin V1 and Seller Onboarding V1 | Approval actions overlap, but Onboarding additionally requires OTP registration, application state and stable public identity. The approval action is one shared outcome; the onboarding lifecycle remains separately tracked. |
-| Seller Onboarding V1 and the approved demo scope | The source requires OTP onboarding and reserved slug routes; this release explicitly excludes authentication migration. Those unmet items are BLOCKED, not represented as completed. Current storefront paths use kitchen IDs rather than the required stable public slug workflow. |
+| Seller Onboarding V1 and the later demo-auth instruction | The later user instruction explicitly supersedes OTP for the demo and authorizes password-based Buyer/Seller registration while preserving Admin approval and role boundaries. The source OTP criterion remains PARTIAL rather than being called complete. Stable URL aliases and the full protected-field change workflow remain unimplemented. |
 
 ### Duplicate source IDs retained as canonical aliases
 
@@ -72,13 +73,14 @@ whose implementation demonstrably fails; none of the executed checks produced su
 | QTY-12 | Order placement uses database locking/transactional protection, but no simultaneous-buyer acceptance test was found | No concurrent final-unit test was run | PARTIAL |
 | REC-01–REC-15 | Schedule defaults, materialized occurrences, date overrides, order buckets, cutoff validation, schedule end and extension | `RecurringScheduleCreateProductIntegrationTest`, `RecurringScheduleHttpTest`, `RecurringFoundationPersistenceTest`, `RecurringBuyerOrderFlowTest`; passed in full suite | PASS |
 | DASH-01–DASH-16 | LIVE/RECURRING dashboard, dynamic summary data, contextual actions, alignment and existing navigation | `SellerDashboardUiTest`, `SellerAppScriptStructureTest`, `SellerFilterScriptStructureTest`; passed in full suite; desktop/mobile UI smoke evidence is recorded in [`requirements_matrix.md`](../my-first-spring-api/requirements_matrix.md) | PASS |
+| ONB-01, ONB-03–ONB-05, ONB-08–ONB-09, ONB-14, ONB-22 | Direct Seller registration collects required details from Admin-managed location options, persists a pending seller/storefront, keeps pending sellers out of approved Seller operations, and allows Admin approval before the seller can manage offerings; approved storefront URL is anonymously browsable | `DirectRegistrationSecurityIntegrationTest`; Playwright `seller-onboarding.spec.cjs`, `marketplace-lifecycle.spec.cjs`, `mobile-registration.mobile.spec.cjs`; passed locally | PASS |
 | ONB-20, ONB-24–ONB-25 | Existing seller pause controls and buyer kitchen eligibility/error rules are implemented independently of new seller registration | `AdminV2HandoverTest`, `KitchenVisibilityEligibilityTest`, `KitchenIneligibilityMessageTest`, `Requirements1920IntegrationTest`; passed in full suite | PASS |
-| ONB-01, ONB-04–ONB-05, ONB-12, ONB-14, ONB-17, ONB-21–ONB-23, ONB-29 | Existing demo sign-in, location/service-area, approval, profile and ID-based storefront pieces cover only part of the requested registration/public-identity lifecycle | `SellerServiceAreaTest`, Admin approval tests, kitchen visibility/eligibility tests; related pieces pass, complete onboarding flow does not exist | PARTIAL |
-| ONB-02–ONB-03, ONB-06–ONB-11, ONB-13, ONB-15–ONB-16, ONB-18–ONB-19, ONB-26–ONB-28 | OTP registration, application/resubmission states, backend slug reservation/aliasing, protected-field change requests, `/kitchen/{slug}`, and the onboarding URL-management workflow are not implemented as specified | No complete seller-registration/slug-flow test; current demo login and kitchen-ID route are not substitutes | BLOCKED |
+| ONB-02, ONB-06–ONB-07, ONB-10–ONB-12, ONB-15–ONB-17, ONB-21, ONB-23, ONB-29 | OTP is intentionally omitted under the later demo-auth instruction; slug generation/reservation race safety, full pending-publication proof, all Admin decision actions, complete first-login/profile verification, protected identity, suspension and public-page affordances are not all covered end-to-end | Direct-auth integration and browser tests cover direct registration, duplicate mobile refusal, pending status, invalid password, Admin approval and role boundaries; request-changes/reject, slug concurrency and several profile/public-page details remain unverified | PARTIAL |
+| ONB-13, ONB-18–ONB-19, ONB-26–ONB-28 | Seller request-changes/resubmission, protected-field change requests, the canonical `/kitchens` route, Admin copy-link controls and old-slug aliases are not implemented or not evidenced | No end-to-end implementation/test for these outcomes | BLOCKED |
 
-The tests for onboarding-adjacent kitchen eligibility do not prove OTP registration, slug uniqueness, or
-application approval. The corresponding requirement IDs remain PARTIAL or BLOCKED rather than inheriting
-those unrelated passes.
+The demo registration flow does not implement the source document's OTP requirement: the newer explicit
+demo instruction supersedes it, and the replacement password flow is tested locally. The local browser suite
+does not verify every onboarding detail, slug race, request-changes/rejection, or Admin promotion action.
 
 ## Independent acceptance metrics
 
@@ -87,26 +89,29 @@ those unrelated passes.
 | Requirement specification files analyzed | 7 |
 | Source acceptance criteria | 130 |
 | Unique criteria after explicit alias normalization | 117 |
-| Fully implemented and locally verified | 87 |
-| Partially implemented / evidence incomplete | 12 |
+| Fully implemented and locally verified | 95 |
+| Partially implemented / evidence incomplete | 14 |
 | Failed in an executed acceptance test | 0 |
 | Not verified | 2 |
-| Blocked by approved release scope | 16 |
-| Automated tests | 589 total; 0 failures; 0 errors; 1 Docker-gated skip; BUILD SUCCESS |
-| Live read-only smoke checks | 5; no full live business-order journey |
-| Latest GitHub `main` commit at this audit snapshot | `b70d13239776fc9221dfa6dfdca0de1910afd982` (documentation-only PR #16 merge) |
-| Runtime source commit on `main` | `d9bb8782ff58719a68df01236c09e9e0990c5bf4` |
-| Render deployed commit | `d9bb8782ff58719a68df01236c09e9e0990c5bf4` |
-| Latest main CI | PASS; run `37973393842` on the PR #16 merge commit |
-| GitHub/Render runtime synchronized | YES; latest GitHub changes are documentation-only |
+| Blocked / not implemented in the current scope | 6 |
+| Automated tests (current local branch) | Maven: 592 total; 0 failures; 0 errors; 1 skipped. Playwright: 4 passed, 0 failed. |
+| Live read-only smoke checks | 5 historical checks; no live business-order journey for this branch |
+| Latest GitHub `main` commit before this PR | `702679c86d450318fce2c6f08a2ac63ab775206f` |
+| Current feature branch | `copilot/demo-registration-e2e`; local tests pass; not yet merged or deployed |
+| Last verified Render runtime commit | `d9bb8782ff58719a68df01236c09e9e0990c5bf4` |
+| Latest main CI before this PR | PASS; run `37974143064` on `702679c86d450318fce2c6f08a2ac63ab775206f` |
+| GitHub/Render runtime synchronized | YES for `main`; current feature-branch changes are not yet synchronized |
 | Monthly infrastructure budget | ₹0/month; existing Render Free plan, no paid resources |
-| Overall completion | **PARTIAL** |
+| Overall completion | **PARTIAL — local validation only; PR, CI, deployment and live E2E remain** |
 
-The status totals are calculated from the 117 canonical IDs: `87 + 12 + 0 + 2 + 16 = 117`. The 16 blocked
-items are not silently counted as passes; implementing them requires a separately approved seller-onboarding
-and authentication scope. No completion percentage is reported.
+The status totals are calculated from the 117 canonical IDs: `95 + 14 + 0 + 2 + 6 = 117`. The six blocked
+outcomes are not silently counted as passes. The V1 OTP criterion is separately recorded as PARTIAL because
+the later user instruction explicitly replaces it for the demo. No completion percentage is reported.
 
-### Live smoke evidence and limits
+### Historical live smoke evidence and limits — 2026-10-09
+
+These read-only observations describe the then-deployed application, not the current unmerged feature branch.
+The branch adds Buyer/Seller password registration; no live write-based smoke test has been run for it.
 
 - Render dashboard showed the existing `sociomart-demo` service on Free, with deployment
   `dep-db4i1rqj9qps73alfiug` for the same application SHA as GitHub `main`.

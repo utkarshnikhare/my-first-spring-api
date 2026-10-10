@@ -43,6 +43,9 @@ public class SellerController {
         User user = authService.getCurrentBuyer(session);
         if (user == null) throw new BuyerNotAuthenticatedException("Authentication required. Please log in.");
         if (user.getRole() != UserRole.SELLER) throw new SellerNotAuthorizedException("Only sellers can perform this action");
+        if (!user.isApprovedSeller()) {
+            throw new SellerNotAuthorizedException("Your seller account is awaiting Admin approval.");
+        }
         return user;
     }
 

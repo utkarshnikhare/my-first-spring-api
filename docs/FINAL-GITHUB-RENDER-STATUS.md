@@ -1,6 +1,31 @@
 # Final GitHub and Render Status
 
-Audit snapshot: 2026-10-09, after PR #16 and before this snapshot-only documentation follow-up. At this
+## Current feature-branch gate — 2026-10-10
+
+- Branch: `copilot/demo-registration-e2e`, based on GitHub `main` at
+  `702679c86d450318fce2c6f08a2ac63ab775206f`; local changes are not yet merged or deployed.
+- Latest local checks: Maven **592 tests, 0 failures, 0 errors, 1 skipped**; Playwright **4 passed** across
+  desktop and mobile. Docker is unavailable locally, so the PostgreSQL/Testcontainers test was skipped.
+- GitHub `main` CI before this branch passed in run
+  [37974143064](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/37974143064).
+- Render dashboard confirms the existing `sociomart-demo` service is still on **Free**, with last successful
+  runtime commit `d9bb8782ff58719a68df01236c09e9e0990c5bf4`. No deployment was triggered.
+- The Render Environment page has neither `SOCIOMART_DEMO_ADMIN_PASSWORD` nor
+  `SOCIOMART_DEMO_SUPER_ADMIN_PASSWORD` configured. Source-controlled fallback credentials were removed;
+  deploying without owner-configured credentials would disable Admin/Super Admin sign-in. This is a deliberate
+  security gate, not a Render permission failure.
+- No Render environment value was changed, no duplicate service or paid resource was created, and the live H2
+  database was not restarted.
+
+**Owner action required before Render deployment:** In the Render dashboard open the existing
+`sociomart-demo` service, choose **Environment**, add `SOCIOMART_DEMO_ADMIN_PASSWORD` and
+`SOCIOMART_DEMO_SUPER_ADMIN_PASSWORD` with owner-chosen private values, then save. Do not put the values in
+GitHub, README files, or chat. Saving environment changes may restart the Free service and reset its
+disposable in-memory H2 records. Once configured, the deployment and live Admin verification can proceed.
+
+## Historical snapshot — 2026-10-09
+
+The following record was captured after PR #16 and before the current feature branch. At that
 snapshot, GitHub `main` is `b70d13239776fc9221dfa6dfdca0de1910afd982`. The demo deployment was explicitly authorized after the owner confirmed that
 non-seed H2 records were disposable. No paid resource, PostgreSQL database, duplicate Render service, real
 payment, or production authentication migration was introduced.
@@ -53,9 +78,10 @@ prevent the offer card from rendering.
 
 - No live order, cancellation, delivery update, schedule edit, or payment transaction was submitted.
 - No authorized Admin session was used for live operational testing.
-- Seller registration with OTP, a persisted pending-application flow, and stable reserved public kitchen slugs
-  are not part of the current demo authentication/routing implementation. They remain blocked from this release
-  by the explicit instruction not to undertake an authentication migration.
+- The current feature branch adds OTP-free direct Buyer/Seller registration and pending Seller approval, but
+  that behavior is not live until it is merged and deployed.
+- Live Admin/Super Admin sign-in is blocked until the owner configures the two role-specific Render environment
+  variables listed above.
 - The demo remains H2/in-memory and is not production-persistent. A future storage migration needs a separate
   owner-approved design and must preserve the ₹0/month ceiling.
 - The complete source-requirement reconciliation and evidence limits are in

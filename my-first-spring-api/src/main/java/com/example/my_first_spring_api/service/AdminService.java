@@ -2100,9 +2100,13 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
         boolean hasKitchen = false, hasHomemade = false;
         List<Map<String, Object>> storefronts = new ArrayList<>();
         for (Kitchen k : kitchens) {
-            boolean homemade = k.getSellerType() != null
-                    && k.getSellerType() == com.example.my_first_spring_api.model.SellerType.HOMEMADE_PRODUCTS;
-            if (homemade) hasHomemade = true; else hasKitchen = true;
+            boolean homemade = k.getSellerType() == com.example.my_first_spring_api.model.SellerType.HOMEMADE_PRODUCTS
+                    || k.getSellerType() == com.example.my_first_spring_api.model.SellerType.BOTH;
+            boolean kitchen = k.getSellerType() == null
+                    || k.getSellerType() == com.example.my_first_spring_api.model.SellerType.KITCHEN
+                    || k.getSellerType() == com.example.my_first_spring_api.model.SellerType.BOTH;
+            if (homemade) hasHomemade = true;
+            if (kitchen) hasKitchen = true;
             Map<String, Object> s = new LinkedHashMap<>();
             s.put("id", k.getId());
             s.put("name", k.getDisplayName());
@@ -2694,7 +2698,7 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
      * Lightweight, factual runtime status for the Admin System Health screen.
      *
      * <p>Only values the running application can actually report: the active Spring
-     * profiles, whether demo login is on (via the very helper the security config
+     * profiles, whether credential-based direct demo authentication is on (via the helper the security config
      * itself uses, so it cannot disagree with the real gate), and a genuine round trip
      * through JPA proving the database is reachable. Nothing is simulated.</p>
      */
@@ -2710,8 +2714,8 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
         if (profiles.isEmpty()) profiles = new ArrayList<>(Collections.singletonList("default"));
         out.put("activeProfiles", profiles);
 
-        out.put("demoLoginEnabled", environment != null
-                && com.example.my_first_spring_api.SecurityConfig.isDemoEnvironment(environment));
+        out.put("directAuthEnabled", environment != null
+                && com.example.my_first_spring_api.SecurityConfig.isDirectAuthEnabled(environment));
 
         Map<String, Object> database = new LinkedHashMap<>();
         try {

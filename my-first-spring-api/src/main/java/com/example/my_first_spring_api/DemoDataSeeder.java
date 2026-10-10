@@ -53,7 +53,7 @@ public class DemoDataSeeder {
     private static final String DEMO_FAVOURITES_FLAG = "demo_favourites_seeded";
     private static final String DEMO_VIEW_ORDERS_FLAG = "demo_view_orders_seeded";
     private static final String DEMO_SELLER_ARCHIVE_FLAG = "demo_seller_archive_seeded";
-    /** The seller the Seller App demo-login signs in as — its archive is what the demo shows. */
+    /** Seed seller whose offering archive is shown in the demo. */
     private static final String DEMO_SELLER_MOBILE = "9100000001";
     /** The approved demo area. */
     private static final String DEMO_AREA_NAME = "Charholi / Lohegaon";

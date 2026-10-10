@@ -113,6 +113,8 @@ document.addEventListener('click', async function (e) {
                 break;
             }
             case 'open-login': openAuthModal(); break;
+            case 'buyer-register': await openBuyerRegistrationModal(); break;
+            case 'buyer-login': openAuthModal(); break;
             case 'read-more': {
                 var full = decodeURIComponent(t.dataset.full || '');
                 var parent = t.closest('.about-text') || t.closest('.oc-desc');

@@ -43,7 +43,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @ActiveProfiles("demo")
 class DemoSellerArchiveSeedTest {
 
-    /** The mobile number the Seller App demo-login signs in as. */
+    /** The mobile number of the seller whose archive is seeded for the demo. */
     private static final String DEMO_SELLER_MOBILE = "9100000001";
 
     @Autowired DemoDataSeeder seeder;

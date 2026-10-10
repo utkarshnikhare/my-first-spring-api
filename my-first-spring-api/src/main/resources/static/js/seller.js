@@ -1,7 +1,7 @@
 /**
  * SocioMart Seller App v1.0 - 5-tab SPA
  */
-var S = { user: null, kitchen: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFilterDelivery: '', offeringProductId: '', deliverySaving: {}, deliveryBlockRequestId: 0, bulkDelivering: false, offeringFor: 'today', quickPostRequestId: null, editOffering: null, dashFilter: 'ALL', offeringsTab: 'history', recurringSchedules: [], recurringDetail: null, offeringMode: 'today', recurringDuration: 'thisweek', dashTab: 'live', offeringSubmitting: false, editOccurrenceId: null };
+var S = { user: null, kitchen: null, kitchenUrl: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFilterDelivery: '', offeringProductId: '', deliverySaving: {}, deliveryBlockRequestId: 0, bulkDelivering: false, offeringFor: 'today', quickPostRequestId: null, editOffering: null, dashFilter: 'ALL', offeringsTab: 'history', recurringSchedules: [], recurringDetail: null, offeringMode: 'today', recurringDuration: 'thisweek', dashTab: 'live', offeringSubmitting: false, editOccurrenceId: null, authMode: 'login', authOptions: null, authError: null, authServiceAreaId: '', authSlugTouched: false };
 var sellerRoutes = {
     '#/home': sellerHomeView, '#/add': sellerAddView, '#/create': sellerCreateView,
     '#/edit-offering': sellerEditOfferingView,
@@ -19,89 +19,218 @@ function sellerResolveRoute(hash) {
     if (hash.startsWith('#/order-detail/')) return { fn: sellerOrderDetailView, arg: hash.split('/')[2] };
     return { fn: sellerHomeView, arg: '#/home' };
 }
-/**
- * Seller session guard.
- *
- * The Buyer and Seller apps run on the same origin and therefore share ONE
- * browser session. Logging in as a Buyer overwrites the server-side identity the
- * Seller app depends on, so the Seller app used to show a raw
- * "Only sellers can perform this action" until the page was reloaded: it
- * authenticated once at boot and then trusted that cached state.
- *
- * The backend stays authoritative here. We ask the server who the current
- * session is, and only when it is not our seller session do we re-establish it
- * through the app's existing /api/seller-app/demo-login. The expected role is
- * read from the server's own response - nothing here is hardcoded and no
- * authorization is bypassed: a Buyer calling the seller APIs directly still
- * gets 403, because requireSeller() re-checks the persisted role server-side.
- */
+/** Seller session and approval are reloaded from the database on each entry. */
 async function ensureSellerSession() {
     try {
         var me = await api('/api/auth/me');
-        if (me && me.authenticated && me.role === 'SELLER') return true;
-    } catch (e) {
-        // Unknown session state - fall through and re-authenticate below.
-    }
-    // Stale, missing, or logged in as a non-seller: restore the seller session.
-    return restoreSellerSession();
-}
-
-/**
- * Forces a fresh seller login and reports whether the server really handed back
- * a seller. Used when a request has already failed with an auth error: at that
- * point the session is known NOT to be a seller, so re-probing /api/auth/me
- * would be a wasted round trip that can race the same way.
- *
- * The expected role is read from the server's own response - nothing is
- * hardcoded and no authorization is bypassed: requireSeller() still re-checks
- * the persisted role server-side on every request.
- */
-async function restoreSellerSession() {
-    try {
-        var s = await api('/api/seller-app/demo-login', { method: 'POST' });
-        return !!(s && s.authenticated && s.role === 'SELLER');
-    } catch (e) {
+        S.authError = null;
+        S.user = me && me.authenticated ? me : null;
+        return !!(me && me.authenticated && me.role === 'SELLER' &&
+            (!me.sellerApprovalStatus || me.sellerApprovalStatus === 'APPROVED'));
+    } catch (err) {
+        S.authError = err;
+        S.user = null;
         return false;
     }
 }
 
-/** True for the two statuses that mean "this session is not the seller". */
-function isSellerAuthError(err) {
-    return !!err && (err.status === 401 || err.status === 403);
+/** Seller API failures are surfaced; a rejected request is never retried as another account. */
+async function sellerApi(path, opts) {
+    return await api(path, opts);
 }
 
-/**
- * Seller-scoped request with bounded self-heal.
- *
- * ensureSellerSession() runs before the route, but that guard and the route's
- * own request are two separate HTTP calls. The Buyer and Seller apps share ONE
- * browser session, so a Buyer login landing in that gap makes an otherwise
- * valid seller request fail with 401/403 - and the view then rendered that raw
- * error permanently, leaving the Seller screen stuck on "Could not load
- * dashboard / Only sellers can perform this action" with no way back except a
- * manual reload.
- *
- * So on an auth failure: re-establish the seller session and retry ONCE. The
- * retry is strictly bounded (no loop, no backoff). Any non-auth error, and any
- * second auth failure, propagates untouched, so genuine server, network and
- * permission problems are still reported honestly rather than hidden.
- */
-async function sellerApi(path, opts) {
+function sellerAreaOptions(selectedId) {
+    return (S.authOptions || []).map(function (area) {
+        return '<option value="' + esc(area.id) + '"' +
+            (String(area.id) === String(selectedId) ? ' selected' : '') + '>' + esc(area.name) + '</option>';
+    }).join('');
+}
+
+function sellerSocietyOptions(areaId) {
+    var area = (S.authOptions || []).find(function (item) { return String(item.id) === String(areaId); });
+    return (area && area.societies || []).map(function (society) {
+        return '<option value="' + esc(society.id) + '">' + esc(society.name) + '</option>';
+    }).join('');
+}
+
+function sellerServiceSocietyHtml(areaId) {
+    var area = (S.authOptions || []).find(function (item) { return String(item.id) === String(areaId); });
+    var rows = area && area.societies || [];
+    if (!rows.length) return '<p class="muted small">No active societies are available in this area.</p>';
+    return rows.map(function (society) {
+        return '<label class="seller-reg-society"><input type="checkbox" name="serviceSocietyIds" value="' +
+            esc(society.id) + '"> <span>' + esc(society.name) + '</span></label>';
+    }).join('');
+}
+
+function sellerStatusHtml() {
+    var status = (S.user && S.user.sellerApprovalStatus) || 'PENDING';
+    var title = status === 'REJECTED' ? 'Application needs attention' : 'Seller application pending';
+    var detail = (S.user && S.user.sellerStatusReason) ||
+        'Your storefront is private until an Admin reviews and approves your application.';
+    var kitchenUrl = (S.user && S.user.kitchenUrl) || S.kitchenUrl;
+    var link = kitchenUrl
+        ? '<p class="small">Your reserved kitchen URL: <a href="' + esc(kitchenUrl) + '">' + esc(kitchenUrl) + '</a></p>' : '';
+    return '<div class="login-wrap"><section class="admin-login seller-auth-card">' +
+        '<div class="modal-icon">🕒</div><h1>' + esc(title) + '</h1>' +
+        '<p class="muted">Current status: <strong>' + esc(status) + '</strong></p>' +
+        '<p>' + esc(detail) + '</p>' + link +
+        '<div class="seller-auth-actions"><button class="btn btn-secondary" type="button" data-action="seller-retry">Refresh status</button> ' +
+        '<button class="btn btn-outline" type="button" data-action="seller-logout">Log out</button></div>' +
+        '</section></div>';
+}
+
+async function sellerAuthHtml() {
+    if (S.user && S.user.role === 'SELLER') return sellerStatusHtml();
+    if (S.authError) {
+        return '<div class="login-wrap"><section class="admin-login seller-auth-card">' +
+            '<h1>Seller service unavailable</h1><p>' + esc(S.authError.message || 'Could not verify your session.') + '</p>' +
+            '<button class="btn btn-primary" type="button" data-action="seller-retry">Retry</button></section></div>';
+    }
+    var login = '<div class="form-group"><label for="sellerLoginMobile">Mobile number</label>' +
+        '<input class="form-input" id="sellerLoginMobile" name="mobileNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" autocomplete="username" required></div>' +
+        '<div class="form-group"><label for="sellerLoginPassword">Password</label>' +
+        '<input class="form-input" id="sellerLoginPassword" name="password" type="password" minlength="10" maxlength="72" autocomplete="current-password" required></div>' +
+        '<button class="btn btn-primary btn-block" type="submit">Sign in</button>' +
+        '<button class="btn btn-secondary btn-block mt-2" type="button" data-action="seller-show-register">Register as a seller</button>';
+    var body = '<div class="login-wrap"><section class="admin-login seller-auth-card">' +
+        '<div class="al-brand">🍲 SocioMart Seller</div>' +
+        '<p class="muted small">Demo-only password sign-in. This is not production-ready authentication.</p>' +
+        '<form id="sellerLoginForm">' + login + '</form></section></div>';
+    if (S.authMode !== 'register') return body;
     try {
-        return await api(path, opts);
+        if (!S.authOptions) S.authOptions = await api('/api/auth/registration-options');
     } catch (err) {
-        if (!isSellerAuthError(err)) throw err;
-        if (!(await restoreSellerSession())) throw err;
-        return await api(path, opts);
+        return '<div class="login-wrap"><section class="admin-login seller-auth-card"><h1>Could not load registration options</h1>' +
+            '<p>' + esc(err.message) + '</p><button class="btn btn-primary" type="button" data-action="seller-show-register">Retry</button></section></div>';
+    }
+    if (!S.authOptions || !S.authOptions.length) {
+        return '<div class="login-wrap"><section class="admin-login seller-auth-card"><h1>Seller registration unavailable</h1>' +
+            '<p>No active areas and societies are configured.</p><button class="btn btn-secondary" type="button" data-action="seller-show-login">Back to login</button></section></div>';
+    }
+    var firstArea = S.authOptions[0];
+    var form = '<form id="sellerRegistrationForm">' +
+        '<div class="form-group"><label for="sellerRegName">Seller / contact name</label><input class="form-input" id="sellerRegName" name="sellerName" maxlength="120" required></div>' +
+        '<div class="form-group"><label for="sellerRegMobile">Mobile number</label><input class="form-input" id="sellerRegMobile" name="mobileNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" required></div>' +
+        '<div class="form-group"><label for="sellerRegPassword">Create password</label><input class="form-input" id="sellerRegPassword" name="password" type="password" minlength="10" maxlength="72" autocomplete="new-password" required></div>' +
+        '<div class="form-group"><label for="sellerRegWhatsApp">WhatsApp number</label><input class="form-input" id="sellerRegWhatsApp" name="whatsappNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" required></div>' +
+        '<div class="form-group"><label for="sellerRegAlternate">Alternate contact (optional)</label><input class="form-input" id="sellerRegAlternate" name="alternateContact" inputmode="numeric" pattern="[0-9]{10}" maxlength="10"></div>' +
+        '<div class="form-group"><label for="sellerRegKitchen">Kitchen / storefront name</label><input class="form-input" id="sellerRegKitchen" name="kitchenName" maxlength="120" required></div>' +
+        '<div class="form-group"><label for="sellerRegSlug">Choose public kitchen URL</label><div class="muted small">/index.html#/kitchen/</div><input class="form-input" id="sellerRegSlug" name="kitchenSlug" minlength="3" maxlength="80" pattern="[A-Za-z0-9]+(-[A-Za-z0-9]+)*" required></div>' +
+        '<div class="form-group"><label for="sellerRegSpeciality">Cuisine / speciality</label><input class="form-input" id="sellerRegSpeciality" name="speciality" maxlength="250" required></div>' +
+        '<div class="form-group"><label for="sellerRegCategory">Seller category</label><select class="form-input" id="sellerRegCategory" name="sellerCategory" required><option value="KITCHEN">Kitchen</option><option value="HOMEMADE_PRODUCTS">Homemade products</option><option value="BOTH">Both</option></select></div>' +
+        '<div class="form-group"><label for="sellerRegShort">Short description (optional)</label><textarea class="form-input" id="sellerRegShort" name="shortDescription" maxlength="500"></textarea></div>' +
+        '<div class="form-group"><label for="sellerRegInstagram">Instagram URL (optional)</label><input class="form-input" id="sellerRegInstagram" name="instagramLink" type="url" maxlength="255"></div>' +
+        '<div class="form-group"><label for="sellerRegPrimaryArea">Primary area</label><select class="form-input" id="sellerRegPrimaryArea" name="primaryAreaId" required>' +
+        sellerAreaOptions(firstArea.id) + '</select></div>' +
+        '<div class="form-group"><label for="sellerRegPrimarySociety">Primary society</label><select class="form-input" id="sellerRegPrimarySociety" name="primarySocietyId" required>' +
+        sellerSocietyOptions(firstArea.id) + '</select></div>' +
+        '<div class="form-group"><label for="sellerRegBuilding">Building / wing (optional)</label><input class="form-input" id="sellerRegBuilding" name="building" maxlength="120"></div>' +
+        '<div class="form-group"><label for="sellerRegServiceArea">Service coverage area</label><select class="form-input" id="sellerRegServiceArea" name="serviceAreaId" required>' +
+        sellerAreaOptions(firstArea.id) + '</select></div>' +
+        '<fieldset class="seller-reg-coverage"><legend>Societies you will serve</legend><div id="sellerRegSocieties">' +
+        sellerServiceSocietyHtml(firstArea.id) + '</div></fieldset>' +
+        '<p class="muted small">New seller accounts remain pending until Admin approval. This demo password is not production authentication.</p>' +
+        '<button class="btn btn-primary btn-block" type="submit">Submit seller application</button>' +
+        '<button class="btn btn-secondary btn-block mt-2" type="button" data-action="seller-show-login">Back to sign in</button>' +
+        '</form>';
+    return '<div class="login-wrap"><section class="admin-login seller-auth-card seller-registration-card">' +
+        '<div class="al-brand">🏪 Seller registration</div>' + form + '</section></div>';
+}
+
+function bindSellerAuth(view) {
+    var loginForm = view.querySelector('#sellerLoginForm');
+    if (loginForm) loginForm.addEventListener('submit', sellerLoginSubmit);
+    var registrationForm = view.querySelector('#sellerRegistrationForm');
+    if (!registrationForm) return;
+    registrationForm.addEventListener('submit', sellerRegistrationSubmit);
+    var primaryArea = view.querySelector('#sellerRegPrimaryArea');
+    primaryArea.addEventListener('change', function () {
+        var society = view.querySelector('#sellerRegPrimarySociety');
+        society.innerHTML = sellerSocietyOptions(primaryArea.value);
+    });
+    var serviceArea = view.querySelector('#sellerRegServiceArea');
+    serviceArea.addEventListener('change', function () {
+        S.authServiceAreaId = serviceArea.value;
+        view.querySelector('#sellerRegSocieties').innerHTML = sellerServiceSocietyHtml(serviceArea.value);
+    });
+    var kitchenName = view.querySelector('#sellerRegKitchen');
+    var slug = view.querySelector('#sellerRegSlug');
+    kitchenName.addEventListener('input', function () {
+        if (!S.authSlugTouched) slug.value = kitchenName.value.toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    });
+    slug.addEventListener('input', function () { S.authSlugTouched = true; });
+}
+
+async function sellerLoginSubmit(event) {
+    event.preventDefault();
+    var form = event.currentTarget;
+    var button = form.querySelector('button[type="submit"]');
+    if (button.disabled) return;
+    button.disabled = true;
+    try {
+        var session = await api('/api/auth/login', { method: 'POST', body: {
+            mobileNumber: form.elements.mobileNumber.value.trim(),
+            password: form.elements.password.value
+        } });
+        if (session.role !== 'SELLER') {
+            S.user = session;
+            toast('This account is not registered as a seller.', 'error');
+            await sellerRender();
+            return;
+        }
+        S.user = session;
+        S.authError = null;
+        location.hash = '#/home';
+        await sellerRender();
+    } catch (err) {
+        toast('Sign in failed: ' + err.message, 'error');
+    } finally {
+        if (button.isConnected) button.disabled = false;
     }
 }
 
-function sellerAuthErrorHtml() {
-    return '<div class="view-enter">' +
-        emptyHtml('🔒', 'Seller session required',
-            'We could not verify your seller session. Please retry.',
-            '<button class="btn btn-primary btn-mt-md" type="button" data-action="seller-retry">Retry</button>') +
-        '</div>';
+async function sellerRegistrationSubmit(event) {
+    event.preventDefault();
+    var form = event.currentTarget;
+    var button = form.querySelector('button[type="submit"]');
+    if (button.disabled) return;
+    var serviceIds = Array.from(form.querySelectorAll('input[name="serviceSocietyIds"]:checked'))
+        .map(function (input) { return Number(input.value); });
+    if (!serviceIds.length) {
+        toast('Select at least one society you will serve.', 'error');
+        return;
+    }
+    button.disabled = true;
+    try {
+        var session = await api('/api/auth/register/seller', { method: 'POST', body: {
+            sellerName: form.elements.sellerName.value.trim(),
+            mobileNumber: form.elements.mobileNumber.value.trim(),
+            password: form.elements.password.value,
+            whatsappNumber: form.elements.whatsappNumber.value.trim(),
+            alternateContact: form.elements.alternateContact.value.trim(),
+            kitchenName: form.elements.kitchenName.value.trim(),
+            kitchenSlug: form.elements.kitchenSlug.value.trim(),
+            speciality: form.elements.speciality.value.trim(),
+            sellerCategory: form.elements.sellerCategory.value,
+            shortDescription: form.elements.shortDescription.value.trim(),
+            instagramLink: form.elements.instagramLink.value.trim(),
+            primaryAreaId: Number(form.elements.primaryAreaId.value),
+            primarySocietyId: Number(form.elements.primarySocietyId.value),
+            building: form.elements.building.value.trim(),
+            serviceAreaId: Number(form.elements.serviceAreaId.value),
+            serviceSocietyIds: serviceIds
+        } });
+        S.user = session;
+        S.kitchenUrl = session.kitchenUrl || null;
+        S.authMode = 'login';
+        S.authSlugTouched = false;
+        await sellerRender();
+    } catch (err) {
+        toast('Registration failed: ' + err.message, 'error');
+        if (button.isConnected) button.disabled = false;
+    }
 }
 
 async function sellerRender() {
@@ -115,7 +244,8 @@ async function sellerRender() {
     // Verify the server session before calling any owner-scoped endpoint, so a
     // Buyer login elsewhere cannot leave this screen stuck on an auth error.
     if (!(await ensureSellerSession())) {
-        view.innerHTML = sellerAuthErrorHtml();
+        view.innerHTML = await sellerAuthHtml();
+        bindSellerAuth(view);
         return;
     }
     try { view.innerHTML = await route.fn(route.arg) || ''; sellerUpdateNav(hash); await loadUnreadNotifications(); if (typeof applyThemeUiState === 'function') applyThemeUiState(); window.scrollTo(0, 0); var saInput = $('#coverageSocietyIdsInput'); if (saInput) renderCoverageSocieties(); }
@@ -2322,6 +2452,28 @@ document.addEventListener('click', async function (e) {
         switch (a) {
             case 'go-back': history.back(); break;
             case 'noop': break;
+            case 'seller-show-register':
+                S.authMode = 'register';
+                S.authError = null;
+                S.authSlugTouched = false;
+                await sellerRender();
+                break;
+            case 'seller-show-login':
+                S.authMode = 'login';
+                S.authError = null;
+                await sellerRender();
+                break;
+            case 'seller-retry':
+                S.authError = null;
+                await sellerRender();
+                break;
+            case 'seller-logout':
+                await api('/api/auth/logout', { method: 'POST' });
+                S.user = null;
+                S.kitchenUrl = null;
+                S.authMode = 'login';
+                await sellerRender();
+                break;
             case 'toggle-notifs': await toggleNotifications(t.dataset.panelId || 'sellerNotifPanel'); break;
             case 'read-notification': await readNotification(t.dataset.notificationId); break;
             case 'toggle-theme': toggleTheme(); break;
@@ -2783,7 +2935,6 @@ document.addEventListener('click', async function (e) {
             }
             case 'add-photo': toast('Photo upload (demo)', 'info'); break;
             case 'upload-avatar': toast('Kitchen photo upload (demo)', 'info'); break;
-            case 'seller-retry': location.reload(); break;
             case 'ack-enquiry': {
                 var eid = Number(t.dataset.id);
                 await api('/api/enquiries/' + eid + '/acknowledge', { method: 'POST' });
@@ -2962,20 +3113,11 @@ window.addEventListener('hashchange', function () { if (sellerBooted) sellerRend
 window.addEventListener('DOMContentLoaded', async function () {
     try {
         initTheme();
-        // Establish the seller session up front. If this genuinely fails we show
-        // a retry state instead of silently continuing into an auth error.
-        if (!(await ensureSellerSession())) {
-            var v0 = viewEl();
-            if (v0) v0.innerHTML = sellerAuthErrorHtml();
-            return;
-        }
         if (!location.hash) {
-            sellerBooted = true;
-            location.hash = '#/home';
-        } else {
-            sellerBooted = true;
-            await sellerRender();
+            history.replaceState(null, '', '#/home');
         }
+        sellerBooted = true;
+        await sellerRender();
     } catch (bootErr) {
         var view = viewEl();
         if (view) view.innerHTML = '<div class="view-enter">' +

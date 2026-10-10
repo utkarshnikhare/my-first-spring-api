@@ -2,7 +2,7 @@
 
 **A society-level marketplace connecting buyers with home-kitchen and homemade sellers. The demo includes Buyer, Seller and Admin apps, recurring offerings, date-specific occurrence overrides, seller-recorded delivery, and an operations console.**
 
-> **Project status:** Recurring Offerings V2 and Seller Dashboard V3 are implemented and covered by the automated suite. SocioMart remains a demo, not a production-ready service. In particular, authentication is demo-only, payments are simulated/manual, and the deployed demo uses ephemeral in-memory H2.
+> **Project status:** Recurring Offerings V2 and Seller Dashboard V3 are implemented and covered by automated tests. OTP-free, password-based Buyer/Seller registration is enabled only in non-production demo profiles; new Sellers remain pending until Admin approval. Admin and Super Admin access still requires separately configured credentials and server-side role authorization. This demo authentication is not production-ready; payments are simulated/manual, and Render uses ephemeral in-memory H2.
 
 ## 🔗 Quick Links
 
@@ -133,9 +133,11 @@ requires `SUPER_ADMIN`. Hiding a menu item is never the protection.
   own catalogue and its own delivery state
 - **Service coverage** - choose which societies the storefront serves. This is what makes it discoverable;
   a new society is **never** automatically added to existing sellers
-- **Kitchen/store setup** - authenticated sellers edit the storefront profile, choose Area/Society coverage,
-  and manage its public availability. Seller accounts are provisioned and moderated; this demo does not
-  provide a public self-service seller sign-up flow
+- **Seller onboarding** - self-service registration captures seller, storefront, contact, location, service
+  coverage and public-URL details. Demo sign-in uses a password rather than OTP; every new Seller remains
+  pending until Admin approval and cannot use approved Seller operations beforehand.
+- **Kitchen/store setup** - approved sellers edit the storefront profile, choose Area/Society coverage, and
+  manage its public availability
 - **Shareable Kitchen page** - the seller's View/Preview action opens the buyer-facing
   `/#/kitchen/{id}` page, which can be shared directly
 - **Offerings / items** - create, edit, price, quantity limits, sold-out, pause/resume, and republish from
@@ -461,9 +463,9 @@ flowchart TB
 | **Services** | 22 services. Own business rules, transactions and authorisation checks |
 | **Repositories** | Spring Data JPA repositories over the entity model |
 | **Persistence** | In-memory H2 for default/demo; file H2 for dev/prod; opt-in PostgreSQL/Flyway preparation |
-| **Security** | Session authentication, role rules, CSRF via a JS-readable cookie |
+| **Security** | Session authentication and server-side role rules; demo-only Buyer/Seller password auth; separate Admin/Super Admin credentials |
 | **Error handling** | A single `GlobalExceptionHandler` produces one consistent error shape |
-| **Tests** | JUnit 5 + Spring Security Test; latest local verification: 589 tests, 1 skipped |
+| **Tests** | JUnit 5 + Spring Security Test; latest local run: 592 tests, 1 skipped; Playwright: 4 desktop/mobile E2E tests passed |
 | **CI** | GitHub Actions running `mvn -B clean verify` |
 | **Deployment** | Render, Docker runtime, `demo` profile |
 
@@ -498,8 +500,10 @@ Responses travel back the same way and always use the same error shape.
 
 - Session-based authentication; the acting user is resolved from the session, **never** from a request body
 - `/api/admin/**` requires `ADMIN` or `SUPER_ADMIN`; `/api/superadmin/**` requires `SUPER_ADMIN`
-- A `PasswordEncoder` (BCrypt) bean is configured, but **no password is stored or verified** - see
-  [Current Demo Limitations](#%EF%B8%8F-current-demo-limitations)
+- Demo/dev Buyer and Seller passwords are stored as password hashes; OTP, password recovery and production
+  identity checks are not implemented. Admin and Super Admin use separately configured passwords.
+- Direct registration/login is guarded by the demo-auth property and disabled under `prod`; legacy
+  passwordless demo-login endpoints are denied.
 - CSRF protection using a JS-readable cookie echoed back in `X-XSRF-TOKEN` - **disabled in the demo profile only**
 - Ownership is re-derived server-side for every sensitive action (orders, delivery, admin operations), so a
   client-supplied ID can never widen access
@@ -724,13 +728,15 @@ claim otherwise:
 
 **Identity and access**
 
-- **No real authentication.** Sign-in is a **demo mobile-number login**. There is **no OTP delivery**, no
-  password, no email verification and no account recovery. A `PasswordEncoder` (BCrypt) bean is configured but
-  **no password is ever stored or verified** - any mobile number resolves to a session.
-- There is no public self-service seller account registration flow. Demo seller accounts are provisioned and
-  moderated; authenticated sellers create/manage their Kitchen or Homemade storefront in the Seller app.
-- **Demo endpoints are profile-gated.** `/api/auth/demo-login`, `/api/seller-app/demo-login` and the H2 console
-  are only reachable when the app runs with a non-`prod` profile.
+- Authentication is for demonstration only. In the non-production demo flow, Buyers and Sellers register and
+  sign in with a mobile number and password; OTP/SMS, email verification, password recovery, MFA and production
+  account protections are not provided. Do not use real customer credentials.
+- New Seller registrations create a pending account and storefront; an Admin must approve the Seller before
+  approved Seller operations are available.
+- Admin and Super Admin accounts are not self-registered. Sign-in requires the role-specific configured
+  credentials; a mobile number alone never grants an administrative role. Keep those credentials private.
+- The direct-auth feature is disabled under `prod`; legacy passwordless demo-login endpoints are denied. The
+  H2 console is intended only for local/demo development and must not be exposed publicly.
 - **CSRF is disabled outside `prod` only.** Under `demo`, `dev` and the default profile
   (`!prod & (demo | dev | default)`) CSRF protection is off.
 - **Session cookie is `SameSite=lax`** (not `strict`) outside `prod`.
@@ -814,18 +820,28 @@ cd my-first-spring-api
 .\mvnw.cmd clean verify
 ```
 
-**Latest local result** (`.\mvnw.cmd -B clean verify`, 2026-10-09)
+**Latest local result** (`.\mvnw.cmd -B test`, 2026-10-10; current unmerged feature branch)
 
 ```text
-Tests run: 589, Failures: 0, Errors: 0, Skipped: 1
+Tests run: 592, Failures: 0, Errors: 0, Skipped: 1
 BUILD SUCCESS
 ```
 
-The skipped test is the native PostgreSQL Testcontainers case when Docker is unavailable locally; the H2
-PostgreSQL-mode migration/schema validation runs locally. GitHub Actions' Docker-enabled runner provides the
-native PostgreSQL gate. The [release status report](./docs/FINAL-GITHUB-RENDER-STATUS.md) tracks the latest verified
-`main` workflow, merged source/documentation status, and current Render runtime commit; do not merge a pending
-or failing check.
+The skipped test is the native PostgreSQL Testcontainers case; Docker is unavailable locally (the `docker`
+executable is not installed). H2 PostgreSQL-mode migration/schema validation ran locally. The current
+feature-branch Playwright run passed all 4 desktop/mobile tests:
+
+```bash
+cd my-first-spring-api/e2e
+npm ci
+npx playwright install chromium
+npm test
+```
+
+Playwright starts the application with the demo profile and a local in-memory H2 database. Its deterministic
+Admin test credentials are generated locally and written only to an ignored temporary file. GitHub CI and
+Render do not contain this unmerged feature branch yet; see the [release status report](./docs/FINAL-GITHUB-RENDER-STATUS.md)
+for the merged `main` commit and deployed runtime state.
 
 **Coverage**
 
@@ -854,7 +870,7 @@ cd my-first-spring-api
 
 ```bash
 cd my-first-spring-api
-.\mvnw.cmd spring-boot:run
+.\mvnw.cmd -Dspring-boot.run.profiles=demo spring-boot:run
 ```
 
 **Run the tests**
@@ -877,18 +893,19 @@ The database is **in-memory H2**, seeded on every boot, so there is nothing to i
 
 > On Windows use `.\mvnw.cmd`; on macOS/Linux use `./mvnw`.
 
-**Demo access** - sign-in is mobile-number based and is not a real identity system. This README does not
-publish demo account identifiers; use only locally authorized demo/test fixtures. No real customer account
-or payment credentials should be used.
+**Demo access** - locally, activate the `demo` profile to use OTP-free Buyer/Seller registration with a
+password. Configure Admin and Super Admin passwords through the corresponding `SOCIOMART_DEMO_*_PASSWORD`
+environment variables; never publish or reuse real credentials. Seller accounts remain pending until Admin
+approval. The demo is not a real identity or payment system.
 
 ## 🚦 Development Status and Roadmap
 
-**Implemented in the current codebase:** Buyer, Seller and Admin apps; society-scoped discovery; kitchen and
-homemade storefront management; order/inventory lifecycle; seller-recorded delivery; recurring schedules,
-per-occurrence overrides and buyer pre-order selection; Seller Dashboard V3; and opt-in PostgreSQL/Flyway
-migration preparation.
+**Implemented in the current codebase:** Buyer, Seller and Admin apps; OTP-free demo Buyer/Seller registration
+and password login; pending Seller approval; society-scoped discovery; kitchen and homemade storefront
+management; order/inventory lifecycle; seller-recorded delivery; recurring schedules, per-occurrence overrides
+and buyer pre-order selection; Seller Dashboard V3; and opt-in PostgreSQL/Flyway migration preparation.
 
-**Not production-ready:** persistent storage/backups, safe export of the live H2 dataset, real authentication,
+**Not production-ready:** persistent storage/backups, safe export of the live H2 dataset, production-grade authentication,
 real payment processing, production-safe Swagger exposure, external image storage/retention, operational
 monitoring, and load/performance certification.
 

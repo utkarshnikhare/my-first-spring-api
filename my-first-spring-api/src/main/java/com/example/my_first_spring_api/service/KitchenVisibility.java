@@ -33,7 +33,8 @@ public final class KitchenVisibility {
     }
 
     public static boolean isHomemadeStore(Kitchen kitchen) {
-        return kitchen != null && kitchen.getSellerType() == SellerType.HOMEMADE_PRODUCTS;
+        return kitchen != null && (kitchen.getSellerType() == SellerType.HOMEMADE_PRODUCTS
+                || kitchen.getSellerType() == SellerType.BOTH);
     }
 
     /**

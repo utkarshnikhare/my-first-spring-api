@@ -616,6 +616,7 @@ h3 { font-size: 1.05rem; font-weight: 700; font-family: 'Montserrat', 'Segoe UI'
     background: var(--surface); border-radius: 20px; padding: 22px;
     width: min(420px, 100%); box-shadow: var(--shadow-lg); animation: viewIn .2s ease;
     text-align: center;
+    max-height: calc(100vh - 48px); overflow-y: auto; -webkit-overflow-scrolling: touch;
 }
 .modal .modal-icon { font-size: 2rem; margin-bottom: 8px; }
 .modal h3 { margin-bottom: 6px; }

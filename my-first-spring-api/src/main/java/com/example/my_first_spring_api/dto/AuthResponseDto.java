@@ -27,6 +27,8 @@ public class AuthResponseDto {
      * source-compatible. Absent for buyers.</p>
      */
     private String sellerStatusReason;
+    private String kitchenSlug;
+    private String kitchenUrl;
 
     public AuthResponseDto() {}
 
@@ -88,4 +90,8 @@ public class AuthResponseDto {
     public void setSellerApprovalStatus(SellerApprovalStatus sellerApprovalStatus) { this.sellerApprovalStatus = sellerApprovalStatus; }
     public String getSellerStatusReason() { return sellerStatusReason; }
     public void setSellerStatusReason(String sellerStatusReason) { this.sellerStatusReason = sellerStatusReason; }
+    public String getKitchenSlug() { return kitchenSlug; }
+    public void setKitchenSlug(String kitchenSlug) { this.kitchenSlug = kitchenSlug; }
+    public String getKitchenUrl() { return kitchenUrl; }
+    public void setKitchenUrl(String kitchenUrl) { this.kitchenUrl = kitchenUrl; }
 }
