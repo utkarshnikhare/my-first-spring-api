@@ -1,5 +1,5 @@
 /**
- * SocioMart Seller App v1.0 - 5-tab SPA
+ * SocioMart Seller App v1.0 - 6-tab SPA
  */
 var S = { user: null, kitchen: null, kitchenUrl: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFilterDelivery: '', offeringProductId: '', deliverySaving: {}, deliveryBlockRequestId: 0, bulkDelivering: false, offeringFor: 'today', quickPostRequestId: null, editOffering: null, dashFilter: 'ALL', offeringsTab: 'history', recurringSchedules: [], recurringDetail: null, offeringMode: 'today', recurringDuration: 'thisweek', dashTab: 'live', offeringSubmitting: false, editOccurrenceId: null, authMode: 'login', authOptions: null, authError: null, authServiceAreaId: '', authSlugTouched: false };
 var sellerRoutes = {
@@ -9,6 +9,7 @@ var sellerRoutes = {
     // "My Offerings". '#/history' stays registered as an alias so existing
     // bookmarks, deep links and the dashboard's history link keep working.
     '#/my-offerings': sellerHistoryView, '#/history': sellerHistoryView,
+    '#/recurring': sellerRecurringView,
     '#/kitchen': sellerKitchenView, '#/orders': sellerOrdersView,
     '#/order-detail': sellerOrderDetailView, '#/earnings': sellerEarningsView,
     '#/enquiries': sellerEnquiriesView
@@ -253,7 +254,7 @@ async function sellerRender() {
 }
 function sellerUpdateNav(hash) {
     $all('.nav-item').forEach(function (el) { el.classList.remove('active'); });
-    var key = hash === '#/home' ? 'home' : hash === '#/kitchen' ? 'kitchen' : (hash === '#/orders' || hash.startsWith('#/order-detail/')) ? 'orders' : hash === '#/enquiries' ? 'enquiries' : (hash === '#/history' || hash === '#/my-offerings') ? 'history' : hash === '#/earnings' ? 'earnings' : null;
+    var key = hash === '#/home' ? 'home' : hash === '#/kitchen' ? 'kitchen' : (hash === '#/orders' || hash.startsWith('#/order-detail/')) ? 'orders' : hash === '#/enquiries' ? 'enquiries' : (hash === '#/history' || hash === '#/my-offerings') ? 'history' : hash === '#/earnings' ? 'earnings' : hash === '#/recurring' ? 'recurring' : null;
     var el = document.querySelector('[data-nav="' + (key || '') + '"]');
     if (el) el.classList.add('active');
 }
@@ -830,6 +831,12 @@ async function sellerHistoryView() {
     } catch (e) { h += emptyHtml('⚠️', 'Could not load history', e.message); }
     h += '</div>';
     return h;
+}
+
+/** Bottom-nav "Recurring" entry — opens My Offerings on its Recurring tab. */
+async function sellerRecurringView() {
+    S.offeringsTab = 'recurring';
+    return await sellerHistoryView();
 }
 
 /**
@@ -1485,7 +1492,7 @@ async function sellerKitchenView() {
     h += '<button class="btn btn-secondary btn-sm btn-block btn-mt-sm" type="button" data-action="preview-kitchen">Preview Kitchen Page</button>';
     h += '<form class="seller-form" id="kitchenForm">';
     h += '<div class="kitchen-avatar-upload"><div class="kitchen-avatar" data-action="upload-avatar" role="button" tabindex="0" aria-label="Upload kitchen photo">' + (kitchen && sellerImg(kitchen.imageUrl) ? '<img src="' + esc(sellerImg(kitchen.imageUrl)) + '" class="avatar-img" alt="Kitchen photo" onerror="imgFallback(this)">' : '📷') + '</div></div>';
-    h += '<div class="form-group"><label class="form-label">Kitchen Name</label><input class="form-input" name="displayName" value="' + esc(kitchen && kitchen.displayName ? kitchen.displayName : 'Aarti Kitchen') + '"></div>';
+    h += '<div class="form-group"><label class="form-label">Kitchen Name</label><input class="form-input" name="displayName" value="' + esc(kitchen && kitchen.displayName ? kitchen.displayName : '') + '"></div>';
     h += '<div class="form-group"><label class="form-label">Who can order from me? (Service Areas)</label>';
     h += '<div class="muted small" style="margin-bottom:6px">Select the area you deliver to, then tick the societies inside it. Buyers outside your selected societies cannot discover or order from your kitchen.</div>';
     if (coverageError) {
@@ -1501,8 +1508,8 @@ async function sellerKitchenView() {
     h += '<div class="form-group"><label class="form-label">Speciality</label><input class="form-input" name="shortDescription" value="' + esc(kitchen && kitchen.shortDescription ? kitchen.shortDescription : 'Homemade Maharashtrian Food') + '"></div>';
     h += '<div class="form-group"><label class="form-label">Full Description</label><textarea class="form-textarea" name="description">' + esc(kitchen && kitchen.description ? kitchen.description : 'Fresh homemade breakfast and traditional snacks') + '</textarea></div>';
     h += '<div class="form-group"><label class="form-label">Gallery Images (URLs, comma-separated)</label><input class="form-input" name="galleryImages" value="' + esc(kitchen && kitchen.galleryImages ? kitchen.galleryImages : '') + '"></div>';
-    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">WhatsApp</label><input class="form-input" name="whatsappLink" value="' + esc(kitchen && kitchen.whatsappLink ? kitchen.whatsappLink : '+91 9100000001') + '"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" name="instagramLink" value="' + esc(kitchen && kitchen.instagramLink ? kitchen.instagramLink : '@aartiskitchen') + '"></div></div>';
-    h += '<div class="form-group"><label class="form-label">UPI ID</label><input class="form-input" name="upiId" value="' + esc(kitchen && kitchen.upiId ? kitchen.upiId : 'aarti@okhdfc') + '"></div>';
+    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">WhatsApp</label><input class="form-input" name="whatsappLink" value="' + esc(kitchen && kitchen.whatsappLink ? kitchen.whatsappLink : '') + '"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" name="instagramLink" value="' + esc(kitchen && kitchen.instagramLink ? kitchen.instagramLink : '') + '"></div></div>';
+    h += '<div class="form-group"><label class="form-label">UPI ID</label><input class="form-input" name="upiId" value="' + esc(kitchen && kitchen.upiId ? kitchen.upiId : '') + '"></div>';
     h += '<div class="form-group"><label class="form-label">Store Type</label><div class="radio-group"><label class="radio-option' + (kitchen && kitchen.sellerType === 'HOMEMADE_PRODUCTS' ? '' : ' selected') + '" data-action="set-seller-type" data-val="KITCHEN">🍽️ Kitchen / Food Seller</label><label class="radio-option' + (kitchen && kitchen.sellerType === 'HOMEMADE_PRODUCTS' ? ' selected' : '') + '" data-action="set-seller-type" data-val="HOMEMADE_PRODUCTS">🍰 Homemade Products</label></div><input type="hidden" name="sellerType" id="sellerTypeInput" value="' + esc(kitchen && kitchen.sellerType ? kitchen.sellerType : 'KITCHEN') + '"></div>';
     h += '<div class="info-box">Your menu loads automatically from live offerings.</div>';
     h += '<button class="btn btn-primary btn-block" type="submit">SAVE CHANGES</button></form></div>';
