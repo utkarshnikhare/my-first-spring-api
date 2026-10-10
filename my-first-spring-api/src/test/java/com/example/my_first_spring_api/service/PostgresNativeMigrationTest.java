@@ -43,7 +43,7 @@ class PostgresNativeMigrationTest {
 
     @Test
     void flywayMigrationCreatesSchemaValidatedByHibernateOnPostgres() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("1");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("2");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
@@ -57,5 +57,13 @@ class PostgresNativeMigrationTest {
                         + "WHERE constraint_schema = 'public' AND constraint_type = 'FOREIGN KEY'",
                 Integer.class);
         assertThat(foreignKeyCount).isGreaterThanOrEqualTo(20);
+
+        Integer onboardingColumnCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'public' "
+                        + "AND ((table_name = 'users' AND column_name IN "
+                        + "('password_hash', 'seller_whatsapp_number', 'seller_alternate_contact', 'seller_category')) "
+                        + "OR (table_name = 'kitchens' AND column_name = 'speciality'))",
+                Integer.class);
+        assertThat(onboardingColumnCount).isEqualTo(5);
     }
 }
