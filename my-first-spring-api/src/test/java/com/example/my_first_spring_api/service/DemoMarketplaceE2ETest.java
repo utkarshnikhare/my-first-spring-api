@@ -29,6 +29,12 @@ import org.springframework.mock.web.MockHttpSession;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -279,6 +285,90 @@ class DemoMarketplaceE2ETest {
                 .as("5 - 2 = 3").isEqualTo(3);
         assertThat(placed.getTotalAmount()).as("3*120 + 2*120 = 600")
                 .isEqualByComparingTo(new BigDecimal("600.00"));
+    }
+
+    @Test
+    @DisplayName("Checkout persists the order and atomically moves quantity from remaining to booked")
+    void checkoutPersistsOrderAndConsumesInventory() {
+        Area area = locationService.createArea("Checkout Area " + nextMobile());
+        Society society = locationService.createSociety(area.getId(), "Checkout Society " + nextMobile());
+        User seller = approvedSeller("checkout");
+        KitchenDto kitchen = newKitchen(seller, area, society);
+        ProductDto product = newProduct(seller, kitchen.getId(), "Checkout Offering", 3);
+        User buyer = completeBuyer("checkout", society);
+        MockHttpSession session = new MockHttpSession();
+        buyerSession(session, buyer);
+
+        OrderDto placed = order(session, kitchen.getId(), List.of(item(product.getId(), 2)));
+
+        assertThat(placed.getId()).isNotNull();
+        assertThat(placed.getOrderStatus().toString()).isEqualTo("ORDERED");
+        assertThat(orderRepository.findByIdWithItems(placed.getId()).orElseThrow().getItems())
+                .singleElement()
+                .satisfies(saved -> assertThat(saved.getQuantity()).isEqualTo(2));
+        Product savedProduct = productRepository.findById(product.getId()).orElseThrow();
+        assertThat(savedProduct.getRemainingQuantity()).isEqualTo(1);
+        assertThat(savedProduct.getBookedQuantity()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("Concurrent checkout requests cannot sell the same final unit twice")
+    void concurrentBuyersCannotOversellFinalUnit() throws Exception {
+        Area area = locationService.createArea("Concurrent Area " + nextMobile());
+        Society society = locationService.createSociety(area.getId(), "Concurrent Society " + nextMobile());
+        User seller = approvedSeller("concurrent");
+        KitchenDto kitchen = newKitchen(seller, area, society);
+        ProductDto product = newProduct(seller, kitchen.getId(), "Final Unit Offering", 1);
+        User firstBuyer = completeBuyer("concurrent-first", society);
+        User secondBuyer = completeBuyer("concurrent-second", society);
+        MockHttpSession firstSession = new MockHttpSession();
+        MockHttpSession secondSession = new MockHttpSession();
+        buyerSession(firstSession, firstBuyer);
+        buyerSession(secondSession, secondBuyer);
+
+        orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(item(product.getId(), 1)), firstSession);
+        orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(item(product.getId(), 1)), secondSession);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<OrderDto>> attempts = List.of(
+                executor.submit(() -> placeAfterBarrier(firstSession, ready, start)),
+                executor.submit(() -> placeAfterBarrier(secondSession, ready, start)));
+        try {
+            assertThat(ready.await(10, TimeUnit.SECONDS)).as("both buyers are ready to check out").isTrue();
+            start.countDown();
+            int placed = 0;
+            int rejected = 0;
+            for (Future<OrderDto> attempt : attempts) {
+                try {
+                    assertThat(attempt.get(20, TimeUnit.SECONDS).getId()).isNotNull();
+                    placed++;
+                } catch (ExecutionException failure) {
+                    assertThat(failure.getCause()).isInstanceOf(IllegalArgumentException.class);
+                    rejected++;
+                }
+            }
+
+            assertThat(placed).isEqualTo(1);
+            assertThat(rejected).isEqualTo(1);
+            Product savedProduct = productRepository.findById(product.getId()).orElseThrow();
+            assertThat(savedProduct.getRemainingQuantity()).isZero();
+            assertThat(savedProduct.getRemainingQuantity()).isNotNegative();
+            assertThat(savedProduct.getBookedQuantity()).isEqualTo(1);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    private OrderDto placeAfterBarrier(MockHttpSession session, CountDownLatch ready, CountDownLatch start)
+            throws InterruptedException {
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Timed out waiting for concurrent checkout start.");
+        }
+        return orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
     }
 
     @Test

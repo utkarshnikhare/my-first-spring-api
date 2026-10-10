@@ -14,7 +14,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
-    healthCheckPath: /api/kitchens
+    healthCheckPath: /api/health
     # Deployment gate: Render must NOT react to pushes to main on its own.
     # GitHub Actions (workflow "CI Build Verification", job "build") is the
     # authoritative gate - it runs the full Maven test suite via
