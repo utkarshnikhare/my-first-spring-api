@@ -8,7 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.web.context.SecurityContextRepository;
-import com.example.my_first_spring_api.service.DemoAuthService;
+import com.example.my_first_spring_api.service.AuthService;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -16,7 +16,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * P0 DEMO BLOCKER regression (auth payload).
+ * P0 BLOCKER regression (auth payload).
  *
  * /api/auth/me and credential-based /api/auth/login build the client-side identity state
  * (state.user). That payload MUST carry the buyer's persisted society/building.
@@ -36,7 +36,7 @@ class AuthControllerProfileStateTest {
     void setUp() {
         buyerService = mock(BuyerService.class);
         securityContextRepository = mock(SecurityContextRepository.class);
-        controller = new AuthController(buyerService, mock(DemoAuthService.class), securityContextRepository);
+        controller = new AuthController(buyerService, mock(AuthService.class), securityContextRepository);
         request = new MockHttpServletRequest();
     }
 

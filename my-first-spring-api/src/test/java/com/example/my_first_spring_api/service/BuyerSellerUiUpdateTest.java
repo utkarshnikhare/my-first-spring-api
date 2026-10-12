@@ -1,6 +1,7 @@
 package com.example.my_first_spring_api.service;
 
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -37,11 +38,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.jpa.open-in-view=false"
 })
-@ActiveProfiles("demo")
+@ActiveProfiles("test")
 class BuyerSellerUiUpdateTest {
 
     @Autowired BuyerService buyerService;
-    @Autowired com.example.my_first_spring_api.DemoDataSeeder seeder;
     @Autowired com.example.my_first_spring_api.repository.UserRepository users;
 
     private static String buyerJs;
@@ -65,9 +65,16 @@ class BuyerSellerUiUpdateTest {
         return new String(Files.readAllBytes(p), StandardCharsets.UTF_8);
     }
 
-    /** A session signed in as the seeded demo buyer. */
+    @BeforeEach
+    void createTestBuyer() {
+        com.example.my_first_spring_api.model.User buyer = new com.example.my_first_spring_api.model.User(
+                "Test Buyer", "9000000010", null, com.example.my_first_spring_api.model.UserRole.BUYER);
+        buyer.setPasswordHash("dummy");
+        users.saveAndFlush(buyer);
+    }
+
+    /** A session signed in as a test buyer. */
     private MockHttpSession buyerSession() {
-        seeder.seedAll();
         com.example.my_first_spring_api.model.User buyer =
                 users.findByRole(com.example.my_first_spring_api.model.UserRole.BUYER).get(0);
         MockHttpSession s = new MockHttpSession();
