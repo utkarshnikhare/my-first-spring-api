@@ -6,7 +6,7 @@ import com.example.my_first_spring_api.dto.CredentialLoginRequestDto;
 import com.example.my_first_spring_api.dto.SellerRegistrationRequestDto;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.service.BuyerService;
-import com.example.my_first_spring_api.service.DemoAuthService;
+import com.example.my_first_spring_api.service.AuthService;
 import com.example.my_first_spring_api.service.OrderService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -31,36 +31,36 @@ import java.util.Map;
 @RequestMapping("/api/auth")
 public class AuthController {
     private final BuyerService buyerService;
-    private final DemoAuthService demoAuthService;
+    private final AuthService authService;
     private final SecurityContextRepository securityContextRepository;
 
     @Autowired
-    public AuthController(BuyerService buyerService, DemoAuthService demoAuthService,
+    public AuthController(BuyerService buyerService, AuthService authService,
                           SecurityContextRepository securityContextRepository) {
         this.buyerService = buyerService;
-        this.demoAuthService = demoAuthService;
+        this.authService = authService;
         this.securityContextRepository = securityContextRepository;
     }
 
     @GetMapping("/config")
     public Map<String, Boolean> config() {
         return Map.of(
-                "directAuthEnabled", demoAuthService.isDirectAuthEnabled(),
-                "demoRegistrationEnabled", demoAuthService.isDirectAuthEnabled(),
-                "adminLoginConfigured", demoAuthService.isAdminPasswordConfigured(),
-                "superAdminLoginConfigured", demoAuthService.isSuperAdminPasswordConfigured());
+                "directAuthEnabled", authService.isDirectAuthEnabled(),
+                "demoRegistrationEnabled", authService.isDirectAuthEnabled(),
+                "adminLoginConfigured", authService.isAdminPasswordConfigured(),
+                "superAdminLoginConfigured", authService.isSuperAdminPasswordConfigured());
     }
 
     @GetMapping("/registration-options")
     public ResponseEntity<?> registrationOptions() {
-        return ResponseEntity.ok(demoAuthService.registrationOptions());
+        return ResponseEntity.ok(authService.registrationOptions());
     }
 
     @PostMapping("/register/buyer")
     public ResponseEntity<AuthResponseDto> registerBuyer(@Valid @RequestBody BuyerRegistrationRequestDto request,
                                                            HttpServletRequest servletRequest,
                                                            HttpServletResponse response) {
-        User buyer = demoAuthService.registerBuyer(request);
+        User buyer = authService.registerBuyer(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(authenticate(buyer, "Registration successful",
                 servletRequest, response));
     }
@@ -69,7 +69,7 @@ public class AuthController {
     public ResponseEntity<AuthResponseDto> registerSeller(@Valid @RequestBody SellerRegistrationRequestDto request,
                                                             HttpServletRequest servletRequest,
                                                             HttpServletResponse response) {
-        DemoAuthService.SellerRegistration registration = demoAuthService.registerSeller(request);
+        AuthService.SellerRegistration registration = authService.registerSeller(request);
         AuthResponseDto result = authenticate(registration.user(), "Registration submitted for Admin approval",
                 servletRequest, response);
         result.setKitchenSlug(registration.kitchenSlug());
@@ -81,7 +81,7 @@ public class AuthController {
     public ResponseEntity<AuthResponseDto> login(@Valid @RequestBody CredentialLoginRequestDto request,
                                                   HttpServletRequest servletRequest,
                                                   HttpServletResponse response) {
-        User user = demoAuthService.login(request);
+        User user = authService.login(request);
         return ResponseEntity.ok(authenticate(user, "Logged in successfully", servletRequest, response));
     }
 

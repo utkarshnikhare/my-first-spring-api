@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
                 "spring.jpa.hibernate.ddl-auto=validate",
                 "spring.jpa.defer-datasource-initialization=false"
         })
-@ActiveProfiles("postgres-demo")
+@ActiveProfiles("test")
 class PostgresSchemaMigrationTest {
 
     @Autowired
@@ -43,7 +43,6 @@ class PostgresSchemaMigrationTest {
         // V3 adds the public-URL slug column, its unique index and the
         // kitchen_slug_aliases redirect table (+ its FK to kitchens).
         assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
-        assertThat(SecurityConfig.isDemoEnvironment(environment)).isTrue();
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "

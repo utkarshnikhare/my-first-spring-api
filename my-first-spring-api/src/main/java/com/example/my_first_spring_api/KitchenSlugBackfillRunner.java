@@ -8,21 +8,20 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
- * Backfills the public-URL slug for every kitchen, on every startup, so the
- * column is never null and never duplicated regardless of how the schema was
- * created (Hibernate {@code ddl-auto} on H2, where Flyway is off, or a fresh
- * database). Idempotent: kitchens that already carry a slug are left untouched.
+ * Gives a public-URL slug to any kitchen that has none (null or blank). It is
+ * a safety net for rows written outside the application (the Flyway V3
+ * migration backfills and enforces NOT NULL on PostgreSQL, so there it finds
+ * nothing) and for local H2 databases.
  *
- * <p>The Flyway migration {@code V3__kitchen_public_url_slug.sql} does the same
- * job for the Postgres profile; this runner is the equivalent guarantee for the
- * H2-backed demo/dev/default profiles and for any legacy row Flyway did not
- * see.</p>
+ * <p>It queries only the rows missing a slug, so a normal cold start costs one
+ * small query and never loads the kitchen table. Rows that already
+ * carry a slug are never touched, and duplicates cannot exist because the
+ * column has a unique constraint. A candidate is always checked against every
+ * stored slug and alias, and a row that still collides is skipped and logged
+ * instead of failing the start-up.</p>
  */
 @Configuration
 public class KitchenSlugBackfillRunner {
@@ -31,38 +30,23 @@ public class KitchenSlugBackfillRunner {
 
     @Bean
     ApplicationRunner backfillKitchenSlugs(KitchenRepository kitchens, SlugService slugService) {
-        return args -> {
-            List<Kitchen> all = kitchens.findAll();
-            if (all.isEmpty()) return;
-            Set<String> used = new HashSet<>();
-            int changed = 0;
-            for (Kitchen k : all) {
-                String current = k.getSlug();
-                if (current != null && !current.isBlank()) {
-                    used.add(current);
-                }
-            }
-            for (Kitchen k : all) {
-                String current = k.getSlug();
-                if (current != null && !current.isBlank() && used.contains(current)) {
-                    continue; // already unique and present
-                }
-                String base = SlugService.slugify(
-                        (current == null || current.isBlank()) ? k.getName() : current);
-                if (base.isBlank()) base = "kitchen";
-                String candidate = base;
-                int suffix = 2;
-                while (used.contains(candidate)) {
-                    candidate = base + "-" + suffix++;
-                }
-                k.setSlug(candidate);
-                used.add(candidate);
-                kitchens.save(k);
+        return args -> backfill(kitchens, slugService);
+    }
+
+    static int backfill(KitchenRepository kitchens, SlugService slugService) {
+        int changed = 0;
+        for (Kitchen kitchen : kitchens.findWithMissingSlug()) {
+            try {
+                kitchen.setSlug(slugService.suggestUnique(kitchen.getName()));
+                kitchens.save(kitchen);
                 changed++;
+            } catch (DataIntegrityViolationException ex) {
+                log.warn("Could not backfill a slug for kitchen id {}; skipped", kitchen.getId());
             }
-            if (changed > 0) {
-                log.info("Backfilled public-URL slugs for {} kitchen(s)", changed);
-            }
-        };
+        }
+        if (changed > 0) {
+            log.info("Backfilled public-URL slugs for {} kitchen(s)", changed);
+        }
+        return changed;
     }
 }
