@@ -64,6 +64,10 @@ public class AdminService {
         this.environment = environment;
     }
 
+    /** Public-URL slug authority for the Admin slug editor. Field-injected so the many focused tests that build AdminService by hand keep working. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private SlugService slugService;
+
     // ==================== Dashboard ====================
 
     @Transactional(readOnly = true)
@@ -529,6 +533,7 @@ public class AdminService {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("id", k.getId());
                 m.put("name", k.getName());
+                m.put("slug", k.publicSlug());
                 m.put("displayName", k.getDisplayName());
                 m.put("sellerId", k.getSeller() != null ? k.getSeller().getId() : null);
                 m.put("sellerName", k.getSeller() != null ? k.getSeller().getName() : null);
@@ -1945,10 +1950,59 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("kitchenId", k.getId());
         m.put("name", k.getDisplayName());
+        m.put("slug", k.publicSlug());
         m.put("sellerId", k.getSeller() != null ? k.getSeller().getId() : null);
         m.put("paused", k.isStorefrontPaused());
         m.put("availableToday", k.getAvailableToday());
         m.put("removed", k.getSeller() != null && k.getSeller().isStorefrontRemoved());
+        return m;
+    }
+
+    /**
+     * Admin-only public-URL (slug) change. Validated and de-duplicated by
+     * {@link SlugService}; the previous slug is preserved as a redirecting alias
+     * so already-shared {@code /kitchen/{old}} links keep working. The display
+     * name is untouched. Audited with before/after.
+     */
+    @Transactional
+    public Map<String, Object> changeKitchenSlug(Long kitchenId, String newSlug, User actingAdmin) {
+        if (slugService == null) {
+            throw new IllegalStateException("Slug management is unavailable.");
+        }
+        Kitchen k = requireKitchen(kitchenId);
+        String before = k.publicSlug();
+        String after = slugService.changeSlug(k, newSlug);
+        auditService.record(AdminAuditService.KITCHEN_SLUG_CHANGED, actingAdmin, "KITCHEN",
+                k.getId(), k.getDisplayName(), before, after, null);
+        Map<String, Object> m = storefrontState(k);
+        m.put("publicUrl", publicBaseUrl() + "/kitchen/" + after);
+        return m;
+    }
+
+    /**
+     * The public base URL for building shareable links. Comes from the
+     * {@code PUBLIC_BASE_URL} environment variable (no hard-coded domain); when
+     * unset it falls back to a relative origin so links stay same-origin.
+     */
+    public String publicBaseUrl() {
+        String configured = environment != null ? environment.getProperty("PUBLIC_BASE_URL") : null;
+        if (configured == null || configured.isBlank()) {
+            configured = environment != null ? environment.getProperty("sociomart.public-base-url") : null;
+        }
+        if (configured != null && !configured.isBlank()) {
+            return configured.trim().replaceAll("/+$", "");
+        }
+        return ""; // same-origin: the UI prefixes these with its own origin
+    }
+
+    /** The marketplace / promotion links an Admin can copy (Admin -> Kitchens). */
+    @Transactional(readOnly = true)
+    public Map<String, Object> marketplaceLinks() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        String base = publicBaseUrl();
+        m.put("baseUrl", base);
+        m.put("marketplacePath", "/kitchens");
+        m.put("marketplaceUrl", base + "/kitchens");
         return m;
     }
 

@@ -43,14 +43,16 @@ class PostgresNativeMigrationTest {
 
     @Test
     void flywayMigrationCreatesSchemaValidatedByHibernateOnPostgres() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("2");
+        // V3 adds the public-URL slug column, its unique index and the
+        // kitchen_slug_aliases redirect table (+ its FK to kitchens).
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
                         + "WHERE table_schema = 'public' AND table_type = 'BASE TABLE' "
                         + "AND table_name <> 'flyway_schema_history'",
                 Integer.class);
-        assertThat(tableCount).isEqualTo(23);
+        assertThat(tableCount).isEqualTo(24);
 
         Integer foreignKeyCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.table_constraints "

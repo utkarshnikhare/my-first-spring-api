@@ -78,6 +78,7 @@ public class SecurityConfig {
                                 "/seller.html",
                                 "/admin.html",
                                 "/kitchens",
+                                "/kitchen/**",
                                 "/css/**",
                                 "/js/**",
                                 "/favicon.ico"

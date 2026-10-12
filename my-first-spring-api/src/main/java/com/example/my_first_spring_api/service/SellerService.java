@@ -44,6 +44,9 @@ public class SellerService {
     private final SocietyDirectory societyDirectory;
     private final LocationService locationService;
     private final RecurringScheduleService recurringScheduleService;
+    /** Public-URL slug authority. Field-injected so manually-constructed test instances keep working. */
+    @Autowired
+    private SlugService slugService;
 
     @Autowired
     public SellerService(KitchenRepository kitchenRepository,
@@ -77,16 +80,40 @@ public class SellerService {
     }
 
     public KitchenDto createKitchen(KitchenCreateDto dto, User seller) {
-        String slug = dto.getName().trim().toLowerCase(java.util.Locale.ROOT)
-                .replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", "");
-        if (slug.isBlank()) throw new IllegalArgumentException("Choose a kitchen URL containing letters or numbers.");
-        if (kitchenRepository.findByName(slug).isPresent()) {
-            throw new IllegalArgumentException("A kitchen with this URL name already exists.");
+        String desiredSlug = dto.getName() == null ? "" : dto.getName().trim();
+        if (slugService != null && SlugService.slugify(desiredSlug).isBlank()) {
+            throw new IllegalArgumentException("Choose a kitchen URL containing letters or numbers.");
         }
-        Kitchen kitchen = new Kitchen(slug, dto.getDisplayName(), dto.getDescription(), dto.getImageUrl(), seller);
+        // The slug is the authoritative public identifier; the legacy unique
+        // `name` column is kept in step (same value) so every existing
+        // findByName(...) caller keeps resolving the same kitchen. When the
+        // SlugService is present the slug is reserved race-safely: the DB unique
+        // constraint is the final arbiter and a lost race retries with -2, -3...
+        String base = slugService != null ? SlugService.slugify(desiredSlug) : desiredSlug.toLowerCase();
+        Kitchen kitchen = new Kitchen(base, dto.getDisplayName(), dto.getDescription(), dto.getImageUrl(), seller);
+        kitchen.setSlug(base);
         kitchen.setShortDescription(dto.getShortDescription());
         kitchen.setSpeciality(dto.getSpeciality());
         kitchen.setSociety(dto.getSociety());
+        kitchen.setBuilding(dto.getBuilding());
+        kitchen.setWhatsappLink(dto.getWhatsappLink());
+        kitchen.setInstagramLink(dto.getInstagramLink());
+        kitchen.setUpiId(dto.getUpiId());
+        kitchen.setAvailableToday(dto.getAvailableToday() != null ? dto.getAvailableToday() : true);
+        if (dto.getSellerType() != null && !dto.getSellerType().isBlank()) {
+            try { kitchen.setSellerType(com.example.my_first_spring_api.model.SellerType.valueOf(dto.getSellerType().toUpperCase())); }
+            catch (IllegalArgumentException ignored) {}
+        }
+        // Reserve the slug FIRST, race-safely, so the very first INSERT is the
+        // one the DB unique constraint guards; coverage is applied afterwards as
+        // an update. The whole method is one transaction, so a coverage
+        // validation failure rolls the reservation back with it.
+        if (slugService != null) {
+            slugService.reserveUniqueSlug(kitchen, base);
+        } else {
+            kitchen.setName(base);
+            kitchenRepository.save(kitchen);
+        }
         // The ID payload is authoritative when present: it replaces the kitchen's
         // COMPLETE coverage and rebuilds the display string from the saved records,
         // so the seller cannot accidentally cover a society they did not tick.
@@ -98,16 +125,7 @@ public class SellerService {
             locationService.applyCoverageFromNames(kitchen,
                     societyDirectory.validateAndNormalize(dto.getServiceAreas()));
         }
-        kitchen.setBuilding(dto.getBuilding());
-        kitchen.setWhatsappLink(dto.getWhatsappLink());
-        kitchen.setInstagramLink(dto.getInstagramLink());
-        kitchen.setUpiId(dto.getUpiId());
-        kitchen.setAvailableToday(dto.getAvailableToday() != null ? dto.getAvailableToday() : true);
-        if (dto.getSellerType() != null && !dto.getSellerType().isBlank()) {
-            try { kitchen.setSellerType(com.example.my_first_spring_api.model.SellerType.valueOf(dto.getSellerType().toUpperCase())); }
-            catch (IllegalArgumentException ignored) {}
-        }
-        return toKitchenDto(kitchenRepository.save(kitchen));
+        return toKitchenDto(kitchen);
     }
 
     public KitchenDto updateKitchen(Long kitchenId, KitchenUpdateDto dto, User seller) {
@@ -149,12 +167,24 @@ public class SellerService {
 
     public KitchenDto pauseKitchen(Long kitchenId, User seller) {
         Kitchen kitchen = getOwnedKitchen(kitchenId, seller);
+        // An Admin suspension is not the seller's to change in either direction.
+        if (KitchenVisibility.isAdminSuspended(kitchen)) {
+            throw new SellerNotAuthorizedException(
+                    "This storefront was suspended by an Admin and cannot be changed by the seller.");
+        }
         kitchen.setAvailableToday(false);
         return toKitchenDto(kitchenRepository.save(kitchen));
     }
 
     public KitchenDto resumeKitchen(Long kitchenId, User seller) {
         Kitchen kitchen = getOwnedKitchen(kitchenId, seller);
+        // Step 6: a seller can pause/resume their OWN SELLER_PAUSED state only.
+        // They can NEVER override an ADMIN_SUSPENDED storefront (403) - only an
+        // Admin can lift that.
+        if (KitchenVisibility.isAdminSuspended(kitchen)) {
+            throw new SellerNotAuthorizedException(
+                    "This storefront was suspended by an Admin and cannot be resumed by the seller.");
+        }
         kitchen.setAvailableToday(true);
         return toKitchenDto(kitchenRepository.save(kitchen));
     }

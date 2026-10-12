@@ -11,6 +11,7 @@ import java.util.Optional;
 @Repository
 public interface KitchenRepository extends JpaRepository<Kitchen, Long> {
     Optional<Kitchen> findByName(String name);
+    Optional<Kitchen> findBySlug(String slug);
     List<Kitchen> findBySeller(User seller);
     List<Kitchen> findByAvailableTodayTrue();
 }

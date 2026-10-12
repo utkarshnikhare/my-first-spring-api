@@ -73,7 +73,7 @@ public class AuthController {
         AuthResponseDto result = authenticate(registration.user(), "Registration submitted for Admin approval",
                 servletRequest, response);
         result.setKitchenSlug(registration.kitchenSlug());
-        result.setKitchenUrl("/index.html#/kitchen/" + registration.kitchenSlug());
+        result.setKitchenUrl("/kitchen/" + registration.kitchenSlug());
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 

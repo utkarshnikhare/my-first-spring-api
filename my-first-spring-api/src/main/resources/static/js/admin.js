@@ -707,6 +707,37 @@ async function adminAction(action, t) {
                 await adminRender();
                 break;
             }
+            case 'admin-copy-kitchen-url': {
+                var copyUrl = t.dataset.url || '';
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(copyUrl);
+                    } else {
+                        var ta = document.createElement('textarea');
+                        ta.value = copyUrl; document.body.appendChild(ta); ta.select();
+                        document.execCommand('copy'); document.body.removeChild(ta);
+                    }
+                    toast('Link copied', 'success');
+                } catch (eCopy) { toast('Could not copy link', 'error'); }
+                break;
+            }
+            case 'admin-edit-slug': {
+                var slugKid = Number(t.dataset.kid);
+                var currentSlug = t.dataset.slug || '';
+                var next = window.prompt('Public kitchen URL slug (letters, numbers, single hyphens):', currentSlug);
+                if (next == null) break;
+                next = next.trim().toLowerCase();
+                if (!next) { toast('Enter a slug', 'error'); break; }
+                if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(next)) {
+                    toast('Use lowercase letters, numbers and single hyphens only.', 'error'); break;
+                }
+                try {
+                    await api('/api/admin/kitchens/' + slugKid + '/slug', { method: 'POST', body: { slug: next } });
+                    toast('Public URL updated', 'success');
+                    await adminRender();
+                } catch (eSlug) { toast(eSlug.message || 'Could not update the URL', 'error'); }
+                break;
+            }
             case 'admin-edit-service-areas': {
                 var kid = Number(t.dataset.kid);
                 var kitchen = await api('/api/admin/kitchens');
@@ -1245,6 +1276,16 @@ async function adminKitchensView() {
     var h = '<div class="view-enter">';
     h += '<div class="section-head admin-section-head"><div><h1>' + esc(title) + '</h1><p class="muted small">' +
         rows.length + ' of ' + (list ? list.length : 0) + ' stores</p></div></div>';
+    // Marketplace / Promotion Links: the /kitchens marketplace link an Admin can
+    // copy to promote the platform. Base URL comes from server config.
+    try {
+        var links = await api('/api/admin/marketplace-links');
+        window.__sociomartBaseUrl = links.baseUrl || '';
+        h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Marketplace / Promotion Links</h3>' +
+            '<div class="sr-meta">Marketplace: <code>' + esc(links.marketplaceUrl || '/kitchens') + '</code></div>' +
+            '<div class="mt-1"><a class="btn btn-secondary btn-sm" href="' + esc(links.marketplaceUrl || '/kitchens') + '" target="_blank" rel="noopener">View</a> ' +
+            '<button class="btn btn-secondary btn-sm" type="button" data-action="admin-copy-kitchen-url" data-url="' + esc(links.marketplaceUrl || '/kitchens') + '">Copy Marketplace Link</button></div></div>';
+    } catch (e) { /* links are a convenience; never block the page */ }
     h += adminSearchBar({
         key: 'kitchens',
         label: 'stores',
@@ -1262,6 +1303,9 @@ async function adminKitchensView() {
     rows.forEach(function (k) {
         var areas = k.serviceAreas || k.area || '';
         var areaText = areas ? areas.split(',').map(function (a) { return a.trim(); }).filter(Boolean).join(', ') : '';
+        // Public URL: base (same-origin unless PUBLIC_BASE_URL is configured) + /kitchen/{slug}.
+        var base = window.__sociomartBaseUrl || '';
+        var publicUrl = base + '/kitchen/' + encodeURIComponent(k.slug || k.name || '');
         h += '<div class="seller-row">' +
             '<div class="sr-avatar">🏪</div>' +
             '<div class="sr-body">' +
@@ -1275,6 +1319,11 @@ async function adminKitchensView() {
             // Handover 7.3: Admin-side storefront state, surfaced where it matters.
             (k.removed ? '<div class="sr-meta sr-reason">🚫 Removed from the buyer app by Admin</div>' : '') +
             (k.paused ? '<div class="sr-meta sr-reason">⏸ Paused by Admin — buyers cannot see this storefront</div>' : '') +
+            // Public URL row: View (opens the buyer storefront) + Copy URL.
+            '<div class="sr-meta">Public URL: <code>' + esc(publicUrl) + '</code></div>' +
+            '<div class="mt-1"><a class="btn btn-secondary btn-sm" href="' + esc(publicUrl) + '" target="_blank" rel="noopener">View</a> ' +
+            '<button class="btn btn-secondary btn-sm" type="button" data-action="admin-copy-kitchen-url" data-url="' + esc(publicUrl) + '">Copy URL</button> ' +
+            '<button class="btn btn-secondary btn-sm" type="button" data-action="admin-edit-slug" data-kid="' + k.id + '" data-slug="' + esc(k.slug || k.name || '') + '">Edit URL</button></div>' +
             '<div class="mt-1"><button class="btn btn-secondary btn-sm" type="button" data-action="admin-edit-service-areas" data-kid="' + k.id + '">Manage Service Areas</button> ' +
             '<button class="btn btn-secondary btn-sm" type="button" data-action="admin-diag-focus" data-kitchen-id="' + k.id + '">Diagnose</button> ' +
             // Handover 7.3 storefront controls. Pause and Resume are the same

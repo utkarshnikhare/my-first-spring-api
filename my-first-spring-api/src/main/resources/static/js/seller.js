@@ -117,7 +117,7 @@ async function sellerAuthHtml() {
         '<div class="form-group"><label for="sellerRegWhatsApp">WhatsApp number</label><input class="form-input" id="sellerRegWhatsApp" name="whatsappNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" required></div>' +
         '<div class="form-group"><label for="sellerRegAlternate">Alternate contact (optional)</label><input class="form-input" id="sellerRegAlternate" name="alternateContact" inputmode="numeric" pattern="[0-9]{10}" maxlength="10"></div>' +
         '<div class="form-group"><label for="sellerRegKitchen">Kitchen / storefront name</label><input class="form-input" id="sellerRegKitchen" name="kitchenName" maxlength="120" required></div>' +
-        '<div class="form-group"><label for="sellerRegSlug">Choose public kitchen URL</label><div class="muted small">/index.html#/kitchen/</div><input class="form-input" id="sellerRegSlug" name="kitchenSlug" minlength="3" maxlength="80" pattern="[A-Za-z0-9]+(-[A-Za-z0-9]+)*" required></div>' +
+        '<div class="form-group"><label for="sellerRegSlug">Choose public kitchen URL</label><div class="muted small" id="sellerRegSlugHint">/kitchen/</div><input class="form-input" id="sellerRegSlug" name="kitchenSlug" minlength="3" maxlength="80" pattern="[A-Za-z0-9]+(-[A-Za-z0-9]+)*" required></div>' +
         '<div class="form-group"><label for="sellerRegSpeciality">Cuisine / speciality</label><input class="form-input" id="sellerRegSpeciality" name="speciality" maxlength="250" required></div>' +
         '<div class="form-group"><label for="sellerRegCategory">Seller category</label><select class="form-input" id="sellerRegCategory" name="sellerCategory" required><option value="KITCHEN">Kitchen</option><option value="HOMEMADE_PRODUCTS">Homemade products</option><option value="BOTH">Both</option></select></div>' +
         '<div class="form-group"><label for="sellerRegShort">Short description (optional)</label><textarea class="form-input" id="sellerRegShort" name="shortDescription" maxlength="500"></textarea></div>' +
@@ -157,11 +157,28 @@ function bindSellerAuth(view) {
     });
     var kitchenName = view.querySelector('#sellerRegKitchen');
     var slug = view.querySelector('#sellerRegSlug');
+    var slugHint = view.querySelector('#sellerRegSlugHint');
+    var slugReq = 0;
     kitchenName.addEventListener('input', function () {
-        if (!S.authSlugTouched) slug.value = kitchenName.value.toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        if (S.authSlugTouched) return;
+        var name = kitchenName.value.trim();
+        if (!name) { if (slug) slug.value = ''; if (slugHint) slugHint.textContent = '/kitchen/'; return; }
+        // The suggested public URL is generated SERVER-SIDE (never only in the
+        // browser) and is already de-duplicated with a -2/-3 suffix, so the seller
+        // sees the real, reserved URL before submitting.
+        var myReq = ++slugReq;
+        api('/api/kitchens/slug-suggestion?name=' + encodeURIComponent(name))
+            .then(function (res) {
+                if (myReq !== slugReq || S.authSlugTouched) return;
+                if (slug) slug.value = res.slug || '';
+                if (slugHint) slugHint.textContent = '/kitchen/' + (res.slug || '');
+            })
+            .catch(function () { /* suggestion is a convenience; leave the field as-is */ });
     });
-    slug.addEventListener('input', function () { S.authSlugTouched = true; });
+    slug.addEventListener('input', function () {
+        S.authSlugTouched = true;
+        if (slugHint) slugHint.textContent = '/kitchen/' + slug.value.trim();
+    });
 }
 
 async function sellerLoginSubmit(event) {
