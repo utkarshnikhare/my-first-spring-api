@@ -8,6 +8,11 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class MyFirstSpringApiApplication {
 
+	// Runs when the class loads (main() and @SpringBootTest alike), before any bean or clock read.
+	static {
+		AppTimeZone.apply();
+	}
+
 	public static void main(String[] args) {
 		SpringApplication.run(MyFirstSpringApiApplication.class, args);
 	}
