@@ -32,6 +32,21 @@ public final class KitchenVisibility {
                 && Boolean.FALSE.equals(kitchen.getAvailableToday());
     }
 
+    /**
+     * True when an ADMIN has suspended the storefront - either the explicit
+     * Admin storefront pause ({@link Kitchen#isStorefrontPaused()}) or the
+     * seller's account being {@code SUSPENDED}. A suspended storefront is hidden
+     * from buyers entirely and cannot be reactivated by the seller (see
+     * {@code SellerService.resumeKitchen}); only an Admin can lift it.
+     */
+    public static boolean isAdminSuspended(Kitchen kitchen) {
+        if (kitchen == null) return false;
+        User seller = kitchen.getSeller();
+        if (kitchen.isStorefrontPaused()) return true;
+        return seller != null
+                && seller.getSellerApprovalStatus() == com.example.my_first_spring_api.model.SellerApprovalStatus.SUSPENDED;
+    }
+
     public static boolean isHomemadeStore(Kitchen kitchen) {
         return kitchen != null && (kitchen.getSellerType() == SellerType.HOMEMADE_PRODUCTS
                 || kitchen.getSellerType() == SellerType.BOTH);

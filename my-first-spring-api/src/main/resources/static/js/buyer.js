@@ -96,7 +96,10 @@ function kitchenCardHtml(k) {
     var items = (k.itemNames || []);
     var preview = items.slice(0, 5).map(esc).join(' · ');
     var more = items.length > 5 ? ' <strong>+' + (items.length - 5) + ' more</strong>' : '';
-    var kUrl = '#/kitchen/' + k.id;
+    // Prefer the permanent public-URL slug so a card opens the shareable
+    // /kitchen/{slug} page; fall back to the numeric id hash route if a card
+    // ever arrives without a slug (defensive, never expected for active kitchens).
+    var kUrl = k.slug ? '/kitchen/' + encodeURIComponent(k.slug) : '#/kitchen/' + k.id;
     return '<div class="kitchen-card">' +
         '<div class="kc-top">' +
         '<a class="kc-avatar" href="' + kUrl + '" aria-label="Open ' + esc(k.displayName || '') + '">' +
@@ -479,17 +482,31 @@ function ineligibleKitchenHtml(e) {
 }
 
 async function kitchenPageView(hash) {
-    var id = decodeURIComponent(hash.split('/')[2] || '');
+    // Two entry shapes reach this view:
+    //   - a hash route "#/kitchen/{id}"  (existing in-app links / seller preview)
+    //   - a clean route "slug:{slug}"    (deep link or refresh on /kitchen/{slug})
+    // The clean route resolves the kitchen by its permanent public-URL slug via
+    // the public by-slug API; the hash route keeps resolving by numeric id so
+    // every existing "#/kitchen/{id}" link keeps working unchanged.
+    var bySlug = typeof hash === 'string' && hash.indexOf('slug:') === 0;
+    var id = bySlug ? decodeURIComponent(hash.slice(5)) : decodeURIComponent(hash.split('/')[2] || '');
     var h = '<div class="view-enter">';
     await loadFavSet();
     try {
-        var detailPath = /^\d+$/.test(id)
-            ? '/api/kitchens/id/' + encodeURIComponent(id)
-            : '/api/kitchens/' + encodeURIComponent(id);
+        var detailPath = bySlug
+            ? '/api/kitchens/by-slug/' + encodeURIComponent(id)
+            : (/^\d+$/.test(id)
+                ? '/api/kitchens/id/' + encodeURIComponent(id)
+                : '/api/kitchens/' + encodeURIComponent(id));
         var detail = await api(detailPath);
         var k = detail.kitchen;
         if (k && k.paused) {
-            h += emptyHtml('⏸️', 'This kitchen is currently closed.', 'Please check again later.');
+            // SELLER_PAUSED: temporarily closed, no new orders, but the buyer can
+            // still explore other kitchens. (ADMIN_SUSPENDED / PENDING / REJECTED
+            // / REMOVED never reach here - the backend conceals them as 404.)
+            h += emptyHtml('⏸️', 'This kitchen is temporarily closed.',
+                'It is not accepting new orders right now. Please check back later.',
+                exploreOtherKitchensHtml());
             return h;
         }
         // Handover 6/18 storefront_view. Fire-and-forget AFTER the storefront is
@@ -502,6 +519,9 @@ async function kitchenPageView(hash) {
         var preorder = (detail.preorderProducts && detail.preorderProducts.length)
             ? detail.preorderProducts
             : (detail.products || []).filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
+
+        // Explore Other Kitchens near the top navigation.
+        h += exploreOtherKitchensHtml();
 
         // Hero — banner, avatar, identity, tags, socials (no kitchen-level
         // "Orders Open" indicator; item-level timing lives on each offering card)
@@ -569,11 +589,23 @@ async function kitchenPageView(hash) {
                         '<div class="tiny muted mt-1">⏰ Order by ' + (p.cutoffTime ? esc(prettyTime(p.cutoffTime)) : '—') + '</div></div>';
                 }).join('') + '</div>';
         }
+
+        // Explore Other Kitchens near the bottom of the page too.
+        h += '<div class="section-gap">' + exploreOtherKitchensHtml() + '</div>';
     } catch (e) {
         h += ineligibleKitchenHtml(e);
     }
     h += '</div>';
     return h;
+}
+
+/**
+ * A visible "Explore Other Kitchens" action linking to the existing marketplace
+ * (/kitchens), shown near the top and lower down on the public kitchen page so a
+ * buyer who cannot order here always has a way back into discovery.
+ */
+function exploreOtherKitchensHtml() {
+    return '<a class="btn btn-secondary btn-block btn-sm" href="/kitchens">🧭 Explore Other Kitchens</a>';
 }
 
 function quickPostsHtml(posts) {

@@ -5,6 +5,7 @@ import com.example.my_first_spring_api.dto.BuyerRegistrationRequestDto;
 import com.example.my_first_spring_api.dto.CredentialLoginRequestDto;
 import com.example.my_first_spring_api.dto.CoverageOptionDto;
 import com.example.my_first_spring_api.dto.KitchenCreateDto;
+import com.example.my_first_spring_api.dto.KitchenDto;
 import com.example.my_first_spring_api.dto.SellerRegistrationRequestDto;
 import com.example.my_first_spring_api.exception.AccountAlreadyExistsException;
 import com.example.my_first_spring_api.exception.InvalidCredentialsException;
@@ -36,6 +37,9 @@ public class DemoAuthService {
     private final PasswordEncoder passwordEncoder;
     private final Environment environment;
     private final AnalyticsService analyticsService;
+    /** Append-only audit for the slug reservation. Field-injected (optional) so manual test construction keeps working. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private AdminAuditService auditService;
 
     public DemoAuthService(UserRepository users, KitchenRepository kitchens, LocationService locations,
                            SellerService sellerService, PasswordEncoder passwordEncoder, Environment environment,
@@ -75,11 +79,12 @@ public class DemoAuthService {
         Area primaryArea = requireActiveArea(request.getPrimaryAreaId());
         Society primarySociety = requireActiveSociety(request.getPrimarySocietyId(), primaryArea);
         Area serviceArea = requireActiveArea(request.getServiceAreaId());
-        String kitchenSlug = request.getKitchenSlug().trim().toLowerCase(Locale.ROOT);
-        if (kitchens.findByName(kitchenSlug).isPresent()) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.CONFLICT, "That kitchen URL is already in use.");
-        }
+        // The public URL is generated and reserved server-side (never trusted from
+        // the browser): the seller's requested slug is normalised, then reserved
+        // against the DB unique constraint inside createKitchen, which appends
+        // -2/-3 when the exact slug is already taken by another PENDING/APPROVED
+        // application. A duplicate is therefore impossible even under a race.
+        String desiredSlug = SlugService.slugify(request.getKitchenSlug());
 
         User seller = new User(request.getSellerName().trim(), request.getMobileNumber(), null, UserRole.SELLER);
         seller.setPasswordHash(passwordEncoder.encode(request.getPassword()));
@@ -96,7 +101,7 @@ public class DemoAuthService {
         saveNewUser(seller);
 
         KitchenCreateDto kitchen = new KitchenCreateDto();
-        kitchen.setName(kitchenSlug);
+        kitchen.setName(desiredSlug);
         kitchen.setDisplayName(request.getKitchenName().trim());
         kitchen.setShortDescription(clean(request.getShortDescription()));
         kitchen.setDescription(clean(request.getShortDescription()));
@@ -107,10 +112,17 @@ public class DemoAuthService {
         kitchen.setSellerType(sellerCategory);
         kitchen.setAreaId(serviceArea.getId());
         kitchen.setSocietyIds(request.getServiceSocietyIds());
-        sellerService.createKitchen(kitchen, seller);
+        KitchenDto created = sellerService.createKitchen(kitchen, seller);
+        String reservedSlug = created.getName();
+        // Audit the slug reservation against the seller application (Step 7). The
+        // slug is reserved now, while the application is still PENDING_APPROVAL.
+        if (auditService != null) {
+            auditService.record(AdminAuditService.KITCHEN_SLUG_RESERVED, seller, "KITCHEN",
+                    created.getId(), request.getKitchenName().trim(), null, reservedSlug, null);
+        }
         analyticsService.record(AnalyticsService.EV_USER_REGISTERED, seller.getId(), seller.getMobileNumber(),
                 null, seller.getName());
-        return new SellerRegistration(seller, kitchenSlug);
+        return new SellerRegistration(seller, reservedSlug);
     }
 
     @Transactional

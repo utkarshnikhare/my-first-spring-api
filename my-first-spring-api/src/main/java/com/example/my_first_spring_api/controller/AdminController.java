@@ -392,6 +392,25 @@ public class AdminController {
         return ResponseEntity.ok(adminService.removeStorefront(kitchenId,
                 body != null ? body.get("reason") : null, admin));
     }
+
+    /**
+     * Admin-only public-URL (slug) change. Validated + unique; the old slug is
+     * kept as a redirecting alias so shared links keep working.
+     */
+    @PostMapping("/kitchens/{kitchenId}/slug")
+    public ResponseEntity<Map<String, Object>> changeKitchenSlug(@PathVariable Long kitchenId,
+                                                                 @RequestBody Map<String, String> body,
+                                                                 HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        String slug = body != null ? body.get("slug") : null;
+        return ResponseEntity.ok(adminService.changeKitchenSlug(kitchenId, slug, admin));
+    }
+
+    /** Marketplace / promotion links the Admin can copy (base URL + /kitchens). */
+    @GetMapping("/marketplace-links")
+    public ResponseEntity<Map<String, Object>> marketplaceLinks() {
+        return ResponseEntity.ok(adminService.marketplaceLinks());
+    }
     // ---------- Buyer support controls (handover 8) ----------
 
     @PostMapping("/buyers/{id}/block")

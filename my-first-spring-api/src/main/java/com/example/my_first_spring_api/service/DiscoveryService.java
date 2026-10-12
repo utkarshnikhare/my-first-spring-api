@@ -142,7 +142,7 @@ public class DiscoveryService {
     private KitchenCard toCard(Kitchen k, List<Product> items, Set<Long> orderedKitchenIds) {
         KitchenCard card = new KitchenCard();
         card.setId(k.getId());
-        card.setSlug(k.getName());
+        card.setSlug(k.publicSlug());
         card.setDisplayName(k.getDisplayName());
         card.setImageUrl(k.getImageUrl());
         card.setShortDescription(k.getShortDescription());
@@ -313,7 +313,7 @@ public class DiscoveryService {
     private KitchenCard toHomemadeCard(Kitchen k, List<Product> items) {
         KitchenCard card = new KitchenCard();
         card.setId(k.getId());
-        card.setSlug(k.getName());
+        card.setSlug(k.publicSlug());
         card.setDisplayName(k.getDisplayName());
         card.setImageUrl(k.getImageUrl());
         card.setShortDescription(k.getShortDescription() != null ? k.getShortDescription() : k.getDescription());

@@ -33,6 +33,9 @@ public class KitchenService {
     private final ProductRepository productRepository;
     private final QuickPostRepository quickPostRepository;
     private final AnalyticsService analyticsService;
+    /** Resolves public-URL slugs (and their aliases) to a kitchen. Field-injected so manually-constructed instances in tests keep working. */
+    @Autowired
+    private SlugService slugService;
     /** Recurring projection: today's resolved occurrence values on buyer DTOs (V2 §14). Field-injected so manually-constructed instances in tests keep working. */
     @Autowired
     private RecurringScheduleService recurringScheduleService;
@@ -114,6 +117,60 @@ public class KitchenService {
         dto.setQuickPosts(toQuickPostDtos(quickPostRepository.findByKitchenAndPostedDateOrderByCreatedAtDesc(kitchen, LocalDate.now())));
         return dto;
     }
+    /**
+     * Public storefront resolved from a public-URL slug (Screen 4), the backend
+     * for {@code GET /api/kitchens/by-slug/{slug}} and the {@code /kitchen/{slug}}
+     * page. Returns the SAME {@link KitchenDetailDto} shape the id-based page
+     * uses, so the buyer experience and business rules are identical whichever
+     * way the kitchen was opened.
+     *
+     * <p>Status-based visibility is enforced here, server-side:</p>
+     * <ul>
+     *   <li>unknown slug or a PENDING/CHANGES_REQUESTED/REJECTED/REMOVED seller →
+     *       concealed 404 (never exposed, never in discovery);</li>
+     *   <li>ADMIN-suspended ({@code storefrontPaused} or seller SUSPENDED) →
+     *       concealed 404 for browsing too, so a suspended storefront is simply
+     *       not reachable;</li>
+     *   <li>SELLER-paused (the seller's own daily "available today" toggle off) →
+     *       the "temporarily closed" detail with no offerings, so the page can say
+     *       so and still offer Explore Other Kitchens;</li>
+     *   <li>APPROVED + ACTIVE but outside the buyer's society → the same
+     *       {@link KitchenNotEligibleException} 404 the id-based page throws.</li>
+     * </ul>
+     */
+    public KitchenDetailDto getKitchenDetailBySlug(String slug, User buyer) {
+        Kitchen kitchen = slugService != null
+                ? slugService.resolveBySlug(slug).orElse(null)
+                : kitchenRepository.findBySlug(slug).orElse(null);
+        if (kitchen == null) {
+            throw new KitchenNotFoundException(slug);
+        }
+        // A removed storefront keeps its records but is no longer available.
+        if (kitchen.getSeller() != null && kitchen.getSeller().isStorefrontRemoved()) {
+            throw new KitchenNotFoundException(slug);
+        }
+        // An Admin pause/suspension hides the storefront entirely (no orders,
+        // not browsable). The seller cannot override it.
+        if (KitchenVisibility.isAdminSuspended(kitchen)) {
+            throw new KitchenNotFoundException(slug);
+        }
+        // SELLER_PAUSED: the seller's own daily toggle is off. Show the closed
+        // storefront (no offerings) rather than a 404, so the buyer sees it is
+        // temporarily closed and can explore other kitchens.
+        if (KitchenVisibility.isPaused(kitchen)) {
+            return closedDetail(kitchen);
+        }
+        // PENDING / CHANGES_REQUESTED / REJECTED sellers, or a buyer outside the
+        // service area, are concealed behind the same 404 as a missing kitchen.
+        if (!KitchenVisibility.isPubliclyVisible(kitchen) || !KitchenVisibility.isServiceAreaVisible(kitchen, buyer)) {
+            throw new KitchenNotEligibleException(kitchen.getId());
+        }
+        analyticsService.record(AnalyticsService.EV_MENU_VIEW, null, null,
+                kitchen.getId(), kitchen.getDisplayName());
+        return getKitchenDetailById(kitchen.getId(), buyer);
+    }
+
+
 
     public ProductDto getProductById(Long id, User buyer) {
         Product product = productRepository.findById(id)

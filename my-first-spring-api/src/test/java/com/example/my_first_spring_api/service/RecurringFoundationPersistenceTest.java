@@ -180,10 +180,15 @@ class RecurringFoundationPersistenceTest {
   void acceptanceScenario() {
     // 1. Create schedule
     RecurringSchedule sch = schedules.save(newSchedule(product, 14));
-    // Simulate generation for dates: 10/12 (Mon), 10/14 (Wed), 10/16 (Fri)
-    Occurrence mon = occurrences.save(new Occurrence(sch, LocalDate.of(2026, 10, 12)));
-    Occurrence wed = occurrences.save(new Occurrence(sch, LocalDate.of(2026, 10, 14)));
-    Occurrence fri = occurrences.save(new Occurrence(sch, LocalDate.of(2026, 10, 16)));
+    // Simulate generation for the next Mon / Wed / Fri. The dates are computed
+    // RELATIVE to "today" (never hard-coded) because updateSchedule only
+    // refreshes occurrences strictly after today: the original fixed October
+    // 2026 dates expired the moment the calendar reached 2026-10-12 itself and
+    // Monday stopped being a future occurrence.
+    LocalDate monDate = LocalDate.now().with(DayOfWeek.MONDAY).plusWeeks(1);
+    Occurrence mon = occurrences.save(new Occurrence(sch, monDate));
+    Occurrence wed = occurrences.save(new Occurrence(sch, monDate.plusDays(2)));
+    Occurrence fri = occurrences.save(new Occurrence(sch, monDate.plusDays(4)));
     
     // Default setting for occurrences
     for (Occurrence o : java.util.List.of(mon, wed, fri)) {

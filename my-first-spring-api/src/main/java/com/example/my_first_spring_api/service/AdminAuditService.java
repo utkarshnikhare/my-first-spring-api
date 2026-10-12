@@ -49,6 +49,9 @@ public class AdminAuditService {
     public static final String SOCIETY_ENABLED = "SOCIETY_ENABLED";
     public static final String SOCIETY_DISABLED = "SOCIETY_DISABLED";
     public static final String ORDER_CORRECTED = "ORDER_CORRECTED";
+    // Public-URL lifecycle (Seller Onboarding, Approval & Public URL Logic V1).
+    public static final String KITCHEN_SLUG_CHANGED = "KITCHEN_SLUG_CHANGED";
+    public static final String KITCHEN_SLUG_RESERVED = "KITCHEN_SLUG_RESERVED";
 
     private static final int MAX_REASON = 1000;
 

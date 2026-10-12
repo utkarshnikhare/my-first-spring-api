@@ -14,6 +14,21 @@ public class Kitchen {
 
     @Column(nullable = false, unique = true)
     private String name;
+    /**
+     * Stable public URL identifier (e.g. "aartis-cloud-kitchen"). Separate from
+     * {@link #name} and {@link #displayName} so a seller renaming their kitchen,
+     * or an Admin changing the display name, can never break a shared link.
+     *
+     * <p>Reserved against the seller application at registration (even while
+     * PENDING) and read-only for the seller afterwards; only an Admin may change
+     * it, and the previous value is kept as a redirecting alias. Unique and
+     * indexed so the database - not the browser - is the uniqueness authority
+     * under concurrent registration.</p>
+     */
+    @Column(name = "slug", unique = true)
+    private String slug;
+
+
 
     @Column(name = "display_name", nullable = false)
     private String displayName;
@@ -108,6 +123,13 @@ public class Kitchen {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
+        // Backfill: any Kitchen created without an explicit slug (legacy seeders,
+        // the DemoDataSeeder, tests) still gets a permanent slug derived from its
+        // name, so the public URL is never null. The dedicated SlugService resolves
+        // collisions; this only guarantees a non-null starting value.
+        if (slug == null || slug.isBlank()) {
+            slug = com.example.my_first_spring_api.service.SlugService.slugify(name);
+        }
     }
 
     @PreUpdate
@@ -129,6 +151,17 @@ public class Kitchen {
     public void setId(Long id) { this.id = id; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
+    public String getSlug() { return slug; }
+    public void setSlug(String slug) { this.slug = slug; }
+
+    /**
+     * The slug used to build public URLs, never null for a persisted kitchen:
+     * the dedicated slug when present, otherwise the legacy unique name (which
+     * seeders and tests still populate directly).
+     */
+    public String publicSlug() {
+        return (slug != null && !slug.isBlank()) ? slug : name;
+    }
     public String getDisplayName() { return displayName; }
     public void setDisplayName(String displayName) { this.displayName = displayName; }
     public String getDescription() { return description; }
