@@ -37,9 +37,14 @@ class PostgresNativeMigrationTest {
 
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
-        registry.add("SOCIOMART_DB_JDBC_URL", POSTGRES::getJdbcUrl);
-        registry.add("SOCIOMART_DB_USERNAME", POSTGRES::getUsername);
-        registry.add("SOCIOMART_DB_PASSWORD", POSTGRES::getPassword);
+        // Point the datasource directly at the Testcontainers PostgreSQL. The
+        // "test" profile hardcodes an H2 URL and never reads SOCIOMART_DB_JDBC_URL
+        // (that name is consumed only by application-prod.properties), so setting
+        // the env-var name alone left this test silently running against H2.
+        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES::getUsername);
+        registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
     }
 
     @Test

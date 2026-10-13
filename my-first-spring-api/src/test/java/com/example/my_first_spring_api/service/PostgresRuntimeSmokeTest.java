@@ -18,6 +18,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @SpringBootTest(properties = {
         "spring.jpa.hibernate.ddl-auto=validate",
         "spring.jpa.defer-datasource-initialization=false",
+        "spring.flyway.enabled=true",
         "sociomart.auth.password-login-enabled=true"
 })
 @ActiveProfiles("test")
@@ -29,9 +30,14 @@ class PostgresRuntimeSmokeTest extends AbstractRuntimeSmokeFlow {
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
-        registry.add("SOCIOMART_DB_JDBC_URL", POSTGRES::getJdbcUrl);
-        registry.add("SOCIOMART_DB_USERNAME", POSTGRES::getUsername);
-        registry.add("SOCIOMART_DB_PASSWORD", POSTGRES::getPassword);
+        // Point the datasource directly at the Testcontainers PostgreSQL and let
+        // Flyway build the schema (see spring.flyway.enabled=true above). The
+        // "test" profile hardcodes an H2 URL and never reads SOCIOMART_DB_JDBC_URL,
+        // so setting the env-var name alone left this test silently running on H2.
+        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES::getUsername);
+        registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("sociomart.auth.admin-password", () -> ADMIN_PASSWORD);
         registry.add("sociomart.auth.super-admin-password", () -> SUPER_ADMIN_PASSWORD);
     }
