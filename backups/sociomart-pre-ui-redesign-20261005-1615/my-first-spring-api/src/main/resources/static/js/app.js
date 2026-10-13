@@ -1,0 +1,315 @@
+// ==================== App shell: router, nav & global events ====================
+
+var state = {
+    user: null,
+    viewMode: 'items',        // Screen 2 [By Items] / [By Kitchens]
+    catMode: 'items',         // Screen 2A toggle
+    kitchenTab: 'LIVE_NOW',   // Screen 3 tabs
+    favTab: 'kitchens',       // Screen 8 favourites tabs
+    ordersTab: 'orders',      // Screen 8 orders/enquiries tabs
+    ordersFilter: 'all',      // Screen 8 order filter: all/active/completed/cancelled
+    payMethod: 'upi',         // Screen 6 demo payment method: upi/card/cod
+    payPreference: 'PAID',    // Confirm Order payment-status selection: PAID | PENDING
+    placingOrder: false,      // idempotency guard for payment confirmation
+    lastOrder: null,          // placed order for the confirmation screen
+    authMobile: '',
+    pendingAuthAction: null,
+    pendingCheckout: null
+};
+
+var routes = {
+    '#/home': homeView,
+    '#/food': foodHubView,
+    '#/kitchens': kitchensView,
+    '#/homemade': homemadeView,
+    '#/summary': orderSummaryView,
+    '#/confirm': confirmOrderView,
+    '#/payment': paymentView,
+    '#/payment-success': paymentSuccessView,
+    '#/favourites': favouritesView,
+    '#/orders': ordersView,
+    '#/profile': profileView
+};
+
+function resolveRoute(hash) {
+    if (routes[hash]) return { fn: routes[hash], arg: hash };
+    if (hash.startsWith('#/category/')) return { fn: categoryView, arg: hash };
+    if (hash.startsWith('#/kitchen/')) return { fn: kitchenPageView, arg: hash };
+    if (hash.startsWith('#/homemade-store/')) return { fn: homemadeStoreView, arg: hash };
+    if (hash.startsWith('#/order/')) return { fn: orderDetailView, arg: hash };
+    if (hash.startsWith('#/search/')) return { fn: comparisonView, arg: hash };
+    return { fn: homeView, arg: '#/home' };
+}
+
+async function render() {
+    var hash = location.hash || '#/home';
+    var route = resolveRoute(hash);
+    var view = viewEl();
+    view.innerHTML = '<div class="page-loading"><div class="spinner"></div></div>';
+    closeSheet();
+    try {
+        var html = await route.fn(route.arg);
+        view.innerHTML = html || '';
+        updateNav(hash);
+        await loadUnreadNotifications();
+        updateCartBar();
+        if (typeof applyThemeUiState === 'function') applyThemeUiState();
+        if (view.querySelector('.sticky-footer-bar')) view.classList.add('has-sticky-footer');
+        else view.classList.remove('has-sticky-footer');
+        window.scrollTo(0, 0);
+    } catch (err) {
+        view.innerHTML = '<div class="view-enter">' + emptyHtml('⚠️', 'Something went wrong', err.message) + '</div>';
+    }
+}
+
+function updateNav(hash) {
+    $all('.nav-item').forEach(function (el) { el.classList.remove('active'); });
+    var key = null;
+    if (hash === '#/home') key = 'home';
+    else if (hash === '#/favourites') key = 'favourites';
+    else if (hash === '#/orders') key = 'orders';
+    else if (hash === '#/profile') key = 'profile';
+    var el = document.querySelector('[data-nav="' + (key || '') + '"]');
+    if (el) el.classList.add('active');
+}
+
+function navigate(hash) {
+    if (location.hash === hash) render();
+    else location.hash = hash;
+}
+
+// ==================== Global click delegation ====================
+
+document.addEventListener('click', async function (e) {
+    var t = e.target.closest('[data-action]');
+    if (!t) return;
+    var a = t.dataset.action;
+    try {
+        switch (a) {
+            case 'go-back': history.back(); break;
+            case 'noop': break;
+            case 'toggle-notifs': await toggleNotifications(t.dataset.panelId); break;
+            case 'read-notification': await readNotification(t.dataset.notificationId); break;
+            case 'toggle-theme': toggleTheme(); break;
+            case 'set-mode': state.viewMode = t.dataset.mode; await render(); break;
+            case 'set-cat-mode': state.catMode = t.dataset.mode; await render(); break;
+            case 'switch-cat': navigate('#/category/' + t.dataset.cat); break;
+            case 'set-kitchen-tab': state.kitchenTab = t.dataset.tab; await render(); break;
+            case 'set-fav-tab': state.favTab = t.dataset.tab; await render(); break;
+            case 'set-orders-tab': state.ordersTab = t.dataset.tab; await render(); break;
+            case 'set-orders-filter': state.ordersFilter = t.dataset.filter; await render(); break;
+            case 'cancel-order': {
+                if (!confirm('Cancel this order?')) return;
+                if (t.disabled) return;
+                t.disabled = true;
+                try {
+                    await api('/api/buyer/orders/' + encodeURIComponent(t.dataset.orderId) + '/cancel', { method: 'POST' });
+                    toast('Order cancelled', 'success');
+                    await render();
+                } catch (err) {
+                    t.disabled = false;
+                    toast(err.message || 'Could not cancel order', 'error');
+                }
+                break;
+            }
+            case 'open-login': openAuthModal(); break;
+            case 'read-more': {
+                var full = decodeURIComponent(t.dataset.full || '');
+                var parent = t.closest('.about-text') || t.closest('.oc-desc');
+                if (parent) parent.textContent = full;
+                break;
+            }
+            case 'share-kitchen': {
+                var url = location.href;
+                if (navigator.share) { try { await navigator.share({ title: 'SocioMart Kitchen', url: url }); } catch (e2) {} }
+                else { try { await navigator.clipboard.writeText(url); toast('Link copied', 'success'); } catch (e3) {} }
+                break;
+            }
+            case 'open-order-sheet': openOrderSheet(t.dataset.product, t.dataset.kitchen); break;
+            case 'sheet-qty': sheetQty(Number(t.dataset.dir)); break;
+            case 'set-sheet-date': sheet.date = t.dataset.date; highlightSheetSelection(); break;
+            case 'set-sheet-slot': sheet.slot = t.dataset.slot; highlightSheetSelection(); break;
+            case 'sheet-add': sheetAdd(); break;
+            case 'open-enquiry':
+                try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ENQUIRY_CLICK', kitchenId: t.dataset.kid } }); } catch (e) {}
+                openEnquirySheet(t.dataset.kid, t.dataset.kname); break;
+            case 'cart-qty': await cartQty(Number(t.dataset.idx), Number(t.dataset.dir)); break;
+            case 'cart-remove': await cartRemove(Number(t.dataset.idx)); break;
+            case 'go-checkout': await goCheckout(); break;
+            case 'go-payment': navigate('#/payment'); break;
+            case 'place-order-paid':
+                try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
+                await placeOrderWithStatus('PAID'); break;
+            case 'place-order-later':
+                try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
+                await placeOrderWithStatus('PENDING'); break;
+            case 'select-pay-method': state.payMethod = t.dataset.method; await render(); break;
+            case 'select-pay-status': // Confirm Order: Paid / Will Pay Later (UI selection only)
+                state.payPreference = t.dataset.status === 'PENDING' || t.dataset.status === 'WILL_PAY_LATER'
+                    ? 'PENDING' : 'PAID';
+                await render(); break;
+            case 'place-order':
+                try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
+                await placeOrderWithStatus(state.payPreference || 'PAID'); break;
+            case 'confirm-payment': await confirmPayment(t); break;
+            case 'logout': {
+                try { await api('/api/auth/logout', { method: 'POST' }); } catch (e5) {}
+                state.user = null;
+                toast('Logged out', 'info');
+                navigate('#/home');
+                if (location.hash === '#/home') render();
+                break;
+            }
+            case 'toggle-fav-kitchen': await toggleFavourite('kitchen', Number(t.dataset.kid), t); break;
+        }
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+});
+
+// ==================== Favourites (identity-bound, Spec 1.1) ====================
+
+var FAV_TOGGLE_IN_PROGRESS = {}; // guards rapid duplicate clicks per favourite
+
+async function toggleFavourite(type, id, btnEl) {
+    var label = type === 'kitchen' ? 'kitchen' : 'dish';
+    var key = type + ':' + id;
+    if (FAV_TOGGLE_IN_PROGRESS[key]) return; // prevent duplicate concurrent requests
+    var doToggle = async function () {
+        FAV_TOGGLE_IN_PROGRESS[key] = true;
+        try {
+            var resp = await api('/api/favourites/' + type + '/' + id + '/toggle', { method: 'POST' });
+            // Keep the client-side favourites cache in sync so every heart on the
+            // page (and the Favourites screen) reflects the new state immediately.
+            if (FAV_CACHE) {
+                if (resp.favourited) FAV_CACHE.add(String(id));
+                else FAV_CACHE.delete(String(id));
+            }
+            if (FAV_FULL_CACHE) {
+                if (resp.favourited) {
+                    if (!FAV_FULL_CACHE.some(function (f) { return f && f.kitchenId === id && f.type === 'KITCHEN'; })) {
+                        // Re-fetch to get full DTO for newly favourited kitchen
+                        FAV_FULL_CACHE = null;
+                    }
+                } else {
+                    FAV_FULL_CACHE = FAV_FULL_CACHE.filter(function (f) {
+                        return !(f && f.kitchenId === id);
+                    });
+                }
+            }
+            if (btnEl) {
+                btnEl.classList.toggle('faved', resp.favourited);
+                btnEl.textContent = resp.favourited ? '❤️' : '🤍';
+                btnEl.setAttribute('aria-pressed', resp.favourited ? 'true' : 'false');
+                btnEl.setAttribute('aria-label', (resp.favourited ? 'Remove from favourites' : 'Save to favourites'));
+            }
+            toast(resp.favourited ? ('Saved ' + label + ' to favourites') : ('Removed from favourites'), 'success');
+            // On the Favourites screen the list itself must update immediately.
+            if (location.hash === '#/favourites' && type === 'kitchen') await render();
+        } catch (err) {
+            if (!(err instanceof ApiError && err.status === 401)) toast(err.message, 'error');
+        } finally {
+            delete FAV_TOGGLE_IN_PROGRESS[key];
+        }
+    };
+    // Deferred login: favourites require identity — open login gate when needed.
+    requireAuth(doToggle);
+}
+
+// ==================== Form delegation ====================
+
+// ==================== Dependent Area -> Community dropdown ====================
+
+/**
+ * The profile offers one society per chosen area, so changing the area has to
+ * re-derive the community list and drop a community that does not belong to the
+ * new area. The area/society data comes from the backend, never hard-coded.
+ */
+document.addEventListener('change', function (e) {
+    var areaSel = e.target;
+    if (!areaSel || areaSel.id !== 'profileArea') return;
+    var societySel = document.getElementById('profileSociety');
+    if (!societySel) return;
+
+    var areas = state.profileAreas || [];
+    var chosen = areaSel.value;
+    var match = null;
+    for (var i = 0; i < areas.length; i++) {
+        if (areas[i].name.toLowerCase() === String(chosen).toLowerCase()) { match = areas[i]; break; }
+    }
+
+    var previous = societySel.value;
+    societySel.innerHTML = '<option value="">' + (match ? 'Select your community' : 'Select an area first') + '</option>';
+    if (match) {
+        (match.societies || []).forEach(function (s) {
+            var opt = document.createElement('option');
+            opt.value = s;
+            opt.textContent = s;
+            // Keep the choice only if it is still valid for the new area.
+            if (previous && s.toLowerCase() === String(previous).toLowerCase()) opt.selected = true;
+            societySel.appendChild(opt);
+        });
+    }
+    societySel.disabled = !match;
+    if (match && previous && !(match.societies || []).some(function (s) {
+        return s.toLowerCase() === String(previous).toLowerCase();
+    })) {
+        // The old community does not belong here - clear it so the form never
+        // submits an invalid Area/Society pair.
+        societySel.value = '';
+    }
+});
+
+document.addEventListener('submit', async function (e) {
+    var form = e.target.closest('form[data-form]');
+    if (!form) return;
+    e.preventDefault();
+    var kind = form.dataset.form;
+    try {
+        if (kind === 'search') {
+            var q = form.querySelector('[name="q"]').value.trim();
+            if (q) navigate('#/search/' + encodeURIComponent(q));
+        } else if (kind === 'enquiry') {
+            await submitEnquiry(form);
+        } else if (kind === 'profile-login') {
+            var mobile = form.querySelector('[name="mobileNumber"]').value.trim();
+            if (!/^\d{10}$/.test(mobile)) { toast('Enter a valid 10-digit mobile number', 'error'); return; }
+            openAuthModal();
+            var mob = $('#authMobile');
+            if (mob) mob.value = mobile;
+        } else if (kind === 'profile-edit') {
+            var vals = formVals(form);
+            // The community dropdown is disabled until an area is chosen. A disabled
+            // select still reports a value to formVals, so without this the save
+            // would blank a community the buyer already had. Only send the society
+            // the user could actually pick.
+            var societySel = form.querySelector('#profileSociety');
+            if (societySel && societySel.disabled) {
+                vals.society = (state.user && state.user.society) || '';
+            }
+            // The server response is authoritative: it reflects what was really
+            // persisted. Trusting the submitted values here could keep a stale
+            // society/building in the UI and re-submit it on the next save.
+            var saved = await api('/api/buyer/profile', { method: 'PUT', body: vals });
+            state.user = Object.assign({}, state.user, saved);
+            toast('Profile saved', 'success');
+            await render();
+        }
+    } catch (err) {
+        if (err instanceof ApiError && err.status === 401) requireAuth(function () { render(); });
+        else toast(err.message, 'error');
+    }
+});
+
+// ==================== Boot ====================
+
+window.addEventListener('hashchange', render);
+window.addEventListener('DOMContentLoaded', async function () {
+    initTheme();
+    try {
+        var me = await api('/api/auth/me');
+        state.user = (me && me.authenticated) ? me : null;
+    } catch (e) { state.user = null; }
+    if (!location.hash) location.hash = '#/home';
+    await render();
+});
