@@ -1,0 +1,38 @@
+# Agent tooling
+.kilo/
+
+# Local runtime data & build output (never share)
+data/
+bin/
+target/
+
+# Logs, local test artifacts & scripts
+*.log
+*.err
+*.txt
+*.ps1
+
+# Local binaries / tooling (cloudflared etc.) - never commit executables
+tools/
+projectmy-first-spring-api/
+*.exe
+
+# Allow the committed one-command runners (everything else *.ps1 stays ignored)
+!start.ps1
+!e2e-deep-test.ps1
+
+# docs screenshot tooling (local only)
+docs-tools/
+docs/shots/
+
+# Generated PDFs and reports (keep source MD/docs only)
+*.pdf
+*.html
+
+# E2E test login/session artifacts
+login.json
+login_admin.json
+login_buyer_b.json
+login_mobile.json
+login_seller_b.json
+login_superadmin.json

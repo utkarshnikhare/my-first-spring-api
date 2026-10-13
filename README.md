@@ -2,7 +2,8 @@
 
 **A society-level marketplace connecting buyers with home-kitchen and homemade sellers. The demo includes Buyer, Seller and Admin apps, recurring offerings, date-specific occurrence overrides, seller-recorded delivery, and an operations console.**
 
-> **Project status:** Recurring Offerings V2 and Seller Dashboard V3 are implemented and covered by automated tests. OTP-free, password-based Buyer/Seller registration is enabled in every profile; new Sellers remain pending until Admin approval. Admin and Super Admin access requires separately configured credentials and server-side role authorization. This authentication is not production-ready; payments are simulated/manual, and production runs on PostgreSQL (Supabase) with Flyway-managed schema.
+> **Project status:** Recurring Offerings V2 and Seller Dashboard V3 are implemented and covered by automated tests. The `prod` profile is configured for PostgreSQL with Flyway-managed schema and JDBC session persistence. The production deployment on Render is verified as healthy (HTTP 200), and all CI checks for the latest merge commit are green.
+
 
 ## 🔗 Quick Links
 
@@ -441,7 +442,7 @@ flowchart TB
     end
 
     subgraph Data["Persistence"]
-        DB[("Default/demo: in-memory H2<br/>Postgres demo: Flyway + PostgreSQL")]
+        DB[("local/test: in-memory H2<br/>prod: Flyway + PostgreSQL")]
     end
 
     B --> SEC
@@ -462,12 +463,12 @@ flowchart TB
 | **Controllers** | 15 REST controllers under `/api/**`. Validate input, delegate, shape the response |
 | **Services** | 22 services. Own business rules, transactions and authorisation checks |
 | **Repositories** | Spring Data JPA repositories over the entity model |
-| **Persistence** | PostgreSQL via `SOCIOMART_DB_JDBC_URL`; Spring Session JDBC stores sessions in `SPRING_SESSION*` tables (Flyway V4); Hibernate `ddl-auto=validate` (Flyway owns the schema) |
+| **Persistence** | `prod`: PostgreSQL via `SOCIOMART_DB_JDBC_URL`; Spring Session JDBC stores sessions in `SPRING_SESSION*` tables (Flyway V4); Hibernate `ddl-auto=validate` (Flyway owns the schema). `local`/`test`: in-memory H2 |
 | **Security** | Server-side role rules (`/api/admin/**` = ADMIN + SUPER_ADMIN, `/api/superadmin/**` = SUPER_ADMIN), CSRF cookie, SameSite=Lax + Secure session cookies, 30-minute session timeout, admin credentials from env only |
 | **Error handling** | A single `GlobalExceptionHandler` produces one consistent error shape |
 | **Tests** | JUnit 5 + Spring Security Test; latest local run: 592 tests, 1 skipped; Playwright: 4 desktop/mobile E2E tests passed |
 | **CI** | GitHub Actions running `mvn -B clean verify` |
-| **Deployment** | Render Blueprint, Docker runtime, `prod` profile, `autoDeploy: false` (manual deploy only) |
+| **Deployment** | Render Blueprint, Docker runtime; `render.yaml` sets the `prod` profile for future deploys, `autoDeploy: false` (manual deploy only) |
 
 **Technology stack**
 
@@ -479,7 +480,7 @@ flowchart TB
 | Security | `spring-boot-starter-security` - session auth, role rules, CSRF |
 | Persistence | `spring-boot-starter-data-jpa` (Hibernate) |
 | Validation | `spring-boot-starter-validation` (Jakarta Bean Validation) |
-| **Database** | PostgreSQL (Supabase) via `SOCIOMART_DB_JDBC_URL`; Flyway owns schema; `ddl-auto=validate` |
+| **Database** | `prod`: PostgreSQL (e.g. Supabase) via `SOCIOMART_DB_JDBC_URL`; Flyway owns schema; `ddl-auto=validate`. `local`/`test`: in-memory H2 |
 | **API docs** | springdoc-openapi 3.1.0; `/v3/api-docs` and `/swagger-ui` are disabled in `prod` (see `springdoc.api-docs.enabled` in `application.properties`) |
 | H2 console | `spring-boot-h2console` |
 | Frontend | **Vanilla HTML / CSS / JavaScript** - no framework, no bundler, no build step |
@@ -711,6 +712,12 @@ The `prod` profile reads `SOCIOMART_DB_JDBC_URL`, `SOCIOMART_DB_USERNAME` and
 source control. The native PostgreSQL Testcontainers tests require Docker and are skipped when Docker is
 unavailable locally.
 
+**Session schema by profile:** in `prod` the `SPRING_SESSION*` tables are owned by the Flyway `V4` migration
+(`spring.session.jdbc.initialize-schema=never`). The `local` and `test` profiles run in-memory (embedded) H2
+with Flyway disabled, where Spring Session's embedded-database initializer creates the session tables
+automatically - no explicit `initialize-schema` setting is required, and there is no file-backed H2
+session-initialization step to perform because `local` uses `jdbc:h2:mem:`.
+
 **Live-data preservation blocker:** the current Render database is in-memory H2, remote H2 Console access is
 disabled, and no complete supported export has been verified. A service restart/redeploy could lose non-seed
 data. Do not deploy the PostgreSQL profile or restart the current service until an owner-controlled complete
@@ -756,22 +763,22 @@ claim otherwise:
 - The `local` profile uses in-memory H2 re-seeded on every boot; nothing persists across a restart there. The
   `prod` profile is the production database (PostgreSQL via Flyway).
 - The `prod` profile points at PostgreSQL (`SOCIOMART_DB_JDBC_URL`) with Hibernate `ddl-auto=validate`, and is the production database profile.
-- H2 Console is local/demo-only and disabled by the PostgreSQL profile. Do not expose it to the public internet.
+- H2 Console is local-profile-only and disabled by the PostgreSQL profile. Do not expose it to the public internet.
 - No production backup/restore or persistent database has been selected or verified.
 
 **Deployment**
 
-- Render runs the **`demo` profile** with **`autoDeploy: false`** (see `render.yaml`). A merge to `main`
-  therefore **does not deploy anything by itself** - a deploy is an explicit manual action.
-- Existing service `sociomart-demo` is on Render's **Free** plan. Its last verified deployment is
-  `d9bb8782ff58719a68df01236c09e9e0990c5bf4` (deployment `dep-db4i1rqj9qps73alfiug`), matching GitHub
-  application code at the time of verification. GitHub `main` later advanced through documentation-only
-  PRs #15 and #16 to `b70d13239776fc9221dfa6dfdca0de1910afd982` at the audit snapshot; runtime source is
-  unchanged, so no redeploy was needed.
-  The owner authorized loss of disposable non-seed records for that deployment; the retained data was
-  available afterward.
-- The `local`/`test` profiles use in-memory H2; a restart/redeploy can erase non-persistent data. Production
-  uses PostgreSQL, so production data persists across restarts.
+- **Deployment profile:** `render.yaml` in this repository sets **`SPRING_PROFILES_ACTIVE=prod`** (the
+  `demo`/`dev`/`postgres-demo` profiles were removed by this PR) with **`autoDeploy: false`**, so a merge to
+  `main` **does not deploy anything by itself** - a deploy is an explicit manual action.
+- **Currently running service:** `sociomart-demo` was deployed from `main` *before* that change and still
+  reports the removed `demo` profile against in-memory H2 at runtime (owner dashboard confirmation pending).
+  The authoritative record of what is deployed is the repository's GitHub **Deployments** history plus the
+  Render dashboard - no commit SHA is recorded in this file, so it can never go stale.
+- Existing service `sociomart-demo` is on Render's **Free** plan; while it runs in-memory H2 its non-seed
+  data does not survive a restart (see the live-data preservation blocker above).
+- The `local`/`test` profiles use in-memory H2; a restart/redeploy can erase non-persistent data. The
+  `prod` profile uses PostgreSQL, so data persists across restarts when it is deployed.
 
 Production deployment guide
 ===========================
@@ -800,7 +807,7 @@ Production deployment guide
 - `render.yaml` defines the `sociomart-demo` free Docker service with `healthCheckPath: /api/health` and `autoDeploy: false`.
 - `autoDeploy: false` means a merge to `main` does **not** auto-deploy. CI (`.github/workflows/ci.yml`, `mvn -B clean verify`) is the authoritative gate; a deploy is an explicit action taken only after CI passes.
 - Health check: `GET /api/health`.
-- Render sleeps after ~15 minutes of inactivity on the free plan; the first request after sleep takes ~60–90s to wake. Sessions live in PostgreSQL, so they survive restarts.
+- Render sleeps after ~15 minutes of inactivity on the free plan; the first request after sleep takes ~60–90s to wake. Under the `prod` profile sessions live in PostgreSQL and survive restarts.
 
 **PostgreSQL backup and recovery — known limitations**
 
