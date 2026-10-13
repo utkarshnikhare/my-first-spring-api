@@ -64,6 +64,14 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-flyway</artifactId>
         </dependency>
+        <!-- Persistent HTTP sessions (Spring Session JDBC): sessions survive app
+             restarts/recycles because they live in the database instead of the
+             servlet container's memory. Schema: V4 migration in production,
+             Spring Session's own initializer for embedded (H2) test databases. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-session-jdbc</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>

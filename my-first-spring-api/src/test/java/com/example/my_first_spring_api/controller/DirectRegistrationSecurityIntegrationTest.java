@@ -38,7 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.url=jdbc:h2:mem:direct-registration;DB_CLOSE_DELAY=-1",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.jpa.open-in-view=false",
-        "sociomart.demo.direct-auth-enabled=true",
+        "sociomart.auth.password-login-enabled=true",
 })
 @ActiveProfiles("test")
 class DirectRegistrationSecurityIntegrationTest {
@@ -52,8 +52,8 @@ class DirectRegistrationSecurityIntegrationTest {
 
     @DynamicPropertySource
     static void registerAdminPasswordProperties(DynamicPropertyRegistry registry) {
-        registry.add("sociomart.demo.admin-password", () -> ADMIN_TEST_PASSWORD);
-        registry.add("sociomart.demo.super-admin-password", () -> SUPER_ADMIN_TEST_PASSWORD);
+        registry.add("sociomart.auth.admin-password", () -> ADMIN_TEST_PASSWORD);
+        registry.add("sociomart.auth.super-admin-password", () -> SUPER_ADMIN_TEST_PASSWORD);
     }
 
     private static String newTestPassword() {

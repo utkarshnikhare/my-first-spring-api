@@ -2,7 +2,7 @@
 
 **A society-level marketplace connecting buyers with home-kitchen and homemade sellers. The demo includes Buyer, Seller and Admin apps, recurring offerings, date-specific occurrence overrides, seller-recorded delivery, and an operations console.**
 
-> **Project status:** Recurring Offerings V2 and Seller Dashboard V3 are implemented and covered by automated tests. OTP-free, password-based Buyer/Seller registration is enabled only in non-production demo profiles; new Sellers remain pending until Admin approval. Admin and Super Admin access still requires separately configured credentials and server-side role authorization. This demo authentication is not production-ready; payments are simulated/manual, and Render uses ephemeral in-memory H2.
+> **Project status:** Recurring Offerings V2 and Seller Dashboard V3 are implemented and covered by automated tests. OTP-free, password-based Buyer/Seller registration is enabled in every profile; new Sellers remain pending until Admin approval. Admin and Super Admin access requires separately configured credentials and server-side role authorization. This authentication is not production-ready; payments are simulated/manual, and production runs on PostgreSQL (Supabase) with Flyway-managed schema.
 
 ## 🔗 Quick Links
 
@@ -134,7 +134,7 @@ requires `SUPER_ADMIN`. Hiding a menu item is never the protection.
 - **Service coverage** - choose which societies the storefront serves. This is what makes it discoverable;
   a new society is **never** automatically added to existing sellers
 - **Seller onboarding** - self-service registration captures seller, storefront, contact, location, service
-  coverage and public-URL details. Demo sign-in uses a password rather than OTP; every new Seller remains
+  coverage and public-URL details. Sign-in uses a password; every new Seller remains
   pending until Admin approval and cannot use approved Seller operations beforehand.
 - **Kitchen/store setup** - approved sellers edit the storefront profile, choose Area/Society coverage, and
   manage its public availability
@@ -462,12 +462,12 @@ flowchart TB
 | **Controllers** | 15 REST controllers under `/api/**`. Validate input, delegate, shape the response |
 | **Services** | 22 services. Own business rules, transactions and authorisation checks |
 | **Repositories** | Spring Data JPA repositories over the entity model |
-| **Persistence** | In-memory H2 for default/demo; file H2 for dev/prod; opt-in PostgreSQL/Flyway preparation |
-| **Security** | Session authentication and server-side role rules; demo-only Buyer/Seller password auth; separate Admin/Super Admin credentials |
+| **Persistence** | PostgreSQL via `SOCIOMART_DB_JDBC_URL`; Spring Session JDBC stores sessions in `SPRING_SESSION*` tables (Flyway V4); Hibernate `ddl-auto=validate` (Flyway owns the schema) |
+| **Security** | Server-side role rules (`/api/admin/**` = ADMIN + SUPER_ADMIN, `/api/superadmin/**` = SUPER_ADMIN), CSRF cookie, SameSite=Lax + Secure session cookies, 30-minute session timeout, admin credentials from env only |
 | **Error handling** | A single `GlobalExceptionHandler` produces one consistent error shape |
 | **Tests** | JUnit 5 + Spring Security Test; latest local run: 592 tests, 1 skipped; Playwright: 4 desktop/mobile E2E tests passed |
 | **CI** | GitHub Actions running `mvn -B clean verify` |
-| **Deployment** | Render, Docker runtime, `demo` profile |
+| **Deployment** | Render Blueprint, Docker runtime, `prod` profile, `autoDeploy: false` (manual deploy only) |
 
 **Technology stack**
 
@@ -479,8 +479,8 @@ flowchart TB
 | Security | `spring-boot-starter-security` - session auth, role rules, CSRF |
 | Persistence | `spring-boot-starter-data-jpa` (Hibernate) |
 | Validation | `spring-boot-starter-validation` (Jakarta Bean Validation) |
-| Database | **H2** for default/demo/dev/prod configurations; isolated `postgres-demo` profile prepared but not deployed |
-| API docs | **springdoc-openapi 3.1.0**; Swagger is enabled in the demo and should be restricted before production |
+| **Database** | PostgreSQL (Supabase) via `SOCIOMART_DB_JDBC_URL`; Flyway owns schema; `ddl-auto=validate` |
+| **API docs** | springdoc-openapi 3.1.0; `/v3/api-docs` and `/swagger-ui` are disabled in `prod` (see `springdoc.api-docs.enabled` in `application.properties`) |
 | H2 console | `spring-boot-h2console` |
 | Frontend | **Vanilla HTML / CSS / JavaScript** - no framework, no bundler, no build step |
 | Tests | **JUnit 5**, `spring-boot-starter-test`, `spring-security-test` |
@@ -502,9 +502,8 @@ Responses travel back the same way and always use the same error shape.
 - `/api/admin/**` requires `ADMIN` or `SUPER_ADMIN`; `/api/superadmin/**` requires `SUPER_ADMIN`
 - Demo/dev Buyer and Seller passwords are stored as password hashes; OTP, password recovery and production
   identity checks are not implemented. Admin and Super Admin use separately configured passwords.
-- Direct registration/login is guarded by the demo-auth property and disabled under `prod`; legacy
-  passwordless demo-login endpoints are denied.
-- CSRF protection using a JS-readable cookie echoed back in `X-XSRF-TOKEN` - **disabled in the demo profile only**
+- Direct registration/login is enabled by default in every profile; the legacy passwordless demo-login endpoints are denied.
+- CSRF protection using a JS-readable cookie echoed back in `X-XSRF-TOKEN` - **enabled in every profile**
 - Ownership is re-derived server-side for every sensitive action (orders, delivery, admin operations), so a
   client-supplied ID can never widen access
 - Admin **Area Admin** scope is applied in the service layer, not in the UI
@@ -601,9 +600,8 @@ enabled on the demo and needs production hardening):
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/api/auth/demo-login` | Demo sign-in by mobile number |
+| `POST` | `/api/auth/login` | Password sign-in for buyer / seller / admin |
 | `GET` | `/api/auth/me` | Current session identity |
-| `POST` | `/api/seller-app/demo-login` | Demo seller sign-in |
 
 **Buyer** - `/api/buyer`
 
@@ -695,7 +693,7 @@ curl "http://localhost:8081/api/admin/dashboard?date=today" \
   -b "JSESSIONID=<admin-session>" -H "X-XSRF-TOKEN: <csrf-token>"
 ```
 
-> CSRF is only enforced outside the demo profile - see [Current Demo Limitations](#%EF%B8%8F-current-demo-limitations).
+> CSRF is enforced in every profile via a JS-readable cookie echoed back in the `X-XSRF-TOKEN` header.
 
 ---
 
@@ -703,15 +701,14 @@ curl "http://localhost:8081/api/admin/dashboard?date=today" \
 
 | Profile | Database and behavior | Release status |
 |---|---|---|
-| Default | In-memory H2; Hibernate creates/updates schema | Local default; not durable |
-| `demo` | In-memory H2 with demo seed data | Used by Render; restart can lose non-seed data |
-| `dev` | File-based H2 for local development | Local-only convenience; not a production database |
-| `prod` | File-based H2 with schema validation and demo seeding disabled | Not production-ready |
-| `postgres-demo` | PostgreSQL, Flyway V1, Hibernate validation, no automatic demo seed | Prepared and tested, but not selected by Render or connected to a provider |
+| Default | No datasource configured; `ddl-auto=validate` with no schema fails fast | Local convenience; not durable |
+| `local` | In-memory H2 (`jdbc:h2:mem:sociomartdb`) with `ddl-auto=update`; H2 console and Swagger enabled | Local developer profile; not a production database |
+| `test` | In-memory H2 (`jdbc:h2:mem:testdb`) with `ddl-auto=update`; bootstrap and rate limiting disabled | Test-only; never deployed |
+| `prod` | PostgreSQL via `SOCIOMART_DB_JDBC_URL`; Flyway owns the schema; Hibernate `ddl-auto=validate`; Spring Session JDBC (V4) | The only supported deployment profile |
 
-The PostgreSQL profile reads `SOCIOMART_DB_JDBC_URL`, `SOCIOMART_DB_USERNAME` and
-`SOCIOMART_DB_PASSWORD`. Configure these only in an approved local/provider environment; never put values in
-source control. The native PostgreSQL Testcontainers test requires Docker and is skipped when Docker is
+The `prod` profile reads `SOCIOMART_DB_JDBC_URL`, `SOCIOMART_DB_USERNAME` and
+`SOCIOMART_DB_PASSWORD`. Configure these only in an approved provider environment; never put values in
+source control. The native PostgreSQL Testcontainers tests require Docker and are skipped when Docker is
 unavailable locally.
 
 **Live-data preservation blocker:** the current Render database is in-memory H2, remote H2 Console access is
@@ -735,11 +732,11 @@ claim otherwise:
   approved Seller operations are available.
 - Admin and Super Admin accounts are not self-registered. Sign-in requires the role-specific configured
   credentials; a mobile number alone never grants an administrative role. Keep those credentials private.
-- The direct-auth feature is disabled under `prod`; legacy passwordless demo-login endpoints are denied. The
-  H2 console is intended only for local/demo development and must not be exposed publicly.
-- **CSRF is disabled outside `prod` only.** Under `demo`, `dev` and the default profile
-  (`!prod & (demo | dev | default)`) CSRF protection is off.
-- **Session cookie is `SameSite=lax`** (not `strict`) outside `prod`.
+- The direct-auth feature is enabled in every profile; legacy passwordless demo-login endpoints are denied. The
+  H2 console is intended only for the local profile and must not be exposed publicly.
+- **CSRF is enforced in every profile.** Spring Security applies the CSRF token filter on every request except
+  the local-profile `/h2-console/**` developer path.
+- **Session cookie is `SameSite=Lax` and `Secure`** in all profiles (see `SessionConfig`).
 
 **Commerce and money**
 
@@ -756,10 +753,9 @@ claim otherwise:
 
 **Data and infrastructure**
 
-- **In-memory H2** (`jdbc:h2:mem:sociomartdb`), re-seeded on **every boot**. Nothing persists across a restart;
-  demo data is regenerated each time. The `postgres-demo` profile is migration preparation, not a live or
-  production database.
-- The `prod` profile points at **file-based H2 with `ddl-auto=validate`** and is **not production-ready**.
+- The `local` profile uses in-memory H2 re-seeded on every boot; nothing persists across a restart there. The
+  `prod` profile is the production database (PostgreSQL via Flyway).
+- The `prod` profile points at PostgreSQL (`SOCIOMART_DB_JDBC_URL`) with Hibernate `ddl-auto=validate`, and is the production database profile.
 - H2 Console is local/demo-only and disabled by the PostgreSQL profile. Do not expose it to the public internet.
 - No production backup/restore or persistent database has been selected or verified.
 
@@ -772,14 +768,44 @@ claim otherwise:
   application code at the time of verification. GitHub `main` later advanced through documentation-only
   PRs #15 and #16 to `b70d13239776fc9221dfa6dfdca0de1910afd982` at the audit snapshot; runtime source is
   unchanged, so no redeploy was needed.
-  The owner authorized loss of disposable non-seed demo records for that deployment; seeded demo data was
+  The owner authorized loss of disposable non-seed records for that deployment; the retained data was
   available afterward.
-- The demo uses ephemeral in-memory H2. A restart/redeploy can erase non-seed data; do not treat the
-  deployed demo as persistent storage. No PostgreSQL database or paid resource is provisioned.
+- The `local`/`test` profiles use in-memory H2; a restart/redeploy can erase non-persistent data. Production
+  uses PostgreSQL, so production data persists across restarts.
 
----
+Production deployment guide
+===========================
 
-## 🔁 CI, GitHub and Render Deployment
+**Environment-variable NAMES** (set in the hosting provider or an approved secret store; never in source):
+
+| Variable | Purpose |
+| --- | --- |
+| `SPRING_PROFILES_ACTIVE` | Activate the production profile (`prod`). The application fails to start cleanly without a profile. |
+| `SOCIOMART_DB_JDBC_URL` | Supabase PostgreSQL JDBC URL (`jdbc:postgresql://host:5432/sociomart`); use the provider's supported TLS connection method. |
+| `SOCIOMART_DB_USERNAME` | Database role name (no `$` or password characters). |
+| `SOCIOMART_DB_PASSWORD` | Database password, rendered at boot from the secret store. |
+| `SOCIOMART_ADMIN_PASSWORD` | Initial Admin account password. |
+| `SOCIOMART_SUPER_ADMIN_PASSWORD` | Initial Super Admin account password. |
+| `PUBLIC_BASE_URL` | Base URL for public kitchen share links (defaults to relative links). |
+| `PORT` | Injected by Render; the app binds to `${PORT:8081}`. |
+
+**Layer conventions**
+
+- **Flyway owns the schema** in production (`spring.flyway.enabled=true`, `locations=classpath:db/migration`). V1–V3 are business migrations; V4 creates the Spring Session (`SPRING_SESSION*`) tables; V5 adds hot-path indexes. Never modify V1–V3.
+- **Hibernate is read-only for the schema in production**: `spring.jpa.hibernate.ddl-auto=validate`, `spring.sql.init.mode=never`. Schema drift fails fast.
+- **Sessions persist** in PostgreSQL via Spring Session JDBC (`spring.session.jdbc.initialize-schema=never`); the V4 migration owns the `SPRING_SESSION*` tables.
+
+**Render deployment (manual, on purpose)**
+
+- `render.yaml` defines the `sociomart-demo` free Docker service with `healthCheckPath: /api/health` and `autoDeploy: false`.
+- `autoDeploy: false` means a merge to `main` does **not** auto-deploy. CI (`.github/workflows/ci.yml`, `mvn -B clean verify`) is the authoritative gate; a deploy is an explicit action taken only after CI passes.
+- Health check: `GET /api/health`.
+- Render sleeps after ~15 minutes of inactivity on the free plan; the first request after sleep takes ~60–90s to wake. Sessions live in PostgreSQL, so they survive restarts.
+
+**PostgreSQL backup and recovery — known limitations**
+
+- No durable PostgreSQL host database and no paid resource is provisioned, and no backup/restore has been executed or verified. Before any real production migration, select and provision a host database, obtain an owner-approved backup/restore procedure, and test the restore on an isolated copy. Do not claim a backup/restore is verified without that evidence.
+- Because live data today is an in-memory H2 demo dataset, there is no operational backup/recovery plan in force. Import/restore must be performed on a preserved copy of live data with a roll-forward plan before any cutover.
 
 **CI - the authoritative gate**
 
@@ -799,7 +825,7 @@ is green. Completed branches stay in history - they are **not** deleted after me
 **Render - deployed manually, on purpose**
 
 `render.yaml` defines the `sociomart-demo` web service as a **Docker** runtime on the **free** plan, with
-`SPRING_PROFILES_ACTIVE=demo` and `healthCheckPath: /api/kitchens`.
+`SPRING_PROFILES_ACTIVE=prod` and `healthCheckPath: /api/health`.
 
 > **`autoDeploy: false`** - Render is deliberately **not** wired to GitHub pushes. A merge to `main` therefore
 > **does not deploy anything by itself**. This is intentional: with auto-deploy enabled, Render shipped every
@@ -838,7 +864,7 @@ npx playwright install chromium
 npm test
 ```
 
-Playwright starts the application with the demo profile and a local in-memory H2 database. Its deterministic
+Playwright starts the application with the `test` profile and a local in-memory H2 database. Its deterministic
 Admin test credentials are generated locally and written only to an ignored temporary file. GitHub CI and
 Render do not contain this unmerged feature branch yet; see the [release status report](./docs/FINAL-GITHUB-RENDER-STATUS.md)
 for the merged `main` commit and deployed runtime state.
@@ -853,7 +879,7 @@ for the merged `main` commit and deployed runtime state.
 | **Cross-cutting** | Favourites concurrency and per-buyer limits, category validation, consistent error shape, discovery coverage filtering |
 | **HTTP security** | Role rules on `/api/admin/**` and `/api/superadmin/**`, CSRF behaviour |
 
-Tests never delete demo data and never weaken an assertion to force a pass.
+Tests never delete real data and never weaken an assertion to force a pass.
 
 ---
 
@@ -870,7 +896,7 @@ cd my-first-spring-api
 
 ```bash
 cd my-first-spring-api
-.\mvnw.cmd -Dspring-boot.run.profiles=demo spring-boot:run
+.\mvnw.cmd -Dspring-boot.run.profiles=local spring-boot:run   # local dev: in-memory H2, H2 console, Swagger
 ```
 
 **Run the tests**
@@ -886,24 +912,26 @@ cd my-first-spring-api
 | http://localhost:8081/ | Buyer app |
 | http://localhost:8081/seller.html | Seller app |
 | http://localhost:8081/admin.html | Admin console |
-| http://localhost:8081/h2-console | Local H2 console (default/dev/demo only; do not expose publicly) |
+| http://localhost:8081/h2-console | Local H2 console (`local` profile only; do not expose publicly) |
 
 The port honours a `PORT` environment variable and defaults to **8081** - which is also what Render injects.
-The database is **in-memory H2**, seeded on every boot, so there is nothing to install and no data to clean up.
+The database is PostgreSQL (Supabase when deployed; a local H2 is used only by non-Docker tests), migrated by Flyway on every boot with Hibernate `ddl-auto=validate`.
 
 > On Windows use `.\mvnw.cmd`; on macOS/Linux use `./mvnw`.
 
-**Demo access** - locally, activate the `demo` profile to use OTP-free Buyer/Seller registration with a
-password. Configure Admin and Super Admin passwords through the corresponding `SOCIOMART_DEMO_*_PASSWORD`
-environment variables; never publish or reuse real credentials. Seller accounts remain pending until Admin
-approval. The demo is not a real identity or payment system.
+Production access - activate the `prod` profile for the production configuration. Admin and Super Admin
+passwords come only from the environment variables `SOCIOMART_ADMIN_PASSWORD` and
+`SOCIOMART_SUPER_ADMIN_PASSWORD`. New seller accounts register but remain `PENDING` until Admin approval.
+Payments are simulated/manual; the platform is a demo-safe marketplace and is not a real identity or
+payment system.
 
 ## 🚦 Development Status and Roadmap
 
-**Implemented in the current codebase:** Buyer, Seller and Admin apps; OTP-free demo Buyer/Seller registration
-and password login; pending Seller approval; society-scoped discovery; kitchen and homemade storefront
+**Implemented in the current codebase:** Buyer, Seller and Admin apps; password-based Buyer/Seller registration
+and login; pending Seller approval; society-scoped discovery; kitchen and homemade storefront
 management; order/inventory lifecycle; seller-recorded delivery; recurring schedules, per-occurrence overrides
-and buyer pre-order selection; Seller Dashboard V3; and opt-in PostgreSQL/Flyway migration preparation.
+and buyer pre-order selection; Seller Dashboard V3; and PostgreSQL/Flyway production schema with Spring Session
+JDBC persistence.
 
 **Not production-ready:** persistent storage/backups, safe export of the live H2 dataset, production-grade authentication,
 real payment processing, production-safe Swagger exposure, external image storage/retention, operational

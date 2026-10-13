@@ -18,9 +18,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @SpringBootTest(properties = {
         "spring.jpa.hibernate.ddl-auto=validate",
         "spring.jpa.defer-datasource-initialization=false",
-        "sociomart.demo.direct-auth-enabled=true"
+        "sociomart.auth.password-login-enabled=true"
 })
-@ActiveProfiles("postgres-demo")
+@ActiveProfiles("test")
 @Testcontainers(disabledWithoutDocker = true)
 class PostgresRuntimeSmokeTest extends AbstractRuntimeSmokeFlow {
 
@@ -32,7 +32,7 @@ class PostgresRuntimeSmokeTest extends AbstractRuntimeSmokeFlow {
         registry.add("SOCIOMART_DB_JDBC_URL", POSTGRES::getJdbcUrl);
         registry.add("SOCIOMART_DB_USERNAME", POSTGRES::getUsername);
         registry.add("SOCIOMART_DB_PASSWORD", POSTGRES::getPassword);
-        registry.add("sociomart.demo.admin-password", () -> ADMIN_PASSWORD);
-        registry.add("sociomart.demo.super-admin-password", () -> SUPER_ADMIN_PASSWORD);
+        registry.add("sociomart.auth.admin-password", () -> ADMIN_PASSWORD);
+        registry.add("sociomart.auth.super-admin-password", () -> SUPER_ADMIN_PASSWORD);
     }
 }

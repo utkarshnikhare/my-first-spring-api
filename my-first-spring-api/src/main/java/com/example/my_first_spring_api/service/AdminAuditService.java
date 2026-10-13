@@ -4,6 +4,7 @@ import com.example.my_first_spring_api.model.AdminAuditLog;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.repository.AdminAuditLogRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,6 +53,9 @@ public class AdminAuditService {
     // Public-URL lifecycle (Seller Onboarding, Approval & Public URL Logic V1).
     public static final String KITCHEN_SLUG_CHANGED = "KITCHEN_SLUG_CHANGED";
     public static final String KITCHEN_SLUG_RESERVED = "KITCHEN_SLUG_RESERVED";
+    // Security (Phase D): login rate-limit lockout, written by AuthController when the
+    // 5-failures-in-15-minutes threshold trips. actor is SYSTEM (no authenticated user).
+    public static final String LOGIN_LOCKED_OUT = "LOGIN_LOCKED_OUT";
 
     private static final int MAX_REASON = 1000;
 
@@ -87,8 +91,12 @@ public class AdminAuditService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> recent(int limit) {
-        List<AdminAuditLog> rows = repository.findAllByOrderByCreatedAtDesc();
-        return rows.stream().limit(Math.max(1, Math.min(limit, 500))).map(this::toRow).toList();
+        int bounded = Math.max(1, Math.min(limit, 500));
+        // DB-level LIMIT (via Pageable) — the audit table grows forever, so the
+        // old findAll-then-trim-in-Java pattern loaded the entire trail.
+        List<AdminAuditLog> rows =
+                repository.findTopByOrderByCreatedAtDesc(PageRequest.of(0, bounded));
+        return rows.stream().map(this::toRow).toList();
     }
 
     /** History for one target, newest first - rendered inside Seller/Buyer detail. */

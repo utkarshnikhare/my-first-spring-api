@@ -12,6 +12,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -47,7 +48,18 @@ public class SecurityConfig {
                         csrf.ignoringRequestMatchers("/h2-console/**");
                     }
                 })
-                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
+                .headers(headers -> headers
+                        // Framing stays same-origin: the local H2 console is framed by its
+                        // own page, while buyer/seller/admin pages cannot be embedded by
+                        // an attacker site (clickjacking).
+                        .frameOptions(frame -> frame.sameOrigin())
+                        // Never let a browser MIME-sniff a response into a script/HTML
+                        // type - uploads and API responses must keep their declared type.
+                        .contentTypeOptions(contentTypeOptions -> { })
+                        // Referrer: send only the origin (never the full URL, which can
+                        // contain /kitchen/<slug> or ids) on cross-origin navigations.
+                        .referrerPolicy(referrer -> referrer.policy(
+                                ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)))
                 .addFilterBefore(userSessionAuthorizationFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/demo-login", "/api/seller-app/demo-login").denyAll()

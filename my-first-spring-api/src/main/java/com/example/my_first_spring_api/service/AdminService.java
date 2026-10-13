@@ -525,6 +525,7 @@ public class AdminService {
         return kitchens(null);
     }
 
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> kitchens(String sellerTypeFilter) {
         List<Kitchen> all = kitchenRepository.findAll();
         return all.stream()

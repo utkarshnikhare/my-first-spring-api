@@ -12,6 +12,7 @@ import com.example.my_first_spring_api.exception.OrderNotFoundException;
 import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.exception.TemplateNotFoundException;
+import com.example.my_first_spring_api.exception.TooManyRequestsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -124,6 +125,20 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ApiErrorDto> handleInvalidCredentials(InvalidCredentialsException ex) {
         return new ResponseEntity<>(new ApiErrorDto("INVALID_CREDENTIALS", ex.getMessage(), 401), HttpStatus.UNAUTHORIZED);
+    }
+
+    /**
+     * Login / registration rate limit exceeded ({@link TooManyRequestsException}).
+     *
+     * <p>The message is intentionally generic and non-sensitive: it must not reveal
+     * whether a given mobile number exists, nor which counter (per-mobile vs per-IP)
+     * tripped. Logged at WARN with no user identifiers for the same reason.</p>
+     */
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ApiErrorDto> handleTooManyRequests(TooManyRequestsException ex) {
+        logger.warn("Rate limit exceeded: {}", ex.getMessage());
+        return new ResponseEntity<>(new ApiErrorDto("TOO_MANY_REQUESTS", ex.getMessage(), 429),
+                HttpStatus.TOO_MANY_REQUESTS);
     }
 
     @ExceptionHandler(ResponseStatusException.class)
