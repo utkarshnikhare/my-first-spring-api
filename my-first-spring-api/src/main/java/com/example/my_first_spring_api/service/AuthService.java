@@ -1,6 +1,6 @@
 package com.example.my_first_spring_api.service;
 
-import com.example.my_first_spring_api.SecurityConfig;
+import com.example.my_first_spring_api.AuthSettings;
 import com.example.my_first_spring_api.dto.BuyerRegistrationRequestDto;
 import com.example.my_first_spring_api.dto.CredentialLoginRequestDto;
 import com.example.my_first_spring_api.dto.CoverageOptionDto;
@@ -29,7 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 @Service
-public class DemoAuthService {
+public class AuthService {
     private final UserRepository users;
     private final KitchenRepository kitchens;
     private final LocationService locations;
@@ -41,9 +41,9 @@ public class DemoAuthService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private AdminAuditService auditService;
 
-    public DemoAuthService(UserRepository users, KitchenRepository kitchens, LocationService locations,
-                           SellerService sellerService, PasswordEncoder passwordEncoder, Environment environment,
-                           AnalyticsService analyticsService) {
+    public AuthService(UserRepository users, KitchenRepository kitchens, LocationService locations,
+                       SellerService sellerService, PasswordEncoder passwordEncoder, Environment environment,
+                       AnalyticsService analyticsService) {
         this.users = users;
         this.kitchens = kitchens;
         this.locations = locations;
@@ -142,15 +142,15 @@ public class DemoAuthService {
     }
 
     public boolean isDirectAuthEnabled() {
-        return SecurityConfig.isDirectAuthEnabled(environment);
+        return AuthSettings.passwordLoginEnabled(environment);
     }
 
     public boolean isAdminPasswordConfigured() {
-        return StringUtils.hasText(environment.getProperty("sociomart.demo.admin-password"));
+        return AuthSettings.adminPasswordConfigured(environment);
     }
 
     public boolean isSuperAdminPasswordConfigured() {
-        return StringUtils.hasText(environment.getProperty("sociomart.demo.super-admin-password"));
+        return AuthSettings.superAdminPasswordConfigured(environment);
     }
 
     @Transactional(readOnly = true)
@@ -161,7 +161,7 @@ public class DemoAuthService {
     private boolean validPasswordFor(User user, String rawPassword) {
         if (user.getRole() == UserRole.ADMIN || user.getRole() == UserRole.SUPER_ADMIN) {
             String property = user.getRole() == UserRole.SUPER_ADMIN
-                    ? "sociomart.demo.super-admin-password" : "sociomart.demo.admin-password";
+                    ? AuthSettings.SUPER_ADMIN_PASSWORD : AuthSettings.ADMIN_PASSWORD;
             String configured = environment.getProperty(property);
             return StringUtils.hasText(configured)
                     && java.security.MessageDigest.isEqual(
@@ -175,7 +175,7 @@ public class DemoAuthService {
         if (!isDirectAuthEnabled()) {
             throw new org.springframework.web.server.ResponseStatusException(
                     org.springframework.http.HttpStatus.FORBIDDEN,
-                    "Direct registration and login are available only in the configured demo environment.");
+                    "Registration and password login are disabled on this server.");
         }
     }
 

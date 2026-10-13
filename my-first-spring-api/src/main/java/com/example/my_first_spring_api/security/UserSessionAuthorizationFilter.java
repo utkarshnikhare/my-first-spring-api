@@ -45,7 +45,27 @@ public class UserSessionAuthorizationFilter extends OncePerRequestFilter {
                 Object attr = session.getAttribute(BuyerService.BUYER_SESSION_KEY);
                 if (attr instanceof Long userId) {
                     User user = userRepository.findById(userId).orElse(null);
-                    if (user != null) {
+                    if (user == null) {
+                        SecurityContextHolder.getContext().setAuthentication(null);
+                    } else if (user.isBlocked()) {
+                        // A blocked account loses every authority immediately - on
+                        // the very next request, not just at next login. Protected
+                        // calls are refused with 403 and the agreed, non-sensitive
+                        // message; the response exposes no account data.
+                        SecurityContextHolder.getContext().setAuthentication(null);
+                        if (isAuthEscapeHatch(request)) {
+                            // /api/auth/** stays reachable (SecurityConfig already
+                            // permits it) so the client can read the block state via
+                            // /me and invalidate the session with /logout. Re-login
+                            // is refused separately in AuthService.login.
+                            filterChain.doFilter(request, response);
+                            return;
+                        }
+                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                        response.setContentType("application/json");
+                        response.getWriter().write("{\"message\":\"Your account is blocked\"}");
+                        return;
+                    } else {
                         // Always derive authorities from the DB so role changes
                         // (approval, demotion, ...) apply on the very next request.
                         String role = user.getRole().name();
@@ -56,8 +76,6 @@ public class UserSessionAuthorizationFilter extends OncePerRequestFilter {
                         UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
                                 userId, null, List.of(new SimpleGrantedAuthority("ROLE_" + role)));
                         SecurityContextHolder.getContext().setAuthentication(auth);
-                    } else {
-                        SecurityContextHolder.getContext().setAuthentication(null);
                     }
                 }
             }
@@ -65,5 +83,16 @@ public class UserSessionAuthorizationFilter extends OncePerRequestFilter {
         } finally {
             SecurityContextHolder.clearContext();
         }
+    }
+
+    /**
+     * Auth endpoints are the one path a blocked session keeps: the SPA must be able
+     * to ask "who am I" (and be told it is blocked) and to log out cleanly. Every
+     * other path is refused with 403 while the block is active, so a blocked
+     * account can never act again on the existing session.
+     */
+    private static boolean isAuthEscapeHatch(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        return uri != null && uri.startsWith("/api/auth/");
     }
 }

@@ -47,11 +47,10 @@ class AdminSystemHealthTest {
         // screen can never disagree with the real gate. Asserting equality against that
         // helper is the real contract; the literal below just documents the outcome for
         // the "test" profile, which is not one of demo/dev/default and so is not a demo
-        // environment. (It used to read as true, which would have been a wrong
-        // expectation rather than a wrong implementation.)
+        // environment. (Password login is enabled by default: sociomart.auth.password-login-enabled=true)
         assertThat(health.get("directAuthEnabled"))
-                .isEqualTo(com.example.my_first_spring_api.SecurityConfig.isDirectAuthEnabled(environment));
-        assertThat(health.get("directAuthEnabled")).isEqualTo(Boolean.FALSE);
+                .isEqualTo(com.example.my_first_spring_api.AuthSettings.passwordLoginEnabled(environment));
+        assertThat(health.get("directAuthEnabled")).isEqualTo(Boolean.TRUE);
     }
 
     @SuppressWarnings("unchecked")

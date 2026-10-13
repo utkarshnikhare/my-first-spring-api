@@ -9,14 +9,14 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:runtime-smoke;DB_CLOSE_DELAY=-1",
         "spring.jpa.hibernate.ddl-auto=create-drop",
-        "sociomart.demo.direct-auth-enabled=true"
+        "sociomart.auth.password-login-enabled=true"
 })
 @ActiveProfiles("test")
 class H2RuntimeSmokeFlowTest extends AbstractRuntimeSmokeFlow {
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
-        registry.add("sociomart.demo.admin-password", () -> ADMIN_PASSWORD);
-        registry.add("sociomart.demo.super-admin-password", () -> SUPER_ADMIN_PASSWORD);
+        registry.add("sociomart.auth.admin-password", () -> ADMIN_PASSWORD);
+        registry.add("sociomart.auth.super-admin-password", () -> SUPER_ADMIN_PASSWORD);
     }
 }

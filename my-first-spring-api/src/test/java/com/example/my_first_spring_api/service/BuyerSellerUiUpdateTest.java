@@ -1,6 +1,7 @@
 package com.example.my_first_spring_api.service;
 
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -37,12 +38,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.jpa.open-in-view=false"
 })
-@ActiveProfiles("demo")
+@ActiveProfiles("test")
 class BuyerSellerUiUpdateTest {
 
+    private static final String TEST_BUYER_MOBILE = "9000000010";
+
     @Autowired BuyerService buyerService;
-    @Autowired com.example.my_first_spring_api.DemoDataSeeder seeder;
     @Autowired com.example.my_first_spring_api.repository.UserRepository users;
+    @Autowired com.example.my_first_spring_api.service.LocationService locations;
 
     private static String buyerJs;
     private static String sellerJs;
@@ -65,9 +68,39 @@ class BuyerSellerUiUpdateTest {
         return new String(Files.readAllBytes(p), StandardCharsets.UTF_8);
     }
 
-    /** A session signed in as the seeded demo buyer. */
+    /**
+     * Ensures the single test buyer exists. Every test in this class shares one in-memory
+     * database, so the fixture is created once and reused instead of re-inserted.
+     */
+    @BeforeEach
+    void createTestBuyer() {
+        seedReferenceLocations();
+        if (users.findByMobileNumber(TEST_BUYER_MOBILE).isPresent()) return;
+        com.example.my_first_spring_api.model.User buyer = new com.example.my_first_spring_api.model.User(
+                "Test Buyer", TEST_BUYER_MOBILE, null, com.example.my_first_spring_api.model.UserRole.BUYER);
+        buyer.setPasswordHash("dummy");
+        if (!locations.findAllAreas().isEmpty()) {
+            var area = locations.findActiveAreas().get(0);
+            var societies = locations.findActiveSocieties(area.getId());
+            if (!societies.isEmpty()) {
+                buyer.setAreaRef(area);
+                buyer.setArea(area.getName());
+                buyer.setSocietyRef(societies.get(0));
+                buyer.setSociety(societies.get(0).getName());
+            }
+        }
+        users.saveAndFlush(buyer);
+    }
+
+    /** Creates the reference area + society the directory-driven tests need. */
+    private void seedReferenceLocations() {
+        if (!locations.findAllAreas().isEmpty()) return;
+        var area = locations.createArea("Test Area");
+        locations.createSociety(area.getId(), "Test Society");
+    }
+
+    /** A session signed in as a test buyer. */
     private MockHttpSession buyerSession() {
-        seeder.seedAll();
         com.example.my_first_spring_api.model.User buyer =
                 users.findByRole(com.example.my_first_spring_api.model.UserRole.BUYER).get(0);
         MockHttpSession s = new MockHttpSession();

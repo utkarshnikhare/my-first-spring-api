@@ -24,9 +24,10 @@ import static org.assertj.core.api.Assertions.assertThat;
                 "spring.datasource.username=sa",
                 "spring.datasource.password=",
                 "spring.jpa.hibernate.ddl-auto=validate",
-                "spring.jpa.defer-datasource-initialization=false"
+                "spring.jpa.defer-datasource-initialization=false",
+                "spring.flyway.enabled=true"
         })
-@ActiveProfiles("postgres-demo")
+@ActiveProfiles("test")
 class PostgresSchemaMigrationTest {
 
     @Autowired
@@ -40,18 +41,26 @@ class PostgresSchemaMigrationTest {
 
     @Test
     void migrationsCreateSchemaThatMatchesAllJpaEntities() {
-        // V3 adds the public-URL slug column, its unique index and the
-        // kitchen_slug_aliases redirect table (+ its FK to kitchens).
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
-        assertThat(SecurityConfig.isDemoEnvironment(environment)).isTrue();
+        // V4 adds the Spring Session tables; V5 adds hot-path indexes only
+        // (no new tables), so the business table count is unchanged.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("5");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
                         + "WHERE table_schema = 'PUBLIC' AND table_type = 'BASE TABLE' "
-                        + "AND table_name <> 'flyway_schema_history'",
+                        + "AND table_name <> 'flyway_schema_history' "
+                        + "AND LOWER(table_name) NOT LIKE 'spring_session%'",
                 Integer.class);
         Assertions.assertNotNull(tableCount);
         assertThat(tableCount).isEqualTo(24);
+
+        Integer sessionTableCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables "
+                        + "WHERE table_schema = 'PUBLIC' AND table_type = 'BASE TABLE' "
+                        + "AND LOWER(table_name) LIKE 'spring_session%'",
+                Integer.class);
+        Assertions.assertNotNull(sessionTableCount);
+        assertThat(sessionTableCount).isEqualTo(2);
 
         Integer foreignKeyCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.table_constraints "

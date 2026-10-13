@@ -28,4 +28,7 @@ services:
     autoDeploy: false
     envVars:
       - key: SPRING_PROFILES_ACTIVE
-        value: demo
+        # prod is the only supported deploy profile since PR-B removed
+        # demo/dev/postgres-demo. Using a removed profile silently falls back
+        # to the unsafe defaults in application.properties.
+        value: prod

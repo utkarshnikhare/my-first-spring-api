@@ -18,9 +18,10 @@ import static org.assertj.core.api.Assertions.assertThat;
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
         properties = {
                 "spring.jpa.hibernate.ddl-auto=validate",
-                "spring.jpa.defer-datasource-initialization=false"
+                "spring.jpa.defer-datasource-initialization=false",
+                "spring.flyway.enabled=true"
         })
-@ActiveProfiles("postgres-demo")
+@ActiveProfiles("test")
 @Testcontainers(disabledWithoutDocker = true)
 class PostgresNativeMigrationTest {
 
@@ -36,23 +37,36 @@ class PostgresNativeMigrationTest {
 
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
-        registry.add("SOCIOMART_DB_JDBC_URL", POSTGRES::getJdbcUrl);
-        registry.add("SOCIOMART_DB_USERNAME", POSTGRES::getUsername);
-        registry.add("SOCIOMART_DB_PASSWORD", POSTGRES::getPassword);
+        // Point the datasource directly at the Testcontainers PostgreSQL. The
+        // "test" profile hardcodes an H2 URL and never reads SOCIOMART_DB_JDBC_URL
+        // (that name is consumed only by application-prod.properties), so setting
+        // the env-var name alone left this test silently running against H2.
+        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES::getUsername);
+        registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
     }
 
     @Test
     void flywayMigrationCreatesSchemaValidatedByHibernateOnPostgres() {
-        // V3 adds the public-URL slug column, its unique index and the
-        // kitchen_slug_aliases redirect table (+ its FK to kitchens).
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
+        // V4 adds the Spring Session tables; V5 adds hot-path indexes only
+        // (no new tables), so the business table count is unchanged.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("5");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
                         + "WHERE table_schema = 'public' AND table_type = 'BASE TABLE' "
-                        + "AND table_name <> 'flyway_schema_history'",
+                        + "AND table_name <> 'flyway_schema_history' "
+                        + "AND LOWER(table_name) NOT LIKE 'spring_session%'",
                 Integer.class);
         assertThat(tableCount).isEqualTo(24);
+
+        Integer sessionTableCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables "
+                        + "WHERE table_schema = 'public' AND table_type = 'BASE TABLE' "
+                        + "AND LOWER(table_name) LIKE 'spring_session%'",
+                Integer.class);
+        assertThat(sessionTableCount).isEqualTo(2);
 
         Integer foreignKeyCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.table_constraints "

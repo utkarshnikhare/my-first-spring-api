@@ -525,6 +525,7 @@ public class AdminService {
         return kitchens(null);
     }
 
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> kitchens(String sellerTypeFilter) {
         List<Kitchen> all = kitchenRepository.findAll();
         return all.stream()
@@ -2310,11 +2311,17 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
 
     @Transactional
     public void ensureBootstrapAccounts() {
-        if (userRepository.findByMobileNumber(SUPER_ADMIN_MOBILE).isEmpty()) {
-            userRepository.save(new User("Super Admin", SUPER_ADMIN_MOBILE, null, UserRole.SUPER_ADMIN));
+        ensureBootstrapAccounts(SUPER_ADMIN_MOBILE, ADMIN_MOBILE);
+    }
+
+    /** Creates the built-in accounts only when their mobile is free; existing rows are never touched. */
+    @Transactional
+    public void ensureBootstrapAccounts(String superAdminMobile, String adminMobile) {
+        if (userRepository.findByMobileNumber(superAdminMobile).isEmpty()) {
+            userRepository.save(new User("Super Admin", superAdminMobile, null, UserRole.SUPER_ADMIN));
         }
-        if (userRepository.findByMobileNumber(ADMIN_MOBILE).isEmpty()) {
-            userRepository.save(new User("Platform Admin", ADMIN_MOBILE, null, UserRole.ADMIN));
+        if (userRepository.findByMobileNumber(adminMobile).isEmpty()) {
+            userRepository.save(new User("Platform Admin", adminMobile, null, UserRole.ADMIN));
         }
     }
 
@@ -2769,7 +2776,7 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
         out.put("activeProfiles", profiles);
 
         out.put("directAuthEnabled", environment != null
-                && com.example.my_first_spring_api.SecurityConfig.isDirectAuthEnabled(environment));
+                && com.example.my_first_spring_api.AuthSettings.passwordLoginEnabled(environment));
 
         Map<String, Object> database = new LinkedHashMap<>();
         try {
