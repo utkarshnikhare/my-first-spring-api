@@ -156,6 +156,16 @@ public class AuthService {
         if (user.isBlocked() || !validPasswordFor(user, request.getPassword())) {
             throw new InvalidCredentialsException();
         }
+        // Reached only when the password is CORRECT, so this specific message can
+        // never be used to probe which mobile numbers are registered (contrast a
+        // blocked account, which stays on the generic branch above so login remains
+        // useless for probing - see SecurityHardeningHttpTest). A seller awaiting
+        // admin approval is told exactly why login fails instead of receiving a
+        // vague "invalid credentials" answer.
+        if (user.getRole() == UserRole.SELLER
+                && user.getSellerApprovalStatus() == SellerApprovalStatus.PENDING) {
+            throw new InvalidCredentialsException("Your account is pending admin approval");
+        }
         analyticsService.record(AnalyticsService.EV_USER_LOGIN, user.getId(), user.getMobileNumber(),
                 null, user.getName());
         return user;
