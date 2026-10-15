@@ -3,6 +3,8 @@ package com.example.my_first_spring_api.controller;
 import com.example.my_first_spring_api.dto.AuthResponseDto;
 import com.example.my_first_spring_api.dto.BuyerRegistrationRequestDto;
 import com.example.my_first_spring_api.dto.CredentialLoginRequestDto;
+import com.example.my_first_spring_api.dto.ForgotPasswordRequestDto;
+import com.example.my_first_spring_api.dto.ResetPasswordRequestDto;
 import com.example.my_first_spring_api.dto.SellerRegistrationRequestDto;
 import com.example.my_first_spring_api.exception.InvalidCredentialsException;
 import com.example.my_first_spring_api.model.User;
@@ -10,6 +12,7 @@ import com.example.my_first_spring_api.security.AuthRateLimiter;
 import com.example.my_first_spring_api.service.AdminAuditService;
 import com.example.my_first_spring_api.service.BuyerService;
 import com.example.my_first_spring_api.service.AuthService;
+import com.example.my_first_spring_api.service.AuthService.PasswordResetResponseDto;
 import com.example.my_first_spring_api.service.OrderService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -124,6 +127,19 @@ public class AuthController {
             }
             throw ex;
         }
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequestDto request) {
+        PasswordResetResponseDto response = authService.requestPasswordReset(request.getEmail());
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequestDto request) {
+        authService.resetPassword(request.getToken(), request.getNewPassword());
+        return ResponseEntity.ok(Map.of("message",
+                "Password has been reset. You can now log in with your new password."));
     }
 
     @GetMapping("/me")

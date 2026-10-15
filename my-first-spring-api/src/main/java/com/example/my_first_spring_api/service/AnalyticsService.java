@@ -29,6 +29,8 @@ public class AnalyticsService {
 
     public static final String EV_USER_REGISTERED = "USER_REGISTERED";
     public static final String EV_USER_LOGIN = "USER_LOGIN";
+
+    public static final String EV_USER_PASSWORD_RESET = "USER_PASSWORD_RESET";
     public static final String EV_SELLER_REGISTERED = "SELLER_REGISTERED";
     public static final String EV_SELLER_APPROVED = "SELLER_APPROVED";
     public static final String EV_ORDER_PLACED = "ORDER_PLACED";

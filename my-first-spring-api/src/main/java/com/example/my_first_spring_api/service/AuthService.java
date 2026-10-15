@@ -4,20 +4,26 @@ import com.example.my_first_spring_api.AuthSettings;
 import com.example.my_first_spring_api.dto.BuyerRegistrationRequestDto;
 import com.example.my_first_spring_api.dto.CredentialLoginRequestDto;
 import com.example.my_first_spring_api.dto.CoverageOptionDto;
+import com.example.my_first_spring_api.dto.ForgotPasswordRequestDto;
 import com.example.my_first_spring_api.dto.KitchenCreateDto;
 import com.example.my_first_spring_api.dto.KitchenDto;
+import com.example.my_first_spring_api.dto.ResetPasswordRequestDto;
 import com.example.my_first_spring_api.dto.SellerRegistrationRequestDto;
 import com.example.my_first_spring_api.exception.AccountAlreadyExistsException;
 import com.example.my_first_spring_api.exception.InvalidCredentialsException;
 import com.example.my_first_spring_api.model.Area;
 import com.example.my_first_spring_api.model.Kitchen;
+import com.example.my_first_spring_api.model.PasswordResetToken;
 import com.example.my_first_spring_api.model.SellerApprovalStatus;
 import com.example.my_first_spring_api.model.Society;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.model.UserRole;
 import com.example.my_first_spring_api.repository.KitchenRepository;
+import com.example.my_first_spring_api.repository.PasswordResetTokenRepository;
 import com.example.my_first_spring_api.repository.UserRepository;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.env.Environment;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -26,10 +32,22 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.Base64;
 import java.util.Locale;
 
 @Service
 public class AuthService {
+    /** One-time bearer tokens for the forgotten-password flow. */
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+    /** 1 hour TTL for a reset token. */
+    private static final Duration RESET_TOKEN_TTL = Duration.ofHours(1);
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(AuthService.class);
+
     private final UserRepository users;
     private final KitchenRepository kitchens;
     private final LocationService locations;
@@ -37,13 +55,14 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final Environment environment;
     private final AnalyticsService analyticsService;
+    private final PasswordResetTokenRepository passwordResetTokens;
     /** Append-only audit for the slug reservation. Field-injected (optional) so manual test construction keeps working. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private AdminAuditService auditService;
 
     public AuthService(UserRepository users, KitchenRepository kitchens, LocationService locations,
                        SellerService sellerService, PasswordEncoder passwordEncoder, Environment environment,
-                       AnalyticsService analyticsService) {
+                       AnalyticsService analyticsService, PasswordResetTokenRepository passwordResetTokens) {
         this.users = users;
         this.kitchens = kitchens;
         this.locations = locations;
@@ -51,6 +70,7 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.environment = environment;
         this.analyticsService = analyticsService;
+        this.passwordResetTokens = passwordResetTokens;
     }
 
     public record SellerRegistration(User user, String kitchenSlug) {}
@@ -231,5 +251,86 @@ public class AuthService {
 
     private static String clean(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    // ---- Forget-password flow (Part 2) -----------------------------------
+
+    /** One-time bearer token. */
+    private static String generateResetToken() {
+        byte[] bytes = new byte[32];
+        SECURE_RANDOM.nextBytes(bytes);
+        return toHex(bytes);
+    }
+
+    private static String toHex(byte[] bytes) {
+        StringBuilder builder = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            builder.append(Character.forDigit((b >> 4) & 0xF, 16));
+            builder.append(Character.forDigit(b & 0xF, 16));
+        }
+        return builder.toString();
+    }
+
+    private String baseResetUrl() {
+        String url = environment.getProperty("sociomart.public-base-url");
+        return StringUtils.hasText(url) ? url : "http://localhost:8081";
+    }
+
+    private String buildResetLink(String token) {
+        return baseResetUrl() + "/reset-password?token=" + token;
+    }
+
+    private static void logResetLink(User user, String resetLink) {
+        LOGGER.info("[SOCIOMART-RESET] A single-use reset link for user '{}' (mobile {}): {}",
+                user.getId(), user.getMobileNumber(), resetLink);
+    }
+
+    /**
+     * Forgot-password: validates the request, issues a single-use token bound to the
+     * user, and prints the reset link to the console/log for manual testing (no SMTP
+     * relay is configured in this repository today).
+     */
+    @Transactional
+    public PasswordResetResponseDto requestPasswordReset(String email) {
+        requireDirectAuthEnabled();
+        User user = users.findByEmail(email)
+                .orElseThrow(() -> new InvalidCredentialsException(
+                        "No account is registered with that e-mail address."));
+        PasswordResetToken token = new PasswordResetToken(
+                user, generateResetToken(), LocalDateTime.now().plus(RESET_TOKEN_TTL));
+        passwordResetTokens.save(token);
+        String resetLink = buildResetLink(token.getToken());
+        logResetLink(user, resetLink);
+        return new PasswordResetResponseDto(
+                "If an account exists for '" + email + "', a single-use reset link has been issued.",
+                resetLink);
+    }
+
+    /**
+     * Reset-password: validates the token (single-use + not expired), BCrypt-hashes the
+     * new password, persists it, and invalidates the token.
+     */
+    @Transactional
+    public User resetPassword(String token, String newPassword) {
+        requireDirectAuthEnabled();
+        requireBcryptCompatible(newPassword);
+        PasswordResetToken reset = passwordResetTokens.findByToken(token)
+                .orElseThrow(() -> new InvalidCredentialsException("Invalid or expired reset token."));
+        if (reset.isUsed() || reset.isExpired()) {
+            passwordResetTokens.delete(reset);
+            throw new InvalidCredentialsException("Invalid or expired reset token.");
+        }
+        User user = reset.getUser();
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        reset.use();
+        passwordResetTokens.save(reset);
+        passwordResetTokens.deleteByToken(token);
+        analyticsService.record(AnalyticsService.EV_USER_PASSWORD_RESET,
+                user.getId(), user.getMobileNumber(), null, user.getName());
+        return user;
+    }
+
+    /** Response shape returned to the caller after a reset link is issued. */
+    public record PasswordResetResponseDto(String message, String resetLink) {
     }
 }

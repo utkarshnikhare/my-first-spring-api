@@ -18,6 +18,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByMobileNumber(String mobileNumber);
     List<User> findByRole(UserRole role);
 
+    Optional<User> findByEmail(String email);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT u FROM User u WHERE u.id = :id")
     Optional<User> findByIdForUpdate(@Param("id") Long id);
