@@ -77,6 +77,12 @@ class UserEmailMigrationRegressionTest {
                         + "password_hash varchar(255),"
                         + "role varchar(255) NOT NULL,"
                         + "seller_approval_status varchar(255),"
+                        + "blocked boolean NOT NULL,"
+                        + "storefront_removed boolean NOT NULL,"
+                        + "area_id bigint,"
+                        + "society_id bigint,"
+                        + "admin_area_id bigint,"
+                        + "approved_by_id bigint,"
                         + "created_at timestamp(6),"
                         + "updated_at timestamp(6)"
                         + ")");
