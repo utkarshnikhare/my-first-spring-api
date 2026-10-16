@@ -86,8 +86,8 @@ class UserEmailMigrationRegressionTest {
 
         // Insert an existing user (all V1 NOT NULL columns already exist).
         jdbcTemplate.update(
-                "INSERT INTO users (name, mobile_number, role, created_at, updated_at) "
-                        + "VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                "INSERT INTO users (name, mobile_number, role, blocked, storefront_removed, created_at, updated_at) "
+                        + "VALUES (?, ?, ?, FALSE, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 "Existing User", "9999999999", "SELLER");
 
         // Apply the V9 repair migration: idempotent, adds email if missing.
@@ -121,8 +121,8 @@ class UserEmailMigrationRegressionTest {
         flyway.migrate();
 
         jdbcTemplate.update(
-                "INSERT INTO users (name, mobile_number, password_hash, role, created_at, updated_at) "
-                        + "VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                "INSERT INTO users (name, mobile_number, password_hash, role, blocked, storefront_removed, created_at, updated_at) "
+                        + "VALUES (?, ?, ?, ?, FALSE, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 "Super Admin", "9000000001", "hash", "SUPER_ADMIN");
 
         var user = userRepository.findByMobileNumber("9000000001");
