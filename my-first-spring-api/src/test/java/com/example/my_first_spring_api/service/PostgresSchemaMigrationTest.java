@@ -43,8 +43,9 @@ class PostgresSchemaMigrationTest {
     void migrationsCreateSchemaThatMatchesAllJpaEntities() {
         // V4 adds the Spring Session tables; V5 adds hot-path indexes only;
         // V6 adds the password_reset_tokens table; V7 adds users.email;
-        // V8 adds the password_reset_requests table.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("8");
+        // V8 adds the password_reset_requests table; V9 defensively re-adds
+        // users.email if V7 was never applied (idempotent, IF NOT EXISTS).
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("9");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
@@ -54,6 +55,14 @@ class PostgresSchemaMigrationTest {
                 Integer.class);
         Assertions.assertNotNull(tableCount);
         assertThat(tableCount).isEqualTo(26);
+
+        Integer emailColumnCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                        + "WHERE table_schema = 'PUBLIC' AND table_name = 'USERS' "
+                        + "AND column_name = 'EMAIL'",
+                Integer.class);
+        Assertions.assertNotNull(emailColumnCount);
+        assertThat(emailColumnCount).isEqualTo(1);
 
         Integer sessionTableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
