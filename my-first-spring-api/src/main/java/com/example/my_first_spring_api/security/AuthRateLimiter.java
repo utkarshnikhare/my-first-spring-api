@@ -44,6 +44,9 @@ public class AuthRateLimiter {
     public static final Duration LOGIN_WINDOW = Duration.ofMinutes(15);
     public static final int REGISTRATION_MAX = 5;
     public static final Duration REGISTRATION_WINDOW = Duration.ofMinutes(15);
+    /** Manual password recovery: 3 forgot-password requests per mobile AND per IP per window. */
+    public static final int RECOVERY_MAX = 3;
+    public static final Duration RECOVERY_WINDOW = Duration.ofMinutes(15);
 
     /** Hard cap on tracked keys so spoofed mobiles/IPs cannot grow memory without bound. */
     private static final int MAX_TRACKED_KEYS = 10_000;
@@ -77,6 +80,15 @@ public class AuthRateLimiter {
      */
     public void assertRegistrationAllowed(String ip) {
         assertKeys(registrationKey(ip));
+    }
+
+    /**
+     * Checks whether a forgot-password (manual recovery) request for this mobile
+     * from this IP is permitted. Throws {@code TooManyRequestsException} (429) if
+     * either key is locked, so the recovery endpoint cannot be spammed.
+     */
+    public void assertRecoveryAllowed(String mobile, String ip) {
+        assertKeys(recoveryMobileKey(mobile), recoveryIpKey(ip));
     }
 
     /** Throws {@code TooManyRequestsException} (429) if any of the given keys is currently locked. */
@@ -122,6 +134,15 @@ public class AuthRateLimiter {
             return;
         }
         hit(registrationKey(ip), REGISTRATION_MAX, REGISTRATION_WINDOW);
+    }
+
+    /** Records a forgot-password (manual recovery) request; locks when the threshold is reached. */
+    public void recordRecovery(String mobile, String ip) {
+        if (!enabled) {
+            return;
+        }
+        hit(recoveryMobileKey(mobile), RECOVERY_MAX, RECOVERY_WINDOW);
+        hit(recoveryIpKey(ip), RECOVERY_MAX, RECOVERY_WINDOW);
     }
 
     private boolean hit(String key, int max, Duration window) {
@@ -170,6 +191,14 @@ public class AuthRateLimiter {
 
     static String registrationKey(String ip) {
         return "R:" + ip;
+    }
+
+    static String recoveryMobileKey(String mobile) {
+        return "F:m:" + mobile;
+    }
+
+    static String recoveryIpKey(String ip) {
+        return "F:i:" + ip;
     }
 
     /**

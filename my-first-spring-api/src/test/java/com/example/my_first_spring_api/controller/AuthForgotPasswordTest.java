@@ -44,7 +44,7 @@ class AuthForgotPasswordTest {
                         "If an account exists for 'buyer@example.com', a single-use reset link has been issued.",
                         "http://example.com/reset-password?token=XYZ"));
 
-        var result = controller.forgotPassword(requestDto);
+        var result = controller.forgotPassword(requestDto, null);
 
         assertThat(result.getStatusCode().value()).isEqualTo(200);
         assertThat(result.getBody()).isNotNull();
@@ -61,7 +61,7 @@ class AuthForgotPasswordTest {
         when(authService.requestPasswordReset("missing@example.com"))
                 .thenThrow(new InvalidCredentialsException("No account is registered with that e-mail address."));
 
-        assertThatThrownBy(() -> controller.forgotPassword(requestDto))
+        assertThatThrownBy(() -> controller.forgotPassword(requestDto, null))
                 .isInstanceOf(InvalidCredentialsException.class)
                 .hasMessageContaining("No account is registered");
     }
