@@ -59,6 +59,11 @@ public class AuthService {
     /** Append-only audit for the slug reservation. Field-injected (optional) so manual test construction keeps working. */
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private AdminAuditService auditService;
+    /** Manual (Admin-mediated) password recovery integration; optional for the same reason as above. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private PasswordRecoveryService passwordRecovery;
+    /** Same minimum password policy as registration (10-72 characters). */
+    private static final int MIN_PASSWORD_LENGTH = 10;
 
     public AuthService(UserRepository users, KitchenRepository kitchens, LocationService locations,
                        SellerService sellerService, PasswordEncoder passwordEncoder, Environment environment,
@@ -145,18 +150,41 @@ public class AuthService {
         return new SellerRegistration(seller, reservedSlug);
     }
 
+    /**
+     * Outcome of a credential login: the authenticated user plus whether the
+     * one-time temporary password of the manual recovery flow was used.
+     */
+    public record LoginResult(User user, boolean tempPasswordLogin) {
+    }
+
     @Transactional
     public User login(@Valid CredentialLoginRequestDto request) {
+        return loginWithOutcome(request).user();
+    }
+
+    @Transactional
+    public LoginResult loginWithOutcome(@Valid CredentialLoginRequestDto request) {
         requireDirectAuthEnabled();
         if (request.getPassword().getBytes(StandardCharsets.UTF_8).length > 72) {
             throw new InvalidCredentialsException();
         }
         User user = users.findByMobileNumber(request.getMobileNumber())
                 .orElseThrow(InvalidCredentialsException::new);
-        if (user.isBlocked() || !validPasswordFor(user, request.getPassword())) {
+        if (user.isBlocked()) {
             throw new InvalidCredentialsException();
         }
-        // Reached only when the password is CORRECT, so this specific message can
+        boolean standardPassword = validPasswordFor(user, request.getPassword());
+        // Manual recovery (Admin-mediated): a one-time temporary password issued by a
+        // Super Admin is a valid credential for its FIRST USE ONLY. It never lives in
+        // users.password_hash, so the 24-hour expiry and single-use rules are absolute.
+        boolean tempPasswordLogin = false;
+        if (!standardPassword && passwordRecovery != null && user.getRole() != UserRole.BUYER) {
+            tempPasswordLogin = passwordRecovery.consumeTempPasswordOnLogin(user, request.getPassword());
+        }
+        if (!standardPassword && !tempPasswordLogin) {
+            throw new InvalidCredentialsException();
+        }
+        // Reached only when a credential is CORRECT, so this specific message can
         // never be used to probe which mobile numbers are registered (contrast a
         // blocked account, which stays on the generic branch above so login remains
         // useless for probing - see SecurityHardeningHttpTest). A seller awaiting
@@ -168,7 +196,39 @@ public class AuthService {
         }
         analyticsService.record(AnalyticsService.EV_USER_LOGIN, user.getId(), user.getMobileNumber(),
                 null, user.getName());
-        return user;
+        return new LoginResult(user, tempPasswordLogin);
+    }
+
+    /**
+     * Changes the password of a logged-in user (forced change after a temporary
+     * password login, or a voluntary change). The current password may be the
+     * user's original password OR the temporary password that opened this session
+     * (it was consumed at first use but still identifies the session).
+     */
+    @Transactional
+    public void changePassword(User user, String currentPassword, String newPassword, String confirmPassword) {
+        requireBcryptCompatible(newPassword);
+        if (newPassword == null || newPassword.length() < MIN_PASSWORD_LENGTH) {
+            throw new IllegalArgumentException("New password must be at least 10 characters long.");
+        }
+        if (!java.util.Objects.equals(newPassword, confirmPassword)) {
+            throw new IllegalArgumentException("New password and confirmation do not match.");
+        }
+        boolean currentPasswordOk = validPasswordFor(user, currentPassword)
+                || (passwordRecovery != null && passwordRecovery.verifyTempPasswordFor(user, currentPassword));
+        if (!currentPasswordOk) {
+            throw new InvalidCredentialsException("Your current password is incorrect.");
+        }
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        users.save(user);
+        if (auditService != null) {
+            auditService.record(AdminAuditService.PASSWORD_CHANGED, user, "USER", user.getId(),
+                    user.getMobileNumber(), null, "CHANGED",
+                    "Password changed through the manual recovery forced-change flow");
+        }
+        if (passwordRecovery != null) {
+            passwordRecovery.recordPasswordChangedAnalytics(user);
+        }
     }
 
     public boolean isDirectAuthEnabled() {
