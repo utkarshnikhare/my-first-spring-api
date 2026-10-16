@@ -35,7 +35,7 @@ USER sociomart
 #                        stop the JIT at the first (C1) tier instead of full C2 profiling.
 #                        Trades peak steady-state throughput for a much faster startup,
 #                        which is what Render's health-check deadline needs.
-ENV JAVA_OPTS="-Xms128m -Xmx256m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+ENV JAVA_OPTS="-XX:+TieredCompilation -XX:TieredStopAtLevel=1 -Xms128m -Xmx256m -XX:+UseContainerSupport"
 
 # Listens on the PORT provided by the hosting platform;
 # falls back to 8081 when run locally via:  docker run -p 8081:8081 sociomart
