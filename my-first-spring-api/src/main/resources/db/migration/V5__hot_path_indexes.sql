@@ -6,17 +6,17 @@
 -- orders: seller dashboard lists (findByKitchenOrderByCreatedAtDesc),
 -- buyer history (findByBuyerOrderByCreatedAtDesc), reminder scans and
 -- analytics windows (countByCreatedAtAfter / createdAt BETWEEN).
-CREATE INDEX idx_orders_kitchen_created ON orders (kitchen_id, created_at);
-CREATE INDEX idx_orders_buyer_created ON orders (buyer_id, created_at);
-CREATE INDEX idx_orders_created ON orders (created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_kitchen_created ON orders (kitchen_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_buyer_created ON orders (buyer_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_created ON orders (created_at);
 
 -- order_items: joined to orders on every order read (items fetch / N+1 avoidance).
-CREATE INDEX idx_order_items_order ON order_items (order_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items (order_id);
 
 -- enquiries: buyer history and seller inbox listings.
-CREATE INDEX idx_enquiries_user ON enquiries (user_id, created_at);
-CREATE INDEX idx_enquiries_kitchen ON enquiries (kitchen_id);
+CREATE INDEX IF NOT EXISTS idx_enquiries_user ON enquiries (user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_enquiries_kitchen ON enquiries (kitchen_id);
 
 -- products/kitchens: per-seller and per-kitchen product listings.
-CREATE INDEX idx_products_kitchen ON products (kitchen_id);
-CREATE INDEX idx_kitchens_seller ON kitchens (seller_id);
+CREATE INDEX IF NOT EXISTS idx_products_kitchen ON products (kitchen_id);
+CREATE INDEX IF NOT EXISTS idx_kitchens_seller ON kitchens (seller_id);
