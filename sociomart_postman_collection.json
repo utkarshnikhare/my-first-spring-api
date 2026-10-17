@@ -1,0 +1,5982 @@
+{
+  "info": {
+    "_postman_id": "sociomart-all-controllers-collection-v1",
+    "name": "SocioMart API - Complete Controller Collection",
+    "description": "Complete Postman Import Collection covering all 16 @RestController controllers across SocioMart Spring Boot application.\nIncludes endpoints for Auth, Health, Marketplace, Discovery, Buyer Profile & Orders, Favourites, Enquiries, Notifications, Analytics, Seller Kitchen & Products, Seller App / Dashboard V3, Recurring Schedules, Admin Console, Password Recovery, and Super Admin.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication (AuthController)",
+      "description": "Endpoints under /api/auth: registration, credential login, password reset/recovery, session info and logout.",
+      "item": [
+        {
+          "name": "Get Auth Config",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/config",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "config"
+              ]
+            },
+            "description": "Returns frontend flags: directAuthEnabled, demoRegistrationEnabled, adminLoginConfigured, superAdminLoginConfigured"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Registration Options",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/registration-options",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "registration-options"
+              ]
+            },
+            "description": "Returns coverage options (active areas & societies) for buyer & seller registration"
+          },
+          "response": []
+        },
+        {
+          "name": "Register Buyer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register/buyer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register",
+                "buyer"
+              ]
+            },
+            "description": "Registers a new Buyer account and establishes session.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Pooja Sharma\",\n  \"mobileNumber\": \"9876543210\",\n  \"password\": \"Password123!\",\n  \"flatHouseNumber\": \"Flat 402\",\n  \"building\": \"Tower B, Whispering Palms\",\n  \"areaId\": 1,\n  \"societyId\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Register Seller",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register/seller",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register",
+                "seller"
+              ]
+            },
+            "description": "Registers a seller and creates pending storefront awaiting admin approval.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sellerName\": \"Anita Sharma\",\n  \"mobileNumber\": \"9823456789\",\n  \"password\": \"Password123!\",\n  \"whatsappNumber\": \"9823456789\",\n  \"alternateContact\": \"\",\n  \"kitchenName\": \"Annapurna Kitchen\",\n  \"kitchenSlug\": \"annapurna-kitchen\",\n  \"speciality\": \"North Indian Thali & Parathas\",\n  \"sellerCategory\": \"KITCHEN\",\n  \"shortDescription\": \"Fresh homemade meals delivered hot every lunch and dinner\",\n  \"instagramLink\": \"https://instagram.com/annapurna_kitchen\",\n  \"primaryAreaId\": 1,\n  \"primarySocietyId\": 1,\n  \"building\": \"Tower A, Flat 101\",\n  \"serviceAreaId\": 1,\n  \"serviceSocietyIds\": [\n    1,\n    2\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login (Credential Login)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Password login for Buyer, Seller, Admin, or Super Admin.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobileNumber\": \"9876543210\",\n  \"password\": \"Password123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password (Request Reset)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "forgot-password"
+              ]
+            },
+            "description": "Initiates admin-mediated recovery by mobile or token recovery by email.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobileNumber\": \"9823456789\",\n  \"email\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/change-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "change-password"
+              ]
+            },
+            "description": "Forced or voluntary password change for current session user.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"Password123!\",\n  \"newPassword\": \"NewSecretPassword123!\",\n  \"confirmPassword\": \"NewSecretPassword123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password with Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "reset-password"
+              ]
+            },
+            "description": "Reset password using token from reset flow.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"sample-reset-token-here\",\n  \"newPassword\": \"NewSecretPassword123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current User (/me)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Returns currently authenticated user profile, role, and storefront info."
+          },
+          "response": []
+        },
+        {
+          "name": "Become Seller (Guidance)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/become-seller",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "become-seller"
+              ]
+            },
+            "description": "Deprecated route; returns guidance 409 prompting full seller registration."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Invalidates the current HTTP session."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Health (HealthController)",
+      "description": "Service liveness endpoint.",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            },
+            "description": "Liveness probe returning {\"status\": \"UP\"}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Marketplace & Kitchens (MarketplaceController)",
+      "description": "Public browse and discovery of kitchens, offerings, and search.",
+      "item": [
+        {
+          "name": "Marketplace Home",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/marketplace",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "marketplace"
+              ]
+            },
+            "description": "Returns the marketplace home model tailored for buyer's society."
+          },
+          "response": []
+        },
+        {
+          "name": "Search Marketplace",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/search?q=paneer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "paneer",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Search kitchens and menu offerings."
+          },
+          "response": []
+        },
+        {
+          "name": "Suggest Kitchen Slug",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/kitchens/slug-suggestion?name=Annapurna%20Kitchen",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "kitchens",
+                "slug-suggestion"
+              ],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "Annapurna Kitchen",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Generates an available, deduplicated public URL slug."
+          },
+          "response": []
+        },
+        {
+          "name": "Check Slug Availability",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/kitchens/slug-check?slug=annapurna-kitchen",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "kitchens",
+                "slug-check"
+              ],
+              "query": [
+                {
+                  "key": "slug",
+                  "value": "annapurna-kitchen",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Verifies whether a slug is available or taken."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Kitchen by Slug",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/kitchens/by-slug/:slug",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "kitchens",
+                "by-slug",
+                ":slug"
+              ],
+              "variable": [
+                {
+                  "key": "slug",
+                  "value": "annapurna-kitchen",
+                  "description": "ID or slug for slug"
+                }
+              ]
+            },
+            "description": "Public kitchen storefront resolved by slug."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Kitchen by Name",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/kitchens/:kitchenName",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "kitchens",
+                ":kitchenName"
+              ],
+              "variable": [
+                {
+                  "key": "kitchenName",
+                  "value": "Annapurna Kitchen",
+                  "description": "ID or slug for kitchenName"
+                }
+              ]
+            },
+            "description": "Storefront detail by kitchen name."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Offerings by Kitchen Name",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/kitchens/:kitchenName/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "kitchens",
+                ":kitchenName",
+                "products"
+              ],
+              "variable": [
+                {
+                  "key": "kitchenName",
+                  "value": "Annapurna Kitchen",
+                  "description": "ID or slug for kitchenName"
+                }
+              ]
+            },
+            "description": "List of products for a kitchen name."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Kitchen Detail by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/kitchens/id/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "kitchens",
+                "id",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "ID or slug for id"
+                }
+              ]
+            },
+            "description": "Public kitchen storefront by ID (with Today and Pre-order offerings)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Product / Offering by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/:productId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                ":productId"
+              ],
+              "variable": [
+                {
+                  "key": "productId",
+                  "value": "1",
+                  "description": "ID or slug for productId"
+                }
+              ]
+            },
+            "description": "Detailed offering information."
+          },
+          "response": []
+        },
+        {
+          "name": "List All Active Kitchens",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/kitchens",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "kitchens"
+              ]
+            },
+            "description": "List all active kitchens visible to buyer."
+          },
+          "response": []
+        },
+        {
+          "name": "Global Browse (All Menu Items)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items"
+              ]
+            },
+            "description": "All available menu items across active kitchens."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Discovery (DiscoveryController)",
+      "description": "Dynamic discovery tabs, categories, dish grouping, and price comparisons.",
+      "item": [
+        {
+          "name": "Dynamic Header Counts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/discovery/counts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "discovery",
+                "counts"
+              ]
+            },
+            "description": "Live counts: Live now, Tomorrow, Pre-order, and All."
+          },
+          "response": []
+        },
+        {
+          "name": "Discovery Cards by Tab",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/discovery/kitchens?tab=LIVE_NOW",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "discovery",
+                "kitchens"
+              ],
+              "query": [
+                {
+                  "key": "tab",
+                  "value": "LIVE_NOW",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Discovery cards for tab: LIVE_NOW, TOMORROW, PREORDER, ALL."
+          },
+          "response": []
+        },
+        {
+          "name": "Category Tiles with Counts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/discovery/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "discovery",
+                "categories"
+              ]
+            },
+            "description": "Categories (Breakfast, Lunch, Dinner, Snacks, Special) with live counts."
+          },
+          "response": []
+        },
+        {
+          "name": "Items Grouped by Dish Name",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/discovery/items?category=LUNCH",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "discovery",
+                "items"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "LUNCH",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Items grouped by dish name for a category."
+          },
+          "response": []
+        },
+        {
+          "name": "Kitchens Having Category Items",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/discovery/category-kitchens?category=LUNCH",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "discovery",
+                "category-kitchens"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "LUNCH",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Kitchens offering items in the selected category."
+          },
+          "response": []
+        },
+        {
+          "name": "Search Dish Names",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/discovery/search?q=biryani",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "discovery",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "biryani",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Live search over dish item groups."
+          },
+          "response": []
+        },
+        {
+          "name": "Compare Offers for Dish",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/discovery/offers?item=Paneer%20Butter%20Masala",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "discovery",
+                "offers"
+              ],
+              "query": [
+                {
+                  "key": "item",
+                  "value": "Paneer Butter Masala",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Comparison offers for one dish across multiple kitchens."
+          },
+          "response": []
+        },
+        {
+          "name": "Homemade Product Stores",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/discovery/homemade",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "discovery",
+                "homemade"
+              ]
+            },
+            "description": "List of homemade artisan product stores."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Buyer Profile (BuyerProfileController)",
+      "description": "Buyer profile management, addresses, and community selection.",
+      "item": [
+        {
+          "name": "Get Buyer Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/buyer/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "buyer",
+                "profile"
+              ]
+            },
+            "description": "Returns currently authenticated buyer profile."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Selectable Societies",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/buyer/profile/societies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "buyer",
+                "profile",
+                "societies"
+              ]
+            },
+            "description": "List of selectable societies from directory."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Approved Areas with Societies",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/buyer/profile/areas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "buyer",
+                "profile",
+                "areas"
+              ]
+            },
+            "description": "Areas and their societies for dropdown selection."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Buyer Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/buyer/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "buyer",
+                "profile"
+              ]
+            },
+            "description": "Updates buyer delivery details, flat number, and society.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Pooja Sharma\",\n  \"mobileNumber\": \"9876543210\",\n  \"flatHouseNumber\": \"Flat 402\",\n  \"building\": \"Tower B, Whispering Palms\",\n  \"societyName\": \"Whispering Palms\",\n  \"societyId\": 1,\n  \"areaId\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Buyer Orders (BuyerOrderController)",
+      "description": "Draft cart, order placement, order history, ratings, and reorders.",
+      "item": [
+        {
+          "name": "Create or Update Draft Order (Cart)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/buyer/orders/draft?kitchenId=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "buyer",
+                "orders",
+                "draft"
+              ],
+              "query": [
+                {
+                  "key": "kitchenId",
+                  "value": "1",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Sets or updates draft items for a single kitchen.",
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"productId\": 1,\n    \"quantity\": 2\n  }\n]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current Draft Order",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/buyer/orders/draft",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "buyer",
+                "orders",
+                "draft"
+              ]
+            },
+            "description": "Returns current cart draft (204 if empty)."
+          },
+          "response": []
+        },
+        {
+          "name": "Clear Draft Order",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/buyer/orders/draft",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "buyer",
+                "orders",
+                "draft"
+              ]
+            },
+            "description": "Empties the buyer draft cart."
+          },
+          "response": []
+        },
+        {
+          "name": "Place Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/buyer/orders/place",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "buyer",
+                "orders",
+                "place"
+              ]
+            },
+            "description": "Places order from current draft, reserves stock, validates delivery coverage.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentStatus\": \"PENDING\",\n  \"buyerDetails\": {\n    \"name\": \"Pooja Sharma\",\n    \"mobileNumber\": \"9876543210\",\n    \"flatHouseNumber\": \"Flat 402\",\n    \"building\": \"Tower B, Whispering Palms\",\n    \"societyName\": \"Whispering Palms\"\n  },\n  \"customInstructions\": \"Please make it less spicy.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/buyer/orders/my",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "buyer",
+                "orders",
+                "my"
+              ]
+            },
+            "description": "Returns active and past orders for current buyer."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Order Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/buyer/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "buyer",
+                "orders",
+                ":orderId"
+              ],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "1",
+                  "description": "ID or slug for orderId"
+                }
+              ]
+            },
+            "description": "Detailed order breakdown."
+          },
+          "response": []
+        },
+        {
+          "name": "Rate Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/buyer/orders/:orderId/rate?rating=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "buyer",
+                "orders",
+                ":orderId",
+                "rate"
+              ],
+              "query": [
+                {
+                  "key": "rating",
+                  "value": "5",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "1",
+                  "description": "ID or slug for orderId"
+                }
+              ]
+            },
+            "description": "Submits 1-5 star rating for completed order."
+          },
+          "response": []
+        },
+        {
+          "name": "Reorder",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/buyer/orders/:orderId/reorder",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "buyer",
+                "orders",
+                ":orderId",
+                "reorder"
+              ],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "1",
+                  "description": "ID or slug for orderId"
+                }
+              ]
+            },
+            "description": "Loads past order items into active draft cart."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/buyer/orders/:orderId/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "buyer",
+                "orders",
+                ":orderId",
+                "cancel"
+              ],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "1",
+                  "description": "ID or slug for orderId"
+                }
+              ]
+            },
+            "description": "Cancels order if permitted by seller workflow."
+          },
+          "response": []
+        },
+        {
+          "name": "Buyer Update Payment Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/buyer/orders/:orderId/payment-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "buyer",
+                "orders",
+                ":orderId",
+                "payment-status"
+              ],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "1",
+                  "description": "ID or slug for orderId"
+                }
+              ]
+            },
+            "description": "Buyer marks order as paid.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentStatus\": \"PAID\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "7. Favourites (FavouriteController)",
+      "description": "Buyer favourite kitchen toggles and list.",
+      "item": [
+        {
+          "name": "Get My Favourites",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/favourites",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "favourites"
+              ]
+            },
+            "description": "Returns list of buyer's favourited kitchens."
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle Kitchen Favourite",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/favourites/kitchen/:kitchenId/toggle",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "favourites",
+                "kitchen",
+                ":kitchenId",
+                "toggle"
+              ],
+              "variable": [
+                {
+                  "key": "kitchenId",
+                  "value": "1",
+                  "description": "ID or slug for kitchenId"
+                }
+              ]
+            },
+            "description": "Toggles favourite status of kitchen for current buyer."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "8. Enquiries (EnquiryController)",
+      "description": "Custom pre-order enquiries between buyers and sellers.",
+      "item": [
+        {
+          "name": "Buyer: Get My Enquiries",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/enquiries/my",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "enquiries",
+                "my"
+              ]
+            },
+            "description": "List of enquiries submitted by logged in buyer."
+          },
+          "response": []
+        },
+        {
+          "name": "Buyer: Submit Enquiry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/enquiries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "enquiries"
+              ]
+            },
+            "description": "Submits a party or custom bulk food enquiry to a kitchen.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kitchenId\": 1,\n  \"message\": \"Need catering for 15 guests next Sunday evening.\",\n  \"preferredDate\": \"2026-11-01\",\n  \"quantity\": \"15 portions\",\n  \"referenceImageUrl\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Seller: Get My Store Enquiries",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/enquiries/seller/my",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "enquiries",
+                "seller",
+                "my"
+              ]
+            },
+            "description": "Enquiries received by current seller's kitchen."
+          },
+          "response": []
+        },
+        {
+          "name": "Seller: Acknowledge Enquiry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/enquiries/:enquiryId/acknowledge",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "enquiries",
+                ":enquiryId",
+                "acknowledge"
+              ],
+              "variable": [
+                {
+                  "key": "enquiryId",
+                  "value": "1",
+                  "description": "ID or slug for enquiryId"
+                }
+              ]
+            },
+            "description": "Seller acknowledges customer enquiry."
+          },
+          "response": []
+        },
+        {
+          "name": "Seller: Update Enquiry Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/enquiries/:enquiryId/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "enquiries",
+                ":enquiryId",
+                "status"
+              ],
+              "variable": [
+                {
+                  "key": "enquiryId",
+                  "value": "1",
+                  "description": "ID or slug for enquiryId"
+                }
+              ]
+            },
+            "description": "Updates enquiry status (PENDING, ACCEPTED, REJECTED, COMPLETED).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACCEPTED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "9. Notifications (NotificationController)",
+      "description": "In-app notifications for order status and reminders.",
+      "item": [
+        {
+          "name": "Get Unread Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ]
+            },
+            "description": "Returns unread notifications for current user."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Notification as Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/:eventId/read",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                ":eventId",
+                "read"
+              ],
+              "variable": [
+                {
+                  "key": "eventId",
+                  "value": "1",
+                  "description": "ID or slug for eventId"
+                }
+              ]
+            },
+            "description": "Marks a notification event as read."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "10. Analytics (AnalyticsController)",
+      "description": "Frontend interaction reporting (intent vs completion).",
+      "item": [
+        {
+          "name": "Record Interaction Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/event",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "analytics",
+                "event"
+              ]
+            },
+            "description": "Records whitelisted event: ORDER_NOW_CLICK, ENQUIRY_CLICK, PRODUCT_VIEW, HOMEMADE_STOREFRONT_VIEW.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"ORDER_NOW_CLICK\",\n  \"kitchenId\": \"1\",\n  \"detail\": \"Home Screen Banner Click\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "11. Seller Storefront & Products (SellerController)",
+      "description": "Seller portal: kitchen configuration, menu CRUD, and order management.",
+      "item": [
+        {
+          "name": "Get My Kitchen",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/kitchen",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "kitchen"
+              ]
+            },
+            "description": "Returns seller's own kitchen profile."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Known Societies",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/societies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "societies"
+              ]
+            },
+            "description": "List of existing societies for service area selection."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Coverage Options",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/coverage-options",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "coverage-options"
+              ]
+            },
+            "description": "Available areas and societies with IDs for coverage picker."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Kitchen",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/kitchen",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "kitchen"
+              ]
+            },
+            "description": "Creates storefront for seller.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Annapurna Kitchen\",\n  \"kitchenSlug\": \"annapurna-kitchen\",\n  \"description\": \"Authentic homely food with love and hygiene.\",\n  \"speciality\": \"Gujarati & North Indian Thalis\",\n  \"sellerCategory\": \"KITCHEN\",\n  \"serviceAreas\": \"Whispering Palms, Raheja Heights\",\n  \"serviceAreaId\": 1,\n  \"serviceSocietyIds\": [\n    1,\n    2\n  ],\n  \"deliveryCharge\": 20,\n  \"freeDeliveryThreshold\": 300\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Kitchen",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/kitchen/:kitchenId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "kitchen",
+                ":kitchenId"
+              ],
+              "variable": [
+                {
+                  "key": "kitchenId",
+                  "value": "1",
+                  "description": "ID or slug for kitchenId"
+                }
+              ]
+            },
+            "description": "Updates kitchen details and service area coverage.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Annapurna Kitchen\",\n  \"description\": \"Authentic homemade meals made fresh every day.\",\n  \"speciality\": \"Gujarati & North Indian Thalis\",\n  \"sellerCategory\": \"KITCHEN\",\n  \"serviceAreas\": \"Whispering Palms, Raheja Heights\",\n  \"serviceAreaId\": 1,\n  \"serviceSocietyIds\": [\n    1,\n    2\n  ],\n  \"deliveryCharge\": 25,\n  \"freeDeliveryThreshold\": 350\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Pause Kitchen",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/kitchen/:kitchenId/pause",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "kitchen",
+                ":kitchenId",
+                "pause"
+              ],
+              "variable": [
+                {
+                  "key": "kitchenId",
+                  "value": "1",
+                  "description": "ID or slug for kitchenId"
+                }
+              ]
+            },
+            "description": "Temporarily pause taking new orders for the kitchen."
+          },
+          "response": []
+        },
+        {
+          "name": "Resume Kitchen",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/kitchen/:kitchenId/resume",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "kitchen",
+                ":kitchenId",
+                "resume"
+              ],
+              "variable": [
+                {
+                  "key": "kitchenId",
+                  "value": "1",
+                  "description": "ID or slug for kitchenId"
+                }
+              ]
+            },
+            "description": "Resume taking orders for the kitchen."
+          },
+          "response": []
+        },
+        {
+          "name": "List My Products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "products"
+              ]
+            },
+            "description": "List all offerings created by current seller."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Offering for Edit Screen",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/products/:productId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "products",
+                ":productId"
+              ],
+              "variable": [
+                {
+                  "key": "productId",
+                  "value": "1",
+                  "description": "ID or slug for productId"
+                }
+              ]
+            },
+            "description": "Authoritative state of offering and whether orders freeze protected fields."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Product / Offering",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/products?kitchenId=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "kitchenId",
+                  "value": "1",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Creates an offering with window timing, date, and inventory.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Special Paneer Thali\",\n  \"description\": \"Paneer butter masala, 3 phulkas, dal tadka, jeera rice, salad & sweet.\",\n  \"price\": 180,\n  \"priceUnit\": \"thali\",\n  \"imageUrl\": \"https://images.unsplash.com/photo-1546833999-b9f581a1996d\",\n  \"availableToday\": true,\n  \"availableDate\": \"2026-10-18\",\n  \"orderWindowStart\": \"08:00\",\n  \"orderWindowEnd\": \"11:30\",\n  \"readyByTime\": \"13:00\",\n  \"maxQuantity\": 25,\n  \"isPreorder\": false,\n  \"categories\": [\n    \"LUNCH\",\n    \"SPECIAL\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Product / Offering",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/products/:productId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "products",
+                ":productId"
+              ],
+              "variable": [
+                {
+                  "key": "productId",
+                  "value": "1",
+                  "description": "ID or slug for productId"
+                }
+              ]
+            },
+            "description": "Updates an existing offering.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Special Paneer Thali (Deluxe)\",\n  \"description\": \"Paneer butter masala, 4 phulkas, dal tadka, jeera rice, salad & gulab jamun.\",\n  \"price\": 200,\n  \"priceUnit\": \"thali\",\n  \"orderWindowEnd\": \"12:00\",\n  \"readyByTime\": \"13:30\",\n  \"maxQuantity\": 30,\n  \"categories\": [\n    \"LUNCH\",\n    \"SPECIAL\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Product",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/products/:productId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "products",
+                ":productId"
+              ],
+              "variable": [
+                {
+                  "key": "productId",
+                  "value": "1",
+                  "description": "ID or slug for productId"
+                }
+              ]
+            },
+            "description": "Deletes an offering (allowed when no active orders exist)."
+          },
+          "response": []
+        },
+        {
+          "name": "List Seller Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "orders"
+              ]
+            },
+            "description": "All orders placed with the seller's kitchen."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Order Detail for Seller",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/orders/:orderId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "orders",
+                ":orderId"
+              ],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "1",
+                  "description": "ID or slug for orderId"
+                }
+              ]
+            },
+            "description": "Detailed view of an order with customer contact details."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Order Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/orders/:orderId/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "orders",
+                ":orderId",
+                "status"
+              ],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "1",
+                  "description": "ID or slug for orderId"
+                }
+              ]
+            },
+            "description": "Updates status: ACCEPTED, PREPARING, READY_FOR_PICKUP, DELIVERED, CANCELLED.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderStatus\": \"ACCEPTED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Order as Paid",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/orders/:orderId/payment-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "orders",
+                ":orderId",
+                "payment-status"
+              ],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "1",
+                  "description": "ID or slug for orderId"
+                }
+              ]
+            },
+            "description": "Seller confirms cash/UPI receipt and marks order PAID."
+          },
+          "response": []
+        },
+        {
+          "name": "Acknowledge Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/orders/:orderId/acknowledge",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "orders",
+                ":orderId",
+                "acknowledge"
+              ],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "1",
+                  "description": "ID or slug for orderId"
+                }
+              ]
+            },
+            "description": "Seller acknowledges receipt of order notification."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "12. Seller App & Dashboard V3 (SellerAppController)",
+      "description": "Seller Dashboard V3: live inventory, templates, quick posts, bulk republish, order delivery tracking, and earnings.",
+      "item": [
+        {
+          "name": "Seller Dashboard Overview",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "dashboard"
+              ]
+            },
+            "description": "Live stats, active offerings, recurring summaries for Seller Dashboard."
+          },
+          "response": []
+        },
+        {
+          "name": "Adjust Inventory Delta",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/products/:productId/inventory",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "products",
+                ":productId",
+                "inventory"
+              ],
+              "variable": [
+                {
+                  "key": "productId",
+                  "value": "1",
+                  "description": "ID or slug for productId"
+                }
+              ]
+            },
+            "description": "Increments or decrements remaining inventory (e.g. delta: +5 or -2).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"delta\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Offering Sold Out",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/products/:productId/sold-out",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "products",
+                ":productId",
+                "sold-out"
+              ],
+              "variable": [
+                {
+                  "key": "productId",
+                  "value": "1",
+                  "description": "ID or slug for productId"
+                }
+              ]
+            },
+            "description": "Immediately sets remaining inventory to 0."
+          },
+          "response": []
+        },
+        {
+          "name": "Pause Orders for Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/products/:productId/pause",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "products",
+                ":productId",
+                "pause"
+              ],
+              "variable": [
+                {
+                  "key": "productId",
+                  "value": "1",
+                  "description": "ID or slug for productId"
+                }
+              ]
+            },
+            "description": "Pauses ordering on an offering without changing stock."
+          },
+          "response": []
+        },
+        {
+          "name": "Resume Orders for Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/products/:productId/resume",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "products",
+                ":productId",
+                "resume"
+              ],
+              "variable": [
+                {
+                  "key": "productId",
+                  "value": "1",
+                  "description": "ID or slug for productId"
+                }
+              ]
+            },
+            "description": "Resumes ordering on a paused offering."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Saved Offering Templates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/templates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "templates"
+              ]
+            },
+            "description": "List up to 3 saved recurring menu templates."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Offering Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/templates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "templates"
+              ]
+            },
+            "description": "Save a template for quick 1-click publishing.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sunday Rajma Chawal Special\",\n  \"description\": \"Delicious slow cooked Punjabi Rajma with aromatic Jeera Rice\",\n  \"price\": 150,\n  \"priceUnit\": \"plate\",\n  \"orderWindowStart\": \"08:00\",\n  \"orderWindowEnd\": \"12:00\",\n  \"readyByTime\": \"13:30\",\n  \"maxQuantity\": 20,\n  \"categories\": [\n    \"LUNCH\",\n    \"SPECIAL\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Template",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/templates/:templateId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "templates",
+                ":templateId"
+              ],
+              "variable": [
+                {
+                  "key": "templateId",
+                  "value": "1",
+                  "description": "ID or slug for templateId"
+                }
+              ]
+            },
+            "description": "Deletes a saved offering template."
+          },
+          "response": []
+        },
+        {
+          "name": "Publish from Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/templates/:templateId/publish",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "templates",
+                ":templateId",
+                "publish"
+              ],
+              "variable": [
+                {
+                  "key": "templateId",
+                  "value": "1",
+                  "description": "ID or slug for templateId"
+                }
+              ]
+            },
+            "description": "Publishes a new live offering from a template for target date.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"availableDate\": \"today\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Quick Post",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/quick-posts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "quick-posts"
+              ]
+            },
+            "description": "Publishes a today-only quick broadcast offering.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Fresh Gajar Ka Halwa available today 500g boxes at Rs 200. Only 8 boxes ready!\",\n  \"imageData\": \"\",\n  \"requestId\": \"qp-req-101\",\n  \"postedDate\": \"2026-10-18\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Quick Posts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/quick-posts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "quick-posts"
+              ]
+            },
+            "description": "List recent quick posts."
+          },
+          "response": []
+        },
+        {
+          "name": "Parse Free-Text / WhatsApp Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/parse-message",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "parse-message"
+              ]
+            },
+            "description": "AI-style parser extracting dish name, price, quantity, and timings from free-text.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Making fresh Methi Thepla 10 pcs pack Rs 120 ready by 11am today max 15 packs\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Offerings History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "history"
+              ]
+            },
+            "description": "Recent offerings available for 1-click republishing."
+          },
+          "response": []
+        },
+        {
+          "name": "Batch Republish Offerings",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/batch-republish",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "batch-republish"
+              ]
+            },
+            "description": "Republishes multiple past offerings for a given date.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productIds\": [\n    1,\n    2\n  ],\n  \"availableDate\": \"tomorrow\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Orders Summary Buckets",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/orders/summary?date=today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "orders",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "today",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Aggregated order summary cards by status and society."
+          },
+          "response": []
+        },
+        {
+          "name": "Offering Orders Drill-down",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/orders/product/:productId?date=today&society=Whispering%20Palms&status=ACCEPTED&delivery=not_delivered",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "orders",
+                "product",
+                ":productId"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "today",
+                  "description": ""
+                },
+                {
+                  "key": "society",
+                  "value": "Whispering Palms",
+                  "description": ""
+                },
+                {
+                  "key": "status",
+                  "value": "ACCEPTED",
+                  "description": ""
+                },
+                {
+                  "key": "delivery",
+                  "value": "not_delivered",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "productId",
+                  "value": "1",
+                  "description": "ID or slug for productId"
+                }
+              ]
+            },
+            "description": "Detailed list of orders for one offering with 3 independent filter axes."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Order Delivery Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/orders/:orderId/delivery-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "orders",
+                ":orderId",
+                "delivery-status"
+              ],
+              "variable": [
+                {
+                  "key": "orderId",
+                  "value": "1",
+                  "description": "ID or slug for orderId"
+                }
+              ]
+            },
+            "description": "Toggles or updates delivery status checkbox on an order.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deliveryStatus\": \"DELIVERED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Mark All Delivered",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/orders/product/:productId/mark-all-delivered?date=today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "orders",
+                "product",
+                ":productId",
+                "mark-all-delivered"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "today",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "productId",
+                  "value": "1",
+                  "description": "ID or slug for productId"
+                }
+              ]
+            },
+            "description": "Bulk marks all active orders for an offering on that date as delivered."
+          },
+          "response": []
+        },
+        {
+          "name": "Seller Earnings Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller-app/earnings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller-app",
+                "earnings"
+              ]
+            },
+            "description": "Detailed financial breakdown: today, this week, total revenue and order count."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "13. Recurring Schedules (RecurringScheduleController)",
+      "description": "Manage recurring dish schedules, weekly repeat rules, and per-day overrides.",
+      "item": [
+        {
+          "name": "List My Recurring Schedules",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/schedules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "schedules"
+              ]
+            },
+            "description": "Lists all recurring schedule cards for the seller."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Occurrences for Schedule",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/schedules/:scheduleId/occurrences",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "schedules",
+                ":scheduleId",
+                "occurrences"
+              ],
+              "variable": [
+                {
+                  "key": "scheduleId",
+                  "value": "1",
+                  "description": "ID or slug for scheduleId"
+                }
+              ]
+            },
+            "description": "Resolved calendar day rows for a schedule."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Schedule Card",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/schedules/:scheduleId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "schedules",
+                ":scheduleId"
+              ],
+              "variable": [
+                {
+                  "key": "scheduleId",
+                  "value": "1",
+                  "description": "ID or slug for scheduleId"
+                }
+              ]
+            },
+            "description": "Single schedule card for Manage Schedule modal."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Recurring Schedule for Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/schedules/:productId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "schedules",
+                ":productId"
+              ],
+              "variable": [
+                {
+                  "key": "productId",
+                  "value": "1",
+                  "description": "ID or slug for productId"
+                }
+              ]
+            },
+            "description": "Attaches a recurring repeating schedule to an offering.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pattern\": \"WEEKLY\",\n  \"daysOfWeek\": [\n    \"MON\",\n    \"WED\",\n    \"FRI\"\n  ],\n  \"defaultQuantity\": 20,\n  \"orderCloseTime\": \"11:00\",\n  \"readyByTime\": \"13:00\",\n  \"startDate\": \"2026-10-19\",\n  \"endDate\": \"2026-11-30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "End Recurring Schedule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/schedules/:scheduleId/end",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "schedules",
+                ":scheduleId",
+                "end"
+              ],
+              "variable": [
+                {
+                  "key": "scheduleId",
+                  "value": "1",
+                  "description": "ID or slug for scheduleId"
+                }
+              ]
+            },
+            "description": "Ends schedule while preserving past history."
+          },
+          "response": []
+        },
+        {
+          "name": "Extend Recurring Schedule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/schedules/:scheduleId/extend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "schedules",
+                ":scheduleId",
+                "extend"
+              ],
+              "variable": [
+                {
+                  "key": "scheduleId",
+                  "value": "1",
+                  "description": "ID or slug for scheduleId"
+                }
+              ]
+            },
+            "description": "Extends an ongoing schedule forward in time."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Schedule Defaults",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/schedules/:scheduleId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "schedules",
+                ":scheduleId"
+              ],
+              "variable": [
+                {
+                  "key": "scheduleId",
+                  "value": "1",
+                  "description": "ID or slug for scheduleId"
+                }
+              ]
+            },
+            "description": "Updates repeating rule and future un-overridden occurrences.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"daysOfWeek\": [\n    \"MON\",\n    \"TUE\",\n    \"WED\",\n    \"THU\",\n    \"FRI\"\n  ],\n  \"defaultQuantity\": 25,\n  \"orderCloseTime\": \"11:30\",\n  \"readyByTime\": \"13:30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Resolved Occurrence",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/schedules/occurrences/:occurrenceId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "schedules",
+                "occurrences",
+                ":occurrenceId"
+              ],
+              "variable": [
+                {
+                  "key": "occurrenceId",
+                  "value": "1",
+                  "description": "ID or slug for occurrenceId"
+                }
+              ]
+            },
+            "description": "Fetches one specific selling date row."
+          },
+          "response": []
+        },
+        {
+          "name": "Per-Day Override for Occurrence",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/schedules/occurrences/:occurrenceId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "schedules",
+                "occurrences",
+                ":occurrenceId"
+              ],
+              "variable": [
+                {
+                  "key": "occurrenceId",
+                  "value": "1",
+                  "description": "ID or slug for occurrenceId"
+                }
+              ]
+            },
+            "description": "Modifies quantity or timing for ONE single date only.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 35,\n  \"orderCloseTime\": \"12:00\",\n  \"readyByTime\": \"14:00\",\n  \"soldOut\": false,\n  \"ordersPaused\": false,\n  \"clearQuantity\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Occurrence Sold Out Toggle",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/schedules/occurrences/:occurrenceId/sold-out",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "schedules",
+                "occurrences",
+                ":occurrenceId",
+                "sold-out"
+              ],
+              "variable": [
+                {
+                  "key": "occurrenceId",
+                  "value": "1",
+                  "description": "ID or slug for occurrenceId"
+                }
+              ]
+            },
+            "description": "Toggles sold-out state for this single date.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"soldOut\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Occurrence Pause Orders Toggle",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/seller/schedules/occurrences/:occurrenceId/pause",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "seller",
+                "schedules",
+                "occurrences",
+                ":occurrenceId",
+                "pause"
+              ],
+              "variable": [
+                {
+                  "key": "occurrenceId",
+                  "value": "1",
+                  "description": "ID or slug for occurrenceId"
+                }
+              ]
+            },
+            "description": "Toggles close-orders state for this single date.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paused\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "14. Admin Console (AdminController)",
+      "description": "Admin & Super Admin operations: approvals, storefront controls, buyers, orders monitoring, coverage master, exports, and analytics.",
+      "item": [
+        {
+          "name": "Admin Dashboard Counters",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/dashboard?date=today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "dashboard"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "today",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Overview statistics for chosen date window."
+          },
+          "response": []
+        },
+        {
+          "name": "List & Search Buyers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/buyers?search=&areaId=1&societyId=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "buyers"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "areaId",
+                  "value": "1",
+                  "description": ""
+                },
+                {
+                  "key": "societyId",
+                  "value": "1",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "List registered buyers filtered by name, phone, area, or society."
+          },
+          "response": []
+        },
+        {
+          "name": "Buyer Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/buyers/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "buyers",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "ID or slug for id"
+                }
+              ]
+            },
+            "description": "Full profile, order history, and notes for a buyer."
+          },
+          "response": []
+        },
+        {
+          "name": "Block Buyer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/buyers/:id/block",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "buyers",
+                ":id",
+                "block"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "ID or slug for id"
+                }
+              ]
+            },
+            "description": "Blocks a buyer account.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Repeated fraudulent orders.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Unblock Buyer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/buyers/:id/unblock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "buyers",
+                ":id",
+                "unblock"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "ID or slug for id"
+                }
+              ]
+            },
+            "description": "Unblocks a buyer account.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Identity verified over phone.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Buyer Support Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/buyers/:id/support-note",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "buyers",
+                ":id",
+                "support-note"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "ID or slug for id"
+                }
+              ]
+            },
+            "description": "Saves internal admin support note on buyer.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Requested special delivery instructions via support hotline.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Visibility Diagnostic",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/diagnostics/visibility?buyerId=1&kitchenId=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "diagnostics",
+                "visibility"
+              ],
+              "query": [
+                {
+                  "key": "buyerId",
+                  "value": "1",
+                  "description": ""
+                },
+                {
+                  "key": "kitchenId",
+                  "value": "1",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Explains why a buyer can or cannot see a kitchen based on rule engine."
+          },
+          "response": []
+        },
+        {
+          "name": "System Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/system-health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "system-health"
+              ]
+            },
+            "description": "Factual runtime status of database, jobs, and memory."
+          },
+          "response": []
+        },
+        {
+          "name": "List Sellers by Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/sellers?status=APPROVED",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "sellers"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "APPROVED",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Filter sellers by PENDING, APPROVED, REJECTED, SUSPENDED."
+          },
+          "response": []
+        },
+        {
+          "name": "List Pending Sellers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/sellers/pending",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "sellers",
+                "pending"
+              ]
+            },
+            "description": "Pending seller registrations awaiting admin review."
+          },
+          "response": []
+        },
+        {
+          "name": "Seller Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/sellers/:id/detail",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "sellers",
+                ":id",
+                "detail"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "ID or slug for id"
+                }
+              ]
+            },
+            "description": "Full seller profile, storefront, coverage, documents, and contact."
+          },
+          "response": []
+        },
+        {
+          "name": "Approve Seller",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/sellers/:id/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "sellers",
+                ":id",
+                "approve"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "ID or slug for id"
+                }
+              ]
+            },
+            "description": "Approves seller and activates their kitchen."
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Seller",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/sellers/:id/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "sellers",
+                ":id",
+                "reject"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "ID or slug for id"
+                }
+              ]
+            },
+            "description": "Rejects seller application with reason.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Incomplete kitchen hygiene information.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Request Seller Changes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/sellers/:id/request-changes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "sellers",
+                ":id",
+                "request-changes"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "ID or slug for id"
+                }
+              ]
+            },
+            "description": "Asks seller to update their submission.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Please update your menu with realistic preparation times.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Suspend Seller",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/sellers/:id/suspend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "sellers",
+                ":id",
+                "suspend"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "ID or slug for id"
+                }
+              ]
+            },
+            "description": "Temporarily suspends seller.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Temporary kitchen renovation.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Block Seller",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/sellers/:id/block",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "sellers",
+                ":id",
+                "block"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "ID or slug for id"
+                }
+              ]
+            },
+            "description": "Account-level block on seller.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Terms of service violation.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Unblock Seller",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/sellers/:id/unblock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "sellers",
+                ":id",
+                "unblock"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "ID or slug for id"
+                }
+              ]
+            },
+            "description": "Restores blocked seller account.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Issue resolved.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Seller Support Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/sellers/:id/support-note",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "sellers",
+                ":id",
+                "support-note"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "ID or slug for id"
+                }
+              ]
+            },
+            "description": "Internal admin note on seller.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Assisted seller in setting up recurring schedules.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Storefronts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/kitchens?sellerType=KITCHEN",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "kitchens"
+              ],
+              "query": [
+                {
+                  "key": "sellerType",
+                  "value": "KITCHEN",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "List of all kitchen storefronts."
+          },
+          "response": []
+        },
+        {
+          "name": "Pause Storefront",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/storefronts/:kitchenId/pause",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "storefronts",
+                ":kitchenId",
+                "pause"
+              ],
+              "variable": [
+                {
+                  "key": "kitchenId",
+                  "value": "1",
+                  "description": "ID or slug for kitchenId"
+                }
+              ]
+            },
+            "description": "Admin pauses a kitchen storefront.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Paused on seller phone request.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Resume Storefront",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/storefronts/:kitchenId/resume",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "storefronts",
+                ":kitchenId",
+                "resume"
+              ],
+              "variable": [
+                {
+                  "key": "kitchenId",
+                  "value": "1",
+                  "description": "ID or slug for kitchenId"
+                }
+              ]
+            },
+            "description": "Admin resumes an inactive storefront."
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Storefront",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/storefronts/:kitchenId/remove",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "storefronts",
+                ":kitchenId",
+                "remove"
+              ],
+              "variable": [
+                {
+                  "key": "kitchenId",
+                  "value": "1",
+                  "description": "ID or slug for kitchenId"
+                }
+              ]
+            },
+            "description": "Soft-removes a storefront.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Seller discontinued business.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Change Kitchen Slug",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/kitchens/:kitchenId/slug",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "kitchens",
+                ":kitchenId",
+                "slug"
+              ],
+              "variable": [
+                {
+                  "key": "kitchenId",
+                  "value": "1",
+                  "description": "ID or slug for kitchenId"
+                }
+              ]
+            },
+            "description": "Updates kitchen public URL slug, keeping old slug as alias.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slug\": \"annapurna-delights\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Kitchen Service Areas",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/kitchens/:kitchenId/service-areas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "kitchens",
+                ":kitchenId",
+                "service-areas"
+              ],
+              "variable": [
+                {
+                  "key": "kitchenId",
+                  "value": "1",
+                  "description": "ID or slug for kitchenId"
+                }
+              ]
+            },
+            "description": "Updates coverage area and societies for a storefront.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"areaId\": 1,\n  \"societyIds\": [\n    1,\n    2\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Societies",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/societies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "societies"
+              ]
+            },
+            "description": "All assignable societies."
+          },
+          "response": []
+        },
+        {
+          "name": "List Active Coverage Options",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/coverage-options",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "coverage-options"
+              ]
+            },
+            "description": "Active areas & societies for coverage picker."
+          },
+          "response": []
+        },
+        {
+          "name": "Master Locations List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/locations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "locations"
+              ]
+            },
+            "description": "Full Area -> Society tree including inactive records."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Area",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/areas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "areas"
+              ]
+            },
+            "description": "Creates a new delivery geographic area.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Powai\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Area",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/areas/:areaId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "areas",
+                ":areaId"
+              ],
+              "variable": [
+                {
+                  "key": "areaId",
+                  "value": "1",
+                  "description": "ID or slug for areaId"
+                }
+              ]
+            },
+            "description": "Renames or enables/disables an Area.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Kandivali East\",\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Society",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/societies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "societies"
+              ]
+            },
+            "description": "Adds a residential society to an Area.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"areaId\": 1,\n  \"name\": \"Hiranandani Gardens\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Society",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/societies/:societyId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "societies",
+                ":societyId"
+              ],
+              "variable": [
+                {
+                  "key": "societyId",
+                  "value": "1",
+                  "description": "ID or slug for societyId"
+                }
+              ]
+            },
+            "description": "Renames or enables/disables a Society.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Whispering Palms Phase 1\",\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List All Offerings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/offerings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "offerings"
+              ]
+            },
+            "description": "Master list of menu items and offerings across all kitchens."
+          },
+          "response": []
+        },
+        {
+          "name": "Orders Monitoring List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders?date=today&status=&delivery=&payment=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "today",
+                  "description": ""
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "delivery",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "payment",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Read-only orders monitoring with composite filters."
+          },
+          "response": []
+        },
+        {
+          "name": "Order Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "orders",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "ID or slug for id"
+                }
+              ]
+            },
+            "description": "Admin order detail view."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Orders CSV",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/exports/orders.csv?date=today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "exports",
+                "orders.csv"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "today",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Filter-aware CSV download with formula injection protection."
+          },
+          "response": []
+        },
+        {
+          "name": "Needs Attention Items",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/attention",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "attention"
+              ]
+            },
+            "description": "Consolidated items needing attention (pending sellers, disputes, etc.)."
+          },
+          "response": []
+        },
+        {
+          "name": "List Enquiries",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/enquiries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "enquiries"
+              ]
+            },
+            "description": "List of all customer enquiries in platform."
+          },
+          "response": []
+        },
+        {
+          "name": "Marketplace Links",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/marketplace-links",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "marketplace-links"
+              ]
+            },
+            "description": "Public landing page and promotion links."
+          },
+          "response": []
+        },
+        {
+          "name": "View Audit Log",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/audit-log?limit=200",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "audit-log"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "200",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Append-only system audit log."
+          },
+          "response": []
+        },
+        {
+          "name": "Audit Entries for Target",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/audit-log/:targetType/:targetId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "audit-log",
+                ":targetType",
+                ":targetId"
+              ],
+              "variable": [
+                {
+                  "key": "targetType",
+                  "value": "SELLER",
+                  "description": "ID or slug for targetType"
+                },
+                {
+                  "key": "targetId",
+                  "value": "1",
+                  "description": "ID or slug for targetId"
+                }
+              ]
+            },
+            "description": "Audit trail for specific entity."
+          },
+          "response": []
+        },
+        {
+          "name": "Retention Policy Preview",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/retention",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "retention"
+              ]
+            },
+            "description": "Preview of data retention window and candidate purge count."
+          },
+          "response": []
+        },
+        {
+          "name": "Set Retention Window",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/retention",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "retention"
+              ]
+            },
+            "description": "Sets data retention window in days.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"retentionDays\": 90\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Arm/Disarm Retention Purge",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/retention/purge-enabled",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "retention",
+                "purge-enabled"
+              ]
+            },
+            "description": "Enables or disables destructive purge execution.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Execute Retention Purge",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/retention/purge",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "retention",
+                "purge"
+              ]
+            },
+            "description": "Runs guarded retention purge.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confirmed\": true,\n  \"exported\": true,\n  \"reason\": \"Scheduled quarterly data purge approved by Super Admin.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Seller Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/seller-analytics?date=today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "seller-analytics"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "today",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Per-seller commercial performance and order volumes."
+          },
+          "response": []
+        },
+        {
+          "name": "Recorded Order Value Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/recorded-order-value?date=today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "recorded-order-value"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "today",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Gross merchandise value and order breakdowns."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin Analytics Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/analytics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "analytics"
+              ]
+            },
+            "description": "Platform summary analytics."
+          },
+          "response": []
+        },
+        {
+          "name": "Traffic Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/traffic?period=today",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "traffic"
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "today",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Visitor and conversion traffic overview."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "15. Password Recovery Admin (PasswordRecoveryAdminController)",
+      "description": "Admin & Super Admin mediated password recovery workflow for sellers and users.",
+      "item": [
+        {
+          "name": "List Password Reset Requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/password-recovery?status=PENDING",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "password-recovery"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "PENDING",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Lists password recovery queue (PENDING, APPROVED, REJECTED)."
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Temporary Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/password-recovery/:requestId/generate-temp-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "password-recovery",
+                ":requestId",
+                "generate-temp-password"
+              ],
+              "variable": [
+                {
+                  "key": "requestId",
+                  "value": "1",
+                  "description": "ID or slug for requestId"
+                }
+              ]
+            },
+            "description": "Super Admin action: generates a one-time temporary password."
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Password Reset Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/password-recovery/:requestId/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "password-recovery",
+                ":requestId",
+                "reject"
+              ],
+              "variable": [
+                {
+                  "key": "requestId",
+                  "value": "1",
+                  "description": "ID or slug for requestId"
+                }
+              ]
+            },
+            "description": "Super Admin rejects a reset request.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Could not verify identity of caller.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "16. Super Admin Controls (SuperAdminController)",
+      "description": "Platform governance: Admin accounts, feature flags, seller limits, and global settings.",
+      "item": [
+        {
+          "name": "List Admin Accounts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/superadmin/admins",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "admins"
+              ]
+            },
+            "description": "Lists all platform administrator accounts."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Admin Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/superadmin/admins",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "admins"
+              ]
+            },
+            "description": "Provisions an Admin account.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Rajesh Kumar\",\n  \"mobileNumber\": \"9811122233\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Demote Admin Account",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/superadmin/admins/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "admins",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "2",
+                  "description": "ID or slug for id"
+                }
+              ]
+            },
+            "description": "Demotes an Admin account back to Buyer (Super Admin cannot be demoted)."
+          },
+          "response": []
+        },
+        {
+          "name": "List Feature Flags",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/superadmin/features",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "features"
+              ]
+            },
+            "description": "All platform feature flags with pricing models and limits."
+          },
+          "response": []
+        },
+        {
+          "name": "Configure Feature Flag",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/superadmin/features/:featureKey",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "features",
+                ":featureKey"
+              ],
+              "variable": [
+                {
+                  "key": "featureKey",
+                  "value": "RECURRING_SCHEDULES",
+                  "description": "ID or slug for featureKey"
+                }
+              ]
+            },
+            "description": "Sets feature flag status, pricing, and limits.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Recurring Schedules\",\n  \"description\": \"Allows home chefs to set up weekly repeating menus\",\n  \"enabled\": true,\n  \"pricingType\": \"FREE\",\n  \"limitValue\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Grant / Revoke Seller Feature",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/superadmin/sellers/:sellerId/features/:featureKey",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "sellers",
+                ":sellerId",
+                "features",
+                ":featureKey"
+              ],
+              "variable": [
+                {
+                  "key": "sellerId",
+                  "value": "1",
+                  "description": "ID or slug for sellerId"
+                },
+                {
+                  "key": "featureKey",
+                  "value": "RECURRING_SCHEDULES",
+                  "description": "ID or slug for featureKey"
+                }
+              ]
+            },
+            "description": "Grants or overrides feature limits for a specific seller.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"granted\": true,\n  \"limitOverride\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Feature Grants for Seller",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/superadmin/sellers/:sellerId/features",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "sellers",
+                ":sellerId",
+                "features"
+              ],
+              "variable": [
+                {
+                  "key": "sellerId",
+                  "value": "1",
+                  "description": "ID or slug for sellerId"
+                }
+              ]
+            },
+            "description": "List all custom feature grants for a seller."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Platform Settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/superadmin/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "settings"
+              ]
+            },
+            "description": "Key-value platform configuration dictionary."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Platform Setting",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/superadmin/settings/:key",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "settings",
+                ":key"
+              ],
+              "variable": [
+                {
+                  "key": "key",
+                  "value": "platform.maintenance.mode",
+                  "description": "ID or slug for key"
+                }
+              ]
+            },
+            "description": "Updates a global platform setting.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": \"false\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Platform Global Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/superadmin/analytics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "superadmin",
+                "analytics"
+              ]
+            },
+            "description": "Highest level multi-area platform analytics."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
