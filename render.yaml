@@ -32,3 +32,15 @@ services:
         # demo/dev/postgres-demo. Using a removed profile silently falls back
         # to the unsafe defaults in application.properties.
         value: prod
+      - key: SOCIOMART_DB_JDBC_URL
+        sync: false
+      - key: SOCIOMART_DB_USERNAME
+        sync: false
+      - key: SOCIOMART_DB_PASSWORD
+        sync: false
+      - key: SOCIOMART_ADMIN_PASSWORD
+        sync: false
+      - key: SOCIOMART_SUPER_ADMIN_PASSWORD
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
