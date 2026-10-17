@@ -1,5 +1,7 @@
 package com.example.my_first_spring_api.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -16,14 +18,20 @@ public class ProductUpdateDto {
     private String priceUnit;
     private String imageUrl;
     private Boolean availableToday;
+    @JsonAlias({"offeringDate", "date"})
     private LocalDate availableDate;
+    @JsonAlias({"ordersOpenTime", "openTime"})
     private String orderWindowStart;
+    @JsonAlias({"ordersCloseTime", "closeTime", "cutoffTime"})
     private String orderWindowEnd;
     private String cutoffTime;
+    @JsonAlias({"deliveryTime", "deliveryDateTime", "readyBy"})
     private String readyByTime;
     private Integer maxQuantity;
     private Integer remainingQuantity;
     private Boolean isPreorder;
+    @JsonAlias({"category"})
+    @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY)
     private List<String> categories;
 
     public String getName() { return name; }
@@ -55,5 +63,22 @@ public class ProductUpdateDto {
     public Boolean getIsPreorder() { return isPreorder; }
     public void setIsPreorder(Boolean isPreorder) { this.isPreorder = isPreorder; }
     public List<String> getCategories() { return categories; }
-    public void setCategories(List<String> categories) { this.categories = categories; }
+    public void setCategories(List<String> categories) {
+        if (categories == null) {
+            this.categories = null;
+            return;
+        }
+        List<String> flattened = new java.util.ArrayList<>();
+        for (String c : categories) {
+            if (c != null && !c.isBlank()) {
+                for (String part : c.split(",")) {
+                    String trimmed = part.trim();
+                    if (!trimmed.isEmpty()) {
+                        flattened.add(trimmed);
+                    }
+                }
+            }
+        }
+        this.categories = flattened;
+    }
 }

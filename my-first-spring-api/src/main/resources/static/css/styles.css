@@ -237,6 +237,23 @@ h3 { font-size: 1.05rem; font-weight: 700; font-family: 'Montserrat', 'Segoe UI'
     outline: none; border-color: var(--brand-3);
     box-shadow: 0 0 0 3px var(--brand-soft);
 }
+.form-input-error, .form-input.is-invalid {
+    border-color: var(--danger) !important;
+    box-shadow: 0 0 0 3px var(--danger-soft) !important;
+}
+.timing-inline-warning {
+    color: var(--danger);
+    background: var(--danger-soft);
+    border: 1px solid rgba(220, 38, 38, 0.2);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-top: 6px;
+    margin-bottom: 10px;
+    display: none;
+    line-height: 1.4;
+}
 .search-box { position: relative; margin: 4px 0 18px; }
 .search-box .form-input { padding-left: 42px; border-radius: 999px; }
 .search-box .search-icon { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); opacity: .6; }

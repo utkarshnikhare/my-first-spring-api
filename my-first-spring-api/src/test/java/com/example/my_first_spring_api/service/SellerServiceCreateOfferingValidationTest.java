@@ -239,4 +239,62 @@ class SellerServiceCreateOfferingValidationTest {
         assertThat(result.getReadyByTime())
                 .isEqualTo(LocalDateTime.of(today.plusDays(1), LocalTime.NOON).toString());
     }
+
+    @Test
+    void nullKitchenIdResolvesFromSellerOwnedKitchen() {
+        when(kitchenRepository.findBySeller(any(User.class))).thenReturn(List.of(approvedKitchen()));
+        ProductCreateDto dto = validDto();
+        var result = sellerService.createProduct(null, dto, approvedSeller());
+        assertThat(result).isNotNull();
+        assertThat(result.getKitchenId()).isEqualTo(1L);
+    }
+
+    @Test
+    void nullKitchenIdThrowsWhenSellerHasNoKitchen() {
+        when(kitchenRepository.findBySeller(any(User.class))).thenReturn(List.of());
+        ProductCreateDto dto = validDto();
+        assertThrows(com.example.my_first_spring_api.exception.KitchenNotFoundException.class,
+                () -> sellerService.createProduct(null, dto, approvedSeller()));
+    }
+
+    @Test
+    void categoryMappingNormalizesMixedCaseAndCommaSeparatedStrings() {
+        ProductCreateDto dto = validDto();
+        dto.setCategories(List.of("Dinner, Breakfast", "snacks"));
+        var result = sellerService.createProduct(1L, dto, approvedSeller());
+        assertThat(result.getCategory()).isEqualTo("DINNER,BREAKFAST,SNACKS");
+    }
+
+    @Test
+    void readyByWithUtcZIsConvertedToKolkataLocalTime() {
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        ProductCreateDto dto = validDto();
+        dto.setAvailableDate(tomorrow);
+        // 14:00 UTC = 19:30 IST (+5:30)
+        dto.setReadyByTime(tomorrow + "T14:00:00Z");
+        var result = sellerService.createProduct(1L, dto, approvedSeller());
+        assertThat(result.getReadyByTime()).isEqualTo(tomorrow + "T19:30");
+    }
+
+    @Test
+    void jacksonDeserializesAliasesCorrectly() throws Exception {
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+        String json = "{\n" +
+                "  \"name\": \"Thali\",\n" +
+                "  \"price\": 120,\n" +
+                "  \"offeringDate\": \"2026-10-20\",\n" +
+                "  \"ordersOpenTime\": \"10:00\",\n" +
+                "  \"ordersCloseTime\": \"13:00\",\n" +
+                "  \"deliveryDateTime\": \"2026-10-20T13:30\",\n" +
+                "  \"category\": \"Dinner\"\n" +
+                "}";
+        ProductCreateDto parsed = mapper.readValue(json, ProductCreateDto.class);
+        assertThat(parsed.getName()).isEqualTo("Thali");
+        assertThat(parsed.getAvailableDate()).isEqualTo(LocalDate.of(2026, 10, 20));
+        assertThat(parsed.getOrderWindowStart()).isEqualTo("10:00");
+        assertThat(parsed.getOrderWindowEnd()).isEqualTo("13:00");
+        assertThat(parsed.getReadyByTime()).isEqualTo("2026-10-20T13:30");
+        assertThat(parsed.getCategories()).containsExactly("Dinner");
+    }
 }

@@ -1,5 +1,7 @@
 package com.example.my_first_spring_api.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -22,12 +24,20 @@ public class ProductCreateDto {
     private String imageUrl;
     private Boolean availableToday;
     @NotNull(message = "Offering For is required")
+    @JsonAlias({"offeringDate", "date"})
     private LocalDate availableDate;
+
+    @JsonAlias({"ordersOpenTime", "openTime"})
     private String orderWindowStart;
+
     @NotBlank(message = "Orders Close is required")
+    @JsonAlias({"ordersCloseTime", "closeTime", "cutoffTime"})
     private String orderWindowEnd;
+
     @NotBlank(message = "Delivery / Ready By is required")
+    @JsonAlias({"deliveryTime", "deliveryDateTime", "readyBy"})
     private String readyByTime;
+
     @Positive(message = "Quantity Available must be at least 1; leave blank for unlimited")
     private Integer maxQuantity;
     private Integer remainingQuantity;
@@ -35,6 +45,8 @@ public class ProductCreateDto {
 
     @NotNull(message = "Select at least one category")
     @Size(min = 1, message = "Select at least one category")
+    @JsonAlias({"category"})
+    @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY)
     private List<String> categories;
 
     /** Optional recurring-schedule config; when present, the new product is
@@ -69,7 +81,24 @@ public class ProductCreateDto {
     public Boolean getIsPreorder() { return isPreorder; }
     public void setIsPreorder(Boolean isPreorder) { this.isPreorder = isPreorder; }
     public List<String> getCategories() { return categories; }
-    public void setCategories(List<String> categories) { this.categories = categories; }
+    public void setCategories(List<String> categories) {
+        if (categories == null) {
+            this.categories = null;
+            return;
+        }
+        List<String> flattened = new java.util.ArrayList<>();
+        for (String c : categories) {
+            if (c != null && !c.isBlank()) {
+                for (String part : c.split(",")) {
+                    String trimmed = part.trim();
+                    if (!trimmed.isEmpty()) {
+                        flattened.add(trimmed);
+                    }
+                }
+            }
+        }
+        this.categories = flattened;
+    }
 
     public RecurringScheduleDto getRecurringSchedule() { return recurringSchedule; }
     public void setRecurringSchedule(RecurringScheduleDto recurringSchedule) { this.recurringSchedule = recurringSchedule; }

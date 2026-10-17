@@ -164,7 +164,20 @@ async function api(path, opts) {
         data = text;
     }
     if (!res.ok) {
-        var msg = (data && data.message) || (data && data.error) || ('HTTP ' + res.status);
+        var msg = null;
+        if (data) {
+            if (typeof data === 'string' && data.trim()) {
+                msg = data.trim();
+            } else if (data.message && typeof data.message === 'string') {
+                msg = data.message;
+            } else if (data.error && typeof data.error === 'string') {
+                msg = data.error;
+            } else if (typeof data === 'object') {
+                var fieldValues = Object.values(data).filter(function (v) { return typeof v === 'string'; });
+                if (fieldValues.length) msg = fieldValues.join('; ');
+            }
+        }
+        if (!msg) msg = 'HTTP ' + res.status;
         if (res.status === 403 && (msg === 'Forbidden' || msg === 'Access Denied')) {
             msg = 'This request is not permitted for the current session. Refresh the page and sign in with an authorized account.';
         }

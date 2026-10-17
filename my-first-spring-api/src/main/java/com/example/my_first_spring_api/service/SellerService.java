@@ -22,6 +22,7 @@ import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.OrderItemRepository;
 import com.example.my_first_spring_api.repository.ProductRepository;
+import com.example.my_first_spring_api.AppTimeZone;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -218,7 +219,7 @@ public class SellerService {
     public ProductDto createProduct(Long kitchenId, ProductCreateDto dto, User seller) {
         Kitchen kitchen = getOwnedKitchen(kitchenId, seller);
         LocalDate offeringDate = dto.getAvailableDate();
-        LocalDate today = java.time.LocalDate.now();
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
         boolean recurringRequest = dto.getRecurringSchedule() != null;
         boolean preorder = !recurringRequest && (dto.getIsPreorder() != null
                 ? dto.getIsPreorder() : offeringDate != null && offeringDate.isAfter(today));
@@ -266,7 +267,7 @@ public class SellerService {
         assertFeatureCompliance(seller, preorder, offeringDate, dto.getName());
         Product product = new Product(kitchen, dto.getName(), dto.getDescription(), dto.getPrice(), dto.getImageUrl());
         product.setPriceUnit(dto.getPriceUnit());
-        product.setAvailableToday(offeringDate.equals(java.time.LocalDate.now()) && !preorder);
+        product.setAvailableToday(offeringDate.equals(today) && !preorder);
         product.setAvailableDate(offeringDate);
         product.setOrderWindowStart(orderWindowStart);
         product.setOrderWindowEnd(orderWindowEnd);
@@ -302,19 +303,20 @@ public class SellerService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
         getOwnedKitchen(product.getKitchen().getId(), seller);
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
         boolean effectivePreorder = dto.getIsPreorder() != null
                 ? dto.getIsPreorder()
                 : (dto.getAvailableDate() != null
-                    ? dto.getAvailableDate().isAfter(java.time.LocalDate.now())
+                    ? dto.getAvailableDate().isAfter(today)
                     : Boolean.TRUE.equals(product.getIsPreorder()));
         java.time.LocalDate effectiveDate = dto.getAvailableDate() != null
                 ? dto.getAvailableDate() : (product.getAvailableDate() != null
                     ? product.getAvailableDate()
-                    : (effectivePreorder ? java.time.LocalDate.now().plusDays(1) : java.time.LocalDate.now()));
-        if (effectiveDate != null && effectiveDate.isAfter(java.time.LocalDate.now()) && !effectivePreorder) {
+                    : (effectivePreorder ? today.plusDays(1) : today));
+        if (effectiveDate != null && effectiveDate.isAfter(today) && !effectivePreorder) {
             throw new IllegalArgumentException("Future offerings must be pre-orders.");
         }
-        if (effectivePreorder && (effectiveDate == null || !effectiveDate.isAfter(java.time.LocalDate.now()))) {
+        if (effectivePreorder && (effectiveDate == null || !effectiveDate.isAfter(today))) {
             throw new IllegalArgumentException("Pre-orders must be for a future offering date.");
         }
         assertFeatureCompliance(seller, effectivePreorder, effectiveDate, product.getName());
@@ -395,7 +397,7 @@ public class SellerService {
         if (dto.getRemainingQuantity() != null) product.setRemainingQuantity(dto.getRemainingQuantity());
         if (dto.getAvailableDate() != null) {
             product.setAvailableDate(dto.getAvailableDate());
-            product.setAvailableToday(dto.getAvailableDate().equals(java.time.LocalDate.now()) && !effectivePreorder);
+            product.setAvailableToday(dto.getAvailableDate().equals(LocalDate.now(AppTimeZone.ZONE)) && !effectivePreorder);
         }
         if (dto.getOrderWindowStart() != null) product.setOrderWindowStart(effectiveOpen);
         if (dto.getOrderWindowEnd() != null || dto.getCutoffTime() != null) {
@@ -448,7 +450,7 @@ public class SellerService {
         dto.setIsPreorder(product.getIsPreorder());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
-        dto.setLifecycleState(OfferingTiming.lifecycleState(product, LocalDate.now(), LocalTime.now()));
+        dto.setLifecycleState(OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE)));
         dto.setHasOrders(orderCount > 0);
         dto.setOrderCount((int) orderCount);
         return dto;
@@ -489,6 +491,13 @@ public class SellerService {
     }
 
     private Kitchen getOwnedKitchen(Long kitchenId, User seller) {
+        if (kitchenId == null) {
+            List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
+            if (kitchens.isEmpty()) {
+                throw new KitchenNotFoundException("No kitchen found for this seller account. Please set up your kitchen first.");
+            }
+            return kitchens.get(0);
+        }
         Kitchen kitchen = kitchenRepository.findById(kitchenId)
                 .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
         if (!kitchen.getSeller().getId().equals(seller.getId())) throw new SellerNotAuthorizedException("You do not own this kitchen");
@@ -500,7 +509,10 @@ public class SellerService {
         if (categories == null || categories.isEmpty()) return null;
         return categories.stream()
                 .filter(c -> c != null && !c.isBlank())
-                .map(c -> c.trim().toUpperCase())
+                .flatMap(c -> java.util.Arrays.stream(c.split(",")))
+                .map(String::trim)
+                .filter(c -> !c.isEmpty())
+                .map(String::toUpperCase)
                 .distinct()
                 .collect(Collectors.joining(","));
     }
@@ -529,7 +541,7 @@ public class SellerService {
             featureService.assertSellerCanUse(seller, FeatureService.KEY_PREORDERS);
         }
         if (availableDate != null) {
-            long daysAhead = java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), availableDate);
+            long daysAhead = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(AppTimeZone.ZONE), availableDate);
             if (daysAhead > 0) {
                 if (!featureService.sellerHasAccess(seller, FeatureService.KEY_MENU_ADVANCE_DAYS)) {
                     throw new IllegalStateException(
@@ -599,7 +611,7 @@ public class SellerService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
-        String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(), java.time.LocalTime.now());
+        String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
         dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
         dto.setCreatedAt(product.getCreatedAt());

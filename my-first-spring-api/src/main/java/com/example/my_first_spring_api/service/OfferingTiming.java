@@ -1,11 +1,15 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import com.example.my_first_spring_api.model.Product;
 
 import java.time.DayOfWeek;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZonedDateTime;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -45,7 +49,7 @@ final class OfferingTiming {
                                     String orderWindowStart, String orderWindowEnd,
                                     String readyByTime) {
         validateNewOffering(offeringDate, preorder, orderWindowStart, orderWindowEnd,
-                readyByTime, LocalDate.now(), LocalTime.now());
+                readyByTime, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
     }
 
     static void validateNewOffering(LocalDate offeringDate, boolean preorder,
@@ -66,17 +70,22 @@ final class OfferingTiming {
             throw new IllegalArgumentException("Delivery / Ready By cannot be before the offering date.");
         }
         LocalDate orderingDate = preorder ? offeringDate.minusDays(1) : offeringDate;
-        if (!orderingDate.isAfter(today) && minutes(close) < now.toSecondOfDay() / 60) {
+        // 2-minute tolerance buffer so clock ticks right at submission don't cause rejection
+        int nowMinutes = now.toSecondOfDay() / 60;
+        if (!orderingDate.isAfter(today) && minutes(close) < nowMinutes - 2) {
             throw new IllegalArgumentException("Orders Close must not already have passed for this offering date.");
         }
-        if (java.time.LocalDateTime.of(orderingDate, LocalTime.of(minutes(close) / 60, minutes(close) % 60))
-                .isAfter(delivery)) {
+        LocalDateTime closeDateTime = java.time.LocalDateTime.of(orderingDate, LocalTime.of(minutes(close) / 60, minutes(close) % 60));
+        if (closeDateTime.isAfter(delivery)) {
             throw new IllegalArgumentException("Orders Close must be before Delivery / Ready By.");
+        }
+        if (!offeringDate.isAfter(today) && delivery.isBefore(LocalDateTime.of(today, now).minusMinutes(2))) {
+            throw new IllegalArgumentException("Delivery / Ready By must not already have passed.");
         }
     }
 
     static void enforceOrderWindow(Product product, LocalDate orderingDate, String context) {
-        enforceOrderWindow(product, orderingDate, context, LocalDate.now(), LocalTime.now());
+        enforceOrderWindow(product, orderingDate, context, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
     }
 
     static void enforceOrderWindow(Product product, LocalDate orderingDate, String context,
@@ -102,8 +111,8 @@ final class OfferingTiming {
         if (now.toSecondOfDay() / 60 > minutes(close)) throw closed(product, context);
     }
     static boolean isWindowOpenNow(Product product) {
-        LocalDate today = LocalDate.now();
-        return isWindowOpenNow(product, today, LocalTime.now());
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        return isWindowOpenNow(product, today, LocalTime.now(AppTimeZone.ZONE));
     }
 
     static boolean isWindowOpenNow(Product product, LocalDate today, LocalTime now) {
@@ -196,24 +205,43 @@ final class OfferingTiming {
         // so validateNewOffering can reject a day that precedes the offering.
         if (legacy.matches() && legacy.group(4) != null) return value;
         LocalDateTime resolved;
+        boolean hasOffsetOrZ = false;
         try {
             resolved = LocalDateTime.parse(text);
         } catch (RuntimeException notIso) {
-            if (!legacy.matches()) return value; // Malformed input: validate reports it.
             try {
-                resolved = parseReadyByTime(text, LocalDate.now()); // Bare time-of-day.
-            } catch (RuntimeException invalid) {
-                return value;
+                resolved = OffsetDateTime.parse(text).atZoneSameInstant(AppTimeZone.ZONE).toLocalDateTime();
+                hasOffsetOrZ = true;
+            } catch (RuntimeException notOffset) {
+                try {
+                    resolved = ZonedDateTime.parse(text).withZoneSameInstant(AppTimeZone.ZONE).toLocalDateTime();
+                    hasOffsetOrZ = true;
+                } catch (RuntimeException notZoned) {
+                    try {
+                        resolved = Instant.parse(text).atZone(AppTimeZone.ZONE).toLocalDateTime();
+                        hasOffsetOrZ = true;
+                    } catch (RuntimeException notInstant) {
+                        if (!legacy.matches()) return value; // Malformed input: validate reports it.
+                        try {
+                            resolved = parseReadyByTime(text, LocalDate.now(AppTimeZone.ZONE));
+                        } catch (RuntimeException invalid) {
+                            return value;
+                        }
+                    }
+                }
             }
         }
         if (resolved.toLocalDate().isBefore(offeringDate)) {
             return LocalDateTime.of(offeringDate, resolved.toLocalTime()).toString();
         }
+        if (hasOffsetOrZ) {
+            return resolved.toString();
+        }
         return value;
     }
 
     static LocalDateTime parseReadyByTime(String value) {
-        return parseReadyByTime(value, LocalDate.now());
+        return parseReadyByTime(value, LocalDate.now(AppTimeZone.ZONE));
     }
 
     static LocalDateTime parseReadyByTime(String value, LocalDate today) {
@@ -224,7 +252,22 @@ final class OfferingTiming {
         try {
             return LocalDateTime.parse(text);
         } catch (RuntimeException ignored) {
-            // Continue with the accepted legacy text format below.
+            // Continue with accepted formats below.
+        }
+        try {
+            return OffsetDateTime.parse(text).atZoneSameInstant(AppTimeZone.ZONE).toLocalDateTime();
+        } catch (RuntimeException ignored) {
+        }
+        try {
+            return ZonedDateTime.parse(text).withZoneSameInstant(AppTimeZone.ZONE).toLocalDateTime();
+        } catch (RuntimeException ignored) {
+        }
+        try {
+            return Instant.parse(text).atZone(AppTimeZone.ZONE).toLocalDateTime();
+        } catch (RuntimeException ignored) {
+        }
+        if (text.matches("^([01]\\d|2[0-3]):[0-5]\\d$")) {
+            return LocalDateTime.of(today, LocalTime.parse(text));
         }
         Matcher matcher = LEGACY_READY_TIME.matcher(text);
         if (matcher.matches()) {
