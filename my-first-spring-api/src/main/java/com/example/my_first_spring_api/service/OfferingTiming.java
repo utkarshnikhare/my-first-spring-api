@@ -168,6 +168,50 @@ final class OfferingTiming {
         return value.trim();
     }
 
+    /**
+     * Flexible day-boundary tolerance used by the create/update paths before
+     * {@link #validateNewOffering}. UI and e2e clients build the Delivery /
+     * Ready By timestamp from their own clock, so near a day boundary (late
+     * night / early morning) the date component can land before the offering
+     * date it was meant for. Correct the date instead of rejecting an
+     * otherwise-valid offering: keep the seller-selected time-of-day and move
+     * it onto the offering date. The forward correction is unbounded in days
+     * so any multi-day client/server skew is healed the same way.
+     *
+     * <p>Explicit day words ({@code today}, {@code tomorrow}, a weekday) are
+     * deliberate human intent rather than clock skew, so they are returned
+     * untouched and remain strictly enforced by {@link #validateNewOffering}.
+     *
+     * <p>Values that already resolve to the offering date or later (the e2e
+     * "ready-by tomorrow, offering today" case), and values that fail to
+     * parse, are returned unchanged so validation reports them exactly as
+     * before.
+     */
+    static String rebaseReadyByTimeForOffering(String value, LocalDate offeringDate) {
+        if (value == null || value.isBlank() || offeringDate == null) return value;
+        String text = value.trim();
+        if (WEEKDAY.matcher(text).find()) return value;
+        Matcher legacy = LEGACY_READY_TIME.matcher(text);
+        // A stored "today"/"tomorrow" keyword expresses a chosen day; keep it
+        // so validateNewOffering can reject a day that precedes the offering.
+        if (legacy.matches() && legacy.group(4) != null) return value;
+        LocalDateTime resolved;
+        try {
+            resolved = LocalDateTime.parse(text);
+        } catch (RuntimeException notIso) {
+            if (!legacy.matches()) return value; // Malformed input: validate reports it.
+            try {
+                resolved = parseReadyByTime(text, LocalDate.now()); // Bare time-of-day.
+            } catch (RuntimeException invalid) {
+                return value;
+            }
+        }
+        if (resolved.toLocalDate().isBefore(offeringDate)) {
+            return LocalDateTime.of(offeringDate, resolved.toLocalTime()).toString();
+        }
+        return value;
+    }
+
     static LocalDateTime parseReadyByTime(String value) {
         return parseReadyByTime(value, LocalDate.now());
     }
