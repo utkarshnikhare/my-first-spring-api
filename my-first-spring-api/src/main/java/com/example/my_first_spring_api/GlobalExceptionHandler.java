@@ -163,8 +163,17 @@ public class GlobalExceptionHandler {
             MethodArgumentTypeMismatchException.class,
             HttpMessageNotReadableException.class})
     public ResponseEntity<ApiErrorDto> handleBadRequestWeb(Exception ex) {
-        logger.error("Bad request body binding: ", ex);
-        return new ResponseEntity<>(new ApiErrorDto("BAD_REQUEST", "Invalid request. Please check the submitted data.", 400), HttpStatus.BAD_REQUEST);
+        logger.warn("Bad request binding: {}", ex.getMessage());
+        String msg = "Invalid request. Please check the submitted data.";
+        if (ex instanceof MissingServletRequestParameterException missing) {
+            msg = "Missing required parameter: " + missing.getParameterName();
+        } else if (ex instanceof MethodArgumentTypeMismatchException mismatch) {
+            msg = "Invalid value for parameter: " + mismatch.getName();
+        } else if (ex instanceof HttpMessageNotReadableException readable && readable.getRootCause() != null
+                && readable.getRootCause().getMessage() != null && !readable.getRootCause().getMessage().isBlank()) {
+            msg = readable.getRootCause().getMessage();
+        }
+        return new ResponseEntity<>(new ApiErrorDto("BAD_REQUEST", msg, 400), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(DateTimeParseException.class)

@@ -368,6 +368,25 @@ function applyOfferingDatePicker(picker) {
     }
     var hidden = $('#availDate');
     if (hidden && picker.value) hidden.value = picker.value;
+    var form = picker.closest('form');
+    if (form) {
+        var readyInput = form.querySelector('input[name="readyByTime"]');
+        if (readyInput && readyInput.value && picker.value) {
+            var timePart = readyInput.value.length >= 16 ? readyInput.value.slice(11, 16) : '12:30';
+            readyInput.value = picker.value + 'T' + timePart;
+        }
+        var closeInput = form.querySelector('input[name="orderWindowEnd"]');
+        if (closeInput) {
+            var now = new Date();
+            var currentLocalTime = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
+            if (picker.value <= sellerDate('today')) {
+                closeInput.setAttribute('min', currentLocalTime);
+            } else {
+                closeInput.removeAttribute('min');
+            }
+        }
+        validateFormTiming(form);
+    }
 }
 function sellerDate(dateKey) {
     if (dateKey === 'tomorrow') return localDateStr(new Date(Date.now() + 864e5));
@@ -1050,18 +1069,85 @@ function offeringCategoryBox(value, label, selected) {
 /** Cross-field timing rules shared by Create and Edit; returns an error text or null. */
 function offeringTimingError(availableDate, openHhmm, closeHhmm, readyBy) {
     if (openHhmm && closeHhmm && openHhmm >= closeHhmm) return 'Orders Open must be before Orders Close';
-    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(readyBy)) return 'Delivery / Ready By must be a valid date and time';
+    if (!readyBy) return 'Delivery / Ready By is required';
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(readyBy)) return 'Delivery / Ready By must be a valid date and time';
     var readyDate = readyBy.slice(0, 10);
     if (readyDate < availableDate) return 'Delivery / Ready By cannot be before the offering date';
+
+    var now = new Date();
+    var todayIso = sellerDate('today');
+    var currentHhmm = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
+    var currentLocalIso = todayIso + 'T' + currentHhmm;
+
+    // Check if Orders Close has already passed for same-day offerings
+    if (availableDate <= todayIso && closeHhmm && closeHhmm <= currentHhmm) {
+        return 'Orders Close must be in the future (current time is ' + currentHhmm + ')';
+    }
+
+    // Check if Delivery By has already passed
+    if (readyBy.slice(0, 16) <= currentLocalIso) {
+        return 'Delivery / Ready By must be in the future';
+    }
+
     var orderingDate = availableDate;
-    if (availableDate > sellerDate('today')) {
+    if (availableDate > todayIso) {
         var orderDate = new Date(availableDate + 'T00:00:00');
         orderDate.setDate(orderDate.getDate() - 1);
         orderingDate = localDateStr(orderDate);
     }
-    if (orderingDate + 'T' + closeHhmm + ':00' > readyBy) return 'Orders Close must be before Delivery / Ready By';
+    if (closeHhmm && orderingDate + 'T' + closeHhmm >= readyBy.slice(0, 16)) {
+        return 'Orders Close must be before Delivery / Ready By';
+    }
     return null;
 }
+
+/**
+ * Performs real-time client-side timing validation on the offering form.
+ * Toggles the inline warning banner and highlights invalid inputs with error styles.
+ */
+function validateFormTiming(form) {
+    if (!form) return null;
+    var warningEl = form.querySelector('#timingInlineWarning') || $('#timingInlineWarning');
+    var closeInput = form.querySelector('input[name="orderWindowEnd"]');
+    var readyInput = form.querySelector('input[name="readyByTime"]');
+    var openInput = form.querySelector('input[name="orderWindowStart"]');
+    var availDateInput = form.querySelector('input[name="availableDate"]') || $('#availDate');
+
+    var availDate = availDateInput ? availDateInput.value : sellerDate('today');
+    var closeVal = closeInput ? (closeInput.value || '').trim() : '';
+    var readyVal = readyInput ? (readyInput.value || '').trim() : '';
+    var openVal = openInput ? (openInput.value || '').trim() : '';
+
+    if (closeInput) closeInput.classList.remove('form-input-error');
+    if (readyInput) readyInput.classList.remove('form-input-error');
+    if (openInput) openInput.classList.remove('form-input-error');
+    if (warningEl) {
+        warningEl.style.display = 'none';
+        warningEl.textContent = '';
+    }
+
+    if (!closeVal && !readyVal) return null;
+
+    var err = offeringTimingError(availDate, openVal, closeVal, readyVal);
+    if (err) {
+        if (warningEl) {
+            warningEl.textContent = '⚠️ ' + err;
+            warningEl.style.display = 'block';
+        }
+        if (err.indexOf('Orders Close') >= 0 && closeInput) {
+            closeInput.classList.add('form-input-error');
+        }
+        if (err.indexOf('Delivery / Ready By') >= 0 && readyInput) {
+            readyInput.classList.add('form-input-error');
+        }
+        if (err.indexOf('Orders Open') >= 0 && openInput) {
+            openInput.classList.add('form-input-error');
+        }
+        return err;
+    }
+    return null;
+}
+
 /** Which "Offering For" mode matches a stored offering date (Edit screen). */
 function offeringForMode(isoDate) {
     if (!isoDate || isoDate === sellerDate('today')) return 'today';
@@ -1210,6 +1296,43 @@ function manageScheduleFormHtml(card) {
 
 
 /**
+ * Calculates smart auto-fill timing defaults based on the offering date and current local time:
+ * - Orders Close: current local time + 30 mins rounded to nearest 15 mins (or 11:30 for late night / tomorrow)
+ * - Delivery / Ready By: 45 mins after Orders Close (or 12:30 tomorrow)
+ */
+function computeSmartTimingDefaults(isTomorrow, targetDateIso) {
+    var now = new Date();
+    var closeHhmm = '';
+    var readyIso = '';
+    var dateIso = targetDateIso || (isTomorrow ? sellerDate('tomorrow') : sellerDate('today'));
+
+    if (isTomorrow || now.getHours() >= 21) {
+        closeHhmm = '11:30';
+        readyIso = dateIso + 'T12:30';
+    } else {
+        var targetMs = now.getTime() + 30 * 60 * 1000;
+        var ms15 = 15 * 60 * 1000;
+        var roundedMs = Math.round(targetMs / ms15) * ms15;
+        if (roundedMs < now.getTime() + 15 * 60 * 1000) {
+            roundedMs = Math.ceil((now.getTime() + 30 * 60 * 1000) / ms15) * ms15;
+        }
+        var closeDate = new Date(roundedMs);
+        var closeHh = ('0' + closeDate.getHours()).slice(-2);
+        var closeMm = ('0' + closeDate.getMinutes()).slice(-2);
+        closeHhmm = closeHh + ':' + closeMm;
+
+        var readyDate = new Date(closeDate.getTime() + 45 * 60 * 1000);
+        var readyHh = ('0' + readyDate.getHours()).slice(-2);
+        var readyMm = ('0' + readyDate.getMinutes()).slice(-2);
+        readyIso = dateIso + 'T' + readyHh + ':' + readyMm;
+    }
+    return {
+        orderWindowEnd: closeHhmm,
+        readyByTime: readyIso
+    };
+}
+
+/**
  * The offering form markup, shared by Create Offering (opts.edit false) and Edit
  * Offering (Requirement 5). With `opts.locked` the fields customers already
  * agreed to stay visible but can no longer be changed.
@@ -1219,10 +1342,10 @@ function offeringFormHtml(t, opts) {
     t = t || {};
     var isEdit = !!opts.edit;
     var locked = !!opts.locked;
-    var mode = opts.mode || 'today';
+    var mode = opts.mode || S.offeringFor || 'today';
     var lockAttr = locked ? ' disabled' : '';
     var todayIso = sellerDate('today');
-    var chosenDate = isEdit ? (t.availableDate || todayIso) : todayIso;
+    var chosenDate = isEdit ? (t.availableDate || todayIso) : (mode === 'tomorrow' ? sellerDate('tomorrow') : (mode === 'choose' && t.availableDate ? t.availableDate : todayIso));
     var selectedUnit = t.priceUnit || 'Per Piece';
     var categoryValues = String(t.category || '').split(',').map(function (c) { return c.trim().toUpperCase(); }).filter(Boolean);
     var h = '<form class="seller-form" id="' + (opts.formId || 'createOfferingForm') + '">';
@@ -1281,14 +1404,23 @@ function offeringFormHtml(t, opts) {
     }
     h += '<input type="hidden" name="recurringSchedule" id="recurringScheduleHidden" value="">';
 
-    var openValue = isEdit ? (t.orderWindowStart || '') : '';
-    var closeValue = isEdit ? (t.orderWindowEnd || '') : '';
+    var smartDefaults = computeSmartTimingDefaults(mode === 'tomorrow', chosenDate);
+    var openValue = isEdit ? (t.orderWindowStart || '') : (t.orderWindowStart || '');
+    var closeValue = isEdit ? (t.orderWindowEnd || '') : (t.orderWindowEnd || smartDefaults.orderWindowEnd);
+    var initialReady = isEdit ? (t.readyByTime || '') : (t.readyByTime || smartDefaults.readyByTime);
+    var readyIso = !!(initialReady && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(initialReady));
+
+    var now = new Date();
+    var currentLocalTime = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
+    var currentLocalIso = localDateStr(now) + 'T' + currentLocalTime;
+    var closeMinAttr = (!isEdit && chosenDate <= todayIso) ? ' min="' + currentLocalTime + '"' : '';
+    var readyMinAttr = (!locked) ? ' min="' + currentLocalIso + '"' : '';
+
     var closeNote = locked
         ? 'Has orders — can only be extended (currently ' + prettyTime(t.orderWindowEnd) + ').'
         : 'Last date/time customers can place an order.';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open — Optional</label><input class="form-input" name="orderWindowStart" type="time" value="' + esc(openValue) + '"' + lockAttr + '><p class="muted small">Leave blank to start accepting orders immediately.</p></div>';
-    h += '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label><input class="form-input" name="orderWindowEnd" type="time" required value="' + esc(closeValue) + '"><p class="muted small">' + esc(closeNote) + '</p></div></div>';
-    var readyIso = !!(t.readyByTime && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(t.readyByTime));
+    h += '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label><input class="form-input" name="orderWindowEnd" type="time" required value="' + esc(closeValue) + '"' + closeMinAttr + '><p class="muted small">' + esc(closeNote) + '</p></div></div>';
     var readyNote = 'Date/time by which the order will be ready/delivered.';
     if (locked) {
         var readyDisplay = t.readyByTime
@@ -1297,8 +1429,9 @@ function offeringFormHtml(t, opts) {
         h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTimeLocked" type="text" value="' + esc(readyDisplay) + '" disabled><p class="muted small">' + esc(readyNote) + '</p></div>';
     } else {
         if (isEdit && t.readyByTime && !readyIso) readyNote = 'Saved value: ' + t.readyByTime + '. Pick a new date/time to replace it.';
-        h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTime" type="datetime-local"' + (isEdit ? '' : ' required') + ' value="' + esc(readyIso ? t.readyByTime : '') + '"><p class="muted small">' + esc(readyNote) + '</p></div>';
+        h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTime" type="datetime-local"' + (isEdit ? '' : ' required') + ' value="' + esc(readyIso ? initialReady.slice(0, 16) : '') + '"' + readyMinAttr + '><p class="muted small">' + esc(readyNote) + '</p></div>';
     }
+    h += '<div id="timingInlineWarning" class="timing-inline-warning" style="display:none;"></div>';
     var qtyValue = '', qtyAttr = '', qtyNote = 'Leave blank for unlimited quantity.';
     if (isEdit) {
         if (t.maxQuantity == null) {
@@ -1322,7 +1455,10 @@ function offeringFormHtml(t, opts) {
 
 // SCREEN 3: CREATE OFFERING (MANUAL FORM)
 async function sellerCreateView() {
-    // A new form always starts in Today mode (ONE TIME); never inherit a previous choice.
+    var now = new Date();
+    var isLateNight = now.getHours() >= 21;
+    // If the current time is past 21:00 (9:00 PM), default the offering date to tomorrow.
+    S.offeringFor = isLateNight ? 'tomorrow' : 'today';
     S.offeringMode = 'today';
     S.recurringDuration = 'thisweek';
     S.recurringScheduleConfig = null;
@@ -1331,7 +1467,7 @@ async function sellerCreateView() {
     h += '<div class="page-head"><h1>Create Offering</h1><p class="muted small">' +
         (S.republishSourceId ? 'Review the previous offering details, then set fresh timing and quantity.' : 'Fill in the details for your new dish.') + '</p></div>';
     // Offering Mode toggle - blocking call handled by event delegation
-    h += offeringFormHtml(t, { formId: 'createOfferingForm', mode: S.offeringMode, edit: false, locked: false });
+    h += offeringFormHtml(t, { formId: 'createOfferingForm', mode: S.offeringFor, edit: false, locked: false });
     h += '</div>';
     return h;
 }
@@ -2083,16 +2219,39 @@ function parseOptionalHhmm(value, label) {
 }
 
 /**
- * Normalises the Delivery / Ready By input to the full ISO datetime the
- * backend expects. A `datetime-local` value already carries its own date and
- * is returned unchanged; a bare HH:mm time is combined with the offering date.
+ * Formats the local browser's timezone offset in ISO 8601 format (e.g. "+05:30", "-04:00", "Z").
+ */
+function clientTimezoneOffset() {
+    var offsetMin = -new Date().getTimezoneOffset();
+    var sign = offsetMin >= 0 ? '+' : '-';
+    var absMin = Math.abs(offsetMin);
+    var hh = ('0' + Math.floor(absMin / 60)).slice(-2);
+    var mm = ('0' + (absMin % 60)).slice(-2);
+    return sign + hh + ':' + mm;
+}
+
+/**
+ * Normalises the Delivery / Ready By input to the full ISO datetime with client
+ * timezone offset (e.g. "2026-10-18T12:30:00+05:30") to prevent timezone
+ * drift between the local browser and server UTC clocks.
  */
 function normalizeReadyByTime(raw, availableDate) {
     var v = (raw || '').trim();
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(v)) return v.slice(0, 16);
-    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) return availableDate + 'T' + v;
+    if (!v) return '';
+    if (/[+-]\d{2}:\d{2}$|Z$/i.test(v)) return v;
+    var tz = clientTimezoneOffset();
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) {
+        return v + ':00' + tz;
+    }
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(v)) {
+        return v + tz;
+    }
+    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) {
+        return (availableDate || sellerDate('today')) + 'T' + v + ':00' + tz;
+    }
     return v;
 }
+
 
 /**
  * Requirement 5 — saves the Edit Offering form.
@@ -2192,6 +2351,7 @@ async function submitOfferingEdit(form) {
         // a new value; only newly typed values are pre-checked here (the server
         // re-validates authoritatively).
         if (payload.readyByTime) {
+            payload.readyByTime = normalizeReadyByTime(payload.readyByTime, payload.availableDate || o.availableDate);
             var timingProblem = offeringTimingError(payload.availableDate || o.availableDate,
                 effectiveOpen, closeVal, payload.readyByTime);
             if (timingProblem) { toast(timingProblem, 'error'); return; }
@@ -2233,12 +2393,12 @@ async function submitOfferingEdit(form) {
 document.addEventListener('submit', async function (e) {
     var form = e.target.closest('form');
     if (!form) return;
+    var publishBtn = form.querySelector('button[type="submit"]');
     e.preventDefault();
     try {
         if (form.id === 'createOfferingForm') {
             if (S.offeringSubmitting) return; // guard against double submit
             S.offeringSubmitting = true;
-            var publishBtn = form.querySelector('button[type="submit"]');
             if (publishBtn) publishBtn.disabled = true;
             var vals = formVals(form);
             // Optional timing fields: blank means "not provided" -- never send
@@ -2283,12 +2443,18 @@ document.addEventListener('submit', async function (e) {
             // Immediate UX checks; the backend repeats these rules authoritatively.
             var timingError = offeringTimingError(vals.availableDate, vals.orderWindowStart, vals.orderWindowEnd, vals.readyByTime);
             if (timingError) {
+                validateFormTiming(form);
                 toast(timingError, 'error');
                 return;
             }
             var kid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
             if (!kid) {
                 var k = await sellerApi('/api/seller/kitchen');
+                if (!k || !k.id) {
+                    toast('Please complete your kitchen profile before publishing an offering.', 'error');
+                    sellerNavigate('#/kitchen');
+                    return;
+                }
                 kid = k.id;
                 S.myKitchen = k;
             }
@@ -2470,7 +2636,22 @@ document.addEventListener('submit', async function (e) {
             await sellerApi('/api/seller/kitchen/' + kid, { method: 'PUT', body: kitchenPayload });
             toast('All changes saved', 'success');
         }
-    } catch (err) { toast(err.message, 'error'); }
+    } catch (err) {
+        var errorMsg = (err && (err.message || (err.data && (err.data.message || err.data.error)))) || 'Could not save offering. Please try again.';
+        if (err && err.data) {
+            if (typeof err.data === 'string' && err.data.trim()) {
+                errorMsg = err.data.trim();
+            } else if (err.data.message && typeof err.data.message === 'string') {
+                errorMsg = err.data.message;
+            } else if (err.data.error && typeof err.data.error === 'string') {
+                errorMsg = err.data.error;
+            } else if (typeof err.data === 'object') {
+                var fieldValues = Object.values(err.data).filter(function (v) { return typeof v === 'string'; });
+                if (fieldValues.length) errorMsg = fieldValues.join('; ');
+            }
+        }
+        toast(errorMsg, 'error');
+    }
     finally {
         // Release the double-submit guard on every path: success navigates away,
         // but a validation/transport failure leaves the same form on screen and
@@ -3011,9 +3192,31 @@ document.addEventListener('click', async function (e) {
                  if (cdr) cdr.hidden = S.offeringFor !== 'choose';
                  var picker = $('#chooseDateRow input[type="date"]');
                  var av = $('#availDate');
-                 if (av) av.value = S.offeringFor === 'choose'
+                 var newDate = S.offeringFor === 'choose'
                      ? (picker && picker.value || sellerDate('today'))
                      : sellerDate(S.offeringFor);
+                 if (av) av.value = newDate;
+
+                 // Dynamically update min constraints and adjust readyByTime date
+                 var form = t.closest('form');
+                 if (form && !form.querySelector('input[name="readyByTimeLocked"]')) {
+                     var now = new Date();
+                     var currentLocalTime = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
+                     var closeInput = form.querySelector('input[name="orderWindowEnd"]');
+                     var readyInput = form.querySelector('input[name="readyByTime"]');
+                     if (closeInput) {
+                         if (newDate <= sellerDate('today')) {
+                             closeInput.setAttribute('min', currentLocalTime);
+                         } else {
+                             closeInput.removeAttribute('min');
+                         }
+                     }
+                     if (readyInput && readyInput.value) {
+                         var timePart = readyInput.value.length >= 16 ? readyInput.value.slice(11, 16) : '12:30';
+                         readyInput.value = newDate + 'T' + timePart;
+                     }
+                     validateFormTiming(form);
+                 }
                  break;
              }
              case 'set-availability-date': {
@@ -3125,12 +3328,19 @@ document.addEventListener('change', function (e) {
         updateCoverageIdsInput();
         return;
     }
+    var timingInput = e.target.closest('input[name="orderWindowEnd"], input[name="readyByTime"], input[name="orderWindowStart"], input[name="chosenOfferingDate"]');
+    if (timingInput) {
+        validateFormTiming(timingInput.closest('form'));
+    }
 });
 
 // Live Quick Post character feedback. Delegated on document so it keeps working
 // across the SPA re-renders that replace #view on every navigation.
 document.addEventListener('input', function (e) {
     if (e.target && e.target.id === 'qpMessage') updateQuickPostCounter();
+    if (e.target && (e.target.name === 'orderWindowEnd' || e.target.name === 'readyByTime' || e.target.name === 'orderWindowStart')) {
+        validateFormTiming(e.target.closest('form'));
+    }
 });
 
 // Keyboard activation for the tappable order rows on the Offering Orders

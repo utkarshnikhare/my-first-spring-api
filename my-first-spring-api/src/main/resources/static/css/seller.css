@@ -3251,3 +3251,24 @@ html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #3321
 @media (prefers-reduced-motion: reduce) {
     .oic-root .oic-act { transition: none; }
 }
+
+/* Offering timing validation feedback */
+.form-input-error,
+.form-input.is-invalid {
+    border-color: var(--danger, #DC2626) !important;
+    box-shadow: 0 0 0 3px var(--danger-soft, #FEE2E2) !important;
+}
+
+.timing-inline-warning {
+    color: var(--danger, #DC2626);
+    background: var(--danger-soft, #FEE2E2);
+    border: 1px solid rgba(220, 38, 38, 0.2);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-top: 6px;
+    margin-bottom: 10px;
+    display: none;
+    line-height: 1.4;
+}

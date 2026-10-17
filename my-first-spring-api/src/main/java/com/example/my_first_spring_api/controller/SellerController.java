@@ -116,7 +116,7 @@ public class SellerController {
     }
 
     @PostMapping("/products")
-    public ResponseEntity<ProductDto> createProduct(@RequestParam("kitchenId") Long kitchenId,
+    public ResponseEntity<ProductDto> createProduct(@RequestParam(value = "kitchenId", required = false) Long kitchenId,
                                                     @Valid @RequestBody ProductCreateDto dto, HttpSession session) {
         User seller = requireSeller(session);
         return ResponseEntity.ok(sellerService.createProduct(kitchenId, dto, seller));

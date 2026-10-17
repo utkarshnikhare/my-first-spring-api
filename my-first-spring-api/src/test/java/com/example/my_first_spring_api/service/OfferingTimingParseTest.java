@@ -127,4 +127,40 @@ class OfferingTimingParseTest {
         String badHour = "25:00";
         assertEquals(badHour, OfferingTiming.rebaseReadyByTimeForOffering(badHour, LocalDate.now().plusDays(1)));
     }
+
+    // ===================== Timezone offset & UTC tests =====================
+
+    @Test
+    @DisplayName("parseReadyByTime should correctly convert UTC Z timestamp to Asia/Kolkata local time")
+    void parseUtcZToKolkata() {
+        LocalDate date = LocalDate.of(2026, 10, 18);
+        // 12:30 UTC is 18:00 IST (+5:30)
+        LocalDateTime result = OfferingTiming.parseReadyByTime("2026-10-18T12:30:00Z", date);
+        assertEquals("2026-10-18T18:00", result.toString());
+    }
+
+    @Test
+    @DisplayName("parseReadyByTime should parse ISO timestamp with explicit +05:30 offset")
+    void parseIsoWithOffset() {
+        LocalDate date = LocalDate.of(2026, 10, 18);
+        LocalDateTime result = OfferingTiming.parseReadyByTime("2026-10-18T20:45:00+05:30", date);
+        assertEquals("2026-10-18T20:45", result.toString());
+    }
+
+    @Test
+    @DisplayName("for-offering rebase normalises UTC Z timestamp onto offering date in Asia/Kolkata")
+    void rebaseUtcTimestampForOffering() {
+        LocalDate offeringDate = LocalDate.of(2026, 10, 19);
+        // 12:30 UTC on 2026-10-17 is 18:00 IST on 2026-10-17 (older than offering date 2026-10-19)
+        String rebased = OfferingTiming.rebaseReadyByTimeForOffering("2026-10-17T12:30:00Z", offeringDate);
+        assertEquals("2026-10-19T18:00", rebased);
+    }
+
+    @Test
+    @DisplayName("for-offering rebase normalises offset timestamp and converts to local datetime")
+    void rebaseOffsetTimestampForOffering() {
+        LocalDate offeringDate = LocalDate.of(2026, 10, 19);
+        String rebased = OfferingTiming.rebaseReadyByTimeForOffering("2026-10-19T21:15:00+05:30", offeringDate);
+        assertEquals("2026-10-19T21:15", rebased);
+    }
 }
