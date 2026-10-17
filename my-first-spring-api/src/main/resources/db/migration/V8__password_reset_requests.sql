@@ -7,7 +7,7 @@
 -- status: PENDING -> APPROVED (temp password generated) | REJECTED (closed)
 -- The temp password expires 24 hours after generation or on first use, whichever
 -- comes first (temp_password_used + temp_password_expires_at).
-CREATE TABLE password_reset_requests (
+CREATE TABLE IF NOT EXISTS password_reset_requests (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     status VARCHAR(16) NOT NULL DEFAULT 'PENDING',
@@ -22,5 +22,15 @@ CREATE TABLE password_reset_requests (
     CONSTRAINT fk_prr_reviewer FOREIGN KEY (reviewer_id) REFERENCES users (id)
 );
 
-CREATE INDEX idx_prr_user_id ON password_reset_requests (user_id);
-CREATE INDEX idx_prr_status ON password_reset_requests (status);
+ALTER TABLE password_reset_requests ADD COLUMN IF NOT EXISTS user_id BIGINT;
+ALTER TABLE password_reset_requests ADD COLUMN IF NOT EXISTS status VARCHAR(16) DEFAULT 'PENDING';
+ALTER TABLE password_reset_requests ADD COLUMN IF NOT EXISTS reviewer_id BIGINT;
+ALTER TABLE password_reset_requests ADD COLUMN IF NOT EXISTS temp_password_hash VARCHAR(100);
+ALTER TABLE password_reset_requests ADD COLUMN IF NOT EXISTS temp_password_used BOOLEAN DEFAULT FALSE;
+ALTER TABLE password_reset_requests ADD COLUMN IF NOT EXISTS temp_password_expires_at TIMESTAMP WITHOUT TIME ZONE;
+ALTER TABLE password_reset_requests ADD COLUMN IF NOT EXISTS action_time TIMESTAMP WITHOUT TIME ZONE;
+ALTER TABLE password_reset_requests ADD COLUMN IF NOT EXISTS rejection_reason VARCHAR(500);
+ALTER TABLE password_reset_requests ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITHOUT TIME ZONE;
+
+CREATE INDEX IF NOT EXISTS idx_prr_user_id ON password_reset_requests (user_id);
+CREATE INDEX IF NOT EXISTS idx_prr_status ON password_reset_requests (status);
