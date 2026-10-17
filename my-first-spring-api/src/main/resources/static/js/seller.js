@@ -2227,15 +2227,17 @@ document.addEventListener('submit', async function (e) {
             if (S.offeringSubmitting) return; // guard against double submit
             S.offeringSubmitting = true;
             var publishBtn = form.querySelector('button[type="submit"]');
-            if (publishBtn) publishBtn.disabled = true;
-            var vals = formVals(form);
-            // Optional timing fields: blank means "not provided" -- never send
-            // an invalid empty timestamp to the backend.
-            vals.orderWindowStart = parseOptionalHhmm(vals.orderWindowStart, 'Orders Open');
-            vals.orderWindowEnd = parseOptionalHhmm(vals.orderWindowEnd, 'Orders Close');
-            if (!vals.orderWindowEnd) { toast('Orders Close is required', 'error'); return; }
-            var readyBy = (vals.readyByTime || '').trim();
-            if (!readyBy) { toast('Delivery / Ready By is required', 'error'); return; }
+2231 |             var vals = formVals(form);
+2232 |             // Optional timing fields: blank means "not provided" -- never send
+2233 |             // an invalid empty timestamp to the backend.
+2234 |             vals.orderWindowStart = parseOptionalHhmm(vals.orderWindowStart, 'Orders Open');
+2235 |             vals.orderWindowEnd = parseOptionalHhmm(vals.orderWindowEnd, 'Orders Close');
+2236 |             if (!vals.orderWindowEnd) { toast('Orders Close is required', 'error'); return; }
+2237 |             // Capture ready‑by input but defer construction of the ISO string until after the offering date is known.
+2238 |             var readyByRaw = (vals.readyByTime || '').trim();
+2239 |             if (!readyByRaw) { toast('Delivery / Ready By is required', 'error'); return; }
+2240 |             // `${readyByRaw}` will be substituted with the correct date later.
+2241 |             vals.readyByTime = readyByRaw;
             vals.readyByTime = readyBy;
             // Availability: ONE TIME keeps the existing Today/Tomorrow/Choose Date
             // rules; REPEATING SCHEDULE replaces the single date with the schedule
@@ -2249,9 +2251,13 @@ document.addEventListener('submit', async function (e) {
                 vals.availableDate = vals.chosenOfferingDate || '';
                 if (!vals.availableDate) { toast('Choose an offering date', 'error'); return; }
             } else {
-                vals.availableDate = sellerDate(S.offeringFor);
-            }
-            delete vals.chosenOfferingDate;
+2252 |                 vals.availableDate = sellerDate(S.offeringFor);
+2253 |             }
+2254 |             // Finalise the ready‑by time to include the offering date so it can be
+2255 |             // interpreted by server‑side `parseReadyByTime` which expects a full ISO
+2256 |             // datetime. The offering date is always known by this point.
+2257 |             vals.readyByTime = vals.availableDate + 'T' + readyByRaw;
+2258 |             delete vals.chosenOfferingDate;
             if (vals.maxQuantity !== '' && vals.maxQuantity !== null && vals.maxQuantity !== undefined) {
                 var mq = Number(vals.maxQuantity);
                 if (!Number.isInteger(mq) || mq < 1) {
