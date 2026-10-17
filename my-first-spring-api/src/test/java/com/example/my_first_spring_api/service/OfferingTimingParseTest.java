@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -47,5 +48,83 @@ class OfferingTimingParseTest {
     void rebaseNoChange() {
         String unchanged = OfferingTiming.rebaseReadyByTime("2026-10-19T15:45", LocalDate.of(2026, 10, 19));
         assertEquals("2026-10-19T15:45", unchanged);
+    }
+
+    @Test
+    @DisplayName("rebaseReadyByTime should keep a readyBy that already falls after the offering date")
+    void rebaseKeepsLaterReadyByDate() {
+        String unchanged = OfferingTiming.rebaseReadyByTime("2026-10-20T12:00", LocalDate.of(2026, 10, 19));
+        assertEquals("2026-10-20T12:00", unchanged);
+    }
+
+    // ===================== rebaseReadyByTimeForOffering =====================
+
+    @Test
+    @DisplayName("for-offering rebase corrects a one-day-early timestamp (late-night skew)")
+    void forOfferingCorrectsOneDaySkew() {
+        String rebased = OfferingTiming.rebaseReadyByTimeForOffering(
+                "2026-10-18T00:30", LocalDate.of(2026, 10, 19));
+        assertEquals("2026-10-19T00:30", rebased);
+    }
+
+    @Test
+    @DisplayName("for-offering rebase heals multi-day skew while keeping the time-of-day")
+    void forOfferingCorrectsMultiDaySkew() {
+        String rebased = OfferingTiming.rebaseReadyByTimeForOffering(
+                "2026-10-15T23:30", LocalDate.of(2026, 10, 19));
+        assertEquals("2026-10-19T23:30", rebased);
+    }
+
+    @Test
+    @DisplayName("for-offering rebase keeps a next-day readyBy for a today offering (e2e cross-day case)")
+    void forOfferingKeepsNextDayReadyBy() {
+        String unchanged = OfferingTiming.rebaseReadyByTimeForOffering(
+                "2026-10-20T12:00", LocalDate.of(2026, 10, 19));
+        assertEquals("2026-10-20T12:00", unchanged);
+    }
+
+    @Test
+    @DisplayName("for-offering rebase anchors a bare time to the offering date")
+    void forOfferingAnchorsBareTime() {
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        String rebased = OfferingTiming.rebaseReadyByTimeForOffering("13:00", tomorrow);
+        assertEquals(LocalDateTime.of(tomorrow, LocalTime.of(13, 0)).toString(), rebased);
+    }
+
+    @Test
+    @DisplayName("for-offering rebase leaves a bare time that already matches the offering date")
+    void forOfferingKeepsMatchingBareTime() {
+        LocalDate today = LocalDate.now();
+        assertEquals("13:00", OfferingTiming.rebaseReadyByTimeForOffering("13:00", today));
+    }
+
+    @Test
+    @DisplayName("for-offering rebase preserves explicit 'today' intent for strict validation")
+    void forOfferingPreservesTodayKeyword() {
+        String value = "11:00 AM today";
+        assertEquals(value, OfferingTiming.rebaseReadyByTimeForOffering(value, LocalDate.now().plusDays(1)));
+    }
+
+    @Test
+    @DisplayName("for-offering rebase preserves explicit 'tomorrow' intent for strict validation")
+    void forOfferingPreservesTomorrowKeyword() {
+        String value = "1:00 PM tomorrow";
+        assertEquals(value, OfferingTiming.rebaseReadyByTimeForOffering(value, LocalDate.now().plusDays(3)));
+    }
+
+    @Test
+    @DisplayName("for-offering rebase passes null and blank through untouched")
+    void forOfferingPassesThroughBlank() {
+        assertNull(OfferingTiming.rebaseReadyByTimeForOffering(null, LocalDate.now()));
+        assertEquals(" ", OfferingTiming.rebaseReadyByTimeForOffering(" ", LocalDate.now()));
+    }
+
+    @Test
+    @DisplayName("for-offering rebase returns malformed input unchanged for the validator to report")
+    void forOfferingLeavesMalformedInputUnchanged() {
+        String garbage = "not-a-datetime";
+        assertEquals(garbage, OfferingTiming.rebaseReadyByTimeForOffering(garbage, LocalDate.now().plusDays(1)));
+        String badHour = "25:00";
+        assertEquals(badHour, OfferingTiming.rebaseReadyByTimeForOffering(badHour, LocalDate.now().plusDays(1)));
     }
 }

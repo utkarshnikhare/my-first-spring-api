@@ -255,6 +255,11 @@ public class SellerService {
                 throw new IllegalArgumentException("Default Delivery / Ready By is required.");
             }
         } else {
+            // Cross-day tolerance: a client-computed readyBy can land a day (or
+            // more) before the offering date near a day boundary; rebase its
+            // time-of-day onto the offering date instead of rejecting a valid
+            // offering. Explicit "today"/"tomorrow" intent stays strict below.
+            readyByTime = OfferingTiming.rebaseReadyByTimeForOffering(readyByTime, offeringDate);
             OfferingTiming.validateNewOffering(dto.getAvailableDate(), preorder,
                     orderWindowStart, orderWindowEnd, readyByTime);
         }
@@ -348,6 +353,10 @@ public class SellerService {
                 || dto.getOrderWindowEnd() != null || dto.getCutoffTime() != null
                 || dto.getReadyByTime() != null || dto.getIsPreorder() != null;
         if (timingChanged) {
+            // Same cross-day tolerance as createProduct: rebase an early
+            // client-computed readyBy onto the effective offering date so a
+            // day-boundary skew is corrected instead of rejected.
+            effectiveReady = OfferingTiming.rebaseReadyByTimeForOffering(effectiveReady, effectiveDate);
             OfferingTiming.validateNewOffering(effectiveDate, effectivePreorder,
                     effectiveOpen, effectiveClose, effectiveReady);
         }

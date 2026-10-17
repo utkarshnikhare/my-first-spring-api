@@ -196,4 +196,47 @@ class SellerServiceCreateOfferingValidationTest {
         assertThrows(IllegalArgumentException.class,
                 () -> sellerService.createProduct(1L, dto, approvedSeller()));
     }
+
+    @Test
+    void readyByOneDayBeforeOfferingIsRebasedInsteadOfRejected() {
+        // Client-clock day-boundary skew: readyBy carries yesterday's date while
+        // the offering is for tomorrow. The time-of-day must be moved onto the
+        // offering date instead of failing the whole create with a 400.
+        LocalDate today = LocalDate.now();
+        LocalDate tomorrow = today.plusDays(1);
+        allowFutureMenus();
+        ProductCreateDto dto = validDto();
+        dto.setAvailableDate(tomorrow);
+        dto.setReadyByTime(LocalDateTime.of(today, LocalTime.of(12, 0)).toString());
+        var result = sellerService.createProduct(1L, dto, approvedSeller());
+        assertThat(result.getAvailableDate()).isEqualTo(tomorrow);
+        assertThat(result.getReadyByTime())
+                .isEqualTo(LocalDateTime.of(tomorrow, LocalTime.NOON).toString());
+    }
+
+    @Test
+    void readyByMultiDayBeforeOfferingIsRebasedKeepingTimeOfDay() {
+        LocalDate today = LocalDate.now();
+        LocalDate offering = today.plusDays(2);
+        allowFutureMenus();
+        ProductCreateDto dto = validDto();
+        dto.setAvailableDate(offering);
+        dto.setReadyByTime(LocalDateTime.of(today.minusDays(1), LocalTime.of(23, 30)).toString());
+        var result = sellerService.createProduct(1L, dto, approvedSeller());
+        assertThat(result.getReadyByTime())
+                .isEqualTo(LocalDateTime.of(offering, LocalTime.of(23, 30)).toString());
+    }
+
+    @Test
+    void readyByOnTheNextDayIsAcceptedForTodayOffering() {
+        // e2e marketplace-lifecycle case: offering Today, readyBy spans tomorrow.
+        LocalDate today = LocalDate.now();
+        allowFutureMenus();
+        ProductCreateDto dto = validDto();
+        dto.setAvailableDate(today);
+        dto.setReadyByTime(LocalDateTime.of(today.plusDays(1), LocalTime.NOON).toString());
+        var result = sellerService.createProduct(1L, dto, approvedSeller());
+        assertThat(result.getReadyByTime())
+                .isEqualTo(LocalDateTime.of(today.plusDays(1), LocalTime.NOON).toString());
+    }
 }
