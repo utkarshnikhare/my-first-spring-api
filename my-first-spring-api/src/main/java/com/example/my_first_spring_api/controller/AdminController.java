@@ -77,8 +77,10 @@ public class AdminController {
 
     @GetMapping("/sellers")
     public ResponseEntity<List<Map<String, Object>>> sellers(
-            @RequestParam(value = "status", required = false) SellerApprovalStatus status) {
-        return ResponseEntity.ok(adminService.sellers(status));
+            @RequestParam(value = "status", required = false) SellerApprovalStatus status,
+            HttpSession session) {
+        User admin = buyerService.getCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.sellers(status, admin));
     }
 
     @GetMapping("/kitchens")
@@ -295,8 +297,9 @@ public class AdminController {
     }
 
     @GetMapping("/sellers/pending")
-    public ResponseEntity<List<Map<String, Object>>> pendingSellers() {
-        return ResponseEntity.ok(adminService.pendingSellers().stream()
+    public ResponseEntity<List<Map<String, Object>>> pendingSellers(HttpSession session) {
+        User admin = buyerService.getCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.pendingSellers(admin).stream()
                 .map(AdminController::toSellerSummary).collect(Collectors.toList()));
     }
 
@@ -363,8 +366,9 @@ public class AdminController {
     }
 
     @GetMapping("/sellers/{id}/detail")
-    public ResponseEntity<Map<String, Object>> sellerDetail(@PathVariable Long id) {
-        return ResponseEntity.ok(adminService.sellerDetail(id));
+    public ResponseEntity<Map<String, Object>> sellerDetail(@PathVariable Long id, HttpSession session) {
+        User admin = buyerService.getCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.sellerDetail(id, admin));
     }
 
     // ---------- Storefront controls (handover 7.3) ----------

@@ -2,6 +2,7 @@ package com.example.my_first_spring_api;
 
 import com.example.my_first_spring_api.repository.AreaRepository;
 import com.example.my_first_spring_api.service.AdminService;
+import com.example.my_first_spring_api.service.DemoAccountSeeder;
 import com.example.my_first_spring_api.service.FeatureService;
 import com.example.my_first_spring_api.service.LocationService;
 import org.slf4j.Logger;
@@ -41,8 +42,11 @@ public class ProductionBootstrap implements ApplicationRunner {
     private final String superAdminMobile;
     private final String adminMobile;
 
+    private final DemoAccountSeeder demoAccountSeeder;
+
     public ProductionBootstrap(AdminService adminService, FeatureService featureService,
                                LocationService locationService, AreaRepository areaRepository,
+                               DemoAccountSeeder demoAccountSeeder,
                                @Value("${sociomart.bootstrap.super-admin-mobile:" + AdminService.SUPER_ADMIN_MOBILE + "}")
                                String superAdminMobile,
                                @Value("${sociomart.bootstrap.admin-mobile:" + AdminService.ADMIN_MOBILE + "}")
@@ -51,6 +55,7 @@ public class ProductionBootstrap implements ApplicationRunner {
         this.featureService = featureService;
         this.locationService = locationService;
         this.areaRepository = areaRepository;
+        this.demoAccountSeeder = demoAccountSeeder;
         this.superAdminMobile = superAdminMobile.trim();
         this.adminMobile = adminMobile.trim();
     }
@@ -67,6 +72,9 @@ public class ProductionBootstrap implements ApplicationRunner {
             var area = locationService.createArea(PILOT_AREA);
             locationService.createSociety(area.getId(), PILOT_SOCIETY);
             log.info("Created the pilot area and society (no areas existed)");
+        }
+        if (demoAccountSeeder != null) {
+            demoAccountSeeder.seedDemoAccounts();
         }
     }
 }

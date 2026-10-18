@@ -22,6 +22,7 @@ import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.OrderItemRepository;
 import com.example.my_first_spring_api.repository.ProductRepository;
+import com.example.my_first_spring_api.repository.UserRepository;
 import com.example.my_first_spring_api.AppTimeZone;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -48,6 +49,9 @@ public class SellerService {
     /** Public-URL slug authority. Field-injected so manually-constructed test instances keep working. */
     @Autowired
     private SlugService slugService;
+
+    @Autowired(required = false)
+    private UserRepository userRepository;
 
     @Autowired
     public SellerService(KitchenRepository kitchenRepository,
@@ -134,7 +138,12 @@ public class SellerService {
         if (dto.getSociety() != null) throw new IllegalArgumentException("Primary Society is a protected field and cannot be changed");
         if (dto.getBuilding() != null) throw new IllegalArgumentException("Primary Building is a protected field and cannot be changed");
         if (dto.getName() != null) throw new IllegalArgumentException("Kitchen URL name is a protected field and cannot be changed");
-        if (dto.getDisplayName() != null && !dto.getDisplayName().isBlank()) kitchen.setDisplayName(dto.getDisplayName());
+        if (dto.getDisplayName() != null) {
+            if (dto.getDisplayName().trim().isEmpty()) {
+                throw new IllegalArgumentException("Kitchen Name cannot be blank.");
+            }
+            kitchen.setDisplayName(dto.getDisplayName().trim());
+        }
         if (dto.getDescription() != null) kitchen.setDescription(dto.getDescription());
         if (dto.getShortDescription() != null) kitchen.setShortDescription(dto.getShortDescription());
         if (dto.getSpeciality() != null) kitchen.setSpeciality(dto.getSpeciality());
@@ -150,6 +159,15 @@ public class SellerService {
                     societyDirectory.validateAndNormalize(dto.getServiceAreas()));
         }
         if (dto.getWhatsappLink() != null) kitchen.setWhatsappLink(dto.getWhatsappLink());
+        if (dto.getWhatsappNumber() != null) {
+            String cleanWa = dto.getWhatsappNumber().trim();
+            if (kitchen.getSeller() != null) {
+                kitchen.getSeller().setSellerWhatsappNumber(cleanWa.isEmpty() ? null : cleanWa);
+                if (userRepository != null) {
+                    userRepository.save(kitchen.getSeller());
+                }
+            }
+        }
         if (dto.getInstagramLink() != null) kitchen.setInstagramLink(dto.getInstagramLink());
         if (dto.getUpiId() != null) kitchen.setUpiId(dto.getUpiId());
         if (dto.getGalleryImages() != null) kitchen.setGalleryImages(dto.getGalleryImages());
@@ -650,6 +668,8 @@ public class SellerService {
                         .collect(java.util.stream.Collectors.toList()));
         dto.setBuilding(kitchen.getBuilding());
         dto.setWhatsappLink(kitchen.getWhatsappLink());
+        dto.setWhatsappNumber(kitchen.getSeller() != null ? kitchen.getSeller().getSellerWhatsappNumber() : null);
+        dto.setSlug(kitchen.getSlug() != null ? kitchen.getSlug() : kitchen.getName());
         dto.setInstagramLink(kitchen.getInstagramLink());
         dto.setUpiId(kitchen.getUpiId());
         dto.setGalleryImages(kitchen.getGalleryImages());
@@ -690,5 +710,47 @@ public class SellerService {
         dto.setLifecycleState(lifecycle);
         dto.setCreatedAt(product.getCreatedAt());
         return dto;
+    }
+
+    @Transactional(readOnly = true)
+    public com.example.my_first_spring_api.dto.SellerProfileDto getSellerProfile(User seller) {
+        var dto = new com.example.my_first_spring_api.dto.SellerProfileDto();
+        dto.setId(seller.getId());
+        dto.setName(seller.getName());
+        dto.setMobileNumber(seller.getMobileNumber());
+        dto.setWhatsappNumber(seller.getSellerWhatsappNumber());
+        dto.setEmail(seller.getEmail());
+        dto.setAlternateContact(seller.getSellerAlternateContact());
+        dto.setArea(seller.getArea() != null ? seller.getArea() : (seller.getAreaRef() != null ? seller.getAreaRef().getName() : null));
+        dto.setSociety(seller.getSociety() != null ? seller.getSociety() : (seller.getSocietyRef() != null ? seller.getSocietyRef().getName() : null));
+        dto.setBuilding(seller.getBuilding());
+        dto.setFlatHouseNumber(seller.getFlatHouseNumber());
+        dto.setSellerCategory(seller.getSellerCategory());
+        dto.setSellerApprovalStatus(seller.getSellerApprovalStatus() != null ? seller.getSellerApprovalStatus().name() : null);
+        return dto;
+    }
+
+    @Transactional
+    public com.example.my_first_spring_api.dto.SellerProfileDto updateSellerProfile(User seller, com.example.my_first_spring_api.dto.SellerProfileDto dto) {
+        if (dto.getWhatsappNumber() != null) {
+            String wa = dto.getWhatsappNumber().trim();
+            seller.setSellerWhatsappNumber(wa.isEmpty() ? null : wa);
+        }
+        if (dto.getEmail() != null) {
+            String em = dto.getEmail().trim();
+            seller.setEmail(em.isEmpty() ? null : em);
+        }
+        if (dto.getAlternateContact() != null) {
+            String alt = dto.getAlternateContact().trim();
+            seller.setSellerAlternateContact(alt.isEmpty() ? null : alt);
+        }
+        if (dto.getFlatHouseNumber() != null) {
+            seller.setFlatHouseNumber(dto.getFlatHouseNumber().trim());
+        }
+        if (dto.getBuilding() != null) {
+            seller.setBuilding(dto.getBuilding().trim());
+        }
+        User saved = (userRepository != null) ? userRepository.save(seller) : seller;
+        return getSellerProfile(saved);
     }
 }
