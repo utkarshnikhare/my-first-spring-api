@@ -448,6 +448,18 @@ public class OrderService {
             orderRepository.delete(order);
             throw new IllegalArgumentException("This kitchen does not serve your selected area. Please choose another kitchen.");
         }
+        // Cross-society delivery validation: verify delivery compatibility
+        String buyerSociety = buyer.getSociety();
+        String kitchenSociety = order.getKitchen() != null ? order.getKitchen().getSociety() : null;
+        if (kitchenSociety != null && !kitchenSociety.isBlank() && buyerSociety != null && !buyerSociety.isBlank()) {
+            if (!kitchenSociety.trim().equalsIgnoreCase(buyerSociety.trim())) {
+                if (!KitchenVisibility.isServiceAreaVisible(order.getKitchen(), buyer)) {
+                    session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
+                    orderRepository.delete(order);
+                    throw new IllegalArgumentException("This kitchen (" + kitchenSociety + ") does not deliver to your society (" + buyerSociety + ").");
+                }
+            }
+        }
         validateOrderItemsForPlacement(order);
         consumeStock(order);
         // Notify seller if any tracked offering newly sold out as a result of this order.
@@ -972,9 +984,11 @@ public class OrderService {
         dto.setAcknowledgedBySellerId(order.getAcknowledgedBy() != null ? order.getAcknowledgedBy().getId() : null);
         Kitchen kitchen = order.getKitchen();
         if (kitchen != null) {
-            dto.setKitchen(new OrderDto.KitchenSummary(
+            OrderDto.KitchenSummary ks = new OrderDto.KitchenSummary(
                     kitchen.getId(), kitchen.getName(), kitchen.getDisplayName(),
-                    kitchen.getImageUrl(), kitchen.getRating()));
+                    kitchen.getImageUrl(), kitchen.getRating());
+            ks.setSociety(kitchen.getSociety());
+            dto.setKitchen(ks);
         }
             if (order.getBuyer() != null) {
                 OrderDto.BuyerSummary buyerSummary = new OrderDto.BuyerSummary();
@@ -1043,6 +1057,9 @@ public class OrderService {
                     .orElseThrow(() -> new ProductNotFoundException(item.getProduct().getId()));
             if (product.getKitchen() == null || !product.getKitchen().getId().equals(order.getKitchen().getId())) {
                 throw new IllegalArgumentException("One of the selected offerings no longer belongs to this kitchen.");
+            }
+            if (!Boolean.TRUE.equals(product.getKitchen().getAvailableToday())) {
+                throw new IllegalArgumentException("The kitchen '" + product.getKitchen().getDisplayName() + "' is not currently accepting orders.");
             }
             if (Boolean.TRUE.equals(product.getOrdersPaused())) {
                 throw new IllegalArgumentException("Orders are paused for '" + product.getName() + "'.");

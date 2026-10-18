@@ -210,6 +210,18 @@ async function sellerLoginSubmit(event) {
     }
 }
 
+function sanitizeWhatsAppNumber(num) {
+    if (!num) return '';
+    return String(num).replace(/\D/g, '');
+}
+
+function buildWhatsAppChatLink(num) {
+    var digits = sanitizeWhatsAppNumber(num);
+    if (!digits) return '';
+    if (digits.length === 10) digits = '91' + digits;
+    return 'https://wa.me/' + digits;
+}
+
 async function sellerRegistrationSubmit(event) {
     event.preventDefault();
     var form = event.currentTarget;
@@ -227,7 +239,7 @@ async function sellerRegistrationSubmit(event) {
             sellerName: form.elements.sellerName.value.trim(),
             mobileNumber: form.elements.mobileNumber.value.trim(),
             password: form.elements.password.value,
-            whatsappNumber: form.elements.whatsappNumber.value.trim(),
+            whatsappNumber: sanitizeWhatsAppNumber(form.elements.whatsappNumber.value),
             alternateContact: form.elements.alternateContact.value.trim(),
             kitchenName: form.elements.kitchenName.value.trim(),
             kitchenSlug: form.elements.kitchenSlug.value.trim(),
@@ -1805,6 +1817,13 @@ function initOfferingFormWheels(view) {
     function attachWheelScroll(viewport, targetName) {
         if (!viewport) return;
         var scrollTimer = null;
+        var isDragging = false;
+        var startY = 0;
+        var startScrollTop = 0;
+        var hasDragged = false;
+
+        viewport.style.cursor = 'pointer';
+
         viewport.addEventListener('scroll', function () {
             var idx = Math.round(viewport.scrollTop / 44);
             if (idx < 0) idx = 0;
@@ -1818,10 +1837,49 @@ function initOfferingFormWheels(view) {
             }, 60);
         }, { passive: true });
 
+        // Desktop mouse drag scrolling alongside touch
+        viewport.addEventListener('mousedown', function (e) {
+            isDragging = true;
+            hasDragged = false;
+            startY = e.pageY;
+            startScrollTop = viewport.scrollTop;
+            viewport.style.cursor = 'grabbing';
+            viewport.style.userSelect = 'none';
+        });
+
+        window.addEventListener('mousemove', function (e) {
+            if (!isDragging) return;
+            var delta = e.pageY - startY;
+            if (Math.abs(delta) > 3) hasDragged = true;
+            viewport.scrollTop = startScrollTop - delta;
+        });
+
+        window.addEventListener('mouseup', function () {
+            if (!isDragging) return;
+            isDragging = false;
+            viewport.style.cursor = 'pointer';
+            viewport.style.removeProperty('user-select');
+            if (hasDragged) {
+                var idx = Math.round(viewport.scrollTop / 44);
+                if (idx < 0) idx = 0;
+                if (idx >= WHEEL_INTERVALS.length) idx = WHEEL_INTERVALS.length - 1;
+                viewport.scrollTo({ top: idx * 44, behavior: 'smooth' });
+                updateActiveSlotInViewport(viewport, idx);
+                S.offeringFormDirty = true;
+                applyWheelTimeToInput(view, targetName, idx);
+            }
+        });
+
+        // Direct click-to-select on hour and minute items
         viewport.addEventListener('click', function (e) {
+            if (hasDragged) {
+                hasDragged = false;
+                return;
+            }
             var slot = e.target.closest('.wheel-slot');
             if (!slot) return;
             var idx = Number(slot.getAttribute('data-slot-index'));
+            if (isNaN(idx)) return;
             viewport.scrollTo({ top: idx * 44, behavior: 'smooth' });
             updateActiveSlotInViewport(viewport, idx);
             S.offeringFormDirty = true;
@@ -2742,8 +2800,12 @@ async function sellerOrderDetailByOrderView(orderId) {
             if (order.buyer.flatHouseNumber) addrParts.push(order.buyer.flatHouseNumber);
             h += '<div class="odc-buyer-row"><span class="odc-buyer">' + esc(order.buyer.name || 'Unknown') + '</span>';
             h += '<span class="odc-qty">' + money(order.totalAmount) + '</span></div>';
-            if (addrParts.length > 0) { h += '<div class="odc-address">📍 ' + esc(addrParts.join(', ')) + '</div>'; }
-            if (order.buyer.mobileNumber) { h += '<div class="odc-address">📱 ' + esc(order.buyer.mobileNumber) + '</div>'; }
+            if (order.buyer.mobileNumber) {
+                var waLink = buildWhatsAppChatLink(order.buyer.mobileNumber);
+                h += '<div class="odc-address">📱 ' + esc(order.buyer.mobileNumber) +
+                    (waLink ? ' <a href="' + esc(waLink) + '" target="_blank" rel="noopener" class="btn btn-outline btn-xs" style="margin-left:8px;padding:2px 8px;font-size:0.75rem;text-decoration:none;">💬 WhatsApp</a>' : '') +
+                    '</div>';
+            }
         }
         if (order.orderTime) { h += '<div class="tiny muted mt-1">Ordered: ' + prettyDateTime(order.orderTime) + '</div>'; }
         if (order.customInstructions) { h += '<div class="odc-remark">"' + esc(order.customInstructions) + '"</div>'; }
@@ -3233,8 +3295,9 @@ document.addEventListener('submit', async function (e) {
                 delete kitchenPayload.societyIds;
             }
             if (kitchenPayload.whatsappNumber) {
-                kitchenPayload.whatsappNumber = kitchenPayload.whatsappNumber.trim();
-                kitchenPayload.whatsappLink = kitchenPayload.whatsappNumber;
+                var cleanWa = sanitizeWhatsAppNumber(kitchenPayload.whatsappNumber);
+                kitchenPayload.whatsappNumber = cleanWa;
+                kitchenPayload.whatsappLink = buildWhatsAppChatLink(cleanWa);
             }
             var updatedK = await sellerApi('/api/seller/kitchen/' + kid, { method: 'PUT', body: kitchenPayload });
             if (updatedK) S.myKitchen = updatedK;

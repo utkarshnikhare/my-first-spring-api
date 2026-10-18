@@ -613,7 +613,7 @@ function quickPostsHtml(posts) {
     var h = '<h3 class="section-gap mb-2">📢 Today\'s Quick Posts</h3><div class="quick-posts">';
     posts.forEach(function (p) {
         h += '<div class="card pad card-mb"><div>' + esc(p.message) + '</div>' +
-            (p.imageData ? '<img class="mt-2" style="max-width:100%;border-radius:8px" src="' + esc(p.imageData) + '" alt="Kitchen quick post">' : '') + '</div>';
+            (p.imageData ? '<img class="mt-2" style="max-width:100%;border-radius:8px" src="' + esc(p.imageData) + '" alt="Kitchen quick post" onerror="imgFallback(this)">' : '') + '</div>';
     });
     return h + '</div>';
 }
@@ -1045,6 +1045,14 @@ async function placeOrderWithStatus(paymentStatus) {
                 societyId: buyerDetails ? buyerDetails.societyId : null,
                 buyerDetails: buyerDetails
             };
+            // Re-validate cart items against live product availability before placing orders
+            var cart = getCart();
+            if (cart && cart.items && cart.items.length) {
+                var draftCheck = await api('/api/buyer/orders/draft');
+                if (!draftCheck || !draftCheck.items || !draftCheck.items.length) {
+                    throw new Error('Your selected offerings are no longer available. Please review your cart.');
+                }
+            }
             var placed;
             try {
                 placed = await api('/api/buyer/orders/place', { method: 'POST', body: placeBody });
@@ -1139,6 +1147,18 @@ async function confirmOrderView() {
         '<p class="muted small">' +
         esc([u.society || LOCATION, u.building, u.flatHouseNumber].filter(Boolean).join(' · ')) +
         (u.mobileNumber ? '<br>📱 ' + esc(u.mobileNumber) : '') + '</p></div>';
+
+    // Cross-society delivery validation: warn buyer if delivery address society does not match kitchen's active society
+    var buyerSociety = ((u && u.society) || LOCATION || '').trim();
+    var kitchenSociety = (draft.kitchen && (draft.kitchen.society || draft.kitchen.name) ? (draft.kitchen.society || '') : '').trim();
+    if (kitchenSociety && buyerSociety && kitchenSociety.toLowerCase() !== buyerSociety.toLowerCase()) {
+        h += '<div class="card pad card-mb" style="border-left: 4px solid var(--amber, #f59e0b); background: var(--amber-light, #fffbeb);">' +
+            '<div class="flex items-center gap-2">' +
+            '<span style="font-size: 1.25rem;">⚠️</span>' +
+            '<div><strong style="color: var(--amber-dark, #b45309);">Cross-Society Delivery Notice</strong>' +
+            '<p class="small mt-1" style="color: #78350f;">This kitchen is in <b>' + esc(kitchenSociety) + '</b> while your delivery address is in <b>' + esc(buyerSociety) + '</b>. Delivery may take longer or require direct coordination with the kitchen.</p>' +
+            '</div></div></div>';
+    }
 
     // Remark carried from the Order Summary note
     var note = (state.pendingCheckout && state.pendingCheckout.note) || '';
@@ -1365,7 +1385,7 @@ async function comparisonView(hash) {
             h += offers.map(function (o) {
                 return '<div class="compare-card">' +
                     '<div class="cc-top">' +
-                    '<div class="kc-avatar">' + (o.kitchenImageUrl ? '<img src="' + esc(o.kitchenImageUrl) + '" alt="' + esc(o.kitchenDisplayName) + '">' : '🏪') + '</div>' +
+                    '<div class="kc-avatar" data-emoji="🏪">' + (o.kitchenImageUrl ? '<img src="' + esc(o.kitchenImageUrl) + '" alt="' + esc(o.kitchenDisplayName) + '" onerror="imgFallback(this)">' : '🏪') + '</div>' +
                     '<div class="kc-info"><div class="kc-name">' + esc(o.kitchenDisplayName) + '</div>' +
                     '<p class="kc-desc">' + esc(o.tagline || '') + '</p>' +
                     '<div class="kc-meta">' + statusPill(o.status) +
