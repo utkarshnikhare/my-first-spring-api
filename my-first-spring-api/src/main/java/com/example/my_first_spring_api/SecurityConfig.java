@@ -73,6 +73,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/seller/**", "/api/seller-app/**").hasRole("SELLER")
                         .requestMatchers(
                                 "/api/auth/**",
+                                "/admin/login",
                                 "/api/health",
                                 "/api/marketplace",
                                 "/api/items",

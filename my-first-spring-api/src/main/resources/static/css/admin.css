@@ -60,11 +60,16 @@
 .admin-nav .nav-item.active { color: var(--admin-2); }
 .admin-nav .nav-item.active .nav-icon { background: var(--admin-1); color: var(--admin-2); }
 
+.admin-body {
+    overflow-x: hidden;
+    width: 100%;
+}
+
 /* Login & blocked wrappers */
 .login-wrap, .blocked-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
 .admin-login,.admin-blocked {
     background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
-    box-shadow: var(--shadow); padding: 24px; width: min(420px, 100%);
+    box-shadow: var(--shadow); padding: 24px; width: 100%; max-width: 440px; margin: 0 auto; box-sizing: border-box;
 }
 .al-brand-row {
     display: flex;
@@ -79,7 +84,7 @@
 .admin-login .form-group { margin-bottom: 14px; }
 .admin-login .form-group label { display: block; font-size: 0.82rem; font-weight: 700; margin-bottom: 6px; color: var(--text); }
 .admin-login .form-group input {
-    width: 100%; padding: 12px 14px;
+    width: 100%; padding: 12px 14px; min-height: 44px;
     border: 1px solid var(--border); border-radius: 12px;
     font-size: 0.92rem; background: var(--surface); color: var(--text); box-sizing: border-box;
     transition: border-color .15s ease, box-shadow .15s ease;

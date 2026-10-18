@@ -271,7 +271,7 @@ function renderLoginScreen() {
         '<p class="muted small">Use the mobile number on your Admin account and its configured demo password. Admin and Super Admin passwords are separate.</p>' +
         configurationMessage +
         '<div class="form-group"><label for="alMobile">Mobile number</label><input id="alMobile" inputmode="numeric" maxlength="10" placeholder="10-digit mobile" autocomplete="username"></div>' +
-        '<div class="form-group"><label for="alPassword">Demo password</label><input id="alPassword" type="password" maxlength="72" autocomplete="current-password"></div>' +
+        '<div class="form-group"><label for="alPassword">Demo password</label><div class="password-input-wrapper"><input id="alPassword" type="password" maxlength="72" autocomplete="current-password"></div></div>' +
         '<p class="muted small">Demo-only authentication; not production-ready.</p>' +
         '<button class="btn btn-primary btn-block" type="button" data-action="admin-login"' + (!loginEnabled ? ' disabled' : '') + '>Sign In</button>' +
         '<a class="al-back" href="/index.html">← Back to buyer app</a>' +

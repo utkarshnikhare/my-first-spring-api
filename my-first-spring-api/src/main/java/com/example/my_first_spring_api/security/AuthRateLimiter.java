@@ -37,11 +37,15 @@ import java.util.concurrent.ConcurrentHashMap;
  *       That is a follow-up, not required for the current single-instance pilot.</li>
  * </ul>
  */
+import com.example.my_first_spring_api.service.AdminService;
+
 @Component
 public class AuthRateLimiter {
 
-    public static final int LOGIN_MAX_FAILURES = 5;
-    public static final Duration LOGIN_WINDOW = Duration.ofMinutes(15);
+    public static final int LOGIN_MAX_FAILURES = 20;
+    public static final int ADMIN_LOGIN_MAX_FAILURES = 50;
+    public static final Duration LOGIN_WINDOW = Duration.ofSeconds(60);
+    public static final Duration LOGIN_LOCKOUT_DURATION = Duration.ofSeconds(60);
     public static final int REGISTRATION_MAX = 5;
     public static final Duration REGISTRATION_WINDOW = Duration.ofMinutes(15);
     /** Manual password recovery: 3 forgot-password requests per mobile AND per IP per window. */
@@ -55,6 +59,12 @@ public class AuthRateLimiter {
     private final Clock clock;
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
+    @Value("${sociomart.bootstrap.super-admin-mobile:" + AdminService.SUPER_ADMIN_MOBILE + "}")
+    private String superAdminMobile = AdminService.SUPER_ADMIN_MOBILE;
+
+    @Value("${sociomart.bootstrap.admin-mobile:" + AdminService.ADMIN_MOBILE + "}")
+    private String adminMobile = AdminService.ADMIN_MOBILE;
+
     /** Annotated because the class also defines the package-private Clock ctor. */
     @Autowired
     public AuthRateLimiter(@Value("${sociomart.ratelimit.enabled:true}") boolean enabled) {
@@ -64,6 +74,17 @@ public class AuthRateLimiter {
     AuthRateLimiter(boolean enabled, Clock clock) {
         this.enabled = enabled;
         this.clock = clock;
+    }
+
+    public boolean isAdminMobile(String mobile) {
+        if (mobile == null) {
+            return false;
+        }
+        String m = mobile.trim();
+        return m.equals(AdminService.ADMIN_MOBILE)
+                || m.equals(AdminService.SUPER_ADMIN_MOBILE)
+                || (adminMobile != null && m.equals(adminMobile.trim()))
+                || (superAdminMobile != null && m.equals(superAdminMobile.trim()));
     }
 
     /**
@@ -97,11 +118,18 @@ public class AuthRateLimiter {
             return;
         }
         Instant now = now();
+        long maxRemainingSeconds = -1;
         for (String key : keys) {
             Bucket bucket = buckets.get(key);
             if (bucket != null && bucket.lockedUntil != null && now.isBefore(bucket.lockedUntil)) {
-                throw new com.example.my_first_spring_api.exception.TooManyRequestsException();
+                long remaining = Math.max(1, Duration.between(now, bucket.lockedUntil).toSeconds());
+                if (remaining > maxRemainingSeconds) {
+                    maxRemainingSeconds = remaining;
+                }
             }
+        }
+        if (maxRemainingSeconds > 0) {
+            throw new com.example.my_first_spring_api.exception.TooManyRequestsException(maxRemainingSeconds);
         }
     }
 
@@ -112,11 +140,19 @@ public class AuthRateLimiter {
      *         caller can audit the lockout exactly once.
      */
     public boolean recordLoginFailure(String mobile, String ip) {
+        return recordLoginFailure(mobile, ip, isAdminMobile(mobile));
+    }
+
+    /**
+     * Records a failed login with admin-aware threshold.
+     */
+    public boolean recordLoginFailure(String mobile, String ip, boolean isAdmin) {
         if (!enabled) {
             return false;
         }
-        boolean mobileLocked = hit(loginMobileKey(mobile), LOGIN_MAX_FAILURES, LOGIN_WINDOW);
-        hit(loginIpKey(ip), LOGIN_MAX_FAILURES, LOGIN_WINDOW);
+        int max = (isAdmin || isAdminMobile(mobile)) ? ADMIN_LOGIN_MAX_FAILURES : LOGIN_MAX_FAILURES;
+        boolean mobileLocked = hit(loginMobileKey(mobile), max, LOGIN_LOCKOUT_DURATION);
+        hit(loginIpKey(ip), max, LOGIN_LOCKOUT_DURATION);
         return mobileLocked;
     }
 

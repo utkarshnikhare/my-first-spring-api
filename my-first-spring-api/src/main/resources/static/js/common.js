@@ -543,7 +543,7 @@ function openAuthModal() {
         '</div>' +
         '<div class="form-group">' +
         '<label class="form-label" for="authPassword">Password</label>' +
-        '<input class="form-input" id="authPassword" name="password" type="password" minlength="10" maxlength="72" autocomplete="current-password" required>' +
+        '<div class="password-input-wrapper"><input class="form-input" id="authPassword" name="password" type="password" minlength="10" maxlength="72" autocomplete="current-password" required></div>' +
         '</div>' +
         '<button class="btn btn-primary btn-block" type="submit" id="authSubmit">Log in</button>' +
         '<button class="btn btn-secondary btn-block mt-2" type="button" data-action="buyer-register">Create buyer account</button>' +
@@ -573,7 +573,7 @@ async function openBuyerRegistrationModal() {
             '<div class="form-group"><label class="form-label" for="buyerRegMobile">Mobile number</label>' +
             '<input class="form-input" id="buyerRegMobile" name="mobileNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" required autocomplete="tel"></div>' +
             '<div class="form-group"><label class="form-label" for="buyerRegPassword">Create password</label>' +
-            '<input class="form-input" id="buyerRegPassword" name="password" type="password" minlength="10" maxlength="72" required autocomplete="new-password">' +
+            '<div class="password-input-wrapper"><input class="form-input" id="buyerRegPassword" name="password" type="password" minlength="10" maxlength="72" required autocomplete="new-password"></div>' +
             '<small class="muted">Use at least 10 characters. This is demo sign-in, not production authentication.</small></div>' +
             '<div class="form-group"><label class="form-label" for="buyerRegArea">Area</label>' +
             '<select class="form-input" id="buyerRegArea" name="areaId" required><option value="">Select area</option>' + areaOptions + '</select></div>' +
@@ -687,3 +687,117 @@ async function withAuthGate(actionFn) {
         throw err;
     }
 }
+
+/* =======================================================================
+   UNIVERSAL SHOW/HIDE PASSWORD EYE TOGGLE
+   Accessible, responsive toggle for every password field across the app.
+   ======================================================================= */
+
+var EYE_OPEN_SVG = '<svg class="eye-icon eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+
+var EYE_SLASH_SVG = '<svg class="eye-icon eye-slashed" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+
+function initPasswordToggles(root) {
+    var scope = root || document;
+    if (!scope || !scope.querySelectorAll) return;
+    var pwdInputs = scope.querySelectorAll('input[type="password"], input[data-password-toggle="true"]');
+    for (var i = 0; i < pwdInputs.length; i++) {
+        setupPasswordToggle(pwdInputs[i]);
+    }
+}
+
+function setupPasswordToggle(input) {
+    if (!input || input.getAttribute('data-password-toggle-initialized') === 'true') {
+        return;
+    }
+    input.setAttribute('data-password-toggle-initialized', 'true');
+    input.setAttribute('data-password-toggle', 'true');
+
+    var parent = input.parentElement;
+    var wrapper = parent && parent.classList.contains('password-input-wrapper') ? parent : null;
+
+    if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'password-input-wrapper';
+        if (input.parentNode) {
+            input.parentNode.insertBefore(wrapper, input);
+        }
+        wrapper.appendChild(input);
+    }
+
+    var existingBtn = wrapper.querySelector('.password-toggle-btn');
+    if (existingBtn) return;
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'password-toggle-btn';
+    btn.setAttribute('aria-label', input.type === 'password' ? 'Show password' : 'Hide password');
+    btn.setAttribute('title', input.type === 'password' ? 'Show password' : 'Hide password');
+    btn.setAttribute('tabindex', '-1');
+    btn.innerHTML = input.type === 'password' ? EYE_SLASH_SVG : EYE_OPEN_SVG;
+
+    btn.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+    });
+
+    btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var isHidden = input.type === 'password';
+        input.type = isHidden ? 'text' : 'password';
+        btn.innerHTML = isHidden ? EYE_OPEN_SVG : EYE_SLASH_SVG;
+        btn.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+        btn.setAttribute('title', isHidden ? 'Hide password' : 'Show password');
+        try {
+            input.focus();
+            if (input.setSelectionRange && input.value) {
+                var len = input.value.length;
+                input.setSelectionRange(len, len);
+            }
+        } catch (err) {}
+    });
+
+    wrapper.appendChild(btn);
+}
+
+if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') {
+    var passwordObserver = new MutationObserver(function (mutations) {
+        for (var i = 0; i < mutations.length; i++) {
+            var mutation = mutations[i];
+            if (mutation.addedNodes && mutation.addedNodes.length > 0) {
+                for (var j = 0; j < mutation.addedNodes.length; j++) {
+                    var node = mutation.addedNodes[j];
+                    if (node.nodeType === 1) {
+                        if (node.matches && (node.matches('input[type="password"]') || node.matches('input[data-password-toggle="true"]'))) {
+                            setupPasswordToggle(node);
+                        } else if (node.querySelectorAll) {
+                            initPasswordToggles(node);
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    if (document.body) {
+        passwordObserver.observe(document.body, { childList: true, subtree: true });
+    } else {
+        document.addEventListener('DOMContentLoaded', function () {
+            passwordObserver.observe(document.body, { childList: true, subtree: true });
+        });
+    }
+}
+
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () {
+            initPasswordToggles();
+        });
+    } else {
+        initPasswordToggles();
+    }
+}
+
+window.initPasswordToggles = initPasswordToggles;
+window.setupPasswordToggle = setupPasswordToggle;
+

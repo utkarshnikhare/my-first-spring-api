@@ -91,7 +91,7 @@ async function sellerAuthHtml() {
     var login = '<div class="form-group"><label for="sellerLoginMobile">Mobile number</label>' +
         '<input class="form-input" id="sellerLoginMobile" name="mobileNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" autocomplete="username" required></div>' +
         '<div class="form-group"><label for="sellerLoginPassword">Password</label>' +
-        '<input class="form-input" id="sellerLoginPassword" name="password" type="password" minlength="10" maxlength="72" autocomplete="current-password" required></div>' +
+        '<div class="password-input-wrapper"><input class="form-input" id="sellerLoginPassword" name="password" type="password" minlength="10" maxlength="72" autocomplete="current-password" required></div></div>' +
         '<button class="btn btn-primary btn-block" type="submit">Sign in</button>' +
         '<button class="btn btn-secondary btn-block mt-2" type="button" data-action="seller-show-register">Register as a seller</button>';
     var body = '<div class="login-wrap"><section class="admin-login seller-auth-card">' +
@@ -113,7 +113,7 @@ async function sellerAuthHtml() {
     var form = '<form id="sellerRegistrationForm">' +
         '<div class="form-group"><label for="sellerRegName">Seller / contact name</label><input class="form-input" id="sellerRegName" name="sellerName" maxlength="120" required></div>' +
         '<div class="form-group"><label for="sellerRegMobile">Mobile number</label><input class="form-input" id="sellerRegMobile" name="mobileNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" required></div>' +
-        '<div class="form-group"><label for="sellerRegPassword">Create password</label><input class="form-input" id="sellerRegPassword" name="password" type="password" minlength="10" maxlength="72" autocomplete="new-password" required></div>' +
+        '<div class="form-group"><label for="sellerRegPassword">Create password</label><div class="password-input-wrapper"><input class="form-input" id="sellerRegPassword" name="password" type="password" minlength="10" maxlength="72" autocomplete="new-password" required></div></div>' +
         '<div class="form-group"><label for="sellerRegWhatsApp">WhatsApp number</label><input class="form-input" id="sellerRegWhatsApp" name="whatsappNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" required></div>' +
         '<div class="form-group"><label for="sellerRegAlternate">Alternate contact (optional)</label><input class="form-input" id="sellerRegAlternate" name="alternateContact" inputmode="numeric" pattern="[0-9]{10}" maxlength="10"></div>' +
         '<div class="form-group"><label for="sellerRegKitchen">Kitchen / storefront name</label><input class="form-input" id="sellerRegKitchen" name="kitchenName" maxlength="120" required></div>' +

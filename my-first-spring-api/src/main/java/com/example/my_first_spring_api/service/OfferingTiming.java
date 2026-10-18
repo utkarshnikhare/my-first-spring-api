@@ -71,9 +71,9 @@ final class OfferingTiming {
         if (!offeringDate.isAfter(today) && delivery.isBefore(LocalDateTime.of(today, now).minusMinutes(2))) {
             throw new IllegalArgumentException("Delivery / Ready By must not already have passed.");
         }
+        validateWindowPair(open, close);
         LocalDate orderingDate = preorder ? offeringDate.minusDays(1) : offeringDate;
         close = autoCorrectOrdersClose(orderingDate, close, delivery, today, now);
-
         validateWindowPair(open, close);
         LocalDateTime closeDateTime = java.time.LocalDateTime.of(orderingDate, LocalTime.of(minutes(close) / 60, minutes(close) % 60));
         if (closeDateTime.isAfter(delivery)) {

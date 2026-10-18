@@ -70,11 +70,11 @@ class AuthRateLimiterTest {
     void successClearsThePerMobileCounterButTheIpCounterKeepsCounting() {
         AuthRateLimiter limiter = new AuthRateLimiter(true, new MutableClock(Instant.parse("2026-10-12T10:00:00Z")));
         String sharedIp = "198.51.100.20";
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < AuthRateLimiter.LOGIN_MAX_FAILURES - 1; i++) {
             limiter.recordLoginFailure(MOBILE, sharedIp);
         }
         limiter.clearLoginFailures(MOBILE);
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < AuthRateLimiter.LOGIN_MAX_FAILURES - 1; i++) {
             assertThat(limiter.recordLoginFailure(MOBILE, sharedIp))
                     .as("the per-mobile counter was reset, so the lock must not trip yet")
                     .isFalse();
@@ -83,6 +83,30 @@ class AuthRateLimiterTest {
                 .as("the per-IP counter is deliberately NOT reset by a success: a shared "
                         + "NAT that trips the limit stays limited until the window passes")
                 .isInstanceOf(TooManyRequestsException.class);
+    }
+
+    @Test
+    void retryCountdownMessageReportsRemainingSeconds() {
+        MutableClock clock = new MutableClock(Instant.parse("2026-10-12T10:00:00Z"));
+        AuthRateLimiter limiter = new AuthRateLimiter(true, clock);
+        for (int i = 0; i < AuthRateLimiter.LOGIN_MAX_FAILURES; i++) {
+            limiter.recordLoginFailure(MOBILE, IP);
+        }
+        clock.advance(Duration.ofSeconds(25));
+        assertThatThrownBy(() -> limiter.assertLoginAllowed(MOBILE, IP))
+                .isInstanceOf(TooManyRequestsException.class)
+                .hasMessage("Too many failed attempts. Please try again in 35 seconds.");
+    }
+
+    @Test
+    void adminMobileReceivesGenerousThreshold() {
+        MutableClock clock = new MutableClock(Instant.parse("2026-10-12T10:00:00Z"));
+        AuthRateLimiter limiter = new AuthRateLimiter(true, clock);
+        String adminMobile = "9000000002";
+        for (int i = 0; i < AuthRateLimiter.LOGIN_MAX_FAILURES + 5; i++) {
+            assertThat(limiter.recordLoginFailure(adminMobile, IP)).isFalse();
+            assertThatCode(() -> limiter.assertLoginAllowed(adminMobile, IP)).doesNotThrowAnyException();
+        }
     }
 
     @Test

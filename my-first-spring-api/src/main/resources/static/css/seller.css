@@ -23,9 +23,11 @@
 }
 
 .seller-auth-card {
-    width: min(560px, calc(100% - 28px));
+    width: 100%;
+    max-width: 480px;
     margin: 24px auto;
     padding: 24px;
+    box-sizing: border-box;
     color: var(--text);
     background: var(--surface);
     border: 1px solid var(--border);
