@@ -36,6 +36,12 @@ public class OrderService {
     @Autowired
     private RecurringScheduleService recurringScheduleService;
 
+    @Autowired(required = false)
+    private SocietyDirectory societyDirectory;
+
+    @Autowired(required = false)
+    private SocietyRepository societyRepository;
+
     public static final String DRAFT_ORDER_SESSION_KEY = "DRAFT_ORDER_ID";
     private static final String BUYER_SESSION_KEY = "BUYER_USER";
     /** Bounded retries when an order-number candidate is already taken. */
@@ -399,9 +405,38 @@ public class OrderService {
         }
         order.setBuyer(buyer);
         if (buyerDetails != null) updateBuyerDetails(buyer, buyerDetails);
-        if (customInstructions != null && !customInstructions.isBlank()) order.setCustomInstructions(customInstructions);
+        if (customInstructions != null && !customInstructions.isBlank()) {
+            order.setCustomInstructions(customInstructions);
+            order.setSpecialInstructions(customInstructions);
+        }
+        String deliveryAddress = (buyerDetails != null && buyerDetails.getDeliveryAddress() != null && !buyerDetails.getDeliveryAddress().isBlank())
+                ? buyerDetails.getDeliveryAddress()
+                : (buyer != null
+                        ? String.join(", ", java.util.stream.Stream.of(buyer.getFlatHouseNumber(), buyer.getBuilding(), buyer.getSociety())
+                                .filter(s -> s != null && !s.isBlank()).toList())
+                        : "");
+        order.setDeliveryAddress(deliveryAddress);
         // First-order verification: ensure buyer profile is complete before placing an order.
         // Required fields: society, building, flat/house number. Mobile is set at login.
+        if (buyer.getSociety() == null || buyer.getSociety().isBlank()) {
+            if (buyer.getSocietyRef() != null && buyer.getSocietyRef().getName() != null) {
+                buyer.setSociety(buyer.getSocietyRef().getName());
+            } else if (buyerDetails != null && buyerDetails.getSociety() != null && !buyerDetails.getSociety().isBlank()) {
+                buyer.setSociety(buyerDetails.getSociety());
+            }
+        }
+        if (buyer.getBuilding() == null || buyer.getBuilding().isBlank()) {
+            if (buyerDetails != null && buyerDetails.getBuilding() != null && !buyerDetails.getBuilding().isBlank()) {
+                buyer.setBuilding(buyerDetails.getBuilding());
+            }
+        }
+        if (buyer.getFlatHouseNumber() == null || buyer.getFlatHouseNumber().isBlank()) {
+            if (buyerDetails != null && buyerDetails.getFlatHouseNumber() != null && !buyerDetails.getFlatHouseNumber().isBlank()) {
+                buyer.setFlatHouseNumber(buyerDetails.getFlatHouseNumber());
+            } else if (buyerDetails != null && buyerDetails.getDeliveryAddress() != null && !buyerDetails.getDeliveryAddress().isBlank()) {
+                buyer.setFlatHouseNumber(buyerDetails.getDeliveryAddress());
+            }
+        }
         if (buyer.getSociety() == null || buyer.getSociety().isBlank()
                 || buyer.getBuilding() == null || buyer.getBuilding().isBlank()
                 || buyer.getFlatHouseNumber() == null || buyer.getFlatHouseNumber().isBlank()) {
@@ -1174,6 +1209,11 @@ public class OrderService {
         if (buyerDetails.getName() != null && !buyerDetails.getName().isBlank()) {
             buyer.setName(buyerDetails.getName());
         }
+        if (buyerDetails.getMobileNumber() != null && !buyerDetails.getMobileNumber().isBlank()) {
+            buyer.setMobileNumber(buyerDetails.getMobileNumber());
+        } else if (buyerDetails.getPhone() != null && !buyerDetails.getPhone().isBlank()) {
+            buyer.setMobileNumber(buyerDetails.getPhone());
+        }
         if (buyerDetails.getFlatHouseNumber() != null && !buyerDetails.getFlatHouseNumber().isBlank()) {
             buyer.setFlatHouseNumber(buyerDetails.getFlatHouseNumber());
         }
@@ -1183,7 +1223,34 @@ public class OrderService {
         if (buyerDetails.getBuilding() != null && !buyerDetails.getBuilding().isBlank()) {
             buyer.setBuilding(buyerDetails.getBuilding());
         }
+        if (buyerDetails.getSocietyId() != null && societyRepository != null) {
+            societyRepository.findById(buyerDetails.getSocietyId()).ifPresent(s -> {
+                buyer.setSocietyRef(s);
+                if (buyer.getSociety() == null || buyer.getSociety().isBlank()) {
+                    buyer.setSociety(s.getName());
+                }
+                if (s.getArea() != null) {
+                    buyer.setAreaRef(s.getArea());
+                    if (buyer.getArea() == null || buyer.getArea().isBlank()) {
+                        buyer.setArea(s.getArea().getName());
+                    }
+                }
+            });
+        }
+        if (buyerDetails.getDeliveryAddress() != null && !buyerDetails.getDeliveryAddress().isBlank()) {
+            if (buyer.getFlatHouseNumber() == null || buyer.getFlatHouseNumber().isBlank()) {
+                buyer.setFlatHouseNumber(buyerDetails.getDeliveryAddress());
+            }
+        }
         userRepository.save(buyer);
+    }
+
+    @Transactional(readOnly = true)
+    public Long resolveKitchenIdForProduct(Long productId) {
+        if (productId == null) return null;
+        return productRepository.findById(productId)
+                .map(p -> p.getKitchen() != null ? p.getKitchen().getId() : null)
+                .orElse(null);
     }
 
     /**

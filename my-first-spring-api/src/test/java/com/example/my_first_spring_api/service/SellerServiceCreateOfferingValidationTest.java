@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import com.example.my_first_spring_api.dto.ProductCreateDto;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Product;
@@ -351,16 +352,30 @@ class SellerServiceCreateOfferingValidationTest {
         LocalDate tomorrow = LocalDate.now().plusDays(1);
         dto.setAvailableDate(tomorrow);
         // Pre-order offering: orderingDate is today.
-        // User accidentally inputs 04:00 (4:00 AM today, in past) instead of 16:00 (4:00 PM).
-        // Delivery is tomorrow at 18:00.
-        dto.setOrderWindowEnd("04:00");
-        dto.setReadyByTime(tomorrow + "T18:00");
+        // User accidentally inputs an AM time in past instead of PM.
+        // Delivery is tomorrow at 23:59.
+        LocalTime now = LocalTime.now(AppTimeZone.ZONE);
+        String amInput;
+        String expectedPm;
+        if (now.isBefore(LocalTime.of(12, 0))) {
+            amInput = "04:00";
+            expectedPm = "16:00";
+        } else if (now.isBefore(LocalTime.of(22, 0))) {
+            int targetHour = Math.min(23, now.getHour() + 2);
+            int amHour = targetHour - 12;
+            amInput = String.format(java.util.Locale.ROOT, "%02d:00", amHour);
+            expectedPm = String.format(java.util.Locale.ROOT, "%02d:00", targetHour);
+        } else {
+            amInput = "04:00";
+            expectedPm = "23:59";
+        }
+        dto.setOrderWindowEnd(amInput);
+        dto.setReadyByTime(tomorrow + "T23:59");
 
         var result = sellerService.createProduct(1L, dto, approvedSeller());
         assertThat(result).isNotNull();
-        // 04:00 + 12h = 16:00
-        assertThat(result.getOrderWindowEnd()).isEqualTo("16:00");
-        assertThat(result.getCutoffTime()).isEqualTo("16:00");
+        assertThat(result.getOrderWindowEnd()).isEqualTo(expectedPm);
+        assertThat(result.getCutoffTime()).isEqualTo(expectedPm);
     }
 
     @Test

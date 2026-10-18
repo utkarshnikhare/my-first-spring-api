@@ -15,6 +15,7 @@ import com.example.my_first_spring_api.exception.TemplateNotFoundException;
 import com.example.my_first_spring_api.exception.TooManyRequestsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -191,6 +192,29 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiErrorDto> handleNoResourceFound(NoResourceFoundException ex) {
         return new ResponseEntity<>(new ApiErrorDto("NOT_FOUND", "The requested endpoint does not exist.", 404), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiErrorDto> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        logger.error("Data integrity violation: ", ex);
+        String message = "A data constraint was violated while processing your request. Please ensure all required fields are filled.";
+        if (ex.getRootCause() != null && ex.getRootCause().getMessage() != null) {
+            String rootMsg = ex.getRootCause().getMessage().toLowerCase();
+            if (rootMsg.contains("buyer_id")) {
+                message = "Please log in to place an order.";
+            } else if (rootMsg.contains("delivery_address")) {
+                message = "Please enter your delivery address.";
+            } else if (rootMsg.contains("society")) {
+                message = "Please select your society or enter your delivery address.";
+            } else if (rootMsg.contains("payment_status")) {
+                message = "Invalid or missing payment status.";
+            } else if (rootMsg.contains("order_status")) {
+                message = "Invalid or missing order status.";
+            } else if (rootMsg.contains("not-null") || rootMsg.contains("null value")) {
+                message = "Missing required information: " + ex.getRootCause().getMessage();
+            }
+        }
+        return new ResponseEntity<>(new ApiErrorDto("DATA_INTEGRITY_VIOLATION", message, 400), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(Exception.class)
