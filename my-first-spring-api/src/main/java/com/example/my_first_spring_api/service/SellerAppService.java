@@ -1070,15 +1070,17 @@ public class SellerAppService {
                 template.getOrderWindowStart(), close, readyBy);
         Product product = new Product(kitchen, template.getName(), template.getDescription(),
                 template.getPrice(), template.getImageUrl());
-        product.setPriceUnit(template.getPriceUnit());
+        product.setPriceUnit(template.getPriceUnit() != null ? template.getPriceUnit() : "portion");
+        product.setUnit(template.getPriceUnit() != null ? template.getPriceUnit() : "portion");
         product.setAvailableDate(offeringDate);
-        product.setAvailableToday(offeringDate.equals(LocalDate.now()) && !preorder);
+        product.setAvailableToday(Boolean.TRUE);
+        product.setIsVeg(Boolean.TRUE);
         product.setOrderWindowStart(template.getOrderWindowStart());
         product.setOrderWindowEnd(close);
         product.setMaxQuantity(template.getMaxQuantity());
         product.setRemainingQuantity(template.getMaxQuantity());
         product.setIsPreorder(preorder);
-        product.setCategory(template.getCategory() != null ? template.getCategory().name() : null);
+        product.setCategory(template.getCategory() != null ? template.getCategory().name() : "DINNER");
         product.setCutoffTime(close);
         product.setReadyByTime(readyBy);
         product.setBookedQuantity(0);
@@ -1114,9 +1116,11 @@ public class SellerAppService {
                 original.getOrderWindowStart(), close, readyBy);
         Product clone = new Product(kitchen, original.getName(), original.getDescription(),
                 original.getPrice(), original.getImageUrl());
-        clone.setPriceUnit(original.getPriceUnit());
+        clone.setPriceUnit(original.getPriceUnit() != null ? original.getPriceUnit() : "portion");
+        clone.setUnit(original.getUnit() != null ? original.getUnit() : "portion");
         clone.setAvailableDate(offeringDate);
-        clone.setAvailableToday(offeringDate.equals(LocalDate.now()) && !preorder);
+        clone.setAvailableToday(Boolean.TRUE);
+        clone.setIsVeg(original.getIsVeg() != null ? original.getIsVeg() : Boolean.TRUE);
         clone.setOrderWindowStart(null);
         clone.setOrderWindowEnd(close);
         Integer independentMax = original.getMaxQuantity() != null && original.getMaxQuantity() > 0
@@ -1124,7 +1128,7 @@ public class SellerAppService {
         clone.setMaxQuantity(independentMax);
         clone.setRemainingQuantity(independentMax);
         clone.setIsPreorder(preorder);
-        clone.setCategory(original.getCategory());
+        clone.setCategory(original.getCategory() != null && !original.getCategory().isBlank() ? original.getCategory() : "DINNER");
         clone.setCutoffTime(close);
         clone.setReadyByTime(readyBy);
         clone.setPreorderType(original.getPreorderType());
