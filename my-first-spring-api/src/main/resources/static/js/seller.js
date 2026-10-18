@@ -370,13 +370,17 @@ function applyOfferingDatePicker(picker) {
     if (hidden && picker.value) hidden.value = picker.value;
     var form = picker.closest('form');
     if (form) {
-        var readyInput = form.querySelector('input[name="readyByTime"]');
+        var closeInput = form.querySelector('input[name="orderWindowEnd"]');
         if (readyInput && readyInput.value && picker.value) {
             var timePart = readyInput.value.length >= 16 ? readyInput.value.slice(11, 16) : '12:30';
             readyInput.value = picker.value + 'T' + timePart;
+            if (closeInput) {
+                var autoClose = calculateOrdersCloseFromReadyBy(readyInput.value);
+                if (autoClose) closeInput.value = autoClose;
+            }
         }
-        var closeInput = form.querySelector('input[name="orderWindowEnd"]');
         if (closeInput) {
+            autoClampOrderWindowEndIfInvalid(form);
             var now = new Date();
             var currentLocalTime = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
             if (picker.value <= sellerDate('today')) {
@@ -1026,7 +1030,7 @@ async function sellerQuickPostView() {
         '<p class="muted small">Leave blank to start accepting orders immediately.</p></div>' +
         '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label>' +
         '<input class="form-input" name="orderWindowEnd" type="time" required>' +
-        '<p class="muted small">Last date/time customers can place an order.</p></div></div>';
+        '<p class="muted small">Last date/time customers can place an order. (Auto-set to 1 hour before delivery)</p></div></div>';
     h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label>' +
         '<input class="form-input" name="readyByTime" type="datetime-local" required>' +
         '<p class="muted small">Date/time by which the order will be ready/delivered.</p></div>';
@@ -1321,7 +1325,7 @@ function computeSmartTimingDefaults(isTomorrow, targetDateIso) {
         var closeMm = ('0' + closeDate.getMinutes()).slice(-2);
         closeHhmm = closeHh + ':' + closeMm;
 
-        var readyDate = new Date(closeDate.getTime() + 45 * 60 * 1000);
+        var readyDate = new Date(closeDate.getTime() + 60 * 60 * 1000);
         var readyHh = ('0' + readyDate.getHours()).slice(-2);
         var readyMm = ('0' + readyDate.getMinutes()).slice(-2);
         readyIso = dateIso + 'T' + readyHh + ':' + readyMm;
@@ -1330,6 +1334,101 @@ function computeSmartTimingDefaults(isTomorrow, targetDateIso) {
         orderWindowEnd: closeHhmm,
         readyByTime: readyIso
     };
+}
+
+/**
+ * Automatically calculates and returns Orders Close (HH:mm) exactly 60 minutes before readyByTime.
+ * Example: Delivery 16:47 -> Orders Close 15:47.
+ */
+function calculateOrdersCloseFromReadyBy(readyByVal) {
+    if (!readyByVal || readyByVal.length < 16) return null;
+    var d = new Date(readyByVal);
+    if (isNaN(d.getTime())) {
+        var parts = readyByVal.split('T');
+        if (parts.length === 2) {
+            var dateParts = parts[0].split('-');
+            var timeParts = parts[1].split(':');
+            d = new Date(Number(dateParts[0]), Number(dateParts[1]) - 1, Number(dateParts[2]), Number(timeParts[0]), Number(timeParts[1]));
+        }
+    }
+    if (isNaN(d.getTime())) return null;
+    var closeMs = d.getTime() - 60 * 60 * 1000;
+    var closeDate = new Date(closeMs);
+    var hh = ('0' + closeDate.getHours()).slice(-2);
+    var mm = ('0' + closeDate.getMinutes()).slice(-2);
+    return hh + ':' + mm;
+}
+
+/**
+ * Auto-clamps Orders Close to a valid time: readyByTime - 45 minutes (or now + 15m if delivery is close).
+ */
+function clampOrdersCloseForReadyBy(readyByVal, availableDate) {
+    if (!readyByVal || readyByVal.length < 16) return null;
+    var d = new Date(readyByVal);
+    if (isNaN(d.getTime())) {
+        var parts = readyByVal.split('T');
+        if (parts.length === 2) {
+            var dateParts = parts[0].split('-');
+            var timeParts = parts[1].split(':');
+            d = new Date(Number(dateParts[0]), Number(dateParts[1]) - 1, Number(dateParts[2]), Number(timeParts[0]), Number(timeParts[1]));
+        }
+    }
+    if (isNaN(d.getTime())) return null;
+    var clampMs = d.getTime() - 45 * 60 * 1000;
+    var nowMs = Date.now();
+    var todayIso = sellerDate('today');
+    var isTodayOrPast = !availableDate || availableDate <= todayIso;
+
+    if (isTodayOrPast && clampMs < nowMs) {
+        if (nowMs + 15 * 60 * 1000 < d.getTime()) {
+            clampMs = nowMs + 15 * 60 * 1000;
+        } else {
+            clampMs = nowMs + Math.max(60 * 1000, Math.floor((d.getTime() - nowMs) / 2));
+        }
+    }
+    var clampDate = new Date(clampMs);
+    var hh = ('0' + clampDate.getHours()).slice(-2);
+    var mm = ('0' + clampDate.getMinutes()).slice(-2);
+    return hh + ':' + mm;
+}
+
+/**
+ * If Orders Close is invalid, empty, past, or after Delivery, auto-clamps it to readyByTime - 45 minutes.
+ */
+function autoClampOrderWindowEndIfInvalid(form) {
+    if (!form) return;
+    var closeInput = form.querySelector('input[name="orderWindowEnd"]');
+    var readyInput = form.querySelector('input[name="readyByTime"]');
+    var availDateInput = form.querySelector('input[name="availableDate"]') || form.querySelector('input[name="chosenOfferingDate"]');
+    if (!closeInput || !readyInput || !readyInput.value) return;
+
+    var availDate = availDateInput ? availDateInput.value : sellerDate('today');
+    var todayIso = sellerDate('today');
+    var now = new Date();
+    var currentHhmm = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
+    var closeVal = (closeInput.value || '').trim();
+    var readyVal = (readyInput.value || '').trim();
+
+    var isPast = (availDate <= todayIso && closeVal && closeVal <= currentHhmm);
+    var isAfterReady = false;
+    if (closeVal && readyVal && readyVal.length >= 16) {
+        var orderingDate = availDate;
+        if (availDate > todayIso) {
+            var orderDate = new Date(availDate + 'T00:00:00');
+            orderDate.setDate(orderDate.getDate() - 1);
+            orderingDate = localDateStr(orderDate);
+        }
+        if (orderingDate + 'T' + closeVal >= readyVal.slice(0, 16)) {
+            isAfterReady = true;
+        }
+    }
+
+    if (isPast || isAfterReady || !closeVal) {
+        var clamped = clampOrdersCloseForReadyBy(readyVal, availDate);
+        if (clamped) {
+            closeInput.value = clamped;
+        }
+    }
 }
 
 /**
@@ -1418,7 +1517,7 @@ function offeringFormHtml(t, opts) {
 
     var closeNote = locked
         ? 'Has orders — can only be extended (currently ' + prettyTime(t.orderWindowEnd) + ').'
-        : 'Last date/time customers can place an order.';
+        : 'Last date/time customers can place an order. (Auto-set to 1 hour before delivery)';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open — Optional</label><input class="form-input" name="orderWindowStart" type="time" value="' + esc(openValue) + '"' + lockAttr + '><p class="muted small">Leave blank to start accepting orders immediately.</p></div>';
     h += '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label><input class="form-input" name="orderWindowEnd" type="time" required value="' + esc(closeValue) + '"' + closeMinAttr + '><p class="muted small">' + esc(closeNote) + '</p></div></div>';
     var readyNote = 'Date/time by which the order will be ready/delivered.';
@@ -2400,6 +2499,7 @@ document.addEventListener('submit', async function (e) {
             if (S.offeringSubmitting) return; // guard against double submit
             S.offeringSubmitting = true;
             if (publishBtn) publishBtn.disabled = true;
+            autoClampOrderWindowEndIfInvalid(form);
             var vals = formVals(form);
             // Optional timing fields: blank means "not provided" -- never send
             // an invalid empty timestamp to the backend.
@@ -2543,6 +2643,7 @@ document.addEventListener('submit', async function (e) {
             // (price, timing, categories, ownership, authorization) applies
             // unchanged, and the result lands in Offerings + buyer discovery
             // with the normal Order button.
+            autoClampOrderWindowEndIfInvalid(form);
             var vals = formVals(form);
             // The seller's post text is the offering's primary content.
             vals.description = message;
@@ -3214,6 +3315,13 @@ document.addEventListener('click', async function (e) {
                      if (readyInput && readyInput.value) {
                          var timePart = readyInput.value.length >= 16 ? readyInput.value.slice(11, 16) : '12:30';
                          readyInput.value = newDate + 'T' + timePart;
+                         if (closeInput) {
+                             var autoClose = calculateOrdersCloseFromReadyBy(readyInput.value);
+                             if (autoClose) closeInput.value = autoClose;
+                         }
+                     }
+                     if (closeInput) {
+                         autoClampOrderWindowEndIfInvalid(form);
                      }
                      validateFormTiming(form);
                  }
@@ -3328,6 +3436,24 @@ document.addEventListener('change', function (e) {
         updateCoverageIdsInput();
         return;
     }
+    if (e.target && e.target.name === 'readyByTime') {
+        var form = e.target.closest('form');
+        if (form) {
+            var closeInput = form.querySelector('input[name="orderWindowEnd"]');
+            if (closeInput && e.target.value) {
+                var autoClose = calculateOrdersCloseFromReadyBy(e.target.value);
+                if (autoClose) {
+                    closeInput.value = autoClose;
+                }
+            }
+        }
+    }
+    if (e.target && e.target.name === 'orderWindowEnd') {
+        var form = e.target.closest('form');
+        if (form) {
+            autoClampOrderWindowEndIfInvalid(form);
+        }
+    }
     var timingInput = e.target.closest('input[name="orderWindowEnd"], input[name="readyByTime"], input[name="orderWindowStart"], input[name="chosenOfferingDate"]');
     if (timingInput) {
         validateFormTiming(timingInput.closest('form'));
@@ -3338,8 +3464,30 @@ document.addEventListener('change', function (e) {
 // across the SPA re-renders that replace #view on every navigation.
 document.addEventListener('input', function (e) {
     if (e.target && e.target.id === 'qpMessage') updateQuickPostCounter();
+    if (e.target && e.target.name === 'readyByTime') {
+        var form = e.target.closest('form');
+        if (form) {
+            var closeInput = form.querySelector('input[name="orderWindowEnd"]');
+            if (closeInput && e.target.value && e.target.value.length >= 16) {
+                var autoClose = calculateOrdersCloseFromReadyBy(e.target.value);
+                if (autoClose) {
+                    closeInput.value = autoClose;
+                }
+            }
+        }
+    }
     if (e.target && (e.target.name === 'orderWindowEnd' || e.target.name === 'readyByTime' || e.target.name === 'orderWindowStart')) {
         validateFormTiming(e.target.closest('form'));
+    }
+});
+
+document.addEventListener('focusout', function (e) {
+    if (e.target && e.target.name === 'orderWindowEnd') {
+        var form = e.target.closest('form');
+        if (form) {
+            autoClampOrderWindowEndIfInvalid(form);
+            validateFormTiming(form);
+        }
     }
 });
 

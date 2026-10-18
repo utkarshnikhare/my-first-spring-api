@@ -297,4 +297,23 @@ class SellerServiceCreateOfferingValidationTest {
         assertThat(parsed.getReadyByTime()).isEqualTo("2026-10-20T13:30");
         assertThat(parsed.getCategories()).containsExactly("Dinner");
     }
+
+    @Test
+    void pastOrdersCloseWithFutureDeliveryIsAutoCorrectedAndAccepted() {
+        allowFutureMenus();
+        ProductCreateDto dto = validDto();
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        dto.setAvailableDate(tomorrow);
+        // Pre-order offering: orderingDate is today.
+        // User accidentally inputs 04:00 (4:00 AM today, in past) instead of 16:00 (4:00 PM).
+        // Delivery is tomorrow at 18:00.
+        dto.setOrderWindowEnd("04:00");
+        dto.setReadyByTime(tomorrow + "T18:00");
+
+        var result = sellerService.createProduct(1L, dto, approvedSeller());
+        assertThat(result).isNotNull();
+        // 04:00 + 12h = 16:00
+        assertThat(result.getOrderWindowEnd()).isEqualTo("16:00");
+        assertThat(result.getCutoffTime()).isEqualTo("16:00");
+    }
 }
