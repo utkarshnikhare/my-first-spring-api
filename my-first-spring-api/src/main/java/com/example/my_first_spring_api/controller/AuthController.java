@@ -113,12 +113,15 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 
-    @PostMapping("/login")
+    @PostMapping(value = {"/login", "/admin", "/admin/login"})
     public ResponseEntity<AuthResponseDto> login(@Valid @RequestBody CredentialLoginRequestDto request,
                                                   HttpServletRequest servletRequest,
                                                   HttpServletResponse response) {
         String mobile = request.getMobileNumber();
         String ip = clientIp(servletRequest);
+        String uri = servletRequest != null ? servletRequest.getRequestURI() : null;
+        boolean isAdmin = (uri != null && uri.contains("/admin"))
+                || (rateLimiter != null && rateLimiter.isAdminMobile(mobile));
         if (rateLimiter != null) {
             // Rejects with 429 when this mobile or IP is currently locked out.
             rateLimiter.assertLoginAllowed(mobile, ip);
@@ -134,7 +137,7 @@ public class AuthController {
                     ? "Logged in with your temporary password. You must set a new password to continue."
                     : "Logged in successfully", servletRequest, response, tempPasswordLogin));
         } catch (InvalidCredentialsException ex) {
-            if (rateLimiter != null && rateLimiter.recordLoginFailure(mobile, ip)) {
+            if (rateLimiter != null && rateLimiter.recordLoginFailure(mobile, ip, isAdmin)) {
                 auditLoginLockout(mobile, ip);
             }
             throw ex;

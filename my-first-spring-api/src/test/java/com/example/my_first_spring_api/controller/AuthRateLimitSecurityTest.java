@@ -19,9 +19,11 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
@@ -108,28 +110,31 @@ class AuthRateLimitSecurityTest {
         registerBuyer(registerIp, mobileB).andExpect(status().isCreated());
         registerBuyer(registerIp, mobileC).andExpect(status().isCreated());
 
-        // Per-mobile: 4 failures + success + 4 more failures stay under the limit.
-        // Without the reset, the second batch would trip the lock (4+1 = 5) and
+        // Per-mobile: (LOGIN_MAX_FAILURES - 1) failures + success + (LOGIN_MAX_FAILURES - 1) more failures stay under the limit.
+        // Without the reset, the second batch would trip the lock and
         // the last attempts would answer 429 instead of 401.
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < AuthRateLimiter.LOGIN_MAX_FAILURES - 1; i++) {
             login(uniqueIp("22"), mobileA, WRONG_PASSWORD).andExpect(status().isUnauthorized());
         }
         login(uniqueIp("23"), mobileA, BUYER_PASSWORD).andExpect(status().isOk());
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < AuthRateLimiter.LOGIN_MAX_FAILURES - 1; i++) {
             login(uniqueIp("24"), mobileA, WRONG_PASSWORD).andExpect(status().isUnauthorized());
         }
 
-        // Per-IP: one user's success must NOT clear the shared counter. Four
+        // Per-IP: one user's success must NOT clear the shared counter. (LOGIN_MAX_FAILURES - 1)
         // failures from B, a success from C, then one more failure from B trips
-        // the IP lock (5); if the success had reset the counter the final login
+        // the IP lock; if the success had reset the counter the final login
         // would succeed. A shared NAT that trips the limit stays limited.
         String sharedIp = uniqueIp("25");
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < AuthRateLimiter.LOGIN_MAX_FAILURES - 1; i++) {
             login(sharedIp, mobileB, WRONG_PASSWORD).andExpect(status().isUnauthorized());
         }
         login(sharedIp, mobileC, BUYER_PASSWORD).andExpect(status().isOk());
         login(sharedIp, mobileB, WRONG_PASSWORD).andExpect(status().isUnauthorized());
-        login(sharedIp, mobileC, BUYER_PASSWORD).andExpect(status().isTooManyRequests());
+        login(sharedIp, mobileC, BUYER_PASSWORD)
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists("Retry-After"))
+                .andExpect(jsonPath("$.message").value(containsString("Too many failed attempts. Please try again in")));
     }
 
     @Test
@@ -142,6 +147,21 @@ class AuthRateLimitSecurityTest {
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.error").value("TOO_MANY_REQUESTS"));
         registerBuyer(uniqueIp("32"), uniqueMobile()).andExpect(status().isCreated());
+    }
+
+    @Test
+    void adminLoginEndpointsPermitGenerousAttempts() throws Exception {
+        String adminIp = uniqueIp("admin");
+        // /admin/login endpoint is open and allows past normal 20-attempt threshold
+        for (int i = 0; i < AuthRateLimiter.LOGIN_MAX_FAILURES + 2; i++) {
+            mvc.perform(post("/admin/login")
+                    .with(csrf())
+                    .header("X-Forwarded-For", adminIp)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(Map.of(
+                            "mobileNumber", "9000000002", "password", "wrong-admin-pass"))))
+                    .andExpect(status().isUnauthorized());
+        }
     }
 
     private ResultActions registerBuyer(String ip, String mobile) throws Exception {

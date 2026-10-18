@@ -15,6 +15,7 @@ import com.example.my_first_spring_api.exception.TemplateNotFoundException;
 import com.example.my_first_spring_api.exception.TooManyRequestsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -137,8 +138,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(TooManyRequestsException.class)
     public ResponseEntity<ApiErrorDto> handleTooManyRequests(TooManyRequestsException ex) {
         logger.warn("Rate limit exceeded: {}", ex.getMessage());
-        return new ResponseEntity<>(new ApiErrorDto("TOO_MANY_REQUESTS", ex.getMessage(), 429),
-                HttpStatus.TOO_MANY_REQUESTS);
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+                .body(new ApiErrorDto("TOO_MANY_REQUESTS", ex.getMessage(), 429));
     }
 
     @ExceptionHandler(ResponseStatusException.class)
