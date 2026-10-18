@@ -3274,3 +3274,140 @@ html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #3321
     display: none;
     line-height: 1.4;
 }
+
+/* 1-Click Quick Meal Presets */
+.meal-presets-card {
+    background: linear-gradient(135deg, #FFF7ED 0%, #FEF3C7 100%);
+    border: 1.5px solid #FDBA74;
+    border-radius: 16px;
+    padding: 16px 18px;
+    margin-bottom: 22px;
+    box-shadow: 0 4px 14px rgba(234, 88, 12, 0.08);
+}
+
+.meal-presets-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.meal-presets-badge {
+    background: #EA580C;
+    color: #FFFFFF;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 3px 9px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.meal-presets-title {
+    font-size: 1.02rem;
+    font-weight: 800;
+    color: #7C2D12;
+}
+
+.meal-presets-sub {
+    font-size: 0.84rem;
+    color: #9A3412;
+    margin: 0 0 12px 0;
+    line-height: 1.4;
+}
+
+.meal-presets-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+@media (max-width: 480px) {
+    .meal-presets-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.btn-meal-preset {
+    background: #FFFFFF;
+    border: 1.5px solid #FED7AA;
+    border-radius: 12px;
+    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    gap: 4px;
+    user-select: none;
+}
+
+.btn-meal-preset:hover {
+    border-color: #EA580C;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(234, 88, 12, 0.16);
+    background: #FFFBF7;
+}
+
+.btn-meal-preset:active,
+.btn-meal-preset.active {
+    background: #FFF7ED;
+    border-color: #EA580C;
+    box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.25);
+}
+
+.btn-meal-preset .preset-icon {
+    font-size: 1.6rem;
+    line-height: 1;
+    margin-bottom: 2px;
+}
+
+.btn-meal-preset .preset-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.btn-meal-preset .preset-name {
+    font-size: 0.92rem;
+    font-weight: 800;
+    color: #1E293B;
+}
+
+.btn-meal-preset .preset-time {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #EA580C;
+    white-space: nowrap;
+}
+
+/* Live 12-Hour AM/PM Time Summary Badge */
+.timing-live-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #ECFDF5;
+    border: 1.5px solid #A7F3D0;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 0.88rem;
+    color: #065F46;
+    line-height: 1.45;
+    margin-top: 8px;
+    margin-bottom: 14px;
+    font-weight: 500;
+    transition: all 0.25s ease;
+}
+
+.timing-live-badge strong {
+    color: #047857;
+    font-weight: 800;
+}
+
+.timing-live-badge .badge-icon {
+    font-size: 1.15rem;
+    flex-shrink: 0;
+}

@@ -1337,10 +1337,9 @@ function computeSmartTimingDefaults(isTomorrow, targetDateIso) {
 }
 
 /**
- * Automatically calculates and returns Orders Close (HH:mm) exactly 60 minutes before readyByTime.
- * Example: Delivery 16:47 -> Orders Close 15:47.
+ * Automatically calculates and returns Orders Close (HH:mm) given readyByTime and offset in minutes.
  */
-function calculateOrdersCloseFromReadyBy(readyByVal) {
+function computeOrdersCloseFromReadyByAndOffset(readyByVal, offsetMinutes) {
     if (!readyByVal || readyByVal.length < 16) return null;
     var d = new Date(readyByVal);
     if (isNaN(d.getTime())) {
@@ -1352,11 +1351,197 @@ function calculateOrdersCloseFromReadyBy(readyByVal) {
         }
     }
     if (isNaN(d.getTime())) return null;
-    var closeMs = d.getTime() - 60 * 60 * 1000;
-    var closeDate = new Date(closeMs);
+    var offsetMs = (offsetMinutes != null ? offsetMinutes : 60) * 60 * 1000;
+    var closeDate = new Date(d.getTime() - offsetMs);
     var hh = ('0' + closeDate.getHours()).slice(-2);
     var mm = ('0' + closeDate.getMinutes()).slice(-2);
     return hh + ':' + mm;
+}
+
+/**
+ * Formats time string (24h or ISO) into friendly 12-hour AM/PM with time-of-day label.
+ * Example: 13:00 -> "1:00 PM (Afternoon)", 12:00 -> "12:00 PM (Noon)", 20:30 -> "8:30 PM (Evening)".
+ */
+function formatFriendlyTime12h(timeStr) {
+    if (!timeStr) return '';
+    var hours, minutes;
+    if (timeStr.indexOf('T') !== -1) {
+        var timePart = timeStr.split('T')[1];
+        var parts = timePart.split(':');
+        hours = parseInt(parts[0], 10);
+        minutes = parseInt(parts[1], 10);
+    } else if (timeStr.indexOf(':') !== -1) {
+        var parts = timeStr.split(':');
+        hours = parseInt(parts[0], 10);
+        minutes = parseInt(parts[1], 10);
+    } else {
+        return timeStr;
+    }
+    if (isNaN(hours) || isNaN(minutes)) return timeStr;
+
+    var ampm = hours >= 12 ? 'PM' : 'AM';
+    var h12 = hours % 12;
+    if (h12 === 0) h12 = 12;
+    var mmStr = ('0' + minutes).slice(-2);
+
+    var period = '';
+    if (hours === 0 && minutes === 0) {
+        period = 'Midnight';
+    } else if (hours === 12 && minutes === 0) {
+        period = 'Noon';
+    } else if (hours < 12) {
+        period = 'Morning';
+    } else if (hours < 17) {
+        period = 'Afternoon';
+    } else if (hours < 21) {
+        period = 'Evening';
+    } else {
+        period = 'Night';
+    }
+
+    return h12 + ':' + mmStr + ' ' + ampm + (period ? ' (' + period + ')' : '');
+}
+
+/**
+ * Updates the live 12-Hour AM/PM schedule badge under the delivery input.
+ */
+function updateLiveTimingBadge(form) {
+    if (!form) return;
+    var badge = form.querySelector('#liveTimingBadge');
+    if (!badge) return;
+    var readyInput = form.querySelector('input[name="readyByTime"]');
+    var closeInput = form.querySelector('input[name="orderWindowEnd"]');
+    var readyVal = readyInput ? (readyInput.value || '').trim() : '';
+    var closeVal = closeInput ? (closeInput.value || '').trim() : '';
+
+    if (readyVal && readyVal.length >= 16 && closeVal) {
+        var readyTimeStr = readyVal.slice(11, 16);
+        var deliveryFriendly = formatFriendlyTime12h(readyTimeStr);
+        var closeFriendly = formatFriendlyTime12h(closeVal);
+        badge.innerHTML = '<span class="badge-icon">⏱️</span> Your offering will be delivered at: <strong>' + esc(deliveryFriendly) + '</strong>. Customers can order until: <strong>' + esc(closeFriendly) + '</strong>.';
+        badge.style.display = 'flex';
+    } else if (readyVal && readyVal.length >= 16) {
+        var readyTimeStr = readyVal.slice(11, 16);
+        badge.innerHTML = '<span class="badge-icon">⏱️</span> Delivery scheduled for: <strong>' + esc(formatFriendlyTime12h(readyTimeStr)) + '</strong>.';
+        badge.style.display = 'flex';
+    } else {
+        badge.innerHTML = '<span class="badge-icon">💡</span> Select your delivery time to preview delivery and order cutoff schedule.';
+        badge.style.display = 'flex';
+    }
+}
+
+/**
+ * 1-Click Quick Meal Preset Handler:
+ * Fills Delivery, Orders Close, Offering date, and category in 1 click.
+ */
+function applyMealPreset(form, presetType) {
+    if (!form || !presetType) return;
+    var now = new Date();
+    var tomorrowDate = sellerDate('tomorrow');
+    var todayDate = sellerDate('today');
+
+    var readyInput = form.querySelector('input[name="readyByTime"]');
+    var closeInput = form.querySelector('input[name="orderWindowEnd"]');
+    var offsetSelect = form.querySelector('#orderCloseOffsetSelect');
+    var customRow = form.querySelector('#customCloseTimeRow');
+    var availDateInput = form.querySelector('input[name="availableDate"]') || form.querySelector('#availDate');
+    var chooseDateRow = form.querySelector('#chooseDateRow');
+
+    var targetDelivery = '';
+    var targetClose = '';
+    var targetMode = 'tomorrow';
+    var targetCategory = 'LUNCH';
+    var targetOffset = '90';
+
+    if (presetType === 'lunch') {
+        // ☀️ Lunch (Tomorrow 1:00 PM): Delivery tomorrow 13:00, Orders Close 11:30 AM, category Lunch
+        targetMode = 'tomorrow';
+        targetDelivery = tomorrowDate + 'T13:00';
+        targetClose = '11:30';
+        targetCategory = 'LUNCH';
+        targetOffset = '90';
+    } else if (presetType === 'dinner') {
+        // 🌙 Dinner (Tonight 8:30 PM): Delivery today 20:30, Orders Close 7:00 PM, category Dinner. If after 20:00, tomorrow.
+        var isAfter20 = now.getHours() >= 20;
+        targetMode = isAfter20 ? 'tomorrow' : 'today';
+        var dinnerDate = isAfter20 ? tomorrowDate : todayDate;
+        targetDelivery = dinnerDate + 'T20:30';
+        targetClose = '19:00';
+        targetCategory = 'DINNER';
+        targetOffset = '90';
+    } else if (presetType === 'breakfast') {
+        // 🌅 Breakfast (Tomorrow 9:00 AM): Delivery tomorrow 09:00, Orders Close 7:30 AM, category Breakfast
+        targetMode = 'tomorrow';
+        targetDelivery = tomorrowDate + 'T09:00';
+        targetClose = '07:30';
+        targetCategory = 'BREAKFAST';
+        targetOffset = '90';
+    }
+
+    // 1. Update Offering For radio buttons and hidden input
+    S.offeringFor = targetMode;
+    if (availDateInput) {
+        availDateInput.value = targetMode === 'tomorrow' ? tomorrowDate : todayDate;
+    }
+    if (chooseDateRow) {
+        chooseDateRow.hidden = true;
+    }
+    var radioGroup = form.querySelector('#offeringForGroup');
+    if (radioGroup) {
+        var radios = radioGroup.querySelectorAll('.radio-option');
+        radios.forEach(function (r) {
+            if (r.getAttribute('data-value') === targetMode) {
+                r.classList.add('selected');
+            } else {
+                r.classList.remove('selected');
+            }
+        });
+    }
+
+    // 2. Set Delivery / Ready By
+    if (readyInput) {
+        readyInput.value = targetDelivery;
+    }
+
+    // 3. Set Orders Close
+    if (closeInput) {
+        closeInput.value = targetClose;
+    }
+    if (offsetSelect) {
+        offsetSelect.value = targetOffset;
+    }
+    if (customRow) {
+        customRow.style.display = 'none';
+    }
+
+    // 4. Update Categories
+    var catBoxes = form.querySelectorAll('input[name="categories"]');
+    catBoxes.forEach(function (cb) {
+        cb.checked = (cb.value === targetCategory);
+    });
+
+    // 5. Update Preset buttons active state
+    var presetBtns = form.querySelectorAll('.btn-meal-preset');
+    presetBtns.forEach(function (btn) {
+        if (btn.getAttribute('data-preset') === presetType) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // 6. Update Live Badge and form timing validation
+    updateLiveTimingBadge(form);
+    validateFormTiming(form);
+    toast('Applied ' + (targetCategory.charAt(0) + targetCategory.slice(1).toLowerCase()) + ' preset!', 'info');
+}
+
+/**
+ * Automatically calculates and returns Orders Close (HH:mm) exactly 60 minutes before readyByTime.
+ * Example: Delivery 16:47 -> Orders Close 15:47.
+ */
+function calculateOrdersCloseFromReadyBy(readyByVal) {
+    return computeOrdersCloseFromReadyByAndOffset(readyByVal, 60);
 }
 
 /**
@@ -1448,6 +1633,24 @@ function offeringFormHtml(t, opts) {
     var selectedUnit = t.priceUnit || 'Per Piece';
     var categoryValues = String(t.category || '').split(',').map(function (c) { return c.trim().toUpperCase(); }).filter(Boolean);
     var h = '<form class="seller-form" id="' + (opts.formId || 'createOfferingForm') + '">';
+    if (!isEdit) {
+        var isAfter8pm = (new Date()).getHours() >= 20;
+        var dinnerLabel = isAfter8pm ? 'Tomorrow 8:30 PM' : 'Tonight 8:30 PM';
+        h += '<div class="meal-presets-card">';
+        h += '<div class="meal-presets-head"><span class="meal-presets-badge">⚡ Quick Start</span> <span class="meal-presets-title">1-Click Quick Meal Presets</span></div>';
+        h += '<p class="meal-presets-sub">Tap any preset to auto-fill delivery time, cutoff, and category:</p>';
+        h += '<div class="meal-presets-grid">';
+        h += '<button type="button" class="btn-meal-preset" data-action="apply-preset" data-preset="lunch">';
+        h += '<span class="preset-icon">☀️</span><div class="preset-info"><span class="preset-name">Lunch</span><span class="preset-time">Tomorrow 1:00 PM</span></div>';
+        h += '</button>';
+        h += '<button type="button" class="btn-meal-preset" data-action="apply-preset" data-preset="dinner">';
+        h += '<span class="preset-icon">🌙</span><div class="preset-info"><span class="preset-name">Dinner</span><span class="preset-time">' + esc(dinnerLabel) + '</span></div>';
+        h += '</button>';
+        h += '<button type="button" class="btn-meal-preset" data-action="apply-preset" data-preset="breakfast">';
+        h += '<span class="preset-icon">🌅</span><div class="preset-info"><span class="preset-name">Breakfast</span><span class="preset-time">Tomorrow 9:00 AM</span></div>';
+        h += '</button>';
+        h += '</div></div>';
+    }
     h += '<div class="form-group"><label class="form-label">Photos <span class="req">*</span></label><div class="photo-upload-row"><div class="photo-tile" data-action="add-photo">' + (isEdit && sellerImg(t.imageUrl) ? '<img src="' + esc(sellerImg(t.imageUrl)) + '" alt="' + esc(t.name) + '" onerror="imgFallback(this)">' : '+') + '</div></div></div>';
     h += '<div class="form-group"><label class="form-label">Item Name <span class="req">*</span></label><input class="form-input" name="name" value="' + esc(t.name || '') + '" placeholder="e.g. POHA" required' + lockAttr + '></div>';
     h += '<div class="form-group"><label class="form-label">Short Description</label><textarea class="form-textarea" name="description">' + esc(t.description || '') + '</textarea></div>';
@@ -1515,11 +1718,6 @@ function offeringFormHtml(t, opts) {
     var closeMinAttr = (!isEdit && chosenDate <= todayIso) ? ' min="' + currentLocalTime + '"' : '';
     var readyMinAttr = (!locked) ? ' min="' + currentLocalIso + '"' : '';
 
-    var closeNote = locked
-        ? 'Has orders — can only be extended (currently ' + prettyTime(t.orderWindowEnd) + ').'
-        : 'Last date/time customers can place an order. (Auto-set to 1 hour before delivery)';
-    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open — Optional</label><input class="form-input" name="orderWindowStart" type="time" value="' + esc(openValue) + '"' + lockAttr + '><p class="muted small">Leave blank to start accepting orders immediately.</p></div>';
-    h += '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label><input class="form-input" name="orderWindowEnd" type="time" required value="' + esc(closeValue) + '"' + closeMinAttr + '><p class="muted small">' + esc(closeNote) + '</p></div></div>';
     var readyNote = 'Date/time by which the order will be ready/delivered.';
     if (locked) {
         var readyDisplay = t.readyByTime
@@ -1530,7 +1728,37 @@ function offeringFormHtml(t, opts) {
         if (isEdit && t.readyByTime && !readyIso) readyNote = 'Saved value: ' + t.readyByTime + '. Pick a new date/time to replace it.';
         h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTime" type="datetime-local"' + (isEdit ? '' : ' required') + ' value="' + esc(readyIso ? initialReady.slice(0, 16) : '') + '"' + readyMinAttr + '><p class="muted small">' + esc(readyNote) + '</p></div>';
     }
+
+    var initialBadge = (readyIso && initialReady && closeValue)
+        ? '<span class="badge-icon">⏱️</span> Your offering will be delivered at: <strong>' + esc(formatFriendlyTime12h(initialReady.slice(11, 16))) + '</strong>. Customers can order until: <strong>' + esc(formatFriendlyTime12h(closeValue)) + '</strong>.'
+        : '<span class="badge-icon">💡</span> Select your delivery time to preview delivery and order cutoff schedule.';
+    h += '<div id="liveTimingBadge" class="timing-live-badge">' + initialBadge + '</div>';
     h += '<div id="timingInlineWarning" class="timing-inline-warning" style="display:none;"></div>';
+
+    var closeNote = locked
+        ? 'Has orders — can only be extended (currently ' + prettyTime(t.orderWindowEnd) + ').'
+        : 'Stop taking orders before food delivery.';
+    h += '<div class="form-row-2">';
+    h += '<div class="form-group" id="orderCloseGroup"><label class="form-label">Orders Close <span class="req">*</span></label>';
+    if (locked) {
+        h += '<input class="form-input" name="orderWindowEnd" type="time" required value="' + esc(closeValue) + '"' + closeMinAttr + '><p class="muted small">' + esc(closeNote) + '</p>';
+    } else {
+        h += '<select class="form-select" id="orderCloseOffsetSelect" name="orderCloseOffset">';
+        h += '<option value="60" selected>Stop taking orders: 1 hour before delivery (Recommended)</option>';
+        h += '<option value="90">Stop taking orders: 1.5 hours before delivery</option>';
+        h += '<option value="120">Stop taking orders: 2 hours before delivery</option>';
+        h += '<option value="30">Stop taking orders: 30 minutes before delivery</option>';
+        h += '<option value="custom">Custom time</option>';
+        h += '</select>';
+        h += '<div id="customCloseTimeRow" style="display:none;" class="mt-1">';
+        h += '<label class="form-label small muted">Exact Cutoff Time (HH:mm)</label>';
+        h += '<input class="form-input" name="orderWindowEnd" type="time" value="' + esc(closeValue) + '"' + closeMinAttr + '>';
+        h += '</div>';
+        h += '<p class="muted small">' + esc(closeNote) + '</p>';
+    }
+    h += '</div>';
+    h += '<div class="form-group"><label class="form-label">Orders Open — Optional</label><input class="form-input" name="orderWindowStart" type="time" value="' + esc(openValue) + '"' + lockAttr + '><p class="muted small">Leave blank to start accepting orders immediately.</p></div>';
+    h += '</div>';
     var qtyValue = '', qtyAttr = '', qtyNote = 'Leave blank for unlimited quantity.';
     if (isEdit) {
         if (t.maxQuantity == null) {
@@ -2804,6 +3032,12 @@ document.addEventListener('click', async function (e) {
     if (a === 'set-delivered') return;
     try {
         switch (a) {
+            case 'apply-preset':
+                e.preventDefault();
+                var presetForm = t.closest('form');
+                var presetType = t.getAttribute('data-preset');
+                applyMealPreset(presetForm, presetType);
+                break;
             case 'go-back': history.back(); break;
             case 'noop': break;
             case 'seller-show-register':
@@ -3466,22 +3700,49 @@ document.addEventListener('change', function (e) {
         updateCoverageIdsInput();
         return;
     }
+    if (e.target && e.target.id === 'orderCloseOffsetSelect') {
+        var form = e.target.closest('form');
+        if (form) {
+            var customRow = form.querySelector('#customCloseTimeRow');
+            var closeInput = form.querySelector('input[name="orderWindowEnd"]');
+            var readyInput = form.querySelector('input[name="readyByTime"]');
+            if (e.target.value === 'custom') {
+                if (customRow) customRow.style.display = 'block';
+                if (closeInput) closeInput.focus();
+            } else {
+                if (customRow) customRow.style.display = 'none';
+                var offset = parseInt(e.target.value, 10) || 60;
+                if (readyInput && readyInput.value && closeInput) {
+                    var calculated = computeOrdersCloseFromReadyByAndOffset(readyInput.value, offset);
+                    if (calculated) closeInput.value = calculated;
+                }
+            }
+            updateLiveTimingBadge(form);
+            validateFormTiming(form);
+        }
+    }
     if (e.target && e.target.name === 'readyByTime') {
         var form = e.target.closest('form');
         if (form) {
+            var offsetSelect = form.querySelector('#orderCloseOffsetSelect');
             var closeInput = form.querySelector('input[name="orderWindowEnd"]');
             if (closeInput && e.target.value) {
-                var autoClose = calculateOrdersCloseFromReadyBy(e.target.value);
-                if (autoClose) {
-                    closeInput.value = autoClose;
+                if (!offsetSelect || offsetSelect.value !== 'custom') {
+                    var offset = offsetSelect ? (parseInt(offsetSelect.value, 10) || 60) : 60;
+                    var autoClose = computeOrdersCloseFromReadyByAndOffset(e.target.value, offset);
+                    if (autoClose) {
+                        closeInput.value = autoClose;
+                    }
                 }
             }
+            updateLiveTimingBadge(form);
         }
     }
     if (e.target && e.target.name === 'orderWindowEnd') {
         var form = e.target.closest('form');
         if (form) {
             autoClampOrderWindowEndIfInvalid(form);
+            updateLiveTimingBadge(form);
         }
     }
     var timingInput = e.target.closest('input[name="orderWindowEnd"], input[name="readyByTime"], input[name="orderWindowStart"], input[name="chosenOfferingDate"]');
@@ -3497,13 +3758,24 @@ document.addEventListener('input', function (e) {
     if (e.target && e.target.name === 'readyByTime') {
         var form = e.target.closest('form');
         if (form) {
+            var offsetSelect = form.querySelector('#orderCloseOffsetSelect');
             var closeInput = form.querySelector('input[name="orderWindowEnd"]');
             if (closeInput && e.target.value && e.target.value.length >= 16) {
-                var autoClose = calculateOrdersCloseFromReadyBy(e.target.value);
-                if (autoClose) {
-                    closeInput.value = autoClose;
+                if (!offsetSelect || offsetSelect.value !== 'custom') {
+                    var offset = offsetSelect ? (parseInt(offsetSelect.value, 10) || 60) : 60;
+                    var autoClose = computeOrdersCloseFromReadyByAndOffset(e.target.value, offset);
+                    if (autoClose) {
+                        closeInput.value = autoClose;
+                    }
                 }
             }
+            updateLiveTimingBadge(form);
+        }
+    }
+    if (e.target && e.target.name === 'orderWindowEnd') {
+        var form = e.target.closest('form');
+        if (form) {
+            updateLiveTimingBadge(form);
         }
     }
     if (e.target && (e.target.name === 'orderWindowEnd' || e.target.name === 'readyByTime' || e.target.name === 'orderWindowStart')) {
@@ -3516,6 +3788,7 @@ document.addEventListener('focusout', function (e) {
         var form = e.target.closest('form');
         if (form) {
             autoClampOrderWindowEndIfInvalid(form);
+            updateLiveTimingBadge(form);
             validateFormTiming(form);
         }
     }

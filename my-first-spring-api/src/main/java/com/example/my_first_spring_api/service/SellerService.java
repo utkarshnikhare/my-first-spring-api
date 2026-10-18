@@ -224,20 +224,24 @@ public class SellerService {
         boolean preorder = !recurringRequest && (dto.getIsPreorder() != null
                 ? dto.getIsPreorder() : offeringDate.isAfter(today));
         if (!recurringRequest && offeringDate.isAfter(today) && !preorder) {
-            throw new IllegalArgumentException("Future offerings must be pre-orders.");
+            preorder = true;
         }
         if (preorder && !offeringDate.isAfter(today)) {
-            throw new IllegalArgumentException("Pre-orders must be for a future offering date.");
+            preorder = false;
         }
         // Validate authoritative offering input before platform feature gating so
         // malformed requests receive the actionable field error, not a feature error.
         String orderWindowStart = OfferingTiming.normalizeHhmm(dto.getOrderWindowStart(), "Orders Open");
-        String orderWindowEnd = OfferingTiming.requireOrdersClose(dto.getOrderWindowEnd());
+        String orderWindowEnd = dto.getOrderWindowEnd() != null && !dto.getOrderWindowEnd().isBlank()
+                ? OfferingTiming.normalizeHhmm(dto.getOrderWindowEnd(), "Orders Close")
+                : null;
         String readyByTime = dto.getReadyByTime() == null ? null : dto.getReadyByTime().trim();
         Integer maxQuantity = dto.getMaxQuantity();
         if (recurringRequest) {
             RecurringScheduleDto rule = dto.getRecurringSchedule();
-            orderWindowEnd = OfferingTiming.requireOrdersClose(rule.getDefaultOrderCloseTime());
+            orderWindowEnd = rule.getDefaultOrderCloseTime() != null && !rule.getDefaultOrderCloseTime().isBlank()
+                    ? OfferingTiming.normalizeHhmm(rule.getDefaultOrderCloseTime(), "Orders Close")
+                    : "23:59";
             readyByTime = rule.getDefaultReadyByTime() == null ? null : rule.getDefaultReadyByTime().trim();
             maxQuantity = rule.getDefaultQuantity();
         }
