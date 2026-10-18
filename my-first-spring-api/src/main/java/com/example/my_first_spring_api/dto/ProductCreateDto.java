@@ -22,6 +22,7 @@ public class ProductCreateDto {
 
     private String priceUnit;
     private String imageUrl;
+    @JsonAlias({"is_available", "isAvailable"})
     private Boolean availableToday;
     @NotNull(message = "Offering For is required")
     @JsonAlias({"offeringDate", "date"})

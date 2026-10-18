@@ -250,11 +250,57 @@ class SellerServiceCreateOfferingValidationTest {
     }
 
     @Test
-    void nullKitchenIdThrowsWhenSellerHasNoKitchen() {
+    void nullKitchenIdBootstrapsDefaultKitchenWhenSellerHasNoKitchen() {
+        allowFutureMenus();
+        User seller = approvedSeller();
+        Kitchen bootstrapped = new Kitchen("seller-s-kitchen", "Seller's Kitchen", "", null, seller);
+        bootstrapped.setId(99L);
         when(kitchenRepository.findBySeller(any(User.class))).thenReturn(List.of());
+        when(kitchenRepository.findByName(anyString())).thenReturn(Optional.empty());
+        when(kitchenRepository.findBySlug(anyString())).thenReturn(Optional.empty());
+        when(kitchenRepository.saveAndFlush(any(Kitchen.class))).thenReturn(bootstrapped);
+
         ProductCreateDto dto = validDto();
-        assertThrows(com.example.my_first_spring_api.exception.KitchenNotFoundException.class,
-                () -> sellerService.createProduct(null, dto, approvedSeller()));
+        var result = sellerService.createProduct(null, dto, seller);
+        assertThat(result).isNotNull();
+        assertThat(result.getKitchenId()).isNotNull();
+    }
+
+    @Test
+    void createOfferingWithMobilePayloadOmittedKitchenIdSavesCleanlyWithNonNullKitchenAndCategory() {
+        allowFutureMenus();
+        User seller = approvedSeller();
+        Kitchen bootstrapped = new Kitchen("seller-s-kitchen", "Seller's Kitchen", "", null, seller);
+        bootstrapped.setId(42L);
+        when(kitchenRepository.findBySeller(any(User.class))).thenReturn(List.of());
+        when(kitchenRepository.findByName(anyString())).thenReturn(Optional.empty());
+        when(kitchenRepository.findBySlug(anyString())).thenReturn(Optional.empty());
+        when(kitchenRepository.saveAndFlush(any(Kitchen.class))).thenReturn(bootstrapped);
+
+        LocalDate tomorrow = LocalDate.now(com.example.my_first_spring_api.AppTimeZone.ZONE).plusDays(1);
+        ProductCreateDto dto = new ProductCreateDto();
+        dto.setName("Special Dinner Thali");
+        dto.setDescription(null);
+        dto.setPrice(new BigDecimal("180.00"));
+        dto.setPriceUnit("Per Plate");
+        dto.setAvailableDate(tomorrow);
+        dto.setOrderWindowStart(null);
+        dto.setOrderWindowEnd("11:30");
+        dto.setReadyByTime(tomorrow + "T12:15");
+        dto.setCategories(List.of("Dinner"));
+        dto.setMaxQuantity(25);
+
+        // Omitted kitchenId (null), Delivery: tomorrow 12:15, Category: Dinner
+        var result = sellerService.createProduct(null, dto, seller);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getKitchenId()).isNotNull();
+        assertThat(result.getKitchenId()).isEqualTo(42L);
+        assertThat(result.getCategory()).isNotNull();
+        assertThat(result.getCategory()).isEqualTo("DINNER");
+        assertThat(result.getDescription()).isNotNull();
+        assertThat(result.getDescription()).isEqualTo("");
+        assertThat(result.getAvailableDate()).isEqualTo(tomorrow);
     }
 
     @Test

@@ -217,13 +217,13 @@ public class SellerService {
     }
 
     public ProductDto createProduct(Long kitchenId, ProductCreateDto dto, User seller) {
-        Kitchen kitchen = getOwnedKitchen(kitchenId, seller);
-        LocalDate offeringDate = dto.getAvailableDate();
+        Kitchen kitchen = resolveOfferingKitchen(kitchenId, seller);
         LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        LocalDate offeringDate = dto.getAvailableDate() != null ? dto.getAvailableDate() : today;
         boolean recurringRequest = dto.getRecurringSchedule() != null;
         boolean preorder = !recurringRequest && (dto.getIsPreorder() != null
-                ? dto.getIsPreorder() : offeringDate != null && offeringDate.isAfter(today));
-        if (!recurringRequest && offeringDate != null && offeringDate.isAfter(today) && !preorder) {
+                ? dto.getIsPreorder() : offeringDate.isAfter(today));
+        if (!recurringRequest && offeringDate.isAfter(today) && !preorder) {
             throw new IllegalArgumentException("Future offerings must be pre-orders.");
         }
         if (preorder && !offeringDate.isAfter(today)) {
@@ -261,13 +261,17 @@ public class SellerService {
             // time-of-day onto the offering date instead of rejecting a valid
             // offering. Explicit "today"/"tomorrow" intent stays strict below.
             readyByTime = OfferingTiming.rebaseReadyByTimeForOffering(readyByTime, offeringDate);
-            orderWindowEnd = OfferingTiming.validateNewOffering(dto.getAvailableDate(), preorder,
+            orderWindowEnd = OfferingTiming.validateNewOffering(offeringDate, preorder,
                     orderWindowStart, orderWindowEnd, readyByTime);
         }
         assertFeatureCompliance(seller, preorder, offeringDate, dto.getName());
-        Product product = new Product(kitchen, dto.getName(), dto.getDescription(), dto.getPrice(), dto.getImageUrl());
+        String description = dto.getDescription() != null ? dto.getDescription() : "";
+        Product product = new Product(kitchen, dto.getName(), description, dto.getPrice(), dto.getImageUrl());
+        product.setDescription(description);
         product.setPriceUnit(dto.getPriceUnit());
-        product.setAvailableToday(offeringDate.equals(today) && !preorder);
+        product.setAvailableToday(dto.getAvailableToday() != null
+                ? dto.getAvailableToday()
+                : (offeringDate.equals(today) && !preorder));
         product.setAvailableDate(offeringDate);
         product.setOrderWindowStart(orderWindowStart);
         product.setOrderWindowEnd(orderWindowEnd);
@@ -278,7 +282,17 @@ public class SellerService {
         product.setRemainingQuantity(maxQuantity);
         product.setIsPreorder(preorder);
         product.setReadyByTime(readyByTime);
-        product.setCategory(joinCategories(dto.getCategories()));
+
+        String category = joinCategories(dto.getCategories());
+        if (category == null || category.isBlank()) {
+            if (dto.getCategories() != null && !dto.getCategories().isEmpty()) {
+                category = dto.getCategories().get(0).trim().toUpperCase();
+            }
+        }
+        if (category == null || category.isBlank()) {
+            category = "DINNER";
+        }
+        product.setCategory(category);
 
         // Persist the product first so the recurring schedule's product foreign
         // key is valid. The recurring schedule + occurrences are created in the
@@ -490,6 +504,22 @@ public class SellerService {
         return orderService.acknowledgeOrder(orderId, seller);
     }
 
+    private Kitchen resolveOfferingKitchen(Long kitchenId, User seller) {
+        if (kitchenId != null) {
+            Kitchen kitchen = kitchenRepository.findById(kitchenId)
+                    .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
+            if (!kitchen.getSeller().getId().equals(seller.getId())) {
+                throw new SellerNotAuthorizedException("You do not own this kitchen");
+            }
+            return kitchen;
+        }
+        List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
+        if (!kitchens.isEmpty()) {
+            return kitchens.get(0);
+        }
+        return bootstrapDefaultKitchen(seller);
+    }
+
     private Kitchen getOwnedKitchen(Long kitchenId, User seller) {
         if (kitchenId == null) {
             List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
@@ -501,6 +531,46 @@ public class SellerService {
         Kitchen kitchen = kitchenRepository.findById(kitchenId)
                 .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
         if (!kitchen.getSeller().getId().equals(seller.getId())) throw new SellerNotAuthorizedException("You do not own this kitchen");
+        return kitchen;
+    }
+
+    private Kitchen bootstrapDefaultKitchen(User seller) {
+        String sellerName = (seller.getName() != null && !seller.getName().isBlank())
+                ? seller.getName().trim()
+                : "Seller";
+        String displayName = sellerName + "'s Kitchen";
+        String base = SlugService.slugify(displayName);
+        if (base.isBlank()) {
+            base = "kitchen-" + (seller.getId() != null ? seller.getId() : System.currentTimeMillis());
+        }
+        Kitchen kitchen = new Kitchen();
+        kitchen.setDisplayName(displayName);
+        kitchen.setDescription("");
+        kitchen.setSeller(seller);
+        kitchen.setSellerType(com.example.my_first_spring_api.model.SellerType.KITCHEN);
+        kitchen.setAvailableToday(true);
+        if (seller.getSociety() != null && !seller.getSociety().isBlank()) {
+            kitchen.setSociety(seller.getSociety());
+            kitchen.setServiceAreas(seller.getSociety());
+        }
+        if (slugService != null) {
+            slugService.reserveUniqueSlug(kitchen, base);
+        } else {
+            String candidate = base;
+            int counter = 2;
+            while (kitchenRepository.findByName(candidate).isPresent() || kitchenRepository.findBySlug(candidate).isPresent()) {
+                candidate = base + "-" + counter++;
+            }
+            kitchen.setName(candidate);
+            kitchen.setSlug(candidate);
+            kitchen = kitchenRepository.saveAndFlush(kitchen);
+        }
+        if (seller.getSociety() != null && !seller.getSociety().isBlank() && locationService != null) {
+            try {
+                locationService.applyCoverageFromNames(kitchen,
+                        societyDirectory != null ? societyDirectory.validateAndNormalize(seller.getSociety()) : seller.getSociety());
+            } catch (Exception ignored) {}
+        }
         return kitchen;
     }
 

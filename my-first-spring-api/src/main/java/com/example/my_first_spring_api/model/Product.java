@@ -101,11 +101,23 @@ public class Product {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
+        if (description == null) {
+            description = "";
+        }
+        if (category == null || category.isBlank()) {
+            category = "DINNER";
+        }
+        if (availableToday == null) {
+            availableToday = true;
+        }
     }
 
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+        if (description == null) {
+            description = "";
+        }
     }
 
     public Product() {}
@@ -113,9 +125,10 @@ public class Product {
     public Product(Kitchen kitchen, String name, String description, BigDecimal price, String imageUrl) {
         this.kitchen = kitchen;
         this.name = name;
-        this.description = description;
+        this.description = description != null ? description : "";
         this.price = price;
         this.imageUrl = imageUrl;
+        this.availableToday = true;
     }
 
     public Long getId() { return id; }
@@ -124,16 +137,18 @@ public class Product {
     public void setKitchen(Kitchen kitchen) { this.kitchen = kitchen; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+    public String getDescription() { return description != null ? description : ""; }
+    public void setDescription(String description) { this.description = description != null ? description : ""; }
     public BigDecimal getPrice() { return price; }
     public void setPrice(BigDecimal price) { this.price = price; }
     public String getPriceUnit() { return priceUnit; }
     public void setPriceUnit(String priceUnit) { this.priceUnit = priceUnit; }
     public String getImageUrl() { return imageUrl; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
-    public Boolean getAvailableToday() { return availableToday; }
-    public void setAvailableToday(Boolean availableToday) { this.availableToday = availableToday; }
+    public Boolean getAvailableToday() { return availableToday != null ? availableToday : true; }
+    public void setAvailableToday(Boolean availableToday) { this.availableToday = availableToday != null ? availableToday : true; }
+    public Boolean getIsAvailable() { return getAvailableToday(); }
+    public void setIsAvailable(Boolean isAvailable) { setAvailableToday(isAvailable); }
     public Boolean getOrdersPaused() { return ordersPaused; }
     public void setOrdersPaused(Boolean ordersPaused) { this.ordersPaused = ordersPaused; }
     public boolean isOrdersPaused() { return Boolean.TRUE.equals(ordersPaused); }
@@ -151,8 +166,8 @@ public class Product {
     public void setRating(Double rating) { this.rating = rating; }
     public Boolean getIsPreorder() { return isPreorder; }
     public void setIsPreorder(Boolean isPreorder) { this.isPreorder = isPreorder; }
-    public String getCategory() { return category; }
-    public void setCategory(String category) { this.category = category; }
+    public String getCategory() { return category != null && !category.isBlank() ? category : "DINNER"; }
+    public void setCategory(String category) { this.category = (category != null && !category.isBlank()) ? category : "DINNER"; }
     public String getCutoffTime() { return cutoffTime; }
     public void setCutoffTime(String cutoffTime) { this.cutoffTime = cutoffTime; }
     public String getReadyByTime() { return readyByTime; }
