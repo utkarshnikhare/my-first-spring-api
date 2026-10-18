@@ -942,6 +942,9 @@ async function cartRemove(idx) {
 async function goCheckout() {
     var cart = getCart();
     if (!cart || !cart.items || !cart.items.length) { toast('Your order is empty', 'error'); return; }
+    if (!state.user || !state.user.authenticated) {
+        return requireAuth(function () { return goCheckout(); });
+    }
     var note = $('#orderNote') ? $('#orderNote').value.trim() : '';
     try {
         await withAuthGate(async function () {
@@ -959,7 +962,8 @@ async function goCheckout() {
             navigate('#/confirm'); // Draft created once (idempotent) → review → payment
         });
     } catch (err) {
-        if (!(err instanceof ApiError && err.status === 401)) toast(err.message, 'error');
+        var reason = (err && err.data && (err.data.message || err.data.error)) || (err && err.message) || 'Could not prepare checkout. Please try again.';
+        if (!(err instanceof ApiError && err.status === 401)) toast(reason, 'error');
     }
 }
 
@@ -1010,12 +1014,37 @@ function isRecoverableOrderSessionError(err) {
 /** Place the draft order directly with the selected payment status. */
 async function placeOrderWithStatus(paymentStatus) {
     if (state.placingOrder) return;
+    if (!state.user || !state.user.authenticated) {
+        return requireAuth(function () { return placeOrderWithStatus(paymentStatus); });
+    }
     var note = (state.pendingCheckout && state.pendingCheckout.note) || '';
     state.placingOrder = true;
     try {
         await withAuthGate(async function () {
             var submittedPaymentStatus = paymentStatus === 'WILL_PAY_LATER' ? 'PENDING' : paymentStatus;
-            var placeBody = { paymentStatus: submittedPaymentStatus, customInstructions: note };
+            var buyerDetails = null;
+            if (state.user) {
+                var addr = [state.user.flatHouseNumber, state.user.building, state.user.society].filter(Boolean).join(', ');
+                buyerDetails = {
+                    name: state.user.name || '',
+                    phone: state.user.mobileNumber || '',
+                    mobileNumber: state.user.mobileNumber || '',
+                    society: state.user.society || '',
+                    societyId: state.user.societyId || (state.user.societyRef ? state.user.societyRef.id : null),
+                    building: state.user.building || '',
+                    flatHouseNumber: state.user.flatHouseNumber || '',
+                    deliveryAddress: addr
+                };
+            }
+            var placeBody = {
+                paymentStatus: submittedPaymentStatus,
+                customInstructions: note,
+                specialInstructions: note,
+                deliveryAddress: buyerDetails ? buyerDetails.deliveryAddress : '',
+                society: buyerDetails ? buyerDetails.society : '',
+                societyId: buyerDetails ? buyerDetails.societyId : null,
+                buyerDetails: buyerDetails
+            };
             var placed;
             try {
                 placed = await api('/api/buyer/orders/place', { method: 'POST', body: placeBody });
@@ -1037,10 +1066,11 @@ async function placeOrderWithStatus(paymentStatus) {
             navigate('#/payment-success');
         });
     } catch (err) {
-        if (!(err instanceof ApiError && err.status === 401)) toast(err.message, 'error');
+        var reason = (err && err.data && (err.data.message || err.data.error)) || (err && err.message) || 'Could not place order. Please try again.';
+        if (!(err instanceof ApiError && err.status === 401)) toast(reason, 'error');
         // This screen is now unusable, so return the buyer to their cart, where
         // the selection is still present and the order can simply be retried.
-        if (err instanceof ApiError && (err.status === 400 || err.status === 404)) {
+        if (err instanceof ApiError && (err.status === 400 || err.status === 404 || err.status === 422)) {
             await render();
             navigate('#/summary');
         }
@@ -1228,6 +1258,9 @@ async function paymentView() {
 /** Confirm payment: processing state → place real order via API → success screen. */
 async function confirmPayment(btnEl) {
     if (state.placingOrder) return; // idempotency guard: no double submissions
+    if (!state.user || !state.user.authenticated) {
+        return requireAuth(function () { return confirmPayment(btnEl); });
+    }
     var note = (state.pendingCheckout && state.pendingCheckout.note) || '';
     var cod = btnEl && btnEl.dataset.cod === '1';
     state.placingOrder = true;
@@ -1238,9 +1271,32 @@ async function confirmPayment(btnEl) {
     }
     try {
         await withAuthGate(async function () {
+            var buyerDetails = null;
+            if (state.user) {
+                var addr = [state.user.flatHouseNumber, state.user.building, state.user.society].filter(Boolean).join(', ');
+                buyerDetails = {
+                    name: state.user.name || '',
+                    phone: state.user.mobileNumber || '',
+                    mobileNumber: state.user.mobileNumber || '',
+                    society: state.user.society || '',
+                    societyId: state.user.societyId || (state.user.societyRef ? state.user.societyRef.id : null),
+                    building: state.user.building || '',
+                    flatHouseNumber: state.user.flatHouseNumber || '',
+                    deliveryAddress: addr
+                };
+            }
+            var placeBody = {
+                paymentStatus: cod ? 'PENDING' : 'PAID',
+                customInstructions: note,
+                specialInstructions: note,
+                deliveryAddress: buyerDetails ? buyerDetails.deliveryAddress : '',
+                society: buyerDetails ? buyerDetails.society : '',
+                societyId: buyerDetails ? buyerDetails.societyId : null,
+                buyerDetails: buyerDetails
+            };
             var placed = await api('/api/buyer/orders/place', {
                 method: 'POST',
-                body: { paymentStatus: cod ? 'PENDING' : 'PAID', customInstructions: note }
+                body: placeBody
             });
             clearCart();
             state.pendingCheckout = null;
@@ -1249,7 +1305,8 @@ async function confirmPayment(btnEl) {
         });
     } catch (err) {
         if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = original; }
-        if (!(err instanceof ApiError && err.status === 401)) toast(err.message, 'error');
+        var reason = (err && err.data && (err.data.message || err.data.error)) || (err && err.message) || 'Could not place order. Please try again.';
+        if (!(err instanceof ApiError && err.status === 401)) toast(reason, 'error');
     } finally {
         state.placingOrder = false;
     }

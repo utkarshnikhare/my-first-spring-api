@@ -2,6 +2,7 @@ package com.example.my_first_spring_api.service;
 
 import com.example.my_first_spring_api.dto.OrderDto;
 import com.example.my_first_spring_api.dto.OrderItemRequest;
+import com.example.my_first_spring_api.dto.PlaceOrderRequest;
 import com.example.my_first_spring_api.exception.BuyerProfileIncompleteException;
 import com.example.my_first_spring_api.exception.OrderNotFoundException;
 import com.example.my_first_spring_api.exception.ProductNotFoundException;
@@ -10,6 +11,7 @@ import com.example.my_first_spring_api.repository.*;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -305,5 +307,108 @@ class OrderServiceValidationTest {
         assertThrows(BuyerProfileIncompleteException.class, () -> {
             orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, null, null, httpSession);
         });
+    }
+
+    @Test
+    void endToEndOrderPlacementWithCartItemsPopulatesAllRequiredColumnsCleanly() {
+        Kitchen kitchen = approvedKitchen();
+        kitchen.setId(1L);
+        kitchen.setSociety("Sunshine Society");
+        when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
+
+        Product product = new Product(kitchen, "Poha", "desc", BigDecimal.valueOf(40), null);
+        product.setId(1L);
+        product.setAvailableToday(true);
+        product.setRemainingQuantity(10);
+        product.setMaxQuantity(10);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(productRepository.consumeStock(any(Long.class), any(Integer.class))).thenReturn(1);
+
+        User buyer = new User("Rahul Sharma", "9876543210", "A-101", UserRole.BUYER);
+        buyer.setId(20L);
+        buyer.setSociety("Sunshine Society");
+        buyer.setBuilding("Tower 1");
+        buyer.setFlatHouseNumber("A-101");
+        when(userRepository.findById(20L)).thenReturn(Optional.of(buyer));
+        when(httpSession.getAttribute("BUYER_USER")).thenReturn(20L);
+
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
+            Order o = inv.getArgument(0);
+            if (o.getId() == null) o.setId(100L);
+            o.ensureNonNullFields();
+            return o;
+        });
+
+        OrderItemRequest itemReq = new OrderItemRequest();
+        itemReq.setProductId(1L);
+        itemReq.setQuantity(2);
+
+        OrderDto draftDto = orderService.createOrUpdateDraftOrder(1L, List.of(itemReq), httpSession);
+        assertThat(draftDto.getId()).isEqualTo(100L);
+
+        Order draftOrder = new Order();
+        draftOrder.setId(100L);
+        draftOrder.setKitchen(kitchen);
+        draftOrder.setBuyer(buyer);
+        draftOrder.setOrderStatus(OrderStatus.DRAFT);
+        draftOrder.setOrderNumber("ORD-100-TEST");
+        OrderItem orderItem = new OrderItem();
+        orderItem.setId(10L);
+        orderItem.setOrder(draftOrder);
+        orderItem.setProduct(product);
+        orderItem.setQuantity(2);
+        orderItem.setPrice(product.getPrice());
+        draftOrder.setItems(new java.util.ArrayList<>(List.of(orderItem)));
+
+        when(httpSession.getAttribute(OrderService.DRAFT_ORDER_SESSION_KEY)).thenReturn(100L);
+        when(orderRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(draftOrder));
+
+        PlaceOrderRequest.BuyerDetails details = new PlaceOrderRequest.BuyerDetails();
+        details.setName("Rahul Sharma");
+        details.setPhone("9876543210");
+        details.setSociety("Sunshine Society");
+        details.setBuilding("Tower 1");
+        details.setFlatHouseNumber("A-101");
+        details.setDeliveryAddress("A-101, Tower 1, Sunshine Society");
+
+        OrderDto placedDto = orderService.placeOrder(PaymentStatus.PENDING, details, "Leave at door", httpSession);
+
+        assertThat(placedDto).isNotNull();
+        assertThat(placedDto.getId()).isEqualTo(100L);
+        assertThat(placedDto.getOrderNumber()).isNotBlank();
+        assertThat(placedDto.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(placedDto.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
+
+        ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
+        verify(orderRepository, atLeastOnce()).save(orderCaptor.capture());
+        Order finalOrder = orderCaptor.getValue();
+
+        assertThat(finalOrder.getBuyer()).isNotNull();
+        assertThat(finalOrder.getKitchen()).isNotNull();
+        assertThat(finalOrder.getOrderNumber()).isNotBlank();
+        assertThat(finalOrder.getOrderStatus()).isNotNull().isNotEqualTo(OrderStatus.DRAFT);
+        assertThat(finalOrder.getPaymentStatus()).isNotNull();
+        assertThat(finalOrder.getStatus()).isNotNull();
+        assertThat(finalOrder.getDeliveryAddress()).isNotBlank();
+        assertThat(finalOrder.getSpecialInstructions()).isEqualTo("Leave at door");
+        assertThat(finalOrder.getItems()).isNotEmpty();
+        for (OrderItem item : finalOrder.getItems()) {
+            assertThat(item.getProduct()).isNotNull();
+            assertThat(item.getPrice()).isNotNull().isGreaterThan(BigDecimal.ZERO);
+            assertThat(item.getQuantity()).isNotNull().isGreaterThan(0);
+        }
+    }
+
+    @Test
+    void orderEntityPrePersistDefaultsEnsureNonNullConstraints() {
+        Order order = new Order();
+        order.ensureNonNullFields();
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(order.getOrderStatus()).isEqualTo(OrderStatus.DRAFT);
+        assertThat(order.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(order.getSpecialInstructions()).isEqualTo("");
+        assertThat(order.getDeliveryAddress()).isEqualTo("");
+        assertThat(order.getOrderNumber()).isNotBlank();
     }
 }

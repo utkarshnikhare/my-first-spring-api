@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/buyer/orders")
+@RequestMapping({"/api/buyer/orders", "/api/orders"})
 public class BuyerOrderController {
 
     private final OrderService orderService;
@@ -52,15 +52,24 @@ public class BuyerOrderController {
         return ResponseEntity.ok(Map.of("message", "Draft order cleared"));
     }
 
-    @PostMapping("/place")
+    @PostMapping(path = {"", "/place"})
     public ResponseEntity<OrderDto> placeOrder(@Valid @RequestBody PlaceOrderRequest request, HttpSession session) {
         User buyer = buyerService.requireCurrentBuyer(session);
+        if (request.getItems() != null && !request.getItems().isEmpty()) {
+            Long kitchenId = request.getKitchenId();
+            if (kitchenId == null && !request.getItems().isEmpty()) {
+                kitchenId = orderService.resolveKitchenIdForProduct(request.getItems().get(0).getProductId());
+            }
+            if (kitchenId != null) {
+                orderService.createOrUpdateDraftOrder(kitchenId, request.getItems(), session);
+            }
+        }
         return ResponseEntity.ok(orderService.placeOrder(
                 request.getPaymentStatus(), request.getBuyerDetails(),
                 request.getCustomInstructions(), session));
     }
 
-    @GetMapping("/my")
+    @GetMapping({"/my", ""})
     public ResponseEntity<Map<String, List<OrderDto>>> getMyOrders(HttpSession session) {
         User buyer = buyerService.requireCurrentBuyer(session);
         return ResponseEntity.ok(orderService.getMyOrders(buyer));

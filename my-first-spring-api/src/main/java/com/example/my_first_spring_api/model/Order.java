@@ -35,6 +35,15 @@ public class Order {
     @Column(name = "order_status", nullable = false)
     private OrderStatus orderStatus = OrderStatus.DRAFT;
 
+    @Transient
+    private OrderStatus status = OrderStatus.PENDING;
+
+    @Transient
+    private String specialInstructions = "";
+
+    @Transient
+    private String deliveryAddress = "";
+
     /**
      * Seller-recorded delivery completion (V1 tracker). Deliberately independent
      * of {@link #orderStatus} and {@link #paymentStatus}: marking an order
@@ -71,7 +80,7 @@ public class Order {
     private User deliveryUpdatedBy;
 
     @Column(name = "custom_instructions", columnDefinition = "TEXT")
-    private String customInstructions;
+    private String customInstructions = "";
 
     @Column(name = "rating")
     private Integer rating;
@@ -105,23 +114,57 @@ public class Order {
     private LocalDateTime updatedAt;
 
     @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
-    }
-
     @PreUpdate
-    protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+    public void ensureNonNullFields() {
+        if (this.createdAt == null) this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+        if (this.orderNumber == null || this.orderNumber.isBlank()) {
+            this.orderNumber = "ORD-" + System.currentTimeMillis() + "-" + (int) (Math.random() * 9000 + 1000);
+        }
+        if (this.paymentStatus == null) this.paymentStatus = PaymentStatus.PENDING;
+        if (this.orderStatus == null) {
+            this.orderStatus = (this.status == OrderStatus.PENDING) ? OrderStatus.DRAFT : (this.status != null ? this.status : OrderStatus.DRAFT);
+        }
+        if (this.status == null) this.status = OrderStatus.PENDING;
+        if (this.customInstructions == null) this.customInstructions = "";
+        if (this.specialInstructions == null) this.specialInstructions = this.customInstructions;
+        if (this.deliveryAddress == null) {
+            this.deliveryAddress = "";
+            if (this.buyer != null) {
+                String addr = (this.buyer.getFlatHouseNumber() != null ? this.buyer.getFlatHouseNumber() + ", " : "")
+                        + (this.buyer.getBuilding() != null ? this.buyer.getBuilding() + ", " : "")
+                        + (this.buyer.getSociety() != null ? this.buyer.getSociety() : "");
+                if (!addr.isBlank()) this.deliveryAddress = addr;
+            }
+        }
     }
 
-    public Order() {}
+    protected void onCreate() {
+        ensureNonNullFields();
+    }
+
+    protected void onUpdate() {
+        ensureNonNullFields();
+    }
+
+    public Order() {
+        this.orderStatus = OrderStatus.DRAFT;
+        this.status = OrderStatus.PENDING;
+        this.paymentStatus = PaymentStatus.PENDING;
+        this.customInstructions = "";
+        this.specialInstructions = "";
+        this.deliveryAddress = "";
+    }
 
     public Order(User buyer, Kitchen kitchen) {
         this.buyer = buyer;
         this.kitchen = kitchen;
         this.orderStatus = OrderStatus.DRAFT;
+        this.status = OrderStatus.PENDING;
         this.paymentStatus = PaymentStatus.PENDING;
+        this.customInstructions = "";
+        this.specialInstructions = "";
+        this.deliveryAddress = "";
     }
 
     public void addItem(OrderItem item) {
@@ -207,12 +250,76 @@ public class Order {
     public void setKitchen(Kitchen kitchen) { this.kitchen = kitchen; }
     public BigDecimal getTotalAmount() { return totalAmount; }
     public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
-    public PaymentStatus getPaymentStatus() { return paymentStatus; }
-    public void setPaymentStatus(PaymentStatus paymentStatus) { this.paymentStatus = paymentStatus; }
-    public OrderStatus getOrderStatus() { return orderStatus; }
-    public void setOrderStatus(OrderStatus orderStatus) { this.orderStatus = orderStatus; }
-    public String getCustomInstructions() { return customInstructions; }
-    public void setCustomInstructions(String customInstructions) { this.customInstructions = customInstructions; }
+    public PaymentStatus getPaymentStatus() { return paymentStatus != null ? paymentStatus : PaymentStatus.PENDING; }
+    public void setPaymentStatus(PaymentStatus paymentStatus) { this.paymentStatus = paymentStatus != null ? paymentStatus : PaymentStatus.PENDING; }
+    public void setPaymentStatus(String paymentStatus) {
+        if (paymentStatus == null || paymentStatus.isBlank()) {
+            this.paymentStatus = PaymentStatus.PENDING;
+        } else {
+            try {
+                this.paymentStatus = PaymentStatus.valueOf(paymentStatus.trim().toUpperCase());
+            } catch (Exception e) {
+                this.paymentStatus = PaymentStatus.PENDING;
+            }
+        }
+    }
+    public OrderStatus getOrderStatus() { return orderStatus != null ? orderStatus : OrderStatus.DRAFT; }
+    public void setOrderStatus(OrderStatus orderStatus) {
+        this.orderStatus = orderStatus != null ? orderStatus : OrderStatus.DRAFT;
+        if (this.orderStatus != OrderStatus.DRAFT && this.orderStatus != OrderStatus.PENDING) {
+            this.status = this.orderStatus;
+        }
+    }
+    public OrderStatus getStatus() { return status != null ? status : (orderStatus != null ? orderStatus : OrderStatus.PENDING); }
+    public void setStatus(OrderStatus status) {
+        this.status = status != null ? status : OrderStatus.PENDING;
+        if (status != null && status != OrderStatus.PENDING) {
+            this.orderStatus = status;
+        }
+    }
+    public String getCustomInstructions() { return customInstructions != null ? customInstructions : ""; }
+    public void setCustomInstructions(String customInstructions) {
+        this.customInstructions = customInstructions != null ? customInstructions : "";
+        this.specialInstructions = this.customInstructions;
+    }
+    public String getSpecialInstructions() {
+        return specialInstructions != null ? specialInstructions : (customInstructions != null ? customInstructions : "");
+    }
+    public void setSpecialInstructions(String specialInstructions) {
+        this.specialInstructions = specialInstructions != null ? specialInstructions : "";
+        this.customInstructions = this.specialInstructions;
+    }
+    public String getDeliveryAddress() {
+        if (deliveryAddress != null && !deliveryAddress.isBlank()) {
+            return deliveryAddress;
+        }
+        if (buyer != null) {
+            String addr = (buyer.getFlatHouseNumber() != null ? buyer.getFlatHouseNumber() + ", " : "")
+                    + (buyer.getBuilding() != null ? buyer.getBuilding() + ", " : "")
+                    + (buyer.getSociety() != null ? buyer.getSociety() : "");
+            return addr.trim();
+        }
+        return deliveryAddress != null ? deliveryAddress : "";
+    }
+    public void setDeliveryAddress(String deliveryAddress) {
+        this.deliveryAddress = deliveryAddress != null ? deliveryAddress : "";
+    }
+    @Transient
+    public String getSociety() {
+        return buyer != null ? buyer.getSociety() : null;
+    }
+    @Transient
+    public Long getSocietyId() {
+        return (buyer != null && buyer.getSocietyRef() != null) ? buyer.getSocietyRef().getId() : null;
+    }
+    @Transient
+    public String getBuyerName() {
+        return buyer != null ? buyer.getName() : null;
+    }
+    @Transient
+    public String getBuyerPhone() {
+        return buyer != null ? buyer.getMobileNumber() : null;
+    }
     public Integer getRating() { return rating; }
     public void setRating(Integer rating) { this.rating = rating; }
     public LocalDateTime getAcknowledgedAt() { return acknowledgedAt; }
