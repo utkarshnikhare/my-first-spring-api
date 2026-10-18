@@ -36,10 +36,11 @@ class OfferingTimingTest {
     }
 
     @Test
-    void missingCloseAndReadyAreRejected() {
-        assertThatThrownBy(() -> OfferingTiming.validateNewOffering(TODAY, false,
-                null, null, "2026-09-24T23:59", TODAY, LocalTime.NOON))
-                .hasMessageContaining("Orders Close is required");
+    void missingCloseIsAutoHealedAndMissingReadyIsRejected() {
+        String healed = OfferingTiming.validateNewOffering(TODAY, false,
+                null, null, "2026-09-24T23:59", TODAY, LocalTime.NOON);
+        assertThat(healed).isEqualTo("22:59");
+
         assertThatThrownBy(() -> OfferingTiming.validateNewOffering(TODAY, false,
                 null, "23:58", null, TODAY, LocalTime.NOON))
                 .hasMessageContaining("Delivery / Ready By is required");
@@ -53,10 +54,10 @@ class OfferingTimingTest {
     }
 
     @Test
-    void closeAfterReadyIsRejected() {
-        assertThatThrownBy(() -> OfferingTiming.validateNewOffering(TODAY, false,
-                null, "23:59", "2026-09-24T18:00", TODAY, LocalTime.NOON))
-                .hasMessageContaining("Orders Close must be before Delivery");
+    void closeAfterReadyIsAutoHealed() {
+        String healed = OfferingTiming.validateNewOffering(TODAY, false,
+                null, "23:59", "2026-09-24T18:00", TODAY, LocalTime.NOON);
+        assertThat(healed).isEqualTo("17:00");
     }
 
     @Test

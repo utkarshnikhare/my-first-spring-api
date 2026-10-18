@@ -31,7 +31,6 @@ public class ProductCreateDto {
     @JsonAlias({"ordersOpenTime", "openTime"})
     private String orderWindowStart;
 
-    @NotBlank(message = "Orders Close is required")
     @JsonAlias({"ordersCloseTime", "closeTime", "cutoffTime"})
     private String orderWindowEnd;
 
@@ -44,8 +43,6 @@ public class ProductCreateDto {
     private Integer remainingQuantity;
     private Boolean isPreorder;
 
-    @NotNull(message = "Select at least one category")
-    @Size(min = 1, message = "Select at least one category")
     @JsonAlias({"category"})
     @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY)
     private List<String> categories;
