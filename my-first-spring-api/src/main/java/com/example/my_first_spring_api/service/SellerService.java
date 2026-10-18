@@ -290,10 +290,10 @@ public class SellerService {
         String description = dto.getDescription() != null ? dto.getDescription() : "";
         Product product = new Product(kitchen, dto.getName(), description, dto.getPrice(), dto.getImageUrl());
         product.setDescription(description);
-        product.setPriceUnit(dto.getPriceUnit());
-        product.setAvailableToday(dto.getAvailableToday() != null
-                ? dto.getAvailableToday()
-                : (offeringDate.equals(today) && !preorder));
+        product.setPriceUnit(dto.getPriceUnit() != null ? dto.getPriceUnit() : "portion");
+        product.setUnit(dto.getUnit() != null ? dto.getUnit() : "portion");
+        product.setAvailableToday(dto.getAvailableToday() != null ? dto.getAvailableToday() : Boolean.TRUE);
+        product.setIsVeg(dto.getIsVeg() != null ? dto.getIsVeg() : Boolean.TRUE);
         product.setAvailableDate(offeringDate);
         product.setOrderWindowStart(orderWindowStart);
         product.setOrderWindowEnd(orderWindowEnd);
@@ -689,6 +689,8 @@ public class SellerService {
                 product.getDescription(), product.getPrice(), product.getImageUrl(),
                 product.getAvailableToday(), product.getRating());
         dto.setPriceUnit(product.getPriceUnit());
+        dto.setUnit(product.getUnit());
+        dto.setIsVeg(product.getIsVeg());
         dto.setAvailableDate(product.getAvailableDate());
         dto.setOrderWindowStart(product.getOrderWindowStart());
         dto.setOrderWindowEnd(product.getOrderWindowEnd());

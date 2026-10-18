@@ -3053,6 +3053,10 @@ document.addEventListener('submit', async function (e) {
                 } catch (favErr) { toast('Could not save favourite: ' + favErr.message, 'error'); }
             }
             try {
+                vals.is_available = true;
+                vals.availableToday = true;
+                vals.isVeg = true;
+                vals.unit = vals.unit || vals.priceUnit || 'portion';
                 var prodUrl = kid ? ('/api/seller/products?kitchenId=' + kid) : '/api/seller/products';
                 await sellerApi(prodUrl, { method: 'POST', body: vals });
                 toast('Offering published!', 'success');
@@ -3190,6 +3194,10 @@ document.addEventListener('submit', async function (e) {
             // Product has no "Offering For" chooser on this screen: it is always
             // Today, matching the original Quick Post rule.
             vals.imageUrl = '';
+            vals.is_available = true;
+            vals.availableToday = true;
+            vals.isVeg = true;
+            vals.unit = vals.unit || vals.priceUnit || 'portion';
             try {
                 var qpKid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
                 if (!qpKid) {

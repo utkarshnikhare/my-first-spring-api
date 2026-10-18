@@ -362,4 +362,58 @@ class SellerServiceCreateOfferingValidationTest {
         assertThat(result.getOrderWindowEnd()).isEqualTo("16:00");
         assertThat(result.getCutoffTime()).isEqualTo("16:00");
     }
+
+    @Test
+    void createOfferingWithMissingIsAvailableAndUnitSavesCleanlyWithAllNonNullDefaults() {
+        allowFutureMenus();
+        ProductCreateDto dto = new ProductCreateDto();
+        dto.setName("Default Dish");
+        dto.setPrice(BigDecimal.valueOf(99));
+        dto.setAvailableDate(LocalDate.now().plusDays(1));
+        dto.setOrderWindowEnd("23:58");
+        dto.setReadyByTime(LocalDateTime.of(LocalDate.now().plusDays(1), LocalTime.of(23, 59)).toString());
+        dto.setAvailableToday(null);
+        dto.setIsAvailable(null);
+        dto.setIsVeg(null);
+        dto.setUnit(null);
+        dto.setPriceUnit(null);
+        dto.setDescription(null);
+        dto.setCategories(null);
+
+        var result = sellerService.createProduct(1L, dto, approvedSeller());
+
+        assertThat(result).isNotNull();
+        assertThat(result.getAvailableToday()).isTrue();
+        assertThat(result.getIsAvailable()).isTrue();
+        assertThat(result.getUnit()).isEqualTo("portion");
+        assertThat(result.getPriceUnit()).isEqualTo("portion");
+        assertThat(result.getIsVeg()).isTrue();
+        assertThat(result.getCategory()).isEqualTo("DINNER");
+        assertThat(result.getDescription()).isEqualTo("");
+    }
+
+    @Test
+    void productEntityGuaranteesNonNullDefaultsOnPrePersistAndSetters() {
+        Product product = new Product();
+        product.setAvailableToday(null);
+        product.setIsVeg(null);
+        product.setDescription(null);
+        product.setCategory(null);
+        product.setUnit(null);
+
+        assertThat(product.getAvailableToday()).isTrue();
+        assertThat(product.getIsAvailable()).isTrue();
+        assertThat(product.getIsVeg()).isTrue();
+        assertThat(product.getDescription()).isEqualTo("");
+        assertThat(product.getCategory()).isEqualTo("DINNER");
+        assertThat(product.getUnit()).isEqualTo("portion");
+
+        product.ensureNonNullFields();
+        assertThat(product.getAvailableToday()).isTrue();
+        assertThat(product.getIsAvailable()).isTrue();
+        assertThat(product.getIsVeg()).isTrue();
+        assertThat(product.getDescription()).isEqualTo("");
+        assertThat(product.getCategory()).isEqualTo("DINNER");
+        assertThat(product.getUnit()).isEqualTo("portion");
+    }
 }
