@@ -116,8 +116,9 @@ async function sellerAuthHtml() {
         '<div class="form-group"><label for="sellerRegPassword">Create password</label><div class="password-input-wrapper"><input class="form-input" id="sellerRegPassword" name="password" type="password" minlength="10" maxlength="72" autocomplete="new-password" required></div></div>' +
         '<div class="form-group"><label for="sellerRegWhatsApp">WhatsApp number</label><input class="form-input" id="sellerRegWhatsApp" name="whatsappNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" required></div>' +
         '<div class="form-group"><label for="sellerRegAlternate">Alternate contact (optional)</label><input class="form-input" id="sellerRegAlternate" name="alternateContact" inputmode="numeric" pattern="[0-9]{10}" maxlength="10"></div>' +
-        '<div class="form-group"><label for="sellerRegKitchen">Kitchen / storefront name</label><input class="form-input" id="sellerRegKitchen" name="kitchenName" maxlength="120" required></div>' +
-        '<div class="form-group"><label for="sellerRegSlug">Choose public kitchen URL</label><div class="muted small" id="sellerRegSlugHint">/kitchen/</div><input class="form-input" id="sellerRegSlug" name="kitchenSlug" minlength="3" maxlength="80" pattern="[A-Za-z0-9]+(-[A-Za-z0-9]+)*" required></div>' +
+        '<div class="form-group"><label for="sellerRegKitchen">Kitchen / storefront name</label><input class="form-input" id="sellerRegKitchen" name="kitchenName" maxlength="120" required>' +
+        '<div class="muted small" style="margin-top:4px">This name will be used as the URL to share your kitchen page. Enter the name carefully, as it cannot be changed later.</div></div>' +
+        '<div class="form-group"><label for="sellerRegSlug">Choose public kitchen URL</label><div class="muted small" id="sellerRegSlugHint">sociomart-demo.onrender.com/kitchen/</div><input class="form-input" id="sellerRegSlug" name="kitchenSlug" minlength="3" maxlength="80" pattern="[A-Za-z0-9]+(-[A-Za-z0-9]+)*" required></div>' +
         '<div class="form-group"><label for="sellerRegSpeciality">Cuisine / speciality</label><input class="form-input" id="sellerRegSpeciality" name="speciality" maxlength="250" required></div>' +
         '<div class="form-group"><label for="sellerRegCategory">Seller category</label><select class="form-input" id="sellerRegCategory" name="sellerCategory" required><option value="KITCHEN">Kitchen</option><option value="HOMEMADE_PRODUCTS">Homemade products</option><option value="BOTH">Both</option></select></div>' +
         '<div class="form-group"><label for="sellerRegShort">Short description (optional)</label><textarea class="form-input" id="sellerRegShort" name="shortDescription" maxlength="500"></textarea></div>' +
@@ -162,7 +163,7 @@ function bindSellerAuth(view) {
     kitchenName.addEventListener('input', function () {
         if (S.authSlugTouched) return;
         var name = kitchenName.value.trim();
-        if (!name) { if (slug) slug.value = ''; if (slugHint) slugHint.textContent = '/kitchen/'; return; }
+        if (!name) { if (slug) slug.value = ''; if (slugHint) slugHint.textContent = 'sociomart-demo.onrender.com/kitchen/'; return; }
         // The suggested public URL is generated SERVER-SIDE (never only in the
         // browser) and is already de-duplicated with a -2/-3 suffix, so the seller
         // sees the real, reserved URL before submitting.
@@ -171,13 +172,13 @@ function bindSellerAuth(view) {
             .then(function (res) {
                 if (myReq !== slugReq || S.authSlugTouched) return;
                 if (slug) slug.value = res.slug || '';
-                if (slugHint) slugHint.textContent = '/kitchen/' + (res.slug || '');
+                if (slugHint) slugHint.textContent = 'sociomart-demo.onrender.com/kitchen/' + (res.slug || '');
             })
             .catch(function () { /* suggestion is a convenience; leave the field as-is */ });
     });
     slug.addEventListener('input', function () {
         S.authSlugTouched = true;
-        if (slugHint) slugHint.textContent = '/kitchen/' + slug.value.trim();
+        if (slugHint) slugHint.textContent = 'sociomart-demo.onrender.com/kitchen/' + slug.value.trim();
     });
 }
 
@@ -266,7 +267,7 @@ async function sellerRender() {
         bindSellerAuth(view);
         return;
     }
-    try { view.innerHTML = await route.fn(route.arg) || ''; sellerUpdateNav(hash); await loadUnreadNotifications(); if (typeof applyThemeUiState === 'function') applyThemeUiState(); window.scrollTo(0, 0); var saInput = $('#coverageSocietyIdsInput'); if (saInput) renderCoverageSocieties(); }
+    try { view.innerHTML = await route.fn(route.arg) || ''; sellerUpdateNav(hash); await loadUnreadNotifications(); if (typeof applyThemeUiState === 'function') applyThemeUiState(); window.scrollTo(0, 0); var saInput = $('#coverageSocietyIdsInput'); if (saInput) renderCoverageSocieties(); initOfferingFormWheels(view); }
     catch (err) { view.innerHTML = '<div class="view-enter">' + emptyHtml('⚠️', 'Something went wrong', err.message) + '</div>'; }
 }
 function sellerUpdateNav(hash) {
@@ -813,10 +814,10 @@ async function sellerHomeView() {
                         h += sdOfferingCardHtml(p, orderCounts[p.id] != null ? orderCounts[p.id] : null);
                     });
                 }
+                // Large orange CTA -> the EXISTING create-offering entry point when offerings exist.
+                h += '<button class="sd-add" type="button" data-action="go-add"><span aria-hidden="true">＋</span> Add Offering</button>';
             }
         }
-        // Large orange CTA -> the EXISTING create-offering entry point.
-        h += '<button class="sd-add" type="button" data-action="go-add"><span aria-hidden="true">＋</span> Add Offering</button>';
         h += sdEarningsHtml(dash);
     } catch (e) {
         // Honest failure state: say what broke and offer a retry. Never render
@@ -1530,9 +1531,11 @@ function applyMealPreset(form, presetType) {
         }
     });
 
-    // 6. Update Live Badge and form timing validation
+    // 6. Update Live Badge, sync wheels, and form timing validation
+    syncOfferingFormWheels(form);
     updateLiveTimingBadge(form);
     validateFormTiming(form);
+    S.offeringFormDirty = true;
     toast('Applied ' + (targetCategory.charAt(0) + targetCategory.slice(1).toLowerCase()) + ' preset!', 'info');
 }
 
@@ -1613,6 +1616,249 @@ function autoClampOrderWindowEndIfInvalid(form) {
         if (clamped) {
             closeInput.value = clamped;
         }
+    }
+}
+
+/* ============================================================
+   Scrolling Wheel Time Picker Component (Brief V1 - Item 3)
+   ============================================================ */
+var WHEEL_INTERVALS = [
+    '12:00', '12:30', '1:00', '1:30', '2:00', '2:30',
+    '3:00', '3:30', '4:00', '4:30', '5:00', '5:30',
+    '6:00', '6:30', '7:00', '7:30', '8:00', '8:30',
+    '9:00', '9:30', '10:00', '10:30', '11:00', '11:30'
+];
+
+function parseTimeForWheel(timeStr) {
+    if (!timeStr) return { interval: '12:00', ampm: 'PM', index: 0 };
+    var timePart = timeStr.indexOf('T') !== -1 ? timeStr.split('T')[1] : timeStr;
+    var parts = timePart.split(':');
+    var h = parseInt(parts[0], 10);
+    var m = parts[1] ? parseInt(parts[1], 10) : 0;
+    if (isNaN(h)) h = 12;
+    if (isNaN(m)) m = 0;
+    var snappedM = m < 15 ? 0 : (m < 45 ? 30 : 0);
+    if (m >= 45) {
+        h = (h + 1) % 24;
+    }
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12;
+    if (h12 === 0) h12 = 12;
+    var intervalStr = h12 + ':' + (snappedM === 0 ? '00' : '30');
+    var idx = WHEEL_INTERVALS.indexOf(intervalStr);
+    if (idx === -1) idx = 0;
+    return { interval: intervalStr, ampm: ampm, index: idx };
+}
+
+function wheelIndexTo24h(idx, ampm) {
+    if (idx < 0) idx = 0;
+    if (idx >= WHEEL_INTERVALS.length) idx = WHEEL_INTERVALS.length - 1;
+    var parts = WHEEL_INTERVALS[idx].split(':');
+    var h = parseInt(parts[0], 10);
+    var m = parts[1];
+    if (ampm === 'PM' && h < 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+    return ('0' + h).slice(-2) + ':' + m;
+}
+
+function renderWheelSlotsHtml(activeIdx) {
+    var h = '';
+    for (var i = 0; i < WHEEL_INTERVALS.length; i++) {
+        var isActive = (i === activeIdx);
+        h += '<li class="wheel-slot' + (isActive ? ' active' : '') + '" data-slot-index="' + i + '">'
+            + '<span class="wheel-slot-label">' + esc(WHEEL_INTERVALS[i]) + '</span>'
+            + '</li>';
+    }
+    return h;
+}
+
+function scrollingWheelPickerHtml(closeVal, readyVal, isLocked) {
+    var closeParsed = parseTimeForWheel(closeVal || '19:00');
+    var readyParsed = parseTimeForWheel(readyVal || '20:30');
+
+    var h = '<div class="scrolling-wheel-picker-wrap' + (isLocked ? ' wheel-locked' : '') + '">'
+        + '<div class="wheel-picker-cols">'
+
+        // Column 1: Place your order before (Orders Close)
+        + '<div class="wheel-col" data-wheel-type="close">'
+        + '<div class="wheel-col-header">Place your order before</div>'
+        + '<div class="wheel-selector-container">'
+        + '<div class="wheel-viewport-box">'
+        + '<div class="wheel-center-guide"></div>'
+        + '<div class="wheel-viewport" id="wheelCloseViewport" data-target-input="orderWindowEnd">'
+        + '<ul class="wheel-list">' + renderWheelSlotsHtml(closeParsed.index) + '</ul>'
+        + '</div>'
+        + '</div>'
+        + '<div class="wheel-ampm-pill" data-target-ampm="orderWindowEnd">'
+        + '<button type="button" class="wheel-ampm-btn' + (closeParsed.ampm === 'AM' ? ' active' : '') + '" data-ampm="AM">AM</button>'
+        + '<button type="button" class="wheel-ampm-btn' + (closeParsed.ampm === 'PM' ? ' active' : '') + '" data-ampm="PM">PM</button>'
+        + '</div>'
+        + '</div>'
+        + '</div>'
+
+        // Column 2: Order deliver by (Delivery / Ready By)
+        + '<div class="wheel-col" data-wheel-type="ready">'
+        + '<div class="wheel-col-header">Order deliver by</div>'
+        + '<div class="wheel-selector-container">'
+        + '<div class="wheel-viewport-box">'
+        + '<div class="wheel-center-guide"></div>'
+        + '<div class="wheel-viewport" id="wheelReadyViewport" data-target-input="readyByTime">'
+        + '<ul class="wheel-list">' + renderWheelSlotsHtml(readyParsed.index) + '</ul>'
+        + '</div>'
+        + '</div>'
+        + '<div class="wheel-ampm-pill" data-target-ampm="readyByTime">'
+        + '<button type="button" class="wheel-ampm-btn' + (readyParsed.ampm === 'AM' ? ' active' : '') + '" data-ampm="AM">AM</button>'
+        + '<button type="button" class="wheel-ampm-btn' + (readyParsed.ampm === 'PM' ? ' active' : '') + '" data-ampm="PM">PM</button>'
+        + '</div>'
+        + '</div>'
+        + '</div>'
+
+        + '</div>' // .wheel-picker-cols
+        + '</div>'; // .scrolling-wheel-picker-wrap
+    return h;
+}
+
+function updateActiveSlotInViewport(viewport, activeIdx) {
+    if (!viewport) return;
+    var slots = viewport.querySelectorAll('.wheel-slot');
+    for (var i = 0; i < slots.length; i++) {
+        var s = slots[i];
+        var sIdx = Number(s.getAttribute('data-slot-index'));
+        if (sIdx === activeIdx) {
+            s.classList.add('active');
+        } else {
+            s.classList.remove('active');
+        }
+    }
+}
+
+function updateAmpmButtons(container, targetName, ampm) {
+    if (!container) return;
+    var pill = container.querySelector('.wheel-ampm-pill[data-target-ampm="' + targetName + '"]');
+    if (!pill) return;
+    pill.querySelectorAll('.wheel-ampm-btn').forEach(function (btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-ampm') === ampm);
+    });
+}
+
+function applyWheelTimeToInput(container, targetName, slotIdx) {
+    if (!container) return;
+    var pill = container.querySelector('.wheel-ampm-pill[data-target-ampm="' + targetName + '"]');
+    var activeAmpmBtn = pill ? pill.querySelector('.wheel-ampm-btn.active') : null;
+    var ampm = activeAmpmBtn ? activeAmpmBtn.getAttribute('data-ampm') : 'PM';
+    var time24 = wheelIndexTo24h(slotIdx, ampm);
+
+    var form = container.querySelector('#createOfferingForm') || container.querySelector('#editOfferingForm') || (container.tagName === 'FORM' ? container : null);
+    if (!form) return;
+
+    if (targetName === 'orderWindowEnd') {
+        var closeInput = form.querySelector('input[name="orderWindowEnd"]');
+        if (closeInput) closeInput.value = time24;
+    } else if (targetName === 'readyByTime') {
+        var readyInput = form.querySelector('input[name="readyByTime"]');
+        var availDateInput = form.querySelector('input[name="availableDate"]') || form.querySelector('input[name="chosenOfferingDate"]');
+        var dateVal = availDateInput ? availDateInput.value : sellerDate('today');
+        if (readyInput) readyInput.value = dateVal + 'T' + time24;
+    }
+    updateLiveTimingBadge(form);
+    validateFormTiming(form);
+}
+
+function syncOfferingFormWheels(form) {
+    if (!form) return;
+    var closeViewport = form.querySelector('#wheelCloseViewport');
+    var readyViewport = form.querySelector('#wheelReadyViewport');
+    var closeInput = form.querySelector('input[name="orderWindowEnd"]');
+    var readyInput = form.querySelector('input[name="readyByTime"]');
+    if (closeViewport && closeInput && closeInput.value) {
+        var cp = parseTimeForWheel(closeInput.value);
+        closeViewport.scrollTop = cp.index * 44;
+        updateActiveSlotInViewport(closeViewport, cp.index);
+        updateAmpmButtons(form, 'orderWindowEnd', cp.ampm);
+    }
+    if (readyViewport && readyInput && readyInput.value) {
+        var rp = parseTimeForWheel(readyInput.value);
+        readyViewport.scrollTop = rp.index * 44;
+        updateActiveSlotInViewport(readyViewport, rp.index);
+        updateAmpmButtons(form, 'readyByTime', rp.ampm);
+    }
+}
+
+function initOfferingFormWheels(view) {
+    if (!view) return;
+    var form = view.querySelector('#createOfferingForm') || view.querySelector('#editOfferingForm');
+    var pickerWrap = view.querySelector('.scrolling-wheel-picker-wrap');
+    if (!form || !pickerWrap) return;
+
+    S.offeringFormDirty = false;
+
+    form.addEventListener('input', function () { S.offeringFormDirty = true; });
+    form.addEventListener('change', function () { S.offeringFormDirty = true; });
+
+    var closeViewport = view.querySelector('#wheelCloseViewport');
+    var readyViewport = view.querySelector('#wheelReadyViewport');
+    var closeInput = form.querySelector('input[name="orderWindowEnd"]');
+    var readyInput = form.querySelector('input[name="readyByTime"]');
+
+    syncOfferingFormWheels(form);
+
+    function attachWheelScroll(viewport, targetName) {
+        if (!viewport) return;
+        var scrollTimer = null;
+        viewport.addEventListener('scroll', function () {
+            var idx = Math.round(viewport.scrollTop / 44);
+            if (idx < 0) idx = 0;
+            if (idx >= WHEEL_INTERVALS.length) idx = WHEEL_INTERVALS.length - 1;
+            updateActiveSlotInViewport(viewport, idx);
+
+            clearTimeout(scrollTimer);
+            scrollTimer = setTimeout(function () {
+                S.offeringFormDirty = true;
+                applyWheelTimeToInput(view, targetName, idx);
+            }, 60);
+        }, { passive: true });
+
+        viewport.addEventListener('click', function (e) {
+            var slot = e.target.closest('.wheel-slot');
+            if (!slot) return;
+            var idx = Number(slot.getAttribute('data-slot-index'));
+            viewport.scrollTo({ top: idx * 44, behavior: 'smooth' });
+            updateActiveSlotInViewport(viewport, idx);
+            S.offeringFormDirty = true;
+            applyWheelTimeToInput(view, targetName, idx);
+        });
+    }
+
+    attachWheelScroll(closeViewport, 'orderWindowEnd');
+    attachWheelScroll(readyViewport, 'readyByTime');
+
+    view.querySelectorAll('.wheel-ampm-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var pill = btn.closest('.wheel-ampm-pill');
+            if (!pill) return;
+            var targetName = pill.getAttribute('data-target-ampm');
+            var ampm = btn.getAttribute('data-ampm');
+            pill.querySelectorAll('.wheel-ampm-btn').forEach(function (b) {
+                b.classList.toggle('active', b === btn);
+            });
+            S.offeringFormDirty = true;
+            var viewport = targetName === 'orderWindowEnd' ? closeViewport : readyViewport;
+            if (viewport) {
+                var idx = Math.round(viewport.scrollTop / 44);
+                if (idx < 0) idx = 0;
+                if (idx >= WHEEL_INTERVALS.length) idx = WHEEL_INTERVALS.length - 1;
+                applyWheelTimeToInput(view, targetName, idx);
+            }
+        });
+    });
+
+    if (closeInput) {
+        closeInput.addEventListener('input', function () { syncOfferingFormWheels(form); });
+        closeInput.addEventListener('change', function () { syncOfferingFormWheels(form); });
+    }
+    if (readyInput) {
+        readyInput.addEventListener('input', function () { syncOfferingFormWheels(form); });
+        readyInput.addEventListener('change', function () { syncOfferingFormWheels(form); });
     }
 }
 
@@ -1719,15 +1965,8 @@ function offeringFormHtml(t, opts) {
     var readyMinAttr = (!locked) ? ' min="' + currentLocalIso + '"' : '';
 
     var readyNote = 'Date/time by which the order will be ready/delivered.';
-    if (locked) {
-        var readyDisplay = t.readyByTime
-            ? (readyIso ? prettyDate(t.readyByTime.slice(0, 10)) + ', ' + prettyTime(t.readyByTime.slice(11, 16)) : t.readyByTime)
-            : '--';
-        h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTimeLocked" type="text" value="' + esc(readyDisplay) + '" disabled><p class="muted small">' + esc(readyNote) + '</p></div>';
-    } else {
-        if (isEdit && t.readyByTime && !readyIso) readyNote = 'Saved value: ' + t.readyByTime + '. Pick a new date/time to replace it.';
-        h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTime" type="datetime-local"' + (isEdit ? '' : ' required') + ' value="' + esc(readyIso ? initialReady.slice(0, 16) : '') + '"' + readyMinAttr + '><p class="muted small">' + esc(readyNote) + '</p></div>';
-    }
+
+    h += scrollingWheelPickerHtml(closeValue, initialReady, locked);
 
     var initialBadge = (readyIso && initialReady && closeValue)
         ? '<span class="badge-icon">⏱️</span> Your offering will be delivered at: <strong>' + esc(formatFriendlyTime12h(initialReady.slice(11, 16))) + '</strong>. Customers can order until: <strong>' + esc(formatFriendlyTime12h(closeValue)) + '</strong>.'
@@ -1740,25 +1979,20 @@ function offeringFormHtml(t, opts) {
         : 'Stop taking orders before food delivery.';
     h += '<div class="form-row-2">';
     h += '<div class="form-group" id="orderCloseGroup"><label class="form-label">Orders Close <span class="req">*</span></label>';
+    h += '<input class="form-input" name="orderWindowEnd" type="time" required value="' + esc(closeValue) + '"' + closeMinAttr + '><p class="muted small">' + esc(closeNote) + '</p>';
+    h += '</div>';
+
     if (locked) {
-        h += '<input class="form-input" name="orderWindowEnd" type="time" required value="' + esc(closeValue) + '"' + closeMinAttr + '><p class="muted small">' + esc(closeNote) + '</p>';
+        var readyDisplay = t.readyByTime
+            ? (readyIso ? prettyDate(t.readyByTime.slice(0, 10)) + ', ' + prettyTime(t.readyByTime.slice(11, 16)) : t.readyByTime)
+            : '--';
+        h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTimeLocked" type="text" value="' + esc(readyDisplay) + '" disabled><input type="hidden" name="readyByTime" value="' + esc(initialReady) + '"><p class="muted small">' + esc(readyNote) + '</p></div>';
     } else {
-        h += '<select class="form-select" id="orderCloseOffsetSelect" name="orderCloseOffset">';
-        h += '<option value="60" selected>Stop taking orders: 1 hour before delivery (Recommended)</option>';
-        h += '<option value="90">Stop taking orders: 1.5 hours before delivery</option>';
-        h += '<option value="120">Stop taking orders: 2 hours before delivery</option>';
-        h += '<option value="30">Stop taking orders: 30 minutes before delivery</option>';
-        h += '<option value="custom">Custom time</option>';
-        h += '</select>';
-        h += '<div id="customCloseTimeRow" style="display:none;" class="mt-1">';
-        h += '<label class="form-label small muted">Exact Cutoff Time (HH:mm)</label>';
-        h += '<input class="form-input" name="orderWindowEnd" type="time" value="' + esc(closeValue) + '"' + closeMinAttr + '>';
-        h += '</div>';
-        h += '<p class="muted small">' + esc(closeNote) + '</p>';
+        if (isEdit && t.readyByTime && !readyIso) readyNote = 'Saved value: ' + t.readyByTime + '. Pick a new date/time to replace it.';
+        h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTime" type="datetime-local"' + (isEdit ? '' : ' required') + ' value="' + esc(readyIso ? initialReady.slice(0, 16) : '') + '"' + readyMinAttr + '><p class="muted small">' + esc(readyNote) + '</p></div>';
     }
     h += '</div>';
     h += '<div class="form-group"><label class="form-label">Orders Open — Optional</label><input class="form-input" name="orderWindowStart" type="time" value="' + esc(openValue) + '"' + lockAttr + '><p class="muted small">Leave blank to start accepting orders immediately.</p></div>';
-    h += '</div>';
     var qtyValue = '', qtyAttr = '', qtyNote = 'Leave blank for unlimited quantity.';
     if (isEdit) {
         if (t.maxQuantity == null) {
@@ -1776,7 +2010,10 @@ function offeringFormHtml(t, opts) {
     if (!isEdit) {
         h += '<div class="toggle-row"><div><div class="toggle-text">Mark as Favourite</div><div class="toggle-note">Save as template (max 3).</div></div><div class="toggle-switch" id="favToggle" data-action="toggle-favourite"></div></div>';
     }
-    h += '<button class="btn btn-primary btn-block" type="submit">' + (isEdit ? 'Save Changes' : 'Publish Offering') + '</button></form>';
+    h += '<div class="offering-form-actions-row">'
+        + '<button class="btn btn-secondary btn-cancel-offering" type="button" data-action="cancel-offering-form">Cancel</button>'
+        + '<button class="btn btn-primary btn-flex-1" type="submit">' + (isEdit ? 'Save Changes' : 'Publish Offering') + '</button>'
+        + '</div></form>';
     return h;
 }
 
@@ -1971,8 +2208,10 @@ async function sellerKitchenView() {
         : '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="pause-kitchen">Pause Kitchen</button>';
     h += '<button class="btn btn-secondary btn-sm btn-block btn-mt-sm" type="button" data-action="preview-kitchen">Preview Kitchen Page</button>';
     h += '<form class="seller-form" id="kitchenForm">';
-    h += '<div class="kitchen-avatar-upload"><div class="kitchen-avatar" data-action="upload-avatar" role="button" tabindex="0" aria-label="Upload kitchen photo">' + (kitchen && sellerImg(kitchen.imageUrl) ? '<img src="' + esc(sellerImg(kitchen.imageUrl)) + '" class="avatar-img" alt="Kitchen photo" onerror="imgFallback(this)">' : '📷') + '</div></div>';
-    h += '<div class="form-group"><label class="form-label">Kitchen Name</label><input class="form-input" name="displayName" value="' + esc(kitchen && kitchen.displayName ? kitchen.displayName : '') + '"></div>';
+    var kitchenSlug = (kitchen && kitchen.slug) ? kitchen.slug : '';
+    h += '<div class="form-group"><label class="form-label">Kitchen Name *</label><input class="form-input" name="displayName" value="' + esc(kitchen && kitchen.displayName ? kitchen.displayName : '') + '" required>' +
+        '<div class="muted small" style="margin-top:4px">This name will be used as the URL to share your kitchen page. Enter the name carefully, as it cannot be changed later.</div>' +
+        '<div class="muted small" style="margin-top:2px">Public URL: <strong>sociomart-demo.onrender.com/kitchen/' + esc(kitchenSlug) + '</strong></div></div>';
     h += '<div class="form-group"><label class="form-label">Who can order from me? (Service Areas)</label>';
     h += '<div class="muted small" style="margin-bottom:6px">Select the area you deliver to, then tick the societies inside it. Buyers outside your selected societies cannot discover or order from your kitchen.</div>';
     if (coverageError) {
@@ -1988,7 +2227,8 @@ async function sellerKitchenView() {
     h += '<div class="form-group"><label class="form-label">Speciality</label><input class="form-input" name="shortDescription" value="' + esc(kitchen && kitchen.shortDescription ? kitchen.shortDescription : 'Homemade Maharashtrian Food') + '"></div>';
     h += '<div class="form-group"><label class="form-label">Full Description</label><textarea class="form-textarea" name="description">' + esc(kitchen && kitchen.description ? kitchen.description : 'Fresh homemade breakfast and traditional snacks') + '</textarea></div>';
     h += '<div class="form-group"><label class="form-label">Gallery Images (URLs, comma-separated)</label><input class="form-input" name="galleryImages" value="' + esc(kitchen && kitchen.galleryImages ? kitchen.galleryImages : '') + '"></div>';
-    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">WhatsApp</label><input class="form-input" name="whatsappLink" value="' + esc(kitchen && kitchen.whatsappLink ? kitchen.whatsappLink : '') + '"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" name="instagramLink" value="' + esc(kitchen && kitchen.instagramLink ? kitchen.instagramLink : '') + '"></div></div>';
+    var waVal = (kitchen && (kitchen.whatsappNumber || kitchen.sellerWhatsappNumber || kitchen.whatsappLink)) || '';
+    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">WhatsApp Number</label><input class="form-input" name="whatsappNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" placeholder="10-digit WhatsApp number" value="' + esc(waVal) + '"><input type="hidden" name="whatsappLink" value="' + esc(waVal) + '"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" name="instagramLink" value="' + esc(kitchen && kitchen.instagramLink ? kitchen.instagramLink : '') + '"></div></div>';
     h += '<div class="form-group"><label class="form-label">UPI ID</label><input class="form-input" name="upiId" value="' + esc(kitchen && kitchen.upiId ? kitchen.upiId : '') + '"></div>';
     h += '<div class="form-group"><label class="form-label">Store Type</label><div class="radio-group"><label class="radio-option' + (kitchen && kitchen.sellerType === 'HOMEMADE_PRODUCTS' ? '' : ' selected') + '" data-action="set-seller-type" data-val="KITCHEN">🍽️ Kitchen / Food Seller</label><label class="radio-option' + (kitchen && kitchen.sellerType === 'HOMEMADE_PRODUCTS' ? ' selected' : '') + '" data-action="set-seller-type" data-val="HOMEMADE_PRODUCTS">🍰 Homemade Products</label></div><input type="hidden" name="sellerType" id="sellerTypeInput" value="' + esc(kitchen && kitchen.sellerType ? kitchen.sellerType : 'KITCHEN') + '"></div>';
     h += '<div class="info-box">Your menu loads automatically from live offerings.</div>';
@@ -2984,7 +3224,12 @@ document.addEventListener('submit', async function (e) {
                 delete kitchenPayload.areaId;
                 delete kitchenPayload.societyIds;
             }
-            await sellerApi('/api/seller/kitchen/' + kid, { method: 'PUT', body: kitchenPayload });
+            if (kitchenPayload.whatsappNumber) {
+                kitchenPayload.whatsappNumber = kitchenPayload.whatsappNumber.trim();
+                kitchenPayload.whatsappLink = kitchenPayload.whatsappNumber;
+            }
+            var updatedK = await sellerApi('/api/seller/kitchen/' + kid, { method: 'PUT', body: kitchenPayload });
+            if (updatedK) S.myKitchen = updatedK;
             toast('All changes saved', 'success');
         }
     } catch (err) {
@@ -3038,6 +3283,33 @@ document.addEventListener('click', async function (e) {
                 var presetType = t.getAttribute('data-preset');
                 applyMealPreset(presetForm, presetType);
                 break;
+            case 'cancel-offering-form': {
+                e.preventDefault();
+                if (!S.offeringFormDirty) {
+                    history.back();
+                } else {
+                    openModal(
+                        '<div class="cancel-confirm-dialog">' +
+                        '<h3>Discard unsaved changes?</h3>' +
+                        '<p class="muted">You have unsaved changes in this offering. Are you sure you want to discard them?</p>' +
+                        '<div class="modal-actions" style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">' +
+                        '<button class="btn btn-secondary" type="button" data-action="cancel-dialog-stay">Stay</button>' +
+                        '<button class="btn btn-danger" type="button" data-action="cancel-dialog-discard">Discard</button>' +
+                        '</div></div>'
+                    );
+                }
+                break;
+            }
+            case 'cancel-dialog-stay': {
+                closeModal();
+                break;
+            }
+            case 'cancel-dialog-discard': {
+                closeModal();
+                S.offeringFormDirty = false;
+                history.back();
+                break;
+            }
             case 'go-back': history.back(); break;
             case 'noop': break;
             case 'seller-show-register':

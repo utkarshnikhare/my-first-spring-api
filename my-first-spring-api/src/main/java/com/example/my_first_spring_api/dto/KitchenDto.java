@@ -20,6 +20,8 @@ public class KitchenDto {
     private List<Long> servedSocietyIds;
     private String building;
     private String whatsappLink;
+    private String whatsappNumber;
+    private String slug;
     private String instagramLink;
     private String galleryImages;
     private String upiId;
@@ -70,6 +72,10 @@ public class KitchenDto {
     public void setBuilding(String building) { this.building = building; }
     public String getWhatsappLink() { return whatsappLink; }
     public void setWhatsappLink(String whatsappLink) { this.whatsappLink = whatsappLink; }
+    public String getWhatsappNumber() { return whatsappNumber; }
+    public void setWhatsappNumber(String whatsappNumber) { this.whatsappNumber = whatsappNumber; }
+    public String getSlug() { return slug; }
+    public void setSlug(String slug) { this.slug = slug; }
     public String getInstagramLink() { return instagramLink; }
     public void setInstagramLink(String instagramLink) { this.instagramLink = instagramLink; }
     public String getGalleryImages() { return galleryImages; }

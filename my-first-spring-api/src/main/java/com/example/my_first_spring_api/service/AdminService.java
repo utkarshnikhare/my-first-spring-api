@@ -488,9 +488,19 @@ public class AdminService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> sellers(SellerApprovalStatus status) {
+        return sellers(status, null);
+    }
+
+    public List<Map<String, Object>> sellers(SellerApprovalStatus status, User actingAdmin) {
+        Long scope = adminAreaScope(actingAdmin);
         List<User> sellers = status != null
                 ? userRepository.findByRoleAndSellerApprovalStatus(UserRole.SELLER, status)
                 : userRepository.findByRole(UserRole.SELLER);
+        if (scope != null) {
+            sellers = sellers.stream()
+                    .filter(s -> scope.equals(sellerAreaId(s)))
+                    .collect(Collectors.toList());
+        }
         return sellers.stream().map(s -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", s.getId());
@@ -1071,6 +1081,8 @@ public class AdminService {
 
     /** The Area a seller operates in, or null when it cannot be determined. */
     private Long sellerAreaId(User seller) {
+        if (seller == null) return null;
+        if (seller.getAreaRef() != null) return seller.getAreaRef().getId();
         for (Kitchen k : kitchenRepository.findBySeller(seller)) {
             if (k.getServedSocieties() != null) {
                 for (Society soc : k.getServedSocieties()) {
@@ -1518,7 +1530,19 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
 
     @Transactional(readOnly = true)
     public List<User> pendingSellers() {
-        return userRepository.findByRoleAndSellerApprovalStatus(UserRole.SELLER, SellerApprovalStatus.PENDING);
+        return pendingSellers(null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<User> pendingSellers(User actingAdmin) {
+        Long scope = adminAreaScope(actingAdmin);
+        List<User> list = userRepository.findByRoleAndSellerApprovalStatus(UserRole.SELLER, SellerApprovalStatus.PENDING);
+        if (scope != null) {
+            return list.stream()
+                    .filter(s -> scope.equals(sellerAreaId(s)))
+                    .collect(Collectors.toList());
+        }
+        return list;
     }
 
     @Transactional
@@ -1542,6 +1566,7 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
     @Transactional
     public User rejectSeller(Long sellerId, String reason, User actingAdmin) {
         User seller = requireSeller(sellerId);
+        requireSellerAccess(seller, actingAdmin);
         SellerApprovalStatus from = seller.getSellerApprovalStatus();
         seller.setSellerApprovalStatus(SellerApprovalStatus.REJECTED);
         seller.setSellerStatusReason(trimToNull(reason));
@@ -1566,6 +1591,7 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
             throw new IllegalArgumentException("A reason is required when requesting changes from a seller.");
         }
         User seller = requireSeller(sellerId);
+        requireSellerAccess(seller, actingAdmin);
         SellerApprovalStatus from = seller.getSellerApprovalStatus();
         seller.setSellerApprovalStatus(SellerApprovalStatus.CHANGES_REQUESTED);
         seller.setSellerStatusReason(reason.trim());
@@ -1587,6 +1613,7 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
             throw new IllegalArgumentException("A reason is required when suspending a seller.");
         }
         User seller = requireSeller(sellerId);
+        requireSellerAccess(seller, actingAdmin);
         SellerApprovalStatus from = seller.getSellerApprovalStatus();
         seller.setSellerApprovalStatus(SellerApprovalStatus.SUSPENDED);
         seller.setSellerStatusReason(reason.trim());
@@ -2138,7 +2165,13 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
      */
     @Transactional(readOnly = true)
     public Map<String, Object> sellerDetail(Long sellerId) {
+        return sellerDetail(sellerId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> sellerDetail(Long sellerId, User actingAdmin) {
         User seller = requireSeller(sellerId);
+        requireSellerAccess(seller, actingAdmin);
         List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
         List<Order> orders = orderRepository.findAll().stream()
                 .filter(o -> o.getKitchen() != null && o.getKitchen().getSeller() != null
@@ -2165,7 +2198,13 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
             Map<String, Object> s = new LinkedHashMap<>();
             s.put("id", k.getId());
             s.put("name", k.getDisplayName());
+            s.put("slug", k.getSlug() != null ? k.getSlug() : k.getName());
             s.put("sellerType", k.getSellerType() != null ? k.getSellerType().name() : null);
+            s.put("speciality", k.getSpeciality());
+            s.put("shortDescription", k.getShortDescription());
+            s.put("description", k.getDescription());
+            s.put("instagramLink", k.getInstagramLink());
+            s.put("whatsappLink", k.getWhatsappLink());
             s.put("paused", k.isStorefrontPaused());
             s.put("availableToday", k.getAvailableToday());
             s.put("society", k.getSociety());
@@ -2189,6 +2228,15 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
         m.put("id", seller.getId());
         m.put("name", seller.getName());
         m.put("mobileNumber", seller.getMobileNumber());
+        m.put("whatsappNumber", seller.getSellerWhatsappNumber());
+        m.put("email", seller.getEmail());
+        m.put("alternateContact", seller.getSellerAlternateContact());
+        m.put("area", seller.getArea() != null ? seller.getArea() : (seller.getAreaRef() != null ? seller.getAreaRef().getName() : null));
+        m.put("society", seller.getSociety() != null ? seller.getSociety() : (seller.getSocietyRef() != null ? seller.getSocietyRef().getName() : null));
+        m.put("building", seller.getBuilding());
+        m.put("flatHouseNumber", seller.getFlatHouseNumber());
+        m.put("sellerCategory", seller.getSellerCategory());
+        m.put("createdAt", seller.getCreatedAt());
         m.put("status", seller.getSellerApprovalStatus());
         m.put("statusReason", seller.getSellerStatusReason());
         m.put("approvedAt", seller.getApprovedAt());
@@ -2202,9 +2250,6 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
         m.put("averageOrderValue", orders.isEmpty() ? BigDecimal.ZERO
                 : value.divide(BigDecimal.valueOf(orders.size()), 2, java.math.RoundingMode.HALF_UP));
         m.put("recentOrders", orders.stream().limit(20).map(this::adminOrderRow).toList());
-        // Handover 7.2: the seller detail must carry support notes and the account
-        // status, so an Admin can see why a seller is blocked without leaving the
-        // screen. Both are internal-only fields.
         m.put("supportNote", seller.getSupportNote());
         m.put("accountStatus", seller.isBlocked() ? "BLOCKED" : "ACTIVE");
         m.put("blocked", seller.isBlocked());

@@ -464,3 +464,76 @@ html[data-theme="dark"] .sr-reason { color: #fbbf24; }
     .admin-search { flex: 1 1 100%; }
     .attention-row .att-label { font-size: 0.82rem; }
 }
+
+/* ============================================================
+   Seller Request Review Modal (Brief V1 - Item 6)
+   ============================================================ */
+.admin-review-modal {
+    max-width: 640px;
+    width: 100%;
+    text-align: left;
+}
+.arm-head {
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border, #E5E7EB);
+    padding-bottom: 10px;
+}
+.arm-head h3 {
+    margin: 0 0 4px;
+    font-size: 1.25rem;
+    font-weight: 800;
+}
+.arm-body {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.arm-section {
+    background: var(--bg-card, #F9FAFB);
+    border: 1px solid var(--border, #E5E7EB);
+    border-radius: 12px;
+    padding: 12px 14px;
+}
+[data-theme="dark"] .arm-section {
+    background: #1F2937;
+    border-color: #374151;
+}
+.arm-sec-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted, #6B7280);
+    margin-bottom: 8px;
+}
+.arm-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 14px;
+    font-size: 0.88rem;
+}
+@media (max-width: 520px) {
+    .arm-grid {
+        grid-template-columns: 1fr;
+    }
+}
+.arm-col-span-2 {
+    grid-column: 1 / -1;
+}
+.arm-field {
+    overflow-wrap: anywhere;
+}
+.arm-lbl {
+    color: var(--text-muted, #6B7280);
+    margin-right: 4px;
+}
+.arm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+    flex-wrap: wrap;
+}

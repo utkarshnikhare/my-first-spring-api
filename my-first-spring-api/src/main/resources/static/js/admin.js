@@ -365,6 +365,59 @@ async function adminAction(action, t) {
                 await adminRender();
                 break;
             }
+            case 'review-seller-request': {
+                var sId = Number(t.dataset.id);
+                await adminOpenSellerReviewModal(sId);
+                break;
+            }
+            case 'close-review-modal': {
+                closeModal();
+                break;
+            }
+            case 'review-approve': {
+                var rAppId = Number(t.dataset.id);
+                closeModal();
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/sellers/' + rAppId + '/approve', { method: 'POST' });
+                    toast('Seller approved', 'success');
+                });
+                await adminRender();
+                break;
+            }
+            case 'review-request-changes': {
+                var rRcId = Number(t.dataset.id);
+                var commentEl = $('#reviewComment');
+                var comment = commentEl ? commentEl.value.trim() : '';
+                if (!comment) {
+                    toast('Please enter comments explaining what changes the seller needs to make.', 'error');
+                    if (commentEl) commentEl.focus();
+                    break;
+                }
+                closeModal();
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/sellers/' + rRcId + '/request-changes', { method: 'POST', body: { reason: comment } });
+                    toast('Changes requested from seller', 'success');
+                });
+                await adminRender();
+                break;
+            }
+            case 'review-reject': {
+                var rRejId = Number(t.dataset.id);
+                var commentEl2 = $('#reviewComment');
+                var comment2 = commentEl2 ? commentEl2.value.trim() : '';
+                if (!comment2) {
+                    toast('Please enter a rejection reason in the comments box.', 'error');
+                    if (commentEl2) commentEl2.focus();
+                    break;
+                }
+                closeModal();
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/sellers/' + rRejId + '/reject', { method: 'POST', body: { reason: comment2 } });
+                    toast('Seller application rejected', 'success');
+                });
+                await adminRender();
+                break;
+            }
             case 'open-reject': {
                 openModal(
                     '<h3>Reject ' + esc(t.dataset.name) + '?</h3>' +
@@ -1131,6 +1184,7 @@ async function adminPendingView() {
             '<div class="sr-meta">📱 ' + esc(s.mobileNumber || '—') + ' · Registered ' + adminDate(s.registeredAt) + '</div>' +
             '</div>' +
             '<div class="sr-actions">' +
+            '<button class="btn btn-secondary btn-sm" type="button" data-action="review-seller-request" data-id="' + s.id + '">View Details</button>' +
             '<button class="btn btn-success btn-sm" type="button" data-action="approve-seller" data-id="' + s.id + '">Approve</button>' +
             // Handover 7.1: Request Changes is a first-class decision, not a rejection.
             '<button class="btn btn-outline btn-sm" type="button" data-action="open-admin-reason" data-mode="requestChanges" data-id="' + s.id + '" data-name="' + esc(s.name || 'Seller') + '">Request Changes</button>' +
@@ -1139,6 +1193,77 @@ async function adminPendingView() {
     });
     h += '</div>';
     return h;
+}
+
+async function adminOpenSellerReviewModal(sellerId) {
+    try {
+        var d = await api('/api/admin/sellers/' + sellerId + '/detail');
+        var k = (d.kitchens && d.kitchens.length) ? d.kitchens[0] : null;
+        var addressParts = [d.flatHouseNumber, d.building, d.society].filter(Boolean);
+        var addressStr = addressParts.length ? addressParts.join(', ') : (d.society || 'Not provided');
+        var coverage = d.serviceSocieties || d.serviceArea || (k && k.serviceSocieties) || d.society || 'Not provided';
+        var ig = d.instagramLink || (k && k.instagramLink) || 'Not provided';
+        var ref = d.referralSource || 'Not provided';
+
+        var modalHtml = '<div class="admin-review-modal">' +
+            '<div class="arm-head">' +
+            '<h3>Review Seller Application</h3>' +
+            '<p class="muted small">Submitted registration details (read-only)</p>' +
+            '</div>' +
+            '<div class="arm-body">' +
+            '<div class="arm-section">' +
+            '<div class="arm-sec-title">Seller Contact Information</div>' +
+            '<div class="arm-grid">' +
+            '<div class="arm-field"><span class="arm-lbl">Seller Name:</span> <strong>' + esc(d.name || d.sellerName || '—') + '</strong></div>' +
+            '<div class="arm-field"><span class="arm-lbl">Mobile Number:</span> ' + esc(d.mobileNumber || '—') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">WhatsApp Number:</span> ' + esc(d.whatsappNumber || 'Not provided') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">Email:</span> ' + esc(d.email || 'Not provided') + '</div>' +
+            '</div></div>' +
+
+            '<div class="arm-section">' +
+            '<div class="arm-sec-title">Kitchen & Store Details</div>' +
+            '<div class="arm-grid">' +
+            '<div class="arm-field"><span class="arm-lbl">Kitchen / Store Name:</span> <strong>' + esc(d.kitchenName || (k && k.name) || 'Not provided') + '</strong></div>' +
+            '<div class="arm-field"><span class="arm-lbl">Kitchen Type:</span> ' + esc(d.sellerCategory || d.enabledTypes || 'KITCHEN') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">Speciality:</span> ' + esc(d.speciality || (k && k.speciality) || 'Not provided') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">Short Description:</span> ' + esc(d.shortDescription || (k && k.shortDescription) || 'Not provided') + '</div>' +
+            '</div></div>' +
+
+            '<div class="arm-section">' +
+            '<div class="arm-sec-title">Location & Delivery Coverage</div>' +
+            '<div class="arm-grid">' +
+            '<div class="arm-field"><span class="arm-lbl">Primary Location:</span> ' + esc(d.area || d.primaryAreaName || 'Not provided') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">Address:</span> ' + esc(addressStr) + '</div>' +
+            '<div class="arm-field arm-col-span-2"><span class="arm-lbl">Selected Delivery Societies / Areas:</span> ' + esc(coverage) + '</div>' +
+            '</div></div>' +
+
+            '<div class="arm-section">' +
+            '<div class="arm-sec-title">Referral & Social Links</div>' +
+            '<div class="arm-grid">' +
+            '<div class="arm-field"><span class="arm-lbl">Instagram:</span> ' + (ig !== 'Not provided' ? '<a href="' + esc(ig) + '" target="_blank" rel="noopener">' + esc(ig) + '</a>' : 'Not provided') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">Referral Source:</span> ' + esc(ref) + '</div>' +
+            '</div></div>' +
+
+            '<div class="arm-section">' +
+            '<label class="form-label font-700" for="reviewComment">Decision Comments / Feedback</label>' +
+            '<p class="muted tiny mb-1">Enter notes or required changes (mandatory for Request Changes / Reject):</p>' +
+            '<textarea class="form-input" id="reviewComment" rows="3" placeholder="Explain required changes or reasons for rejection..."></textarea>' +
+            '</div>' +
+
+            '</div>' + // .arm-body
+
+            '<div class="modal-actions arm-actions">' +
+            '<button class="btn btn-secondary" type="button" data-action="close-review-modal">Close</button>' +
+            '<button class="btn btn-outline" type="button" data-action="review-request-changes" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Request Changes</button>' +
+            '<button class="btn btn-danger" type="button" data-action="review-reject" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Reject</button>' +
+            '<button class="btn btn-success" type="button" data-action="review-approve" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Approve</button>' +
+            '</div>' +
+            '</div>';
+
+        openModal(modalHtml);
+    } catch (e) {
+        toast('Could not load seller details: ' + (e.message || 'Access denied'), 'error');
+    }
 }
 
 async function adminBuyersView() {

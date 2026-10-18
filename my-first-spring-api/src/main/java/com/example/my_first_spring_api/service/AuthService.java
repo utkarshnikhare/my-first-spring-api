@@ -253,9 +253,13 @@ public class AuthService {
             String property = user.getRole() == UserRole.SUPER_ADMIN
                     ? AuthSettings.SUPER_ADMIN_PASSWORD : AuthSettings.ADMIN_PASSWORD;
             String configured = environment.getProperty(property);
-            return StringUtils.hasText(configured)
+            if (StringUtils.hasText(configured)
                     && java.security.MessageDigest.isEqual(
-                    rawPassword.getBytes(StandardCharsets.UTF_8), configured.getBytes(StandardCharsets.UTF_8));
+                    rawPassword.getBytes(StandardCharsets.UTF_8), configured.getBytes(StandardCharsets.UTF_8))) {
+                return true;
+            }
+            return StringUtils.hasText(user.getPasswordHash())
+                    && passwordEncoder.matches(rawPassword, user.getPasswordHash());
         }
         return StringUtils.hasText(user.getPasswordHash())
                 && passwordEncoder.matches(rawPassword, user.getPasswordHash());
