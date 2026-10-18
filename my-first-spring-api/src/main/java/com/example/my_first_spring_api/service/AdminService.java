@@ -68,6 +68,9 @@ public class AdminService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private SlugService slugService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.my_first_spring_api.repository.SocietyRepository societyRepository;
+
     // ==================== Dashboard ====================
 
     @Transactional(readOnly = true)
@@ -1083,11 +1086,20 @@ public class AdminService {
     private Long sellerAreaId(User seller) {
         if (seller == null) return null;
         if (seller.getAreaRef() != null) return seller.getAreaRef().getId();
+        if (seller.getSocietyRef() != null && seller.getSocietyRef().getArea() != null) {
+            return seller.getSocietyRef().getArea().getId();
+        }
         for (Kitchen k : kitchenRepository.findBySeller(seller)) {
             if (k.getServedSocieties() != null) {
                 for (Society soc : k.getServedSocieties()) {
                     if (soc.getArea() != null) return soc.getArea().getId();
                 }
+            }
+        }
+        if (seller.getSociety() != null && !seller.getSociety().isBlank() && societyRepository != null) {
+            List<Society> matches = societyRepository.findByNameKey(Society.deriveNameKey(seller.getSociety().trim()));
+            if (matches != null && !matches.isEmpty() && matches.get(0).getArea() != null) {
+                return matches.get(0).getArea().getId();
             }
         }
         return null;
@@ -1558,6 +1570,12 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
         analyticsService.record(AnalyticsService.EV_SELLER_APPROVED, seller.getId(),
                 seller.getMobileNumber(), null, "approved by " + actingAdmin.getMobileNumber());
         User saved = userRepository.save(seller);
+        // Ensure newly approved sellers automatically have their kitchen set to active
+        kitchenRepository.findBySeller(seller).forEach(kitchen -> {
+            kitchen.setStorefrontPaused(false);
+            kitchen.setAvailableToday(true);
+            kitchenRepository.save(kitchen);
+        });
         auditService.record(AdminAuditService.SELLER_APPROVED, actingAdmin, "SELLER",
                 seller.getId(), seller.getName(), String.valueOf(from), "APPROVED", null);
         return saved;

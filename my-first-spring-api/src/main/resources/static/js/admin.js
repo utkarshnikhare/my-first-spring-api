@@ -360,7 +360,7 @@ async function adminAction(action, t) {
                 var id = Number(t.dataset.id);
                 await adminRunOnce(t, async function () {
                     await api('/api/admin/sellers/' + id + '/approve', { method: 'POST' });
-                    toast('Seller approved', 'success');
+                    toast('Seller approved and kitchen activated', 'success');
                 });
                 await adminRender();
                 break;
@@ -379,7 +379,7 @@ async function adminAction(action, t) {
                 closeModal();
                 await adminRunOnce(t, async function () {
                     await api('/api/admin/sellers/' + rAppId + '/approve', { method: 'POST' });
-                    toast('Seller approved', 'success');
+                    toast('Seller approved and kitchen activated', 'success');
                 });
                 await adminRender();
                 break;
@@ -1171,17 +1171,33 @@ function adminExportUrl(domain) {
 
 async function adminPendingView() {
     var list = await api('/api/admin/sellers/pending');
+    var isSuper = A.role === 'SUPER_ADMIN';
+    var myAreaId = A.me ? A.me.adminAreaId : null;
+    var mySociety = (A.me ? (A.me.society || A.me.adminAreaName) : '') || '';
+
+    // Area Admins only see sellers in their assigned society/area; Super Admins see all including unassigned
+    if (!isSuper && (myAreaId || mySociety)) {
+        list = (list || []).filter(function (s) {
+            if (myAreaId && s.areaId) return String(s.areaId) === String(myAreaId);
+            if (mySociety && s.society) return s.society.toLowerCase().trim() === mySociety.toLowerCase().trim();
+            if (mySociety && s.area) return s.area.toLowerCase().trim() === mySociety.toLowerCase().trim();
+            return false;
+        });
+    }
+
     var h = '<div class="view-enter">';
-    h += '<div class="section-head admin-section-head"><div><h1>Pending Approvals</h1><p class="muted small">' + (list ? list.length : 0) + ' seller(s) awaiting your decision</p></div></div>';
+    h += '<div class="section-head admin-section-head"><div><h1>Pending Approvals</h1><p class="muted small">' + (list ? list.length : 0) + ' seller(s) awaiting your decision' + (!isSuper && mySociety ? ' in ' + esc(mySociety) : '') + '</p></div></div>';
     if (!list || !list.length) {
-        return h + '<div class="admin-empty">🎉 All caught up — no pending seller approvals.</div>';
+        return h + '<div class="admin-empty">🎉 All caught up — no pending seller approvals' + (!isSuper && mySociety ? ' in ' + esc(mySociety) : '') + '.</div>';
     }
     list.forEach(function (s) {
         h += '<div class="seller-row">' +
             '<div class="sr-avatar">' + esc(String(s.name || '?').charAt(0).toUpperCase()) + '</div>' +
             '<div class="sr-body">' +
             '<div class="sr-name">' + esc(s.name || 'Unknown') + '</div>' +
-            '<div class="sr-meta">📱 ' + esc(s.mobileNumber || '—') + ' · Registered ' + adminDate(s.registeredAt) + '</div>' +
+            '<div class="sr-meta">📱 ' + esc(s.mobileNumber || '—') +
+            (s.society ? ' · 🏢 ' + esc(s.society) : (isSuper ? ' · <span class="pill pill-amber">Unassigned Society</span>' : '')) +
+            ' · Registered ' + adminDate(s.registeredAt) + '</div>' +
             '</div>' +
             '<div class="sr-actions">' +
             '<button class="btn btn-secondary btn-sm" type="button" data-action="review-seller-request" data-id="' + s.id + '">View Details</button>' +
@@ -1318,6 +1334,20 @@ async function adminSellersView() {
     // the tab fail when the second call raced. Counts now come from the same array,
     // matching every other list screen.
     var list = await api('/api/admin/sellers');
+    var isSuper = A.role === 'SUPER_ADMIN';
+    var myAreaId = A.me ? A.me.adminAreaId : null;
+    var mySociety = (A.me ? (A.me.society || A.me.adminAreaName) : '') || '';
+
+    // Area Admins only see sellers in their assigned society/area
+    if (!isSuper && (myAreaId || mySociety)) {
+        list = (list || []).filter(function (s) {
+            if (myAreaId && s.areaId) return String(s.areaId) === String(myAreaId);
+            if (mySociety && s.society) return s.society.toLowerCase().trim() === mySociety.toLowerCase().trim();
+            if (mySociety && s.area) return s.area.toLowerCase().trim() === mySociety.toLowerCase().trim();
+            return false;
+        });
+    }
+
     var status = A.sellerStatus || '';
     var term = adminSearchTerm('sellers');
     var counts = { '': (list || []).length, PENDING: 0, APPROVED: 0, REJECTED: 0, SUSPENDED: 0, CHANGES_REQUESTED: 0 };

@@ -48,6 +48,15 @@ function imgFallback(imgEl) {
     parent.textContent = emoji;
 }
 
+// Global image fallback capture listener: catches broken images even if dynamically injected without explicit onerror
+if (typeof window !== 'undefined') {
+    window.addEventListener('error', function (e) {
+        if (e && e.target && e.target.tagName === 'IMG') {
+            imgFallback(e.target);
+        }
+    }, true);
+}
+
 function emojiFor(name) {
     var n = (name || '').toLowerCase();
     if (n.indexOf('dosa') >= 0 || n.indexOf('idli') >= 0 || n.indexOf('rice') >= 0 || n.indexOf('biryani') >= 0) return '🍚';

@@ -567,6 +567,15 @@ public class AdminController {
         m.put("statusReason", seller.getSellerStatusReason());
         m.put("approvedAt", seller.getApprovedAt());
         m.put("registeredAt", seller.getCreatedAt());
+        m.put("society", seller.getSociety());
+        if (seller.getSocietyRef() != null) {
+            m.put("societyId", seller.getSocietyRef().getId());
+            if (m.get("society") == null) m.put("society", seller.getSocietyRef().getName());
+        }
+        if (seller.getAreaRef() != null) {
+            m.put("areaId", seller.getAreaRef().getId());
+            m.put("area", seller.getAreaRef().getName());
+        }
         return m;
     }
 }
