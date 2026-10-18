@@ -82,6 +82,8 @@ public class SellerAppService {
      */
     @Autowired
     private RecurringScheduleService recurringScheduleService;
+    @Autowired(required = false)
+    private SlugService slugService;
 
     @Autowired
     public SellerAppService(KitchenRepository kitchenRepository,
@@ -239,7 +241,8 @@ public class SellerAppService {
                 .orElseThrow(() -> new TemplateNotFoundException(templateId));
         if (!template.getSeller().getId().equals(seller.getId()))
             throw new SellerNotAuthorizedException("Not your template");
-        Kitchen kitchen = getOwnedKitchen(seller);
+        List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
+        Kitchen kitchen = !kitchens.isEmpty() ? kitchens.get(0) : bootstrapDefaultKitchen(seller);
         boolean preorder = date != null && date.isAfter(java.time.LocalDate.now());
         assertFeatureCompliance(seller, preorder, date);
         Product product = templateToProduct(template, kitchen, date);
@@ -946,6 +949,40 @@ public class SellerAppService {
         List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
         if (kitchens.isEmpty()) throw new KitchenNotFoundException((Long) null);
         return kitchens.get(0);
+    }
+
+    private Kitchen bootstrapDefaultKitchen(User seller) {
+        String sellerName = (seller.getName() != null && !seller.getName().isBlank())
+                ? seller.getName().trim()
+                : "Seller";
+        String displayName = sellerName + "'s Kitchen";
+        String base = SlugService.slugify(displayName);
+        if (base.isBlank()) {
+            base = "kitchen-" + (seller.getId() != null ? seller.getId() : System.currentTimeMillis());
+        }
+        Kitchen kitchen = new Kitchen();
+        kitchen.setDisplayName(displayName);
+        kitchen.setDescription("");
+        kitchen.setSeller(seller);
+        kitchen.setSellerType(com.example.my_first_spring_api.model.SellerType.KITCHEN);
+        kitchen.setAvailableToday(true);
+        if (seller.getSociety() != null && !seller.getSociety().isBlank()) {
+            kitchen.setSociety(seller.getSociety());
+            kitchen.setServiceAreas(seller.getSociety());
+        }
+        if (slugService != null) {
+            slugService.reserveUniqueSlug(kitchen, base);
+        } else {
+            String candidate = base;
+            int counter = 2;
+            while (kitchenRepository.findByName(candidate).isPresent() || kitchenRepository.findBySlug(candidate).isPresent()) {
+                candidate = base + "-" + counter++;
+            }
+            kitchen.setName(candidate);
+            kitchen.setSlug(candidate);
+            kitchen = kitchenRepository.saveAndFlush(kitchen);
+        }
+        return kitchen;
     }
 
     private void assertFeatureCompliance(User seller, boolean isPreorder, LocalDate availableDate) {

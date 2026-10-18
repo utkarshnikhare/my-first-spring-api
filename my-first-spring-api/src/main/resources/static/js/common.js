@@ -172,6 +172,8 @@ async function api(path, opts) {
                 msg = data.message;
             } else if (data.error && typeof data.error === 'string') {
                 msg = data.error;
+            } else if (data.detail && typeof data.detail === 'string') {
+                msg = data.detail;
             } else if (typeof data === 'object') {
                 var fieldValues = Object.values(data).filter(function (v) { return typeof v === 'string'; });
                 if (fieldValues.length) msg = fieldValues.join('; ');

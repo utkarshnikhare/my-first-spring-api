@@ -2549,14 +2549,13 @@ document.addEventListener('submit', async function (e) {
             }
             var kid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
             if (!kid) {
-                var k = await sellerApi('/api/seller/kitchen');
-                if (!k || !k.id) {
-                    toast('Please complete your kitchen profile before publishing an offering.', 'error');
-                    sellerNavigate('#/kitchen');
-                    return;
-                }
-                kid = k.id;
-                S.myKitchen = k;
+                try {
+                    var k = await sellerApi('/api/seller/kitchen');
+                    if (k && k.id) {
+                        kid = k.id;
+                        S.myKitchen = k;
+                    }
+                } catch (ignored) {}
             }
             var categories = [];
             $all('input[name="categories"]:checked', form).forEach(function (cb) { categories.push(cb.value); });
@@ -2585,12 +2584,35 @@ document.addEventListener('submit', async function (e) {
                     await sellerApi('/api/seller-app/templates', { method: 'POST', body: favBody });
                 } catch (favErr) { toast('Could not save favourite: ' + favErr.message, 'error'); }
             }
-            await sellerApi('/api/seller/products?kitchenId=' + kid, { method: 'POST', body: vals });
-            toast('Offering published!', 'success');
-            S.draftOffering = null;
-            S.republishSourceId = null;
-            S.offeringFor = 'today';
-            sellerNavigate('#/home');
+            try {
+                var prodUrl = kid ? ('/api/seller/products?kitchenId=' + kid) : '/api/seller/products';
+                await sellerApi(prodUrl, { method: 'POST', body: vals });
+                toast('Offering published!', 'success');
+                S.draftOffering = null;
+                S.republishSourceId = null;
+                S.offeringFor = 'today';
+                sellerNavigate('#/home');
+            } catch (saveErr) {
+                var errData = (saveErr && saveErr.data) || {};
+                var errDetail = (typeof errData === 'object' && (errData.message || errData.error || errData.detail))
+                    || (saveErr && saveErr.message)
+                    || 'An unexpected error occurred. Please try again.';
+                if (typeof errData === 'string' && errData.trim()) {
+                    errDetail = errData.trim();
+                } else if (typeof errData === 'object') {
+                    if (errData.message && typeof errData.message === 'string') errDetail = errData.message;
+                    else if (errData.error && typeof errData.error === 'string') errDetail = errData.error;
+                    else if (errData.detail && typeof errData.detail === 'string') errDetail = errData.detail;
+                }
+                var warningEl = form.querySelector('#timingInlineWarning') || $('#timingInlineWarning');
+                if (warningEl) {
+                    warningEl.textContent = '⚠️ ' + errDetail;
+                    warningEl.style.display = 'block';
+                    try { warningEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (scrollErr) {}
+                }
+                toast(errDetail, 'error');
+                return;
+            }
         } else if (form.id === 'editOfferingForm') {
             await submitOfferingEdit(form);
         } else if (form.id === 'manageScheduleForm') {
@@ -2738,7 +2760,7 @@ document.addEventListener('submit', async function (e) {
             toast('All changes saved', 'success');
         }
     } catch (err) {
-        var errorMsg = (err && (err.message || (err.data && (err.data.message || err.data.error)))) || 'Could not save offering. Please try again.';
+        var errorMsg = (err && (err.message || (err.data && (err.data.message || err.data.error || err.data.detail)))) || 'An unexpected error occurred. Please try again.';
         if (err && err.data) {
             if (typeof err.data === 'string' && err.data.trim()) {
                 errorMsg = err.data.trim();
@@ -2746,10 +2768,18 @@ document.addEventListener('submit', async function (e) {
                 errorMsg = err.data.message;
             } else if (err.data.error && typeof err.data.error === 'string') {
                 errorMsg = err.data.error;
+            } else if (err.data.detail && typeof err.data.detail === 'string') {
+                errorMsg = err.data.detail;
             } else if (typeof err.data === 'object') {
                 var fieldValues = Object.values(err.data).filter(function (v) { return typeof v === 'string'; });
                 if (fieldValues.length) errorMsg = fieldValues.join('; ');
             }
+        }
+        var warningEl = (form && form.querySelector('#timingInlineWarning')) || $('#timingInlineWarning');
+        if (warningEl) {
+            warningEl.textContent = '⚠️ ' + errorMsg;
+            warningEl.style.display = 'block';
+            try { warningEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (scrollErr) {}
         }
         toast(errorMsg, 'error');
     }
