@@ -1029,7 +1029,7 @@ public class SellerAppService {
         }
         String close = requirePublicationClose(template.getOrderWindowEnd(), template.getCutoffTime());
         String readyBy = OfferingTiming.rebaseReadyByTime(template.getReadyByTime(), offeringDate);
-        OfferingTiming.validateNewOffering(offeringDate, preorder,
+        close = OfferingTiming.validateNewOffering(offeringDate, preorder,
                 template.getOrderWindowStart(), close, readyBy);
         Product product = new Product(kitchen, template.getName(), template.getDescription(),
                 template.getPrice(), template.getImageUrl());
@@ -1073,7 +1073,7 @@ public class SellerAppService {
         String readyBy = flexible
                 ? offeringDate + "T23:59"
                 : OfferingTiming.rebaseReadyByTime(original.getReadyByTime(), offeringDate);
-        OfferingTiming.validateNewOffering(offeringDate, preorder,
+        close = OfferingTiming.validateNewOffering(offeringDate, preorder,
                 original.getOrderWindowStart(), close, readyBy);
         Product clone = new Product(kitchen, original.getName(), original.getDescription(),
                 original.getPrice(), original.getImageUrl());

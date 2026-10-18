@@ -45,14 +45,14 @@ final class OfferingTiming {
         return close != null ? close : normalizeHhmm(product.getCutoffTime(), "Cutoff");
     }
 
-    static void validateNewOffering(LocalDate offeringDate, boolean preorder,
+    static String validateNewOffering(LocalDate offeringDate, boolean preorder,
                                     String orderWindowStart, String orderWindowEnd,
                                     String readyByTime) {
-        validateNewOffering(offeringDate, preorder, orderWindowStart, orderWindowEnd,
+        return validateNewOffering(offeringDate, preorder, orderWindowStart, orderWindowEnd,
                 readyByTime, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
     }
 
-    static void validateNewOffering(LocalDate offeringDate, boolean preorder,
+    static String validateNewOffering(LocalDate offeringDate, boolean preorder,
                                     String orderWindowStart, String orderWindowEnd,
                                     String readyByTime, LocalDate today, LocalTime now) {
         if (offeringDate == null) throw new IllegalArgumentException("Offering For is required.");
@@ -64,24 +64,61 @@ final class OfferingTiming {
         }
         String open = normalizeHhmm(orderWindowStart, "Orders Open");
         String close = requireOrdersClose(orderWindowEnd);
-        validateWindowPair(open, close);
         LocalDateTime delivery = parseReadyByTime(readyByTime, today);
         if (delivery.toLocalDate().isBefore(offeringDate)) {
             throw new IllegalArgumentException("Delivery / Ready By cannot be before the offering date.");
         }
-        LocalDate orderingDate = preorder ? offeringDate.minusDays(1) : offeringDate;
-        // 2-minute tolerance buffer so clock ticks right at submission don't cause rejection
-        int nowMinutes = now.toSecondOfDay() / 60;
-        if (!orderingDate.isAfter(today) && minutes(close) < nowMinutes - 2) {
-            throw new IllegalArgumentException("Orders Close must not already have passed for this offering date.");
+        if (!offeringDate.isAfter(today) && delivery.isBefore(LocalDateTime.of(today, now).minusMinutes(2))) {
+            throw new IllegalArgumentException("Delivery / Ready By must not already have passed.");
         }
+        LocalDate orderingDate = preorder ? offeringDate.minusDays(1) : offeringDate;
+        close = autoCorrectOrdersClose(orderingDate, close, delivery, today, now);
+
+        validateWindowPair(open, close);
         LocalDateTime closeDateTime = java.time.LocalDateTime.of(orderingDate, LocalTime.of(minutes(close) / 60, minutes(close) % 60));
         if (closeDateTime.isAfter(delivery)) {
             throw new IllegalArgumentException("Orders Close must be before Delivery / Ready By.");
         }
-        if (!offeringDate.isAfter(today) && delivery.isBefore(LocalDateTime.of(today, now).minusMinutes(2))) {
-            throw new IllegalArgumentException("Delivery / Ready By must not already have passed.");
+        return close;
+    }
+
+    static String autoCorrectOrdersClose(LocalDate orderingDate, String close,
+                                         LocalDateTime delivery, LocalDate today, LocalTime now) {
+        int nowMinutes = now.toSecondOfDay() / 60;
+        if (!orderingDate.isAfter(today) && minutes(close) < nowMinutes - 2) {
+            // a) Check if adding 12 hours (AM-to-PM correction) makes it a valid future time that is before readyByTime. If so, auto-correct it to PM!
+            int pmMinutes = minutes(close) + 12 * 60;
+            if (pmMinutes < 24 * 60 && pmMinutes >= nowMinutes - 2) {
+                LocalDateTime pmDateTime = LocalDateTime.of(orderingDate, LocalTime.of(pmMinutes / 60, pmMinutes % 60));
+                if (pmDateTime.isBefore(delivery)) {
+                    return String.format(Locale.ROOT, "%02d:%02d", pmMinutes / 60, pmMinutes % 60);
+                }
+            }
+            // b) If it is still before now or invalid, DO NOT throw an exception. Instead, gracefully clamp/default orderWindowEnd to readyByTime minus 45 minutes (or now plus 15 minutes if delivery is close).
+            LocalDateTime clampDateTime = delivery.minusMinutes(45);
+            if (clampDateTime.toLocalDate().isEqual(orderingDate)
+                    && (clampDateTime.toLocalTime().toSecondOfDay() / 60) >= nowMinutes - 2
+                    && clampDateTime.isBefore(delivery)) {
+                return String.format(Locale.ROOT, "%02d:%02d", clampDateTime.getHour(), clampDateTime.getMinute());
+            }
+            if (clampDateTime.toLocalDate().isAfter(orderingDate)) {
+                // Delivery is tomorrow or later, so on orderingDate (today) close can be 23:59
+                return "23:59";
+            }
+            // Delivery is close (less than 45 minutes from now): try now plus 15 minutes
+            LocalDateTime nowPlus15 = LocalDateTime.of(today, now).plusMinutes(15);
+            if (nowPlus15.toLocalDate().isEqual(orderingDate) && nowPlus15.isBefore(delivery)) {
+                return String.format(Locale.ROOT, "%02d:%02d", nowPlus15.getHour(), nowPlus15.getMinute());
+            }
+            // Delivery is within 15 minutes: clamp between now and delivery
+            long secondsGap = java.time.Duration.between(LocalDateTime.of(today, now), delivery).getSeconds();
+            if (secondsGap > 60) {
+                LocalDateTime midpoint = LocalDateTime.of(today, now).plusSeconds(secondsGap / 2);
+                return String.format(Locale.ROOT, "%02d:%02d", midpoint.getHour(), midpoint.getMinute());
+            }
+            return String.format(Locale.ROOT, "%02d:%02d", now.getHour(), now.getMinute());
         }
+        return close;
     }
 
     static void enforceOrderWindow(Product product, LocalDate orderingDate, String context) {

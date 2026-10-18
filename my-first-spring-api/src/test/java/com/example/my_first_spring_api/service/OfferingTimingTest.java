@@ -165,6 +165,68 @@ class OfferingTimingTest {
                 TODAY, LocalTime.NOON)).isEqualTo("PRE_ORDER");
     }
 
+    @Test
+    void amToPmAutoCorrectionAppliedWhenCloseInPast() {
+        // Now is 14:00 (2:00 PM). Close entered as 03:47 (3:47 AM). Delivery is 16:47 (4:47 PM).
+        // +12h makes 15:47, which is in the future (> 14:00) and before delivery (16:47).
+        String corrected = OfferingTiming.validateNewOffering(TODAY, false, null, "03:47",
+                "2026-09-24T16:47", TODAY, LocalTime.of(14, 0));
+        assertThat(corrected).isEqualTo("15:47");
+    }
+
+    @Test
+    void gracefulClampingToDeliveryMinus45MinutesWhenAmToPmInvalidOrStillPast() {
+        // Now is 16:00. Close entered as 03:45 (3:45 AM).
+        // +12h makes 15:45, which is STILL before now (16:00).
+        // Delivery is 17:00 (5:00 PM).
+        // Gracefully clamped to readyByTime minus 45 minutes = 16:15.
+        String corrected = OfferingTiming.validateNewOffering(TODAY, false, null, "03:45",
+                "2026-09-24T17:00", TODAY, LocalTime.of(16, 0));
+        assertThat(corrected).isEqualTo("16:15");
+    }
+
+    @Test
+    void gracefulClampingToNowPlus15WhenDeliveryIsClose() {
+        // Now is 16:30. Close entered as 15:00 (PM, already passed).
+        // Delivery is 17:00 (30 mins from now; delivery - 45m = 16:15 is already past).
+        // Gracefully clamped to now plus 15 minutes = 16:45.
+        String corrected = OfferingTiming.validateNewOffering(TODAY, false, null, "15:00",
+                "2026-09-24T17:00", TODAY, LocalTime.of(16, 30));
+        assertThat(corrected).isEqualTo("16:45");
+    }
+
+    @Test
+    void gracefulClampingWhenDeliveryWithin15Minutes() {
+        // Now is 16:30. Close entered as 15:00 (past).
+        // Delivery is 16:40 (10 mins away).
+        // Midpoint between 16:30 and 16:40 is 16:35.
+        String corrected = OfferingTiming.validateNewOffering(TODAY, false, null, "15:00",
+                "2026-09-24T16:40", TODAY, LocalTime.of(16, 30));
+        assertThat(corrected).isEqualTo("16:35");
+    }
+
+    @Test
+    void preorderPastCloseTimeIsAutoCorrectedToPm() {
+        // Offering is tomorrow (preorder=true, orderingDate=today).
+        // Now is 14:00 today. Close entered as 09:00 (9:00 AM today, in past).
+        // Delivery is tomorrow at 18:00.
+        // +12h makes 21:00 (9:00 PM today), which is valid and before tomorrow's delivery.
+        String corrected = OfferingTiming.validateNewOffering(TODAY.plusDays(1), true, null, "09:00",
+                "2026-09-25T18:00", TODAY, LocalTime.of(14, 0));
+        assertThat(corrected).isEqualTo("21:00");
+    }
+
+    @Test
+    void preorderPastCloseTimeClampsTo2359WhenDeliveryIsFutureDay() {
+        // Offering is tomorrow (preorder=true, orderingDate=today).
+        // Now is 22:00 today. Close entered as 18:00 (6:00 PM today, in past).
+        // +12h is 30:00 (invalid). Delivery is tomorrow at 18:00.
+        // Clamps to 23:59 on orderingDate (today).
+        String corrected = OfferingTiming.validateNewOffering(TODAY.plusDays(1), true, null, "18:00",
+                "2026-09-25T18:00", TODAY, LocalTime.of(22, 0));
+        assertThat(corrected).isEqualTo("23:59");
+    }
+
 
     private Product product(LocalDate date, boolean preorder, String open, String close, int remaining) {
         User seller = new User("Seller", "9100000001", "A-1", UserRole.SELLER);

@@ -261,7 +261,7 @@ public class SellerService {
             // time-of-day onto the offering date instead of rejecting a valid
             // offering. Explicit "today"/"tomorrow" intent stays strict below.
             readyByTime = OfferingTiming.rebaseReadyByTimeForOffering(readyByTime, offeringDate);
-            OfferingTiming.validateNewOffering(dto.getAvailableDate(), preorder,
+            orderWindowEnd = OfferingTiming.validateNewOffering(dto.getAvailableDate(), preorder,
                     orderWindowStart, orderWindowEnd, readyByTime);
         }
         assertFeatureCompliance(seller, preorder, offeringDate, dto.getName());
@@ -359,7 +359,7 @@ public class SellerService {
             // client-computed readyBy onto the effective offering date so a
             // day-boundary skew is corrected instead of rejected.
             effectiveReady = OfferingTiming.rebaseReadyByTimeForOffering(effectiveReady, effectiveDate);
-            OfferingTiming.validateNewOffering(effectiveDate, effectivePreorder,
+            effectiveClose = OfferingTiming.validateNewOffering(effectiveDate, effectivePreorder,
                     effectiveOpen, effectiveClose, effectiveReady);
         }
 
