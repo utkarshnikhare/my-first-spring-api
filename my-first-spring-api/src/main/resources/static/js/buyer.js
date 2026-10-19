@@ -427,8 +427,10 @@ async function homemadeStoreView(hash) {
         var today = (detail.products || []).filter(function (p) {
             return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate()) && p.availableToday;
         });
+        today = sortByClosingTime(today);
         var preorder = (detail.preorderProducts && detail.preorderProducts.length) ? detail.preorderProducts :
             (detail.products || []).filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
+        preorder = sortByClosingTime(preorder);
         if (today.length) {
             h += '<h3 class="mb-2">Available Now</h3><div class="products-grid">';
             today.forEach(function (p) {
