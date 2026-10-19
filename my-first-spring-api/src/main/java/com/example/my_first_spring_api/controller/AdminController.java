@@ -54,7 +54,7 @@ public class AdminController {
         // The acting Admin is resolved server-side from the session - never from a
         // parameter - so the Area scope in handover 15 cannot be spoofed.
         return ResponseEntity.ok(adminService.buyers(search, areaId, societyId,
-                buyerService.requireCurrentBuyer(session)));
+                buyerService.getCurrentBuyer(session)));
     }
 
     /**

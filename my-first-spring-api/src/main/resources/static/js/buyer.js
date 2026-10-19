@@ -1068,7 +1068,12 @@ async function placeOrderWithStatus(paymentStatus) {
                     deliveryAddress: addr
                 };
             }
+            var cart = getCart();
             var placeBody = {
+                kitchenId: cart ? cart.kitchenId : null,
+                items: (cart && cart.items) ? cart.items.map(function (i) {
+                    return { productId: i.productId, quantity: i.qty, scheduledDate: i.scheduledDate || null, scheduledSlot: i.scheduledSlot || null };
+                }) : null,
                 paymentStatus: submittedPaymentStatus,
                 customInstructions: note,
                 specialInstructions: note,
@@ -1077,12 +1082,16 @@ async function placeOrderWithStatus(paymentStatus) {
                 societyId: buyerDetails ? buyerDetails.societyId : null,
                 buyerDetails: buyerDetails
             };
-            // Re-validate cart items against live product availability before placing orders
-            var cart = getCart();
+            // Ensure draft is synchronized with cart without falsely rejecting valid orders
             if (cart && cart.items && cart.items.length) {
-                var draftCheck = await api('/api/buyer/orders/draft');
+                var draftCheck = null;
+                try {
+                    draftCheck = await api('/api/buyer/orders/draft');
+                } catch (e) {
+                    draftCheck = null;
+                }
                 if (!draftCheck || !draftCheck.items || !draftCheck.items.length) {
-                    throw new Error('Your selected offerings are no longer available. Please review your cart.');
+                    await rebuildDraftFromCart();
                 }
             }
             var placed;
@@ -1133,6 +1142,16 @@ async function confirmOrderView() {
     try {
         draft = await api('/api/buyer/orders/draft');
     } catch (e) { draft = null; }
+    if (!draft || !draft.items || !draft.items.length) {
+        var cart = getCart();
+        if (cart && cart.items && cart.items.length) {
+            try {
+                if (await rebuildDraftFromCart()) {
+                    draft = await api('/api/buyer/orders/draft');
+                }
+            } catch (e2) {}
+        }
+    }
     if (!draft || !draft.items || !draft.items.length) {
         h += backBarHtml('Confirm Order') +
             emptyHtml('🧾', 'No active order', 'Your order was already submitted or your selection expired.',

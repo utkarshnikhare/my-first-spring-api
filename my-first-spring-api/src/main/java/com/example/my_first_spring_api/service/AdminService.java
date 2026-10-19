@@ -71,6 +71,9 @@ public class AdminService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.example.my_first_spring_api.repository.SocietyRepository societyRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.my_first_spring_api.repository.AreaRepository areaRepository;
+
     // ==================== Dashboard ====================
 
     @Transactional(readOnly = true)
@@ -399,7 +402,8 @@ public class AdminService {
         final Set<Long> orderTermMatches = buyersMatchingOrderTerm;
         return all.stream().filter(b -> {
             if (effectiveSociety != null) {
-                if (b.getSocietyRef() == null || !effectiveSociety.equals(b.getSocietyRef().getId())) return false;
+                Long socId = resolveBuyerSocietyId(b);
+                if (socId == null || !effectiveSociety.equals(socId)) return false;
             }
             // Null-safe, and compared the good way round: a buyer with no Area
             // reference yet must be EXCLUDED by an Area filter, not blow up the
@@ -457,9 +461,9 @@ public class AdminService {
         m.put("id", b.getId());
         m.put("name", b.getName());
         m.put("mobileNumber", b.getMobileNumber());
-        m.put("society", b.getSociety());
-        m.put("societyId", b.getSocietyRef() != null ? b.getSocietyRef().getId() : null);
-        m.put("area", b.getArea());
+        m.put("society", b.getSociety() != null ? b.getSociety() : (b.getSocietyRef() != null ? b.getSocietyRef().getName() : null));
+        m.put("societyId", resolveBuyerSocietyId(b));
+        m.put("area", b.getArea() != null ? b.getArea() : (b.getAreaRef() != null ? b.getAreaRef().getName() : (b.getSocietyRef() != null && b.getSocietyRef().getArea() != null ? b.getSocietyRef().getArea().getName() : null)));
         m.put("areaId", resolveBuyerAreaId(b));
         m.put("building", b.getBuilding());
         m.put("flatHouseNumber", b.getFlatHouseNumber());
@@ -1400,14 +1404,66 @@ public class AdminService {
     }
 
     /**
+     * Resolves a buyer's community ID, either from their explicit reference or from
+     * their registered free-text society name.
+     */
+    private Long resolveBuyerSocietyId(User buyer) {
+        if (buyer == null) return null;
+        if (buyer.getSocietyRef() != null) return buyer.getSocietyRef().getId();
+        if (buyer.getSociety() != null && !buyer.getSociety().isBlank()) {
+            if (locationService != null) {
+                Optional<Society> match = locationService.resolveLegacySociety(buyer.getSociety().trim());
+                if (match.isPresent()) return match.get().getId();
+            }
+            if (societyRepository != null) {
+                List<Society> matches = societyRepository.findByNameKey(Society.deriveNameKey(buyer.getSociety().trim()));
+                if (matches != null && !matches.isEmpty()) {
+                    return matches.get(0).getId();
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * The buyer's area, resolved through their own reference or - for a profile
-     * that only ever set the society - through that society's parent area.
+     * that only ever set the society or text area - through that society's parent area
+     * or matching area name.
      */
     private Long resolveBuyerAreaId(User buyer) {
         if (buyer == null) return null;
         if (buyer.getAreaRef() != null) return buyer.getAreaRef().getId();
         if (buyer.getSocietyRef() != null && buyer.getSocietyRef().getArea() != null) {
             return buyer.getSocietyRef().getArea().getId();
+        }
+        if (buyer.getSociety() != null && !buyer.getSociety().isBlank()) {
+            if (locationService != null) {
+                Optional<Society> s = locationService.resolveLegacySociety(buyer.getSociety().trim());
+                if (s.isPresent() && s.get().getArea() != null) {
+                    return s.get().getArea().getId();
+                }
+            }
+            if (societyRepository != null) {
+                List<Society> matches = societyRepository.findByNameKey(Society.deriveNameKey(buyer.getSociety().trim()));
+                if (matches != null && !matches.isEmpty() && matches.get(0).getArea() != null) {
+                    return matches.get(0).getArea().getId();
+                }
+            }
+        }
+        if (buyer.getArea() != null && !buyer.getArea().isBlank()) {
+            if (areaRepository != null) {
+                Optional<Area> a = areaRepository.findByNameIgnoreCase(buyer.getArea().trim());
+                if (a.isPresent()) {
+                    return a.get().getId();
+                }
+            }
+            if (locationService != null) {
+                for (Area a : locationService.findAllAreas()) {
+                    if (a != null && a.getName() != null && a.getName().equalsIgnoreCase(buyer.getArea().trim())) {
+                        return a.getId();
+                    }
+                }
+            }
         }
         return null;
     }
