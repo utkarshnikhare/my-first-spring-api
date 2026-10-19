@@ -45,8 +45,9 @@ class PostgresSchemaMigrationTest {
         // V6 adds the password_reset_tokens table; V7 adds users.email;
         // V8 adds the password_reset_requests table; V9 defensively re-adds
         // users.email if V7 was never applied (idempotent, IF NOT EXISTS);
-        // V10 hardens product is_available and order status defaults.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("10");
+        // V10 hardens product is_available and order status defaults;
+        // V11 syncs legacy orders.status column and sets default PENDING.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("11");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
