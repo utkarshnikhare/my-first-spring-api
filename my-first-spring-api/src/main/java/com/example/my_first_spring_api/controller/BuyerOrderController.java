@@ -31,7 +31,7 @@ public class BuyerOrderController {
 
     @PostMapping("/draft")
     public ResponseEntity<OrderDto> createOrUpdateDraft(@RequestParam("kitchenId") Long kitchenId,
-                                                        @Valid @RequestBody List<OrderItemRequest> items,
+                                                        @RequestBody List<@Valid OrderItemRequest> items,
                                                         HttpSession session) {
         User buyer = buyerService.requireCurrentBuyer(session);
         return ResponseEntity.ok(orderService.createOrUpdateDraftOrder(kitchenId, items, session));
