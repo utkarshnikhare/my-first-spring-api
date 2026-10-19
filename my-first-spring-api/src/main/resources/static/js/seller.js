@@ -665,21 +665,17 @@ function sdOfferingCardHtml(p, orderCount) {
         var occToday = p.nextOccurrenceDate === sellerDate('today');
         h += '<button class="sd-btn sd-btn--edit" type="button" data-action="edit-today" data-oid="'
             + esc(p.occurrenceId) + '">' + (occToday ? 'Edit Today' : 'Edit This Date') + '</button>';
-        var dayLimited = p.maxQuantity != null || p.remainingQuantity != null;
-        if (dayLimited) {
-            h += '<button class="sd-btn sd-btn--soldout" type="button" data-action="occ-sold-out" data-oid="'
-                + esc(p.occurrenceId) + '">' + (occToday ? 'Sold Out Today' : 'Sold Out This Date') + '</button>';
-        } else {
-            h += '<button class="sd-btn sd-btn--pause" type="button" data-action="occ-close" data-oid="'
-                + esc(p.occurrenceId) + '">' + (occToday ? 'Close Orders Today' : 'Close Orders This Date') + '</button>';
-        }
+        var occPauseLabel = occToday ? 'Pause Today' : 'Pause This Date';
+        var occSoldLabel = occToday ? 'Sold Out Today' : 'Sold Out This Date';
+        h += '<button class="sd-btn sd-btn--pause" type="button" data-action="occ-close" data-oid="'
+            + esc(p.occurrenceId) + '">' + occPauseLabel + '</button>';
+        h += '<button class="sd-btn sd-btn--soldout" type="button" data-action="occ-sold-out" data-oid="'
+            + esc(p.occurrenceId) + '">' + occSoldLabel + '</button>';
     } else if (!p.recurring) {
         h += '<button class="sd-btn sd-btn--edit" type="button" data-action="edit-offering" data-pid="' + p.id + '">Edit</button>';
-        var oneTimeLimited = p.maxQuantity != null || p.remainingQuantity != null;
-        // Unlimited offerings close orders rather than pretending to sell out.
-        if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--pause" type="button" data-action="pause-orders" data-pid="' + p.id + '">' + (oneTimeLimited ? 'Pause' : 'Close Orders') + '</button>';
+        if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--pause" type="button" data-action="pause-orders" data-pid="' + p.id + '">Pause</button>';
         if (p.ordersPaused && !p.soldOut) h += '<button class="sd-btn sd-btn--resume" type="button" data-action="resume-orders" data-pid="' + p.id + '">Resume</button>';
-        if (oneTimeLimited && !p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Sold Out</button>';
+        if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Sold Out</button>';
     }
     h += '</div></div></div>';
     return h;
@@ -2022,7 +2018,7 @@ function offeringFormHtml(t, opts) {
     var closeMinAttr = (!isEdit && chosenDate <= todayIso) ? ' min="' + currentLocalTime + '"' : '';
     var readyMinAttr = (!locked) ? ' min="' + currentLocalIso + '"' : '';
 
-    var readyNote = 'Date/time by which the order will be ready/delivered.';
+    h += '<div class="form-group"><label class="form-label">Orders Open — Optional</label><input class="form-input" name="orderWindowStart" type="time" value="' + esc(openValue) + '"' + lockAttr + '><p class="muted small">Leave blank to start accepting orders immediately.</p></div>';
 
     h += scrollingWheelPickerHtml(closeValue, initialReady, locked);
 
@@ -2032,25 +2028,10 @@ function offeringFormHtml(t, opts) {
     h += '<div id="liveTimingBadge" class="timing-live-badge">' + initialBadge + '</div>';
     h += '<div id="timingInlineWarning" class="timing-inline-warning" style="display:none;"></div>';
 
-    var closeNote = locked
-        ? 'Has orders — can only be extended (currently ' + prettyTime(t.orderWindowEnd) + ').'
-        : 'Stop taking orders before food delivery.';
-    h += '<div class="form-row-2">';
-    h += '<div class="form-group" id="orderCloseGroup"><label class="form-label">Orders Close <span class="req">*</span></label>';
-    h += '<input class="form-input" name="orderWindowEnd" type="time" required value="' + esc(closeValue) + '"' + closeMinAttr + '><p class="muted small">' + esc(closeNote) + '</p>';
-    h += '</div>';
+    // Hidden inputs mapped directly to the wheel time picker selections
+    h += '<input type="hidden" name="orderWindowEnd" value="' + esc(closeValue) + '">';
+    h += '<input type="hidden" name="readyByTime" value="' + esc(readyIso ? initialReady.slice(0, 16) : (initialReady || '')) + '">';
 
-    if (locked) {
-        var readyDisplay = t.readyByTime
-            ? (readyIso ? prettyDate(t.readyByTime.slice(0, 10)) + ', ' + prettyTime(t.readyByTime.slice(11, 16)) : t.readyByTime)
-            : '--';
-        h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTimeLocked" type="text" value="' + esc(readyDisplay) + '" disabled><input type="hidden" name="readyByTime" value="' + esc(initialReady) + '"><p class="muted small">' + esc(readyNote) + '</p></div>';
-    } else {
-        if (isEdit && t.readyByTime && !readyIso) readyNote = 'Saved value: ' + t.readyByTime + '. Pick a new date/time to replace it.';
-        h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label><input class="form-input" name="readyByTime" type="datetime-local"' + (isEdit ? '' : ' required') + ' value="' + esc(readyIso ? initialReady.slice(0, 16) : '') + '"' + readyMinAttr + '><p class="muted small">' + esc(readyNote) + '</p></div>';
-    }
-    h += '</div>';
-    h += '<div class="form-group"><label class="form-label">Orders Open — Optional</label><input class="form-input" name="orderWindowStart" type="time" value="' + esc(openValue) + '"' + lockAttr + '><p class="muted small">Leave blank to start accepting orders immediately.</p></div>';
     var qtyValue = '', qtyAttr = '', qtyNote = 'Leave blank for unlimited quantity.';
     if (isEdit) {
         if (t.maxQuantity == null) {
@@ -2066,7 +2047,12 @@ function offeringFormHtml(t, opts) {
     h += '<div class="form-group"><label class="form-label">' + (isEdit ? 'Quantity Available Now' : 'Quantity Available — Optional') + '</label><input class="form-input" name="' + (isEdit ? 'availableQuantity' : 'maxQuantity') + '" type="number" min="' + (isEdit ? '0' : '1') + '" step="1" value="' + esc(qtyValue) + '" placeholder="' + (isEdit ? 'Unlimited' : 'Blank for unlimited') + '"' + qtyAttr + '><p class="muted small">' + esc(qtyNote) + '</p></div>';
     h += '<div class="form-group"><label class="form-label">To be listed in <span class="req">*</span></label><div class="checkbox-group">' + offeringCategoryBox('BREAKFAST', 'Breakfast', categoryValues) + offeringCategoryBox('LUNCH', 'Lunch', categoryValues) + offeringCategoryBox('DINNER', 'Dinner', categoryValues) + offeringCategoryBox('SNACKS', 'Snacks', categoryValues) + '</div><p class="muted small">Select at least one category.</p></div>';
     if (!isEdit) {
-        h += '<div class="toggle-row"><div><div class="toggle-text">Mark as Favourite</div><div class="toggle-note">Save as template (max 3).</div></div><div class="toggle-switch" id="favToggle" data-action="toggle-favourite"></div></div>';
+        var favCount = (S.favTemplates && S.favTemplates.length) ? S.favTemplates.length : 0;
+        var favDisabled = favCount >= 3;
+        var favNote = favDisabled
+            ? '<span class="text-danger" style="color:#dc2626;font-weight:600;">You already have 3 items marked as favourite. Remove items to add more favorites.</span>'
+            : 'Save as template (max 3).';
+        h += '<div class="toggle-row' + (favDisabled ? ' is-disabled' : '') + '"><div><div class="toggle-text">Mark as Favourite</div><div class="toggle-note">' + favNote + '</div></div><div class="toggle-switch' + (favDisabled ? ' disabled' : '') + '" id="favToggle"' + (favDisabled ? ' title="You already have 3 items marked as favourite"' : ' data-action="toggle-favourite"') + '></div></div>';
     }
     h += '<div class="offering-form-actions-row">'
         + '<button class="btn btn-secondary btn-cancel-offering" type="button" data-action="cancel-offering-form">Cancel</button>'
@@ -2084,6 +2070,11 @@ async function sellerCreateView() {
     S.offeringMode = 'today';
     S.recurringDuration = 'thisweek';
     S.recurringScheduleConfig = null;
+    try {
+        S.favTemplates = (await sellerApi('/api/seller-app/templates')) || [];
+    } catch (e) {
+        S.favTemplates = S.favTemplates || [];
+    }
     var t = S.draftOffering || {};
     var h = '<div class="view-enter">';
     h += '<div class="page-head"><h1>Create Offering</h1><p class="muted small">' +
@@ -3808,7 +3799,16 @@ document.addEventListener('click', async function (e) {
                 else S.historySelected = S.historySelected.filter(function (id) { return id !== pid; });
                 break;
             }
-            case 'toggle-favourite': { var tg = $('#favToggle'); if (tg) tg.classList.toggle('on'); break; }
+            case 'toggle-favourite': {
+                var tg = $('#favToggle');
+                if (!tg) break;
+                if (tg.classList.contains('disabled')) {
+                    toast('You already have 3 items marked as favourite. Remove items to add more favorites.', 'error');
+                    break;
+                }
+                tg.classList.toggle('on');
+                break;
+            }
             case 'mark-paid': {
                 var oid = Number(t.dataset.oid);
                 if (!confirm('Mark this order as PAID?')) return;

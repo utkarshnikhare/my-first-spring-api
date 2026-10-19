@@ -108,6 +108,7 @@ document.addEventListener('click', async function (e) {
     try {
         switch (a) {
             case 'go-back': history.back(); break;
+            case 'explore-kitchens': navigate('#/kitchens'); break;
             case 'noop': break;
             case 'toggle-notifs': await toggleNotifications(t.dataset.panelId); break;
             case 'read-notification': await readNotification(t.dataset.notificationId); break;
