@@ -35,7 +35,8 @@ public class Order {
     @Column(name = "order_status", nullable = false)
     private OrderStatus orderStatus = OrderStatus.DRAFT;
 
-    @Transient
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status")
     private OrderStatus status = OrderStatus.PENDING;
 
     @Transient
@@ -123,9 +124,11 @@ public class Order {
         }
         if (this.paymentStatus == null) this.paymentStatus = PaymentStatus.PENDING;
         if (this.orderStatus == null) {
-            this.orderStatus = (this.status == OrderStatus.PENDING) ? OrderStatus.DRAFT : (this.status != null ? this.status : OrderStatus.DRAFT);
+            this.orderStatus = (this.status != null) ? this.status : OrderStatus.DRAFT;
         }
-        if (this.status == null) this.status = OrderStatus.PENDING;
+        if (this.status == null) {
+            this.status = (this.orderStatus != null) ? this.orderStatus : OrderStatus.PENDING;
+        }
         if (this.customInstructions == null) this.customInstructions = "";
         if (this.specialInstructions == null) this.specialInstructions = this.customInstructions;
         if (this.deliveryAddress == null) {
@@ -263,19 +266,15 @@ public class Order {
             }
         }
     }
-    public OrderStatus getOrderStatus() { return orderStatus != null ? orderStatus : OrderStatus.DRAFT; }
+    public OrderStatus getOrderStatus() { return orderStatus != null ? orderStatus : (status != null ? status : OrderStatus.DRAFT); }
     public void setOrderStatus(OrderStatus orderStatus) {
         this.orderStatus = orderStatus != null ? orderStatus : OrderStatus.DRAFT;
-        if (this.orderStatus != OrderStatus.DRAFT && this.orderStatus != OrderStatus.PENDING) {
-            this.status = this.orderStatus;
-        }
+        this.status = this.orderStatus;
     }
     public OrderStatus getStatus() { return status != null ? status : (orderStatus != null ? orderStatus : OrderStatus.PENDING); }
     public void setStatus(OrderStatus status) {
         this.status = status != null ? status : OrderStatus.PENDING;
-        if (status != null && status != OrderStatus.PENDING) {
-            this.orderStatus = status;
-        }
+        this.orderStatus = this.status;
     }
     public String getCustomInstructions() { return customInstructions != null ? customInstructions : ""; }
     public void setCustomInstructions(String customInstructions) {

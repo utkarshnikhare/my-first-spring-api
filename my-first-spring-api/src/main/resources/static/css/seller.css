@@ -1071,6 +1071,14 @@
 }
 .toggle-switch.on { background: var(--accent); }
 .toggle-switch.on::after { transform: translateX(22px); }
+.toggle-switch.disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: #cbd5e1;
+}
+.toggle-row.is-disabled {
+    opacity: 0.85;
+}
 .toggle-text {
     font-weight: 600;
     font-size: .88rem;

@@ -516,9 +516,11 @@ async function kitchenPageView(hash) {
         var today = (detail.products || []).filter(function (p) {
             return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate());
         });
+        today = sortByClosingTime(today);
         var preorder = (detail.preorderProducts && detail.preorderProducts.length)
             ? detail.preorderProducts
             : (detail.products || []).filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
+        preorder = sortByClosingTime(preorder);
 
         // Explore Other Kitchens near the top navigation.
         h += exploreOtherKitchensHtml();
@@ -580,6 +582,7 @@ async function kitchenPageView(hash) {
 
         // Coming Up strip (secondary tease of upcoming scheduled dishes)
         var upcoming = preorder.filter(function (p) { return p.availableDate; });
+        upcoming = sortByClosingTime(upcoming);
         if (upcoming.length) {
             h += '<h3 class="section-gap mb-2">📅 Coming Up</h3><div class="upcoming-strip">' +
                 upcoming.slice(0, 6).map(function (p) {
@@ -599,13 +602,40 @@ async function kitchenPageView(hash) {
     return h;
 }
 
+function parseClosingMinutes(t) {
+    if (!t) return 99999;
+    var s = String(t).trim();
+    var ampmMatch = s.match(/(.*?)\s*([AP]M)$/i);
+    if (ampmMatch) {
+        var parts = ampmMatch[1].split(':');
+        var h = parseInt(parts[0], 10) || 0;
+        var m = parseInt(parts[1], 10) || 0;
+        var isPm = ampmMatch[2].toUpperCase() === 'PM';
+        if (isPm && h < 12) h += 12;
+        if (!isPm && h === 12) h = 0;
+        return h * 60 + m;
+    }
+    var parts = s.split(':');
+    var h = parseInt(parts[0], 10) || 0;
+    var m = parseInt(parts[1], 10) || 0;
+    return h * 60 + m;
+}
+
+function sortByClosingTime(products) {
+    return (products || []).slice().sort(function (a, b) {
+        var tA = parseClosingMinutes(a.cutoffTime || a.orderWindowEnd);
+        var tB = parseClosingMinutes(b.cutoffTime || b.orderWindowEnd);
+        return tA - tB;
+    });
+}
+
 /**
- * A visible "Explore Other Kitchens" action linking to the existing marketplace
- * (/kitchens), shown near the top and lower down on the public kitchen page so a
+ * A visible "Explore Other Kitchens" action linking to the all kitchens view
+ * (#/kitchens), shown near the top and lower down on the public kitchen page so a
  * buyer who cannot order here always has a way back into discovery.
  */
 function exploreOtherKitchensHtml() {
-    return '<a class="btn btn-secondary btn-block btn-sm" href="/kitchens">🧭 Explore Other Kitchens</a>';
+    return '<a class="btn btn-secondary btn-block btn-sm" href="#/kitchens" data-action="explore-kitchens">🧭 Explore Other Kitchens</a>';
 }
 
 function quickPostsHtml(posts) {
