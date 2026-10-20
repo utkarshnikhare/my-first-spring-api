@@ -55,7 +55,7 @@ class PostgresNativeMigrationTest {
         // users.email if V7 was never applied (idempotent, IF NOT EXISTS);
         // V10 hardens product is_available and order status defaults;
         // V11 syncs legacy orders.status column and sets default PENDING;
-        // V12 syncs legacy order_items.unit_price and product_name columns.
+        // V12 syncs legacy order_items.unit_price column.
         assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("12");
 
         Integer tableCount = jdbcTemplate.queryForObject(
