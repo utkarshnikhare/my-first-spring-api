@@ -30,9 +30,6 @@ public class OrderItem {
     @Column(name = "unit_price", precision = 10, scale = 2)
     private BigDecimal unitPrice;
 
-    @Column(name = "product_name")
-    private String productName;
-
     /** Buyer-chosen availability date for pre-order items (null = today). */
     @Column(name = "scheduled_date")
     private LocalDate scheduledDate;
@@ -71,9 +68,6 @@ public class OrderItem {
         if (this.price == null && this.unitPrice != null) {
             this.price = this.unitPrice;
         }
-        if (this.productName == null && this.product != null) {
-            this.productName = this.product.getName();
-        }
     }
 
     public OrderItem() {}
@@ -83,7 +77,6 @@ public class OrderItem {
         this.quantity = quantity;
         this.price = price;
         this.unitPrice = price;
-        this.productName = product != null ? product.getName() : null;
     }
 
     public Long getId() { return id; }
@@ -91,12 +84,7 @@ public class OrderItem {
     public Order getOrder() { return order; }
     public void setOrder(Order order) { this.order = order; }
     public Product getProduct() { return product; }
-    public void setProduct(Product product) {
-        this.product = product;
-        if (product != null && this.productName == null) {
-            this.productName = product.getName();
-        }
-    }
+    public void setProduct(Product product) { this.product = product; }
     public Integer getQuantity() { return quantity; }
     public void setQuantity(Integer quantity) { this.quantity = quantity; }
     public BigDecimal getPrice() { return price; }
@@ -113,8 +101,6 @@ public class OrderItem {
             this.price = unitPrice;
         }
     }
-    public String getProductName() { return productName != null ? productName : (product != null ? product.getName() : null); }
-    public void setProductName(String productName) { this.productName = productName; }
     public LocalDate getScheduledDate() { return scheduledDate; }
     public void setScheduledDate(LocalDate scheduledDate) { this.scheduledDate = scheduledDate; }
     public String getScheduledSlot() { return scheduledSlot; }
