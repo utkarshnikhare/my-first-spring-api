@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -294,6 +295,7 @@ public class DiscoveryService {
                 .map(k -> {
                     List<Product> items = productRepository.findByKitchenAndAvailableTodayTrueOrderByCreatedAtDesc(k).stream()
                             .filter(p -> !p.isOrdersPaused())
+                            .filter(p -> p.getAvailableDate() == null || !p.getAvailableDate().isBefore(LocalDate.now(AppTimeZone.ZONE)))
                             .collect(Collectors.toList());
                     return toHomemadeCard(k, items);
                 })

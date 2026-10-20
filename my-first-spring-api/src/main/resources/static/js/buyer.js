@@ -674,30 +674,26 @@ function buyerScarcityLabel(p) {
 function offeringCardHtml(p, kitchen, isPreorderSection) {
     var soldOut = p.soldOut || (p.remainingQuantity != null && p.remainingQuantity <= 0);
     var paused = !!p.ordersPaused;
-    var ordersClosed = !!p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED';
     var isPre = !!p.isPreorder || !!isPreorderSection;
-    // V2 §14: a recurring offering whose next selling date is in the future
-    // presents exactly like a pre-order WITH its delivery date. Today's
-    // occurrence (or a one-time item) keeps the normal "Today" presentation.
     var nowD = new Date();
     var todayIso = nowD.getFullYear() + '-' + String(nowD.getMonth() + 1).padStart(2, '0') + '-' + String(nowD.getDate()).padStart(2, '0');
     var isNextOcc = !isPre && !!p.recurring && !!p.nextOccurrenceDate && p.nextOccurrenceDate !== todayIso;
     var isPreOrNext = isPre || isNextOcc;
+    var isPast = p.lifecycleState === 'HISTORY' || (!isPreOrNext && p.availableDate && p.availableDate < todayIso);
+    var ordersClosed = !!p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED' || isPast;
     var kitchenJson = encodeURIComponent(JSON.stringify({ id: kitchen.id, displayName: kitchen.displayName }));
     var timingHtml;
     if (isPreOrNext) {
         var timingDate = isPre ? p.availableDate : p.nextOccurrenceDate;
-        // "Order by" / "Delivery by" read from the same persisted cutoff and
-        // delivery data the seller configured - only the Buyer-facing wording changed.
         var orderBy = timingDate ? prettyDate(timingDate) : '';
         if (p.cutoffTime) orderBy = (orderBy ? orderBy + ', ' : '') + prettyTime(p.cutoffTime);
         var deliverBy = timingDate ? prettyDate(timingDate) : '';
-        if (p.readyByTime) deliverBy = (deliverBy ? deliverBy + ', ' : '') + p.readyByTime;
+        if (p.readyByTime) deliverBy = (deliverBy ? deliverBy + ', ' : '') + prettyTime(p.readyByTime);
         timingHtml = '<p class="oc-timing">⏰ <strong>Order by:</strong> ' + esc(orderBy || '—') + '</p>' +
             '<p class="oc-timing">📅 <strong>Delivery by:</strong> ' + esc(deliverBy || '—') + '</p>';
     } else {
         var t1 = p.cutoffTime ? ('Order by ' + prettyTime(p.cutoffTime)) : '';
-        var t2 = p.readyByTime ? (' · Ready ' + p.readyByTime) : '';
+        var t2 = p.readyByTime ? (' · Ready ' + prettyTime(p.readyByTime)) : '';
         timingHtml = '<p class="oc-timing">⏰ ' + esc(t1 + t2) + '</p>';
     }
     return '<div class="offering-card' + (soldOut ? ' sold-out' : '') + (paused ? ' paused' : '') + (isPreOrNext ? ' is-preorder' : '') + '">' +
@@ -762,7 +758,7 @@ function openOrderSheet(productJson, kitchenJson) {
         toast('Orders are paused for this offering', 'error');
         return;
     }
-    if (p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED') {
+    if (p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED' || p.lifecycleState === 'HISTORY') {
         closeSheet();
         toast('ORDERS CLOSED — this offering can no longer be ordered', 'error');
         return;
@@ -1450,7 +1446,7 @@ async function comparisonView(hash) {
                     '<div class="cc-cell"><div class="cc-label">Order by</div><div class="cc-value">' +
                     esc(o.orderBy ? prettyTime(o.orderBy) : '—') + '</div></div>' +
                     '<div class="cc-cell"><div class="cc-label">Ready by</div><div class="cc-value">' +
-                    esc(o.readyBy || '—') + '</div></div>' +
+                    esc(o.readyBy ? prettyTime(o.readyBy) : '—') + '</div></div>' +
                     '</div>' +
                     '<a class="btn btn-secondary btn-block btn-sm" href="#/kitchen/' + o.kitchenId + '">Visit ' +
                     esc(o.kitchenDisplayName) + '\'s Kitchen →</a>' +

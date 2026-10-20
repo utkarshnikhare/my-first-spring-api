@@ -73,12 +73,17 @@ function emojiFor(name) {
 function prettyTime(hhmm) {
     if (!hhmm) return '';
     var s = String(hhmm).trim();
+    if (s.indexOf('T') !== -1) {
+        s = s.split('T')[1];
+    }
+    if (s.indexOf('+') !== -1) s = s.split('+')[0];
+    if (s.indexOf('Z') !== -1) s = s.split('Z')[0];
     if (/[AP]M$/i.test(s)) {
         return s.replace(/\s+/g, ' ').replace(/\s*([AP]M)\s*$/i, ' $1');
     }
     var parts = s.split(':');
     var h = parseInt(parts[0], 10);
-    var m = parts[1] || '00';
+    var m = (parts[1] || '00').slice(0, 2);
     if (isNaN(h)) return hhmm;
     var ampm = h >= 12 ? 'PM' : 'AM';
     h = h % 12;
