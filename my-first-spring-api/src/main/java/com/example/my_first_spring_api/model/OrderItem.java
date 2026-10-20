@@ -26,6 +26,13 @@ public class OrderItem {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 
+    /** Legacy / database column synchronization with Supabase PostgreSQL schema */
+    @Column(name = "unit_price", precision = 10, scale = 2)
+    private BigDecimal unitPrice;
+
+    @Column(name = "product_name")
+    private String productName;
+
     /** Buyer-chosen availability date for pre-order items (null = today). */
     @Column(name = "scheduled_date")
     private LocalDate scheduledDate;
@@ -48,11 +55,25 @@ public class OrderItem {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
+        syncFields();
     }
 
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+        syncFields();
+    }
+
+    public void syncFields() {
+        if (this.unitPrice == null) {
+            this.unitPrice = this.price != null ? this.price : BigDecimal.ZERO;
+        }
+        if (this.price == null && this.unitPrice != null) {
+            this.price = this.unitPrice;
+        }
+        if (this.productName == null && this.product != null) {
+            this.productName = this.product.getName();
+        }
     }
 
     public OrderItem() {}
@@ -61,6 +82,8 @@ public class OrderItem {
         this.product = product;
         this.quantity = quantity;
         this.price = price;
+        this.unitPrice = price;
+        this.productName = product != null ? product.getName() : null;
     }
 
     public Long getId() { return id; }
@@ -68,11 +91,30 @@ public class OrderItem {
     public Order getOrder() { return order; }
     public void setOrder(Order order) { this.order = order; }
     public Product getProduct() { return product; }
-    public void setProduct(Product product) { this.product = product; }
+    public void setProduct(Product product) {
+        this.product = product;
+        if (product != null && this.productName == null) {
+            this.productName = product.getName();
+        }
+    }
     public Integer getQuantity() { return quantity; }
     public void setQuantity(Integer quantity) { this.quantity = quantity; }
     public BigDecimal getPrice() { return price; }
-    public void setPrice(BigDecimal price) { this.price = price; }
+    public void setPrice(BigDecimal price) {
+        this.price = price;
+        if (this.unitPrice == null) {
+            this.unitPrice = price;
+        }
+    }
+    public BigDecimal getUnitPrice() { return unitPrice != null ? unitPrice : price; }
+    public void setUnitPrice(BigDecimal unitPrice) {
+        this.unitPrice = unitPrice;
+        if (this.price == null) {
+            this.price = unitPrice;
+        }
+    }
+    public String getProductName() { return productName != null ? productName : (product != null ? product.getName() : null); }
+    public void setProductName(String productName) { this.productName = productName; }
     public LocalDate getScheduledDate() { return scheduledDate; }
     public void setScheduledDate(LocalDate scheduledDate) { this.scheduledDate = scheduledDate; }
     public String getScheduledSlot() { return scheduledSlot; }
