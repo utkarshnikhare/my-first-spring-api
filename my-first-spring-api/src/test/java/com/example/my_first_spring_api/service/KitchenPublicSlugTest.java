@@ -7,8 +7,11 @@ import com.example.my_first_spring_api.exception.KitchenNotEligibleException;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.model.AdminAuditLog;
+import com.example.my_first_spring_api.AppTimeZone;
+import com.example.my_first_spring_api.dto.ProductDto;
 import com.example.my_first_spring_api.model.Area;
 import com.example.my_first_spring_api.model.Kitchen;
+import com.example.my_first_spring_api.model.Product;
 import com.example.my_first_spring_api.model.SellerApprovalStatus;
 import com.example.my_first_spring_api.model.Society;
 import com.example.my_first_spring_api.model.User;
@@ -16,6 +19,7 @@ import com.example.my_first_spring_api.model.UserRole;
 import com.example.my_first_spring_api.repository.AdminAuditLogRepository;
 import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.KitchenSlugAliasRepository;
+import com.example.my_first_spring_api.repository.ProductRepository;
 import com.example.my_first_spring_api.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,6 +29,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -67,6 +73,7 @@ class KitchenPublicSlugTest {
     @Autowired private KitchenRepository kitchenRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private KitchenSlugAliasRepository aliasRepository;
+    @Autowired private ProductRepository productRepository;
     @Autowired private AdminAuditLogRepository auditRepo;
 
     /** Static so every test in this class gets a unique mobile (the column is UNIQUE). */
@@ -484,5 +491,57 @@ class KitchenPublicSlugTest {
         assertThat(links.get("marketplacePath")).isEqualTo("/kitchens");
         assertThat(String.valueOf(links.get("marketplaceUrl"))).endsWith("/kitchens");
         assertThat(links).containsKey("baseUrl");
+    }
+
+    @Test
+    @DisplayName("offerings from past dates are excluded from available today and preorder on storefront")
+    void pastOfferingsAreExcludedFromAvailableTodayOnStorefront() {
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+
+        Product pastItem = new Product();
+        pastItem.setName("Yesterday Special " + tag);
+        pastItem.setKitchen(kitchen);
+        pastItem.setPrice(new BigDecimal("120.00"));
+        pastItem.setAvailableToday(true);
+        pastItem.setAvailableDate(today.minusDays(1));
+        pastItem.setReadyByTime(today.minusDays(1).toString() + "T10:00");
+        productRepository.save(pastItem);
+
+        Product todayItem = new Product();
+        todayItem.setName("Today Special " + tag);
+        todayItem.setKitchen(kitchen);
+        todayItem.setPrice(new BigDecimal("150.00"));
+        todayItem.setAvailableToday(true);
+        todayItem.setAvailableDate(today);
+        todayItem.setReadyByTime("12:00");
+        productRepository.save(todayItem);
+
+        Product futurePreorder = new Product();
+        futurePreorder.setName("Tomorrow Feast " + tag);
+        futurePreorder.setKitchen(kitchen);
+        futurePreorder.setPrice(new BigDecimal("200.00"));
+        futurePreorder.setIsPreorder(true);
+        futurePreorder.setAvailableDate(today.plusDays(1));
+        productRepository.save(futurePreorder);
+
+        Product pastPreorder = new Product();
+        pastPreorder.setName("Past Preorder " + tag);
+        pastPreorder.setKitchen(kitchen);
+        pastPreorder.setPrice(new BigDecimal("250.00"));
+        pastPreorder.setIsPreorder(true);
+        pastPreorder.setAvailableDate(today.minusDays(1));
+        productRepository.save(pastPreorder);
+
+        KitchenDetailDto detail = kitchenService.getKitchenDetailBySlug(slug, null);
+
+        // Today must contain only today's item, NOT yesterday's item
+        assertThat(detail.getProducts()).extracting(ProductDto::getName)
+                .contains("Today Special " + tag)
+                .doesNotContain("Yesterday Special " + tag);
+
+        // Preorder must contain only future preorder, NOT past preorder
+        assertThat(detail.getPreorderProducts()).extracting(ProductDto::getName)
+                .contains("Tomorrow Feast " + tag)
+                .doesNotContain("Past Preorder " + tag);
     }
 }
