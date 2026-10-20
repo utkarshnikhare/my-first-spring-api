@@ -126,11 +126,13 @@ function fulfilmentBadge(item) {
         return '<span class="fulfil-badge fb-blue">🔵 Delivery ' + esc(prettyDate(item.scheduledDate)) +
             (item.readyBy ? ' by ' + esc(prettyTime(item.readyBy)) : '') + '</span>';
     }
-    var rb = item.readyBy || '';
-    if (rb.indexOf('evening') >= 0 || rb.indexOf('PM') >= 0) {
-        return '<span class="fulfil-badge fb-amber">🟡 ' + esc(rb.replace('today', 'this evening').replace('Delivery by', 'Delivery by')) + '</span>';
+    var rb = item.readyBy ? prettyTime(item.readyBy) : '';
+    if (rb) {
+        var isEvening = rb.indexOf('evening') >= 0 || rb.indexOf('PM') >= 0;
+        var label = 'Delivery by ' + rb + (rb.indexOf('today') >= 0 ? '' : ' today');
+        return '<span class="fulfil-badge ' + (isEvening ? 'fb-amber">🟡 ' : 'fb-green">🟢 ') + esc(label) + '</span>';
     }
-    return '<span class="fulfil-badge fb-green">🟢 ' + esc(item.readyBy || 'Delivery by 4:00 PM today') + '</span>';
+    return '<span class="fulfil-badge fb-green">🟢 Delivery by 4:00 PM today</span>';
 }
 
 function emptyHtml(icon, title, message, actionHtml) {
