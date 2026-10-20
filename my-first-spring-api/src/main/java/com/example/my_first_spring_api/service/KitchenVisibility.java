@@ -104,7 +104,17 @@ public final class KitchenVisibility {
         java.util.Set<com.example.my_first_spring_api.model.Society> coverage = kitchen.getServedSocieties();
         if (coverage != null && !coverage.isEmpty()) {
             com.example.my_first_spring_api.model.Society buyerSociety = buyer.getSocietyRef();
-            if (buyerSociety == null || buyerSociety.getId() == null) return false;
+            if (buyerSociety == null || buyerSociety.getId() == null) {
+                if (buyer.getSociety() != null && !buyer.getSociety().isBlank()) {
+                    for (com.example.my_first_spring_api.model.Society covered : coverage) {
+                        if (covered != null && covered.getName() != null
+                                && covered.getName().trim().equalsIgnoreCase(buyer.getSociety().trim())) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
             for (com.example.my_first_spring_api.model.Society covered : coverage) {
                 if (covered != null && buyerSociety.getId().equals(covered.getId())) return true;
             }

@@ -765,7 +765,15 @@ public class SellerAppService {
     private boolean itemMatchesDate(Order order, OrderItem item, LocalDate date) {
         if (date == null) return true;
         LocalDate fulfilment = item.getScheduledDate();
-        if (fulfilment == null && order.getCreatedAt() != null) fulfilment = order.getCreatedAt().toLocalDate();
+        if (fulfilment == null && item.getProduct() != null && item.getProduct().getAvailableDate() != null) {
+            fulfilment = item.getProduct().getAvailableDate();
+        }
+        if (fulfilment == null && order.getOrderTime() != null) {
+            fulfilment = order.getOrderTime().toLocalDate();
+        }
+        if (fulfilment == null && order.getCreatedAt() != null) {
+            fulfilment = order.getCreatedAt().toLocalDate();
+        }
         return date != null && date.equals(fulfilment);
     }
 
@@ -775,7 +783,7 @@ public class SellerAppService {
             // legacy casing still matches while a partial value can never pull in
             // unrelated records. Buyers without society never match a selection.
             String wanted = society.trim();
-            String buyerSociety = order.getBuyer() != null ? order.getBuyer().getSociety() : null;
+            String buyerSociety = order.getBuyer() != null ? (order.getBuyer().getSociety() != null ? order.getBuyer().getSociety() : (order.getBuyer().getSocietyRef() != null ? order.getBuyer().getSocietyRef().getName() : null)) : null;
             if (buyerSociety == null || !buyerSociety.trim().equalsIgnoreCase(wanted)) {
                 return false;
             }
@@ -837,7 +845,7 @@ public class SellerAppService {
 
             row.setBuyerFlat(order.getBuyer().getFlatHouseNumber());
             row.setBuilding(order.getBuyer().getBuilding());
-            row.setSociety(order.getBuyer().getSociety());
+            row.setSociety(order.getBuyer().getSociety() != null ? order.getBuyer().getSociety() : (order.getBuyer().getSocietyRef() != null ? order.getBuyer().getSocietyRef().getName() : null));
         } else {
             row.setBuyerName("Unknown");
         }

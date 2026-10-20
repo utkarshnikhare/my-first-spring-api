@@ -122,11 +122,12 @@ function fulfilmentBadge(item) {
     if (item.isPreorder && item.preorderType === 'FLEXIBLE') {
         return '<span class="fulfil-badge fb-purple">🟣 Pre-order — choose your slot</span>';
     }
-    if (item.isPreorder || item.scheduledDate) {
-        return '<span class="fulfil-badge fb-blue">🔵 Delivery ' + esc(prettyDate(item.scheduledDate)) +
-            (item.readyBy ? ' by ' + esc(prettyTime(item.readyBy)) : '') + '</span>';
-    }
+    var fDate = item.scheduledDate || item.availableDate;
     var rb = item.readyBy ? prettyTime(item.readyBy) : '';
+    if (fDate && (!item.isPreorder ? prettyDate(fDate) !== 'Today' : true)) {
+        return '<span class="fulfil-badge fb-blue">🔵 Delivery ' + esc(prettyDate(fDate)) +
+            (rb ? ' by ' + esc(rb) : '') + '</span>';
+    }
     if (rb) {
         var isEvening = rb.indexOf('evening') >= 0 || rb.indexOf('PM') >= 0;
         var label = 'Delivery by ' + rb + (rb.indexOf('today') >= 0 ? '' : ' today');
@@ -855,8 +856,9 @@ function sheetAdd() {
         productId: p.id, name: p.name, price: p.price, unit: p.priceUnit || 'serving', qty: sheet.qty,
         isPreorder: !!p.isPreorder, preorderType: p.preorderType || null,
         readyBy: p.readyByTime || null, cutoff: p.cutoffTime || null,
+        availableDate: p.availableDate || null,
         scheduledDate: p.isPreorder ? (sheet.date || p.availableDate || null)
-            : (p.recurring && p.nextOccurrenceDate ? p.nextOccurrenceDate : null),
+            : (p.recurring && p.nextOccurrenceDate ? p.nextOccurrenceDate : (p.availableDate || null)),
         scheduledSlot: p.isPreorder ? sheet.slot : null
     };
     addToCart(item, k, function (committed) {
