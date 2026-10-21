@@ -101,7 +101,9 @@ function localDateStr(d) {
 
 function prettyDate(iso) {
     if (!iso) return '';
+    if (iso === 'all') return 'All dates';
     var d = new Date(iso + 'T00:00:00');
+    if (isNaN(d.getTime())) return iso;
     var today = new Date();
     today.setHours(0, 0, 0, 0);
     var diff = Math.round((d - today) / 86400000);

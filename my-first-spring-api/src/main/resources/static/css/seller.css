@@ -545,6 +545,7 @@
 .dtc-badge.red { background: var(--danger-soft); color: var(--danger); }
 
 .order-product-card {
+    cursor: pointer;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 16px;

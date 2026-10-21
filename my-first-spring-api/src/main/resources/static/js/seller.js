@@ -627,11 +627,11 @@ function sdOfferingCardHtml(p, orderCount) {
     var remaining = p.remainingQuantity;
     var maxQty = p.maxQuantity;
     var h = '<div class="sd-card">';
-    h += '<div class="sd-card__photo" data-emoji="' + foodEmoji(p.name) + '">'
+    h += '<div class="sd-card__photo" role="button" tabindex="0" data-action="open-offering-orders" data-pid="' + esc(p.id) + '" style="cursor:pointer;" data-emoji="' + foodEmoji(p.name) + '">';
         + (img ? '<img src="' + esc(img) + '" alt="' + esc(p.name) + '" onerror="imgFallback(this)">' : foodEmoji(p.name))
         + '</div>';
     h += '<div class="sd-card__body">';
-    h += '<div class="sd-card__top"><span class="sd-card__name">' + esc(p.name) + '</span>' + offeringStatusBadge(p) + '</div>';
+    h += '<div class="sd-card__top"><span class="sd-card__name" role="button" tabindex="0" data-action="open-offering-orders" data-pid="' + esc(p.id) + '" style="cursor:pointer;">' + esc(p.name) + '</span>' + offeringStatusBadge(p) + '</div>';
     h += '<div class="sd-card__qty"><strong>' + (p.bookedQuantity || 0) + ' booked</strong> · '
         + (remaining != null ? '<strong>' + remaining + ' available</strong>' : 'No limit') + '</div>';
     h += '<div class="sd-card__times">'
@@ -2186,7 +2186,7 @@ async function sellerOrdersView() {
             h += '<div class="so-list">';
             summary.products.forEach(function (p) {
                 var img = p.imageUrl || '';
-                h += '<article class="order-product-card">';
+                h += '<article class="order-product-card" role="button" tabindex="0" data-action="open-offering-orders" data-pid="' + p.productId + '">';
                 h += '<div class="opc-header">';
                 h += '<span class="opc-thumb">'
                     + (img ? '<img src="' + esc(img) + '" alt="" data-emoji="' + foodEmoji(p.productName) + '" onerror="imgFallback(this)">' : foodEmoji(p.productName))
@@ -2197,8 +2197,8 @@ async function sellerOrdersView() {
                 h += '</div>';
                 h += '<div class="opc-foot">'
                     + '<span class="opc-meta"><span class="dot-green">●</span> ' + p.paidCount + ' paid · <span class="dot-orange">●</span> ' + p.pendingCount + ' pending</span>'
-                    + (isAll ? '<span class="opc-meta">Choose a date above for order details</span>'
-                        : '<a class="opc-link" href="#/order-detail/' + p.productId + '">View Orders <span aria-hidden="true">→</span></a>')
+                    + '<a class="opc-link" href="#/order-detail/' + p.productId + '">View Orders <span aria-hidden="true">→</span></a>'
+
                     + '</div>';
                 h += '</article>';
             });
@@ -2575,9 +2575,9 @@ function offeringCustomersHtml(detail) {
         var bucket = c.cancelled ? 'cancelled' : (c.paid ? 'paid' : 'pending');
         var label = c.cancelled ? 'CANCELLED' : (c.paid ? 'PAID' : 'PENDING');
         var addr = [];
-        if (c.society) addr.push(c.society);
-        if (c.building) addr.push(c.building);
         if (c.buyerFlat) addr.push(c.buyerFlat);
+        if (c.building) addr.push(c.building);
+        if (c.society) addr.push(c.society);
         var qtyLabel = c.quantity + ' ' + esc(c.unit || 'plate') + (c.quantity !== 1 ? 's' : '');
         var remark = c.remark
             ? '<button type="button" class="remark-icon" data-action="show-remark" data-remark="' + esc(c.remark) + '" aria-label="View customer remark">💬</button>'
@@ -2606,7 +2606,8 @@ function offeringCustomersHtml(detail) {
         if (buyerInfo) out += buyerInfo;
         out += '<div class="oc-row-top"><span class="cr-qty">' + qtyLabel + '</span>' +
             '<span class="cr-status ' + bucket + '">' + label + '</span></div>';
-        if (addr.length) out += '<div class="cr-loc">' + esc(addr.join(' • ')) + '</div>';
+        if (addr.length) out += '<div class="cr-loc">📍 ' + esc(addr.join(' • ')) + '</div>';
+        if (c.buyerPhone) { var waLink = buildWhatsAppChatLink(c.buyerPhone); out += '<div class="cr-phone tiny muted mt-1">📱 ' + esc(c.buyerPhone) + (waLink ? ' <a href="' + esc(waLink) + '" target="_blank" rel="noopener" class="wa-btn" style="text-decoration:none;margin-left:6px;font-size:0.75rem;padding:1px 6px;border:1px solid var(--border);border-radius:4px;display:inline-block;">💬 WhatsApp</a>' : '') + '</div>'; }
         if (c.placedAt) out += '<div class="tiny muted cr-placed">Ordered: ' + prettyDateTime(c.placedAt) + '</div>';
         if (deliveryCtrl) out += '<div class="oc-row-delivery">' + deliveryCtrl + '</div>';
         out += '</div>';
@@ -2780,20 +2781,23 @@ async function sellerOrderDetailByOrderView(orderId) {
         // Same treatment the approved 7B screen gives its badges: the
         // coloured dot carries state, the label stays readable text.
         var paymentStatus = order.paymentStatus || 'PENDING';
+        var deliveryStatus = order.deliveryStatus || 'NOT_DELIVERED';
+        var isDelivered = deliveryStatus === 'DELIVERED';
         h += '<div class="dtc-badges oic-badges">';
         h += '<span class="dtc-badge ' + (paymentStatus === 'PAID' ? 'green' : 'orange') + '"><span class="dtc-dot" aria-hidden="true"></span>Payment: ' + esc(paymentStatus) + '</span>';
-        h += '<span class="dtc-badge ' + (order.orderStatus === 'CANCELLED' ? 'red' : 'green') + '"><span class="dtc-dot" aria-hidden="true"></span>Order status: ' + esc(order.orderStatus || 'ORDERED') + '</span></div>';
-        h += '</section>';
+        h += '<span class="dtc-badge ' + (order.orderStatus === 'CANCELLED' ? 'red' : 'green') + '"><span class="dtc-dot" aria-hidden="true"></span>Order status: ' + esc(order.orderStatus || 'ORDERED') + '</span>';
+        h += '<span class="dtc-badge ' + (isDelivered ? 'green' : 'orange') + '"><span class="dtc-dot" aria-hidden="true"></span>Delivery: ' + (isDelivered ? 'Delivered' : 'Not delivered') + '</span></div>';
         // Buyer / delivery detail card. Class hooks the existing actions and
         // tests rely on (odc-*, ei-*, data-action) are preserved verbatim.
         h += '<section class="card pad card-mb oic-card" aria-label="Buyer and items">';
         if (order.buyer) {
             var addrParts = [];
-            if (order.buyer.society) addrParts.push(order.buyer.society);
-            if (order.buyer.building) addrParts.push(order.buyer.building);
             if (order.buyer.flatHouseNumber) addrParts.push(order.buyer.flatHouseNumber);
+            if (order.buyer.building) addrParts.push(order.buyer.building);
+            if (order.buyer.society) addrParts.push(order.buyer.society);
             h += '<div class="odc-buyer-row"><span class="odc-buyer">' + esc(order.buyer.name || 'Unknown') + '</span>';
             h += '<span class="odc-qty">' + money(order.totalAmount) + '</span></div>';
+            if (addrParts.length) { h += '<div class="odc-address mt-1 font-600">📍 <strong>Deliver To:</strong> ' + esc(addrParts.join(' • ')) + '</div>'; }
             if (order.buyer.mobileNumber) {
                 var waLink = buildWhatsAppChatLink(order.buyer.mobileNumber);
                 h += '<div class="odc-address">📱 ' + esc(order.buyer.mobileNumber) +
@@ -2819,6 +2823,7 @@ async function sellerOrderDetailByOrderView(orderId) {
         if ((paymentStatus === 'PENDING' || paymentStatus === 'WILL_PAY_LATER') && order.orderStatus !== 'CANCELLED') {
             h += '<button class="btn btn-primary btn-block mt-2 oic-act" type="button" data-action="mark-paid" data-oid="' + esc(order.id) + '">Mark as Paid</button>';
         }
+        if (order.orderStatus !== 'CANCELLED') { if (isDelivered) { h += '<button class="btn btn-outline btn-block mt-2 oic-act" type="button" data-action="toggle-delivery-order" data-oid="' + esc(order.id) + '" data-status="NOT_DELIVERED">↩️ Mark as Not Delivered</button>'; } else { h += '<button class="btn btn-primary btn-block mt-2 oic-act" type="button" data-action="toggle-delivery-order" data-oid="' + esc(order.id) + '" data-status="DELIVERED">🚚 Mark as Delivered</button>'; } }
     } catch (e) {
         h += emptyHtml('⚠️', 'Could not load details', e.message,
             '<button class="btn btn-primary card-mt" type="button" data-action="seller-retry">Retry</button>');
@@ -3335,6 +3340,7 @@ document.addEventListener('click', async function (e) {
     var t = e.target.closest('[data-action]');
     if (!t) return;
     var a = t.dataset.action;
+    if (e.target.closest('a[target="_blank"]')) return;
     // The Delivered checkbox lives INSIDE a clickable order row. A click on it
     // (or on its label) must toggle delivery through the 'change' listener and
     // must NOT also navigate to the order detail screen, so it is deliberately
@@ -3588,6 +3594,14 @@ document.addEventListener('click', async function (e) {
                 }
                 break;
             }
+            case 'open-offering-orders': {
+                if (t.dataset.date) S.selectedDate = t.dataset.date;
+                S.offeringFilterSociety = '';
+                S.offeringFilterStatus = '';
+                S.offeringFilterDelivery = '';
+                sellerNavigate('#/order-detail/' + t.dataset.pid);
+                break;
+            }
             case 'open-offering-orders-date': {
                 S.selectedDate = t.dataset.date || sellerDate('today');
                 S.offeringFilterSociety = '';
@@ -3674,6 +3688,25 @@ document.addEventListener('click', async function (e) {
             case 'set-sort': S.sortFilter = t.value; break;
             case 'set-detail-sort': S.selectedSort = t.value; await sellerRender(); break;
             case 'open-order': sellerNavigate('#/order-detail/order/' + t.dataset.order); break;
+            case 'toggle-delivery-order': {
+                var oid = t.dataset.oid;
+                var wantStatus = t.dataset.status;
+                if (!oid || !wantStatus) break;
+                t.disabled = true;
+                try {
+                    await sellerApi('/api/seller-app/orders/' + encodeURIComponent(oid) + '/delivery-status', {
+                        method: 'PATCH',
+                        body: { deliveryStatus: wantStatus }
+                    });
+                    toast(wantStatus === 'DELIVERED' ? 'Order marked delivered' : 'Delivery unmarked', 'success');
+                    await sellerRender();
+                } catch (err) {
+                    toast(err.message, 'error');
+                } finally {
+                    t.disabled = false;
+                }
+                break;
+            }
             case 'mark-all-delivered': {
                 if (S.bulkDelivering) break;
                 var bulkProductId = S.offeringProductId;
@@ -4150,10 +4183,10 @@ document.addEventListener('keydown', function (e) {
     var t = e.target;
     if (!t || typeof t.closest !== 'function') return;
     if (t.closest('input, select, textarea, button, a')) return;
-    var row = t.closest('.oc-row[data-action="open-order"]');
+    var row = t.closest('.oc-row[data-action="open-order"], .order-product-card[data-action="open-offering-orders"]');
     if (!row) return;
     e.preventDefault();
-    sellerNavigate('#/order-detail/order/' + row.dataset.order);
+    if (row.dataset.action === 'open-order') { sellerNavigate('#/order-detail/order/' + row.dataset.order); } else if (row.dataset.action === 'open-offering-orders') { sellerNavigate('#/order-detail/' + row.dataset.pid); }
 });
 
 // BOOT - never leaves the page on an infinite spinner

@@ -44,10 +44,15 @@ public class SellerAppController {
     private LocalDate parseDate(String date) {
         if (date == null || date.isBlank()) return LocalDate.now();
         String d = date.trim().toLowerCase();
+        if ("all".equals(d)) return null;
         if ("today".equals(d)) return LocalDate.now();
         if ("tomorrow".equals(d)) return LocalDate.now().plusDays(1);
         if ("yesterday".equals(d)) return LocalDate.now().minusDays(1);
-        return LocalDate.parse(d);
+        try {
+            return LocalDate.parse(d);
+        } catch (Exception e) {
+            return LocalDate.now();
+        }
     }
 
     @GetMapping("/dashboard")
