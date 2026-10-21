@@ -1002,8 +1002,14 @@ async function goCheckout() {
         toast('Cannot place order: ' + names + ' cutoff has passed for today. Please remove closed items from cart.', 'error');
         return;
     }
-    if (!state.user || !state.user.authenticated) {
+    if (!state.user || !state.user.authenticated || !isBuyer(state.user)) {
         return requireAuth(function () { return goCheckout(); });
+    }
+    var btn = document.querySelector('[data-action="go-checkout"]');
+    var origHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="btn-spinner"></span> Preparing order...';
     }
     var note = $('#orderNote') ? $('#orderNote').value.trim() : '';
     try {
@@ -1012,10 +1018,10 @@ async function goCheckout() {
             // Session may be valid even when this tab's UI state isn't (e.g. login
             // happened in another tab). Sync the UI identity so Confirm Order and
             // My Orders show the real buyer. Display-state only — no flow change.
-            if (!state.user) {
+            if (!state.user || !isBuyer(state.user)) {
                 try {
                     var me = await api('/api/auth/me');
-                    if (me && me.authenticated) state.user = me;
+                    if (me && me.authenticated && isBuyer(me)) state.user = me;
                 } catch (e2) {}
             }
             state.pendingCheckout = { note: note };
@@ -1023,7 +1029,12 @@ async function goCheckout() {
         });
     } catch (err) {
         var reason = (err && err.data && (err.data.message || err.data.error)) || (err && err.message) || 'Could not prepare checkout. Please try again.';
-        if (!(err instanceof ApiError && err.status === 401)) toast(reason, 'error');
+        toast(reason, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
     }
 }
 
@@ -1074,7 +1085,7 @@ function isRecoverableOrderSessionError(err) {
 /** Place the draft order directly with the selected payment status. */
 async function placeOrderWithStatus(paymentStatus) {
     if (state.placingOrder) return;
-    if (!state.user || !state.user.authenticated) {
+    if (!state.user || !state.user.authenticated || !isBuyer(state.user)) {
         return requireAuth(function () { return placeOrderWithStatus(paymentStatus); });
     }
     var note = (state.pendingCheckout && state.pendingCheckout.note) || '';
@@ -1389,7 +1400,7 @@ async function paymentView() {
 /** Confirm payment: processing state → place real order via API → success screen. */
 async function confirmPayment(btnEl) {
     if (state.placingOrder) return; // idempotency guard: no double submissions
-    if (!state.user || !state.user.authenticated) {
+    if (!state.user || !state.user.authenticated || !isBuyer(state.user)) {
         return requireAuth(function () { return confirmPayment(btnEl); });
     }
     var note = (state.pendingCheckout && state.pendingCheckout.note) || '';
@@ -1572,7 +1583,7 @@ async function favouritesView() {
     var h = '<div class="view-enter"><div class="page-head"><h1>❤️ Favourite Kitchens</h1>' +
         '<p class="muted small">Save up to 3 community kitchens for quick access.</p></div>';
 
-    if (!state.user) {
+    if (!state.user || !isBuyer(state.user)) {
         h += emptyHtml('🔐', 'Login to view your favourites', 'Your saved kitchens appear here once you log in.',
             '<button class="btn btn-primary card-mt" type="button" data-action="open-login">Log in</button>');
         h += '</div>';
@@ -1623,7 +1634,7 @@ async function ordersView() {
         '<button type="button" class="' + (tab === 'enquiries' ? 'active' : '') + '" data-action="set-orders-tab" data-tab="enquiries">Enquiries</button>' +
         '</div>';
 
-    if (!state.user) {
+    if (!state.user || !isBuyer(state.user)) {
         h += emptyHtml('🔐', 'Login to view your history', 'Your orders and enquiries appear here.',
             '<button class="btn btn-primary card-mt" type="button" data-action="open-login">Log in</button>');
         h += '</div>';
@@ -1790,7 +1801,7 @@ async function orderDetailView(hash) {
 async function profileView() {
     var h = '<div class="view-enter"><div class="page-head"><h1>Profile</h1></div>';
 
-    if (!state.user) {
+    if (!state.user || !isBuyer(state.user)) {
         // Logged-out state: login prompt (Spec Screen 8)
         h += '<div class="card pad text-center">' +
             '<div class="font-size-2-4 mb-2">👋</div>' +

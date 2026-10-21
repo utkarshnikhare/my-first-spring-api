@@ -129,7 +129,10 @@ function adminUpdateNav(hash) {
     if (key === 'home') key = 'dashboard';
     if (key === 'pending') key = 'approvals';
     var el = document.querySelector('[data-nav="' + key + '"]');
-    if (el) el.classList.add('active');
+    if (el) {
+        el.classList.add('active');
+        if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    }
 }
 function adminNavigate(hash) { if (location.hash === hash) adminRender(); else location.hash = hash; }
 // ==================== SEARCH ====================

@@ -15,6 +15,16 @@
 .seller-nav .nav-item.active::before {
     background: var(--accent);
 }
+@media (max-width: 430px) {
+    .seller-nav .nav-item { padding: 0 1px; gap: 2px; }
+    .seller-nav .nav-icon { font-size: 1.15rem; }
+    .seller-nav .nav-label { font-size: 0.62rem; line-height: 1.15; text-align: center; white-space: normal; }
+}
+@media (max-width: 360px) {
+    .seller-nav .nav-item { gap: 1px; }
+    .seller-nav .nav-icon { font-size: 1.05rem; }
+    .seller-nav .nav-label { font-size: 0.56rem; letter-spacing: -0.01em; }
+}
 
 .seller-view {
     width: 100%;
@@ -3420,6 +3430,21 @@ html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #3321
     font-size: 1.15rem;
     flex-shrink: 0;
 }
+[data-theme="dark"] .meal-presets-card {
+    background: linear-gradient(135deg, #2E1B10 0%, #241A14 100%);
+    border-color: #5C3218;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+[data-theme="dark"] .meal-presets-title { color: #FDBA74; }
+[data-theme="dark"] .meal-presets-sub { color: #D4A373; }
+[data-theme="dark"] .btn-meal-preset { background: #241C17; border-color: #4A2E1B; }
+[data-theme="dark"] .btn-meal-preset:hover { background: #342419; border-color: #EA580C; box-shadow: 0 4px 12px rgba(234, 88, 12, 0.25); }
+[data-theme="dark"] .btn-meal-preset:active,
+[data-theme="dark"] .btn-meal-preset.active { background: #3D2618; border-color: #F97316; }
+[data-theme="dark"] .btn-meal-preset .preset-name { color: #F1EDF9; }
+[data-theme="dark"] .btn-meal-preset .preset-time { color: #FB923C; }
+[data-theme="dark"] .timing-live-badge { background: #12351F; border-color: #1E5C34; color: #A7F3D0; }
+[data-theme="dark"] .timing-live-badge strong { color: #4ADE80; }
 
 /* ============================================================
    Scrolling Wheel Time Picker Component (Brief V1 - Item 3)

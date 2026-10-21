@@ -124,6 +124,19 @@ public final class KitchenVisibility {
         // Legacy string path - still the ONLY thing that keeps an unmigrated kitchen
         // reachable, so its matching stays; only the buyer's Society is now resolved
         // through the authoritative reference first. See the class javadoc.
+        // Match against the buyer's Society, preferring the authoritative ID-backed
+        // reference and falling back to the legacy text so a buyer saved with one
+        // of the two still resolves. A buyer with neither is still allowed through
+        // here: the draft-before-profile-complete flow depends on it, and order
+        // PLACEMENT is what actually blocks a society-less buyer, via
+        // BuyerProfileIncompleteException in OrderService, before this check runs.
+        String buyerSocietyName = buyer.getSociety();
+        if ((buyerSocietyName == null || buyerSocietyName.isBlank())
+                && buyer.getSocietyRef() != null) {
+            buyerSocietyName = buyer.getSocietyRef().getName();
+        }
+        if (buyerSocietyName == null || buyerSocietyName.isBlank()) return true;
+
         String areas = kitchen.getServiceAreas();
         if (areas == null || areas.isBlank()) {
             String society = kitchen.getSociety();
@@ -136,24 +149,11 @@ public final class KitchenVisibility {
                 // behaviour is preserved and the open question is reported instead.
                 return true;
             }
-            // Match against the buyer's Society, preferring the authoritative ID-backed
-            // reference and falling back to the legacy text so a buyer saved with one
-            // of the two still resolves. A buyer with neither is still allowed through
-            // here: the draft-before-profile-complete flow depends on it, and order
-            // PLACEMENT is what actually blocks a society-less buyer, via
-            // BuyerProfileIncompleteException in OrderService, before this check runs.
-            String buyerSocietyName = buyer.getSociety();
-            if ((buyerSocietyName == null || buyerSocietyName.isBlank())
-                    && buyer.getSocietyRef() != null) {
-                buyerSocietyName = buyer.getSocietyRef().getName();
-            }
-            if (buyerSocietyName == null || buyerSocietyName.isBlank()) return true;
             return society.equalsIgnoreCase(buyerSocietyName.trim());
         }
-        if (buyer.getSociety() == null) return false;
         String[] parts = areas.split(",");
         for (String part : parts) {
-            if (part.trim().equalsIgnoreCase(buyer.getSociety())) return true;
+            if (part.trim().equalsIgnoreCase(buyerSocietyName.trim())) return true;
         }
         return false;
     }

@@ -240,11 +240,33 @@ html[data-theme="dark"] .seller-row .sr-avatar { border: 1px solid var(--border)
     .admin-role-badge { font-size: .62rem; padding: 3px 8px; }
 }
 
-/* Very narrow phones: compact admin nav for 10-tab layout */
-@media (max-width: 380px) {
-    .admin-nav .nav-item { font-size: .58rem; gap: 2px; }
-    .admin-nav .nav-icon { font-size: 1.1rem; }
-    .admin-nav .nav-label { font-size: .58rem; }
+/* Narrow phones: responsive scrollable navigation for 8-tab admin layout */
+@media (max-width: 540px) {
+    .admin-nav {
+        overflow-x: auto;
+        justify-content: flex-start;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+        padding: 0 6px;
+    }
+    .admin-nav::-webkit-scrollbar { display: none; }
+    .admin-nav .nav-item {
+        flex: 0 0 58px;
+        min-width: 58px;
+        padding: 0 2px;
+        gap: 2px;
+    }
+    .admin-nav .nav-icon { font-size: 1.15rem; }
+    .admin-nav .nav-label {
+        font-size: 0.58rem;
+        line-height: 1.15;
+        text-align: center;
+        white-space: normal;
+    }
+}
+@media (max-width: 360px) {
+    .admin-nav .nav-item { flex: 0 0 52px; min-width: 52px; }
+    .admin-nav .nav-label { font-size: 0.54rem; }
 }
 
 /* Traffic chart responsiveness */
@@ -316,9 +338,17 @@ a.dash-card:hover { border-color: var(--brand); box-shadow: 0 4px 14px rgba(0,0,
 }
 @media (min-width: 1024px) {
     .admin-view { max-width: 900px; }
+    .admin-topbar {
+        padding-left: calc((100% - 900px) / 2 + 16px);
+        padding-right: calc((100% - 900px) / 2 + 16px);
+    }
 }
 @media (min-width: 1280px) {
     .admin-view { max-width: 1000px; }
+    .admin-topbar {
+        padding-left: calc((100% - 1000px) / 2 + 16px);
+        padding-right: calc((100% - 1000px) / 2 + 16px);
+    }
 }
 
 /* ============================================================
@@ -536,4 +566,10 @@ html[data-theme="dark"] .sr-reason { color: #fbbf24; }
     gap: 8px;
     margin-top: 18px;
     flex-wrap: wrap;
+}
+
+html[data-theme="dark"] .green { color: var(--secondary, #4ADE80); }
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-view, .admin-topbar, .admin-nav, .dash-card { transition: none !important; animation: none !important; }
 }

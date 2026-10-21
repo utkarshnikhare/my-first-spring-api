@@ -509,6 +509,13 @@ function commitItem(newItem, kitchen) {
     toast('Added to your order from ' + kitchen.displayName, 'success');
 }
 
+function isBuyer(user) {
+    if (!user) return false;
+    if (user.role === 'BUYER') return true;
+    if (Array.isArray(user.roles) && user.roles.includes('ROLE_BUYER')) return true;
+    return false;
+}
+
 // ==================== Deferred Auth Gate (Spec 1.1) ====================
 /**
  * Identity-bound actions (place order, toggle favourite, submit enquiry) call
@@ -517,9 +524,10 @@ function commitItem(newItem, kitchen) {
  */
 
 function requireAuth(onAuthenticated) {
-    if (state.user) {
+    if (state.user && isBuyer(state.user)) {
         return confirmSessionThen(onAuthenticated);
     }
+    state.user = null;
     state.pendingAuthAction = onAuthenticated;
     openAuthModal();
     return Promise.resolve();
@@ -541,7 +549,7 @@ async function confirmSessionThen(onAuthenticated) {
     var live = false;
     try {
         var me = await api('/api/auth/me');
-        if (me && me.authenticated) {
+        if (me && me.authenticated && isBuyer(me)) {
             state.user = me;
             live = true;
         }
@@ -549,7 +557,7 @@ async function confirmSessionThen(onAuthenticated) {
         // Probe failed (network/parse): treat the session as unverified.
     }
     if (live) return onAuthenticated();
-    // Stale or unknown session — clear the local identity and ask for login.
+    // Stale or non-buyer session — clear the local identity and ask for login.
     state.user = null;
     state.pendingAuthAction = onAuthenticated;
     openAuthModal();
@@ -653,6 +661,12 @@ async function handleAuthLogin() {
         toast('Login failed: ' + err.message, 'error');
         return;
     }
+    if (me && !isBuyer(me)) {
+        btn.disabled = false;
+        btn.textContent = 'Log in';
+        toast('This account (' + (me.name || me.mobileNumber) + ') is registered as a ' + (me.role ? me.role.toLowerCase() : 'seller') + '. Please log in with a buyer account or create a buyer account.', 'error');
+        return;
+    }
     await finishBuyerAuthentication(me);
 }
 
@@ -706,6 +720,7 @@ async function withAuthGate(actionFn) {
         return await actionFn();
     } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
+            state.user = null;
             // Hand the action to the auth gate. Awaited so a deferred failure
             // surfaces to our caller instead of becoming an unhandled rejection.
             return await requireAuth(actionFn);
