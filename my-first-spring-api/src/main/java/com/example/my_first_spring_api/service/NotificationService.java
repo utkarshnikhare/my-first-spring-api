@@ -26,11 +26,13 @@ public class NotificationService {
         this.notificationEventRepository = notificationEventRepository;
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendNewOrderNotification(User seller, String orderNumber, String productSummary) {
         createEvent(seller, "New SocioMart order",
                 "You received an order for " + productSummary + ".\nOpen SocioMart to review and confirm.");
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendNewEnquiryNotification(User seller, String buyerName) {
         createEvent(seller, "New SocioMart enquiry",
                 buyerName + " has sent a custom request.\nOpen SocioMart to view the enquiry.");
@@ -41,6 +43,7 @@ public class NotificationService {
      * Idempotent: at most one sold-out event per (product, transition) — callers must guard against
      * repeated triggers (e.g. refresh) by invoking this only when the product newly hits zero.
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendSoldOutNotification(User seller, String productName) {
         createEvent(seller, "Offering sold out",
                 "\"" + productName + "\" just sold out. Update its quantity to keep taking orders.");
@@ -49,6 +52,7 @@ public class NotificationService {
     /**
      * Notifies a seller that a buyer cancelled an order.
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendOrderCancellationNotification(User seller, String orderNumber) {
         createEvent(seller, "Order cancelled",
                 "Order " + orderNumber + " was cancelled by the buyer. Inventory has been restored.");
@@ -57,6 +61,7 @@ public class NotificationService {
     /**
      * Notifies a buyer that the seller has confirmed/recorded their payment.
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendPaymentReceivedNotification(User buyer, String orderNumber) {
         createEvent(buyer, "Payment recorded",
                 "Your payment for order " + orderNumber + " has been recorded by the seller.");
@@ -67,6 +72,7 @@ public class NotificationService {
      * actually updated. Callers must invoke this only on a real state transition;
      * repeated Mark as Paid requests must not reach this method.
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendPaymentUpdatedNotification(User seller, String orderNumber) {
         createEvent(seller, "Payment updated",
                 "Payment for order " + orderNumber + " was updated. Open SocioMart to review the order.");
@@ -97,6 +103,7 @@ public class NotificationService {
                 event.getCreatedAt(), event.getDelivered());
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendReminder(User seller, String title, String body) {
         createEvent(seller, title, body);
     }
