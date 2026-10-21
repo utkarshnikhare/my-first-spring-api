@@ -413,7 +413,7 @@ function sellerDate(dateKey) {
 function prettyDateTime(iso) {
     if (!iso) return '';
     var d = new Date(iso);
-    return prettyDate(d.toISOString().split('T')[0]) + ' ' + prettyTime(d.toTimeString().slice(0,5));
+    return prettyDate(localDateStr(d)) + ' ' + prettyTime(d.toTimeString().slice(0,5));
 }
 function sellerImg(url) {
     if (!url) return '';
@@ -2602,9 +2602,12 @@ function offeringCustomersHtml(detail) {
         out += '<div class="customer-row compact oc-row oc-row--' + bucket + '" role="button" tabindex="0" data-action="open-order" data-order="' + esc(c.orderId) + '">';
         out += '<span class="status-dot ' + bucket + '" aria-hidden="true"></span>';
         out += '<div class="oc-row-main">';
+        var buyerInfo = (c.buyerName || c.orderNumber) ? ('<div class="cr-buyer-title font-600">' + esc(c.buyerName || 'Customer') + (c.orderNumber ? ' <span class="muted font-normal text-xs">#' + esc(c.orderNumber) + '</span>' : '') + '</div>') : '';
+        if (buyerInfo) out += buyerInfo;
         out += '<div class="oc-row-top"><span class="cr-qty">' + qtyLabel + '</span>' +
             '<span class="cr-status ' + bucket + '">' + label + '</span></div>';
         if (addr.length) out += '<div class="cr-loc">' + esc(addr.join(' • ')) + '</div>';
+        if (c.placedAt) out += '<div class="tiny muted cr-placed">Ordered: ' + prettyDateTime(c.placedAt) + '</div>';
         if (deliveryCtrl) out += '<div class="oc-row-delivery">' + deliveryCtrl + '</div>';
         out += '</div>';
         out += remark;
