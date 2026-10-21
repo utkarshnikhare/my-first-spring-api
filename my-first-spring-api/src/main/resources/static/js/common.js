@@ -91,6 +91,14 @@ function prettyTime(hhmm) {
     return h + ':' + m + ' ' + ampm;
 }
 
+function localDateStr(d) {
+    if (!d) d = new Date();
+    var y = d.getFullYear();
+    var m = ('0' + (d.getMonth() + 1)).slice(-2);
+    var day = ('0' + d.getDate()).slice(-2);
+    return y + '-' + m + '-' + day;
+}
+
 function prettyDate(iso) {
     if (!iso) return '';
     var d = new Date(iso + 'T00:00:00');
