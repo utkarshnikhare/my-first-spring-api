@@ -464,6 +464,14 @@ public class OrderService {
         }
         validateOrderItemsForPlacement(order);
         consumeStock(order);
+        // ProductRepository.consumeStock uses clearAutomatically=true which detaches entities.
+        // Re-attach order and buyer so all entity references are managed and proxies valid.
+        if (order.getId() != null) {
+            order = orderRepository.findByIdWithItems(order.getId()).orElse(order);
+        }
+        if (buyer != null && buyer.getId() != null) {
+            buyer = userRepository.findById(buyer.getId()).orElse(buyer);
+        }
         // Notify seller if any tracked offering newly sold out as a result of this order.
         notifyNewlySoldOut(order);
         boolean isHomemade = KitchenVisibility.isHomemadeStore(order.getKitchen());
@@ -484,6 +492,7 @@ public class OrderService {
             order.setOrderTime(LocalDateTime.now());
         }
         order = orderRepository.save(order);
+        orderRepository.flush();
         session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
         analyticsService.record(AnalyticsService.EV_ORDER_PLACED, buyer.getId(),
                 buyer.getMobileNumber(), order.getKitchen() != null ? order.getKitchen().getId() : null,
