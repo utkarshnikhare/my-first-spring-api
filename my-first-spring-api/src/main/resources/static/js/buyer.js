@@ -634,6 +634,20 @@ function sortByClosingTime(products) {
     });
 }
 
+function isCartItemClosed(item) {
+    if (!item) return false;
+    var d = item.scheduledDate || item.availableDate;
+    var todayIso = localDateStr(new Date());
+    if (d && d < todayIso) return true;
+    if (d && d > todayIso) return false; // future pre-order
+    var cutoff = item.cutoff || item.cutoffTime || item.orderWindowEnd;
+    if (!cutoff) return false;
+    var closeMin = parseClosingMinutes(cutoff);
+    var now = new Date();
+    var nowMin = now.getHours() * 60 + now.getMinutes();
+    return nowMin > closeMin;
+}
+
 /**
  * A visible "Explore Other Kitchens" action linking to the all kitchens view
  * (#/kitchens), shown near the top and lower down on the public kitchen page so a
@@ -916,6 +930,13 @@ async function orderSummaryView() {
         '<button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button>' +
         '<h2 class="flex-1 font-700">Order Summary</h2></div>';
     h += '<p class="muted small text-sm card-mb">🏪 ' + esc(cart.kitchenName) + '</p>';
+    var anyClosed = cart.items.some(isCartItemClosed);
+    if (anyClosed) {
+        h += '<div class="card pad card-mb" style="background:#fef2f2; border:1px solid #f87171; border-radius:12px; color:#991b1b;">' +
+            '<p class="font-700">⏰ Some offerings have closed for today</p>' +
+            '<p class="small mt-1">The order cutoff for highlighted dishes has passed. Please remove them to proceed with checkout.</p>' +
+            '</div>';
+    }
 
     h += '<div class="card pad card-mb">';
     cart.items.forEach(function (item, idx) {
@@ -924,6 +945,7 @@ async function orderSummaryView() {
             '<span class="si-price">' + money(item.price * item.qty) + '</span></div>' +
             '<p class="si-sub">' + money(item.price) + ' × ' + item.qty + ' ' + esc(item.unit || '') + '</p>' +
             fulfilmentBadge(item) +
+            (isCartItemClosed(item) ? '<div class="mt-1"><span class="pill pill-red">⏰ Cutoff passed — Orders closed</span></div>' : '') +
             (item.isPreorder && item.preorderType === 'FLEXIBLE'
                 ? '<div class="si-controls"><span class="tiny muted">Slot: ' + esc(prettyDate(item.scheduledDate)) + ' · ' + esc(item.scheduledSlot || '') + '</span></div>'
                 : '') +
@@ -974,6 +996,12 @@ async function cartRemove(idx) {
 async function goCheckout() {
     var cart = getCart();
     if (!cart || !cart.items || !cart.items.length) { toast('Your order is empty', 'error'); return; }
+    var closedItems = (cart.items || []).filter(isCartItemClosed);
+    if (closedItems.length > 0) {
+        var names = closedItems.map(function (i) { return i.name; }).join(', ');
+        toast('Cannot place order: ' + names + ' cutoff has passed for today. Please remove closed items from cart.', 'error');
+        return;
+    }
     if (!state.user || !state.user.authenticated) {
         return requireAuth(function () { return goCheckout(); });
     }
@@ -1397,8 +1425,14 @@ async function confirmPayment(btnEl) {
                 state.user.building = bldg;
                 state.user.society = soc;
             }
+            var cart = getCart();
+            var submittedPaymentStatus = cod ? 'PENDING' : 'PAID';
             var placeBody = {
-                paymentStatus: cod ? 'PENDING' : 'PAID',
+                kitchenId: cart ? cart.kitchenId : null,
+                items: (cart && cart.items) ? cart.items.map(function (i) {
+                    return { productId: i.productId, quantity: i.qty, scheduledDate: i.scheduledDate || null, scheduledSlot: i.scheduledSlot || null };
+                }) : null,
+                paymentStatus: submittedPaymentStatus,
                 customInstructions: note,
                 specialInstructions: note,
                 deliveryAddress: buyerDetails ? buyerDetails.deliveryAddress : '',
@@ -1406,10 +1440,30 @@ async function confirmPayment(btnEl) {
                 societyId: buyerDetails ? buyerDetails.societyId : null,
                 buyerDetails: buyerDetails
             };
-            var placed = await api('/api/buyer/orders/place', {
-                method: 'POST',
-                body: placeBody
-            });
+            // Ensure draft is synchronized with cart without falsely rejecting valid orders
+            if (cart && cart.items && cart.items.length) {
+                var draftCheck = null;
+                try {
+                    draftCheck = await api('/api/buyer/orders/draft');
+                } catch (e) {
+                    draftCheck = null;
+                }
+                if (!draftCheck || !draftCheck.items || !draftCheck.items.length) {
+                    await rebuildDraftFromCart();
+                }
+            }
+            var placed;
+            try {
+                placed = await api('/api/buyer/orders/place', {
+                    method: 'POST',
+                    body: placeBody
+                });
+            } catch (err) {
+                if (!isRecoverableOrderSessionError(err)) throw err;
+                if (!(await restoreBuyerSession())) throw err;
+                if (!(await rebuildDraftFromCart())) throw err;
+                placed = await api('/api/buyer/orders/place', { method: 'POST', body: placeBody });
+            }
             clearCart();
             state.pendingCheckout = null;
             state.lastOrder = placed;
@@ -1419,6 +1473,13 @@ async function confirmPayment(btnEl) {
         if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = original; }
         var reason = (err && err.data && (err.data.message || err.data.error)) || (err && err.message) || 'Could not place order. Please try again.';
         if (!(err instanceof ApiError && err.status === 401)) toast(reason, 'error');
+        if (err instanceof ApiError && (err.status === 400 || err.status === 404)) {
+            await render();
+            navigate('#/summary');
+        } else if (err instanceof ApiError && err.status === 422) {
+            state.editingCheckoutAddress = true;
+            await render();
+        }
     } finally {
         state.placingOrder = false;
     }
