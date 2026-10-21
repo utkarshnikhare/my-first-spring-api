@@ -335,7 +335,7 @@ window.addEventListener('DOMContentLoaded', async function () {
     initTheme();
     try {
         var me = await api('/api/auth/me');
-        state.user = (me && me.authenticated) ? me : null;
+        state.user = (me && me.authenticated && isBuyer(me)) ? me : null;
     } catch (e) { state.user = null; }
     // Only fall back to the Home hash when there is neither an in-app hash nor a
     // clean backend route (/kitchen/{slug}, /kitchens) to render. Setting a hash
