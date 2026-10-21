@@ -494,14 +494,22 @@ public class OrderService {
         order = orderRepository.save(order);
         orderRepository.flush();
         session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
-        analyticsService.record(AnalyticsService.EV_ORDER_PLACED, buyer.getId(),
-                buyer.getMobileNumber(), order.getKitchen() != null ? order.getKitchen().getId() : null,
-                orderPlacedDetail(order, buyer));
+        try {
+            analyticsService.record(AnalyticsService.EV_ORDER_PLACED, buyer != null ? buyer.getId() : null,
+                    buyer != null ? buyer.getMobileNumber() : null, order.getKitchen() != null ? order.getKitchen().getId() : null,
+                    orderPlacedDetail(order, buyer));
+        } catch (Exception ex) {
+            log.warn("Analytics event failed for order {}: {}", order.getOrderNumber(), ex.getMessage());
+        }
         // Handover 12: roll the commercial fact into the durable daily aggregate
         // at the moment the order is placed - the only point where it is
         // counted exactly once. Delivery and cancellation deliberately do NOT
         // call this: the upsert is additive, so a second call would double-count.
-        retentionService.recordOrderFact(order);
+        try {
+            retentionService.recordOrderFact(order);
+        } catch (Exception ex) {
+            log.warn("Retention record failed for order {}: {}", order.getOrderNumber(), ex.getMessage());
+        }
         String productSummary = order.getItems() == null ? "items" : order.getItems().stream()
                 .map(item -> item.getProduct() != null ? item.getProduct().getName() : "item")
                 .collect(Collectors.joining(", "));
@@ -1174,11 +1182,12 @@ public class OrderService {
                 if (updated == 0) {
                     throw new IllegalArgumentException("Not enough stock left for '" + product.getName() + "'. Please reduce quantity.");
                 }
-                Product fresh = productRepository.findById(e.getKey()).orElse(null);
-                if (fresh != null && fresh.getRemainingQuantity() != null && fresh.getRemainingQuantity() <= 0) {
-                    fresh.setAvailableToday(false);
-                    productRepository.save(fresh);
+                product.setRemainingQuantity(Math.max(0, product.getRemainingQuantity() - e.getValue()));
+                product.setBookedQuantity((product.getBookedQuantity() == null ? 0 : product.getBookedQuantity()) + e.getValue());
+                if (product.getRemainingQuantity() <= 0) {
+                    product.setAvailableToday(false);
                 }
+                productRepository.save(product);
             } else {
                 product.setBookedQuantity((product.getBookedQuantity() == null ? 0 : product.getBookedQuantity()) + e.getValue());
                 productRepository.save(product);
@@ -1302,25 +1311,42 @@ public class OrderService {
     private static String orderPlacedDetail(Order order, User buyer) {
         StringBuilder sb = new StringBuilder(order.getOrderNumber() == null ? "ORDER" : order.getOrderNumber());
         sb.append(";value=").append(order.getTotalAmount() != null ? order.getTotalAmount() : "0");
-        Kitchen kitchen = order.getKitchen();
-        if (kitchen != null) {
-            sb.append(";storefront=").append(kitchen.getId());
+        try {
+            Kitchen kitchen = order.getKitchen();
+            if (kitchen != null) {
+                sb.append(";storefront=").append(kitchen.getId());
+                try {
+                    if (kitchen.getSeller() != null) sb.append(";seller=").append(kitchen.getSeller().getId());
+                } catch (Exception ignored) {}
+                sb.append(";category=").append(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : "UNKNOWN");
+            }
+        } catch (Exception ignored) {}
+        if (buyer != null) {
+            Society society = null;
             try {
-                if (kitchen.getSeller() != null) sb.append(";seller=").append(kitchen.getSeller().getId());
-            } catch (Exception ignored) {}
-            sb.append(";category=").append(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : "UNKNOWN");
-        }
-        Society society = buyer.getSocietyRef();
-        if (society != null) {
-            sb.append(";societyId=").append(society.getId()).append(";society=").append(society.getName());
-        } else if (buyer.getSociety() != null && !buyer.getSociety().isBlank()) {
-            sb.append(";society=").append(buyer.getSociety());
-        }
-        Area area = buyer.getAreaRef() != null ? buyer.getAreaRef() : (society != null ? society.getArea() : null);
-        if (area != null) {
-            sb.append(";areaId=").append(area.getId()).append(";area=").append(area.getName());
-        } else if (buyer.getArea() != null && !buyer.getArea().isBlank()) {
-            sb.append(";area=").append(buyer.getArea());
+                society = buyer.getSocietyRef();
+                if (society != null) {
+                    sb.append(";societyId=").append(society.getId()).append(";society=").append(society.getName());
+                } else if (buyer.getSociety() != null && !buyer.getSociety().isBlank()) {
+                    sb.append(";society=").append(buyer.getSociety());
+                }
+            } catch (Exception ignored) {
+                if (buyer.getSociety() != null && !buyer.getSociety().isBlank()) {
+                    sb.append(";society=").append(buyer.getSociety());
+                }
+            }
+            try {
+                Area area = buyer.getAreaRef() != null ? buyer.getAreaRef() : (society != null ? society.getArea() : null);
+                if (area != null) {
+                    sb.append(";areaId=").append(area.getId()).append(";area=").append(area.getName());
+                } else if (buyer.getArea() != null && !buyer.getArea().isBlank()) {
+                    sb.append(";area=").append(buyer.getArea());
+                }
+            } catch (Exception ignored) {
+                if (buyer.getArea() != null && !buyer.getArea().isBlank()) {
+                    sb.append(";area=").append(buyer.getArea());
+                }
+            }
         }
         sb.append(";payment=").append(order.getPaymentStatus() != null ? order.getPaymentStatus().name() : "UNKNOWN");
         return sb.toString();

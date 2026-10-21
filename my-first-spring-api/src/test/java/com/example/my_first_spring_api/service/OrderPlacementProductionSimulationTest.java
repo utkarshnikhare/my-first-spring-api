@@ -28,6 +28,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class OrderPlacementProductionSimulationTest {
 
     @Autowired UserRepository users;
+    @Autowired AreaRepository areas;
+    @Autowired SocietyRepository societies;
     @Autowired KitchenRepository kitchens;
     @Autowired ProductRepository products;
     @Autowired OrderRepository orders;
@@ -38,16 +40,26 @@ public class OrderPlacementProductionSimulationTest {
     @Test
     public void testPlaceOrderLikeProduction() {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+
+        Area area = areas.saveAndFlush(new Area("Area " + suffix));
+        Society society = societies.saveAndFlush(new Society(area, "Society " + suffix));
+
         User seller = new User("Seller" + suffix, "91" + suffix + "01", "S-1", UserRole.SELLER);
         seller.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
+        seller.setAreaRef(area);
+        seller.setSocietyRef(society);
         seller = users.saveAndFlush(seller);
 
         Kitchen kitchen = new Kitchen("k" + suffix, "Kitchen " + suffix, "", null, seller);
+        kitchen.setSociety(society.getName());
         kitchen.setAvailableToday(true);
+        kitchen.getServedSocieties().add(society);
         kitchen = kitchens.saveAndFlush(kitchen);
 
         User buyer = new User("Buyer" + suffix, "93" + suffix + "01", "A-402", UserRole.BUYER);
-        buyer.setSociety("Pride World City");
+        buyer.setAreaRef(area);
+        buyer.setSocietyRef(society);
+        buyer.setSociety(society.getName());
         buyer.setBuilding("Tower A");
         buyer = users.saveAndFlush(buyer);
 
@@ -81,7 +93,8 @@ public class OrderPlacementProductionSimulationTest {
         PlaceOrderRequest.BuyerDetails buyerDetails = new PlaceOrderRequest.BuyerDetails();
         buyerDetails.setName("Buyer" + suffix);
         buyerDetails.setMobileNumber(buyer.getMobileNumber());
-        buyerDetails.setSociety("Pride World City");
+        buyerDetails.setSociety(society.getName());
+        buyerDetails.setSocietyId(society.getId());
         buyerDetails.setBuilding("Tower A");
         buyerDetails.setFlatHouseNumber("A-402");
 
