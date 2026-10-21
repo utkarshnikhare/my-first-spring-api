@@ -21,6 +21,8 @@ import java.util.stream.Collectors;
 @Transactional
 public class OrderService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OrderService.class);
+
     private final OrderRepository orderRepository;
     private final KitchenRepository kitchenRepository;
     private final ProductRepository productRepository;
@@ -481,7 +483,7 @@ public class OrderService {
         if (order.getOrderTime() == null) {
             order.setOrderTime(LocalDateTime.now());
         }
-        orderRepository.save(order);
+        order = orderRepository.save(order);
         session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
         analyticsService.record(AnalyticsService.EV_ORDER_PLACED, buyer.getId(),
                 buyer.getMobileNumber(), order.getKitchen() != null ? order.getKitchen().getId() : null,
@@ -494,8 +496,12 @@ public class OrderService {
         String productSummary = order.getItems() == null ? "items" : order.getItems().stream()
                 .map(item -> item.getProduct() != null ? item.getProduct().getName() : "item")
                 .collect(Collectors.joining(", "));
-        if (order.getKitchen() != null && order.getKitchen().getSeller() != null) {
-            notificationService.sendNewOrderNotification(order.getKitchen().getSeller(), order.getOrderNumber(), productSummary);
+        try {
+            if (order.getKitchen() != null && order.getKitchen().getSeller() != null) {
+                notificationService.sendNewOrderNotification(order.getKitchen().getSeller(), order.getOrderNumber(), productSummary);
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to dispatch new order notification for order {}: {}", order.getOrderNumber(), ex.getMessage());
         }
         return toOrderDto(order);
     }
@@ -1209,7 +1215,8 @@ public class OrderService {
      * Each product is notified at most once per order even when the draft lists it more than once.
      */
     private void notifyNewlySoldOut(Order order) {
-        if (order.getKitchen() == null || order.getKitchen().getSeller() == null) return;
+        try {
+            if (order.getKitchen() == null || order.getKitchen().getSeller() == null) return;
         if (order.getItems() == null) return;
         Set<Long> notifiedProductIds = new HashSet<>();
         for (OrderItem item : order.getItems()) {
@@ -1219,6 +1226,9 @@ public class OrderService {
             if (fresh != null && fresh.getRemainingQuantity() != null && fresh.getRemainingQuantity() <= 0) {
                 notificationService.sendSoldOutNotification(order.getKitchen().getSeller(), fresh.getName());
             }
+        }
+        } catch (Exception ex) {
+            log.warn("Failed to dispatch sold out notification: {}", ex.getMessage());
         }
     }
 
@@ -1286,7 +1296,9 @@ public class OrderService {
         Kitchen kitchen = order.getKitchen();
         if (kitchen != null) {
             sb.append(";storefront=").append(kitchen.getId());
-            if (kitchen.getSeller() != null) sb.append(";seller=").append(kitchen.getSeller().getId());
+            try {
+                if (kitchen.getSeller() != null) sb.append(";seller=").append(kitchen.getSeller().getId());
+            } catch (Exception ignored) {}
             sb.append(";category=").append(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : "UNKNOWN");
         }
         Society society = buyer.getSocietyRef();

@@ -5,6 +5,8 @@ import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.model.NotificationEvent;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.repository.NotificationEventRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +15,8 @@ import java.util.List;
 
 @Service
 public class NotificationService {
+
+    private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
 
     private final NotificationEventRepository notificationEventRepository;
 
@@ -97,12 +101,17 @@ public class NotificationService {
     }
 
     private void createEvent(User user, String title, String body) {
-        NotificationEvent event = new NotificationEvent();
-        event.setUserId(user.getId());
-        event.setUserMobile(user.getMobileNumber());
-        event.setTitle(title);
-        event.setBody(body);
-        event.setDelivered(false);
-        notificationEventRepository.save(event);
+        if (user == null || user.getId() == null) return;
+        try {
+            NotificationEvent event = new NotificationEvent();
+            event.setUserId(user.getId());
+            event.setUserMobile(user.getMobileNumber());
+            event.setTitle(title != null ? title : "Notification");
+            event.setBody(body != null ? body : "");
+            event.setDelivered(false);
+            notificationEventRepository.save(event);
+        } catch (Exception ex) {
+            log.warn("Could not save notification event for user {}: {}", user.getId(), ex.getMessage());
+        }
     }
 }

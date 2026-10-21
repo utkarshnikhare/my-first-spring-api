@@ -1056,17 +1056,26 @@ async function placeOrderWithStatus(paymentStatus) {
             var submittedPaymentStatus = paymentStatus === 'WILL_PAY_LATER' ? 'PENDING' : paymentStatus;
             var buyerDetails = null;
             if (state.user) {
-                var addr = [state.user.flatHouseNumber, state.user.building, state.user.society].filter(Boolean).join(', ');
+                var flatInput = document.getElementById('checkoutFlat');
+                var bldgInput = document.getElementById('checkoutBuilding');
+                var societyInput = document.getElementById('checkoutSociety');
+                var flat = (flatInput && flatInput.value.trim()) || state.user.flatHouseNumber || '';
+                var bldg = (bldgInput && bldgInput.value.trim()) || state.user.building || '';
+                var soc = (societyInput && societyInput.value.trim()) || state.user.society || '';
+                var addr = [flat, bldg, soc].filter(Boolean).join(', ');
                 buyerDetails = {
                     name: state.user.name || '',
                     phone: state.user.mobileNumber || '',
                     mobileNumber: state.user.mobileNumber || '',
-                    society: state.user.society || '',
+                    society: soc,
                     societyId: state.user.societyId || (state.user.societyRef ? state.user.societyRef.id : null),
-                    building: state.user.building || '',
-                    flatHouseNumber: state.user.flatHouseNumber || '',
+                    building: bldg,
+                    flatHouseNumber: flat,
                     deliveryAddress: addr
                 };
+                state.user.flatHouseNumber = flat;
+                state.user.building = bldg;
+                state.user.society = soc;
             }
             var cart = getCart();
             var placeBody = {
@@ -1119,9 +1128,14 @@ async function placeOrderWithStatus(paymentStatus) {
         if (!(err instanceof ApiError && err.status === 401)) toast(reason, 'error');
         // This screen is now unusable, so return the buyer to their cart, where
         // the selection is still present and the order can simply be retried.
-        if (err instanceof ApiError && (err.status === 400 || err.status === 404 || err.status === 422)) {
+        if (err instanceof ApiError && (err.status === 400 || err.status === 404)) {
             await render();
             navigate('#/summary');
+        } else if (err instanceof ApiError && err.status === 422) {
+            state.editingCheckoutAddress = true;
+            await render();
+            var el = document.getElementById('checkoutFlat');
+            if (el) el.focus();
         }
     } finally {
         state.placingOrder = false;
@@ -1193,11 +1207,29 @@ async function confirmOrderView() {
 
     // 6: Delivery address from the logged-in buyer profile
     var u = state.user || {};
-    h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Deliver to</h3>' +
-        '<p class="font-700 mb-1">' + esc(u.name || 'Buyer') + '</p>' +
-        '<p class="muted small">' +
-        esc([u.society || LOCATION, u.building, u.flatHouseNumber].filter(Boolean).join(' · ')) +
-        (u.mobileNumber ? '<br>📱 ' + esc(u.mobileNumber) : '') + '</p></div>';
+    var hasCompleteAddress = Boolean((u.society || LOCATION) && u.building && u.flatHouseNumber);
+    var showAddressForm = !hasCompleteAddress || state.editingCheckoutAddress;
+    h += '<div class="card pad card-mb"><div class="flex items-center justify-between mb-2">' +
+        '<h3 class="font-700">Deliver to</h3>' +
+        (hasCompleteAddress ? '<button type="button" class="btn btn-sm btn-ghost" data-action="toggle-checkout-address" style="font-size:0.8rem;padding:2px 8px;">' + (showAddressForm ? 'Done' : 'Edit') + '</button>' : '') +
+        '</div>';
+    if (!showAddressForm) {
+        h += '<p class="font-700 mb-1">' + esc(u.name || 'Buyer') + '</p>' +
+            '<p class="muted small">' +
+            esc([u.society || LOCATION, u.building, u.flatHouseNumber].filter(Boolean).join(' · ')) +
+            (u.mobileNumber ? '<br>📱 ' + esc(u.mobileNumber) : '') + '</p>';
+    } else {
+        h += '<div id="checkoutAddressBlock" class="mt-2">' +
+            (!hasCompleteAddress ? '<p class="small mb-2" style="color:var(--amber-dark, #b45309); font-weight:600;">⚠️ Please enter your flat/house and building to complete delivery details:</p>' : '') +
+            '<div class="form-group mb-2"><label class="tiny muted" for="checkoutFlat">Flat / House Number *</label>' +
+            '<input class="form-input form-input-sm" id="checkoutFlat" placeholder="e.g. Flat 302, 4th Floor" value="' + esc(u.flatHouseNumber || '') + '" required></div>' +
+            '<div class="form-group mb-2"><label class="tiny muted" for="checkoutBuilding">Building / Wing / Tower *</label>' +
+            '<input class="form-input form-input-sm" id="checkoutBuilding" placeholder="e.g. Tower B, Palm Wing" value="' + esc(u.building || '') + '" required></div>' +
+            '<div class="form-group mb-2"><label class="tiny muted" for="checkoutSociety">Society / Community *</label>' +
+            '<input class="form-input form-input-sm" id="checkoutSociety" placeholder="Society name" value="' + esc(u.society || LOCATION || '') + '" required></div>' +
+            '</div>';
+    }
+    h += '</div>';
 
     // Cross-society delivery validation: warn buyer if delivery address society does not match kitchen's active society
     var buyerSociety = ((u && u.society) || LOCATION || '').trim();
@@ -1344,17 +1376,26 @@ async function confirmPayment(btnEl) {
         await withAuthGate(async function () {
             var buyerDetails = null;
             if (state.user) {
-                var addr = [state.user.flatHouseNumber, state.user.building, state.user.society].filter(Boolean).join(', ');
+                var flatInput = document.getElementById('checkoutFlat');
+                var bldgInput = document.getElementById('checkoutBuilding');
+                var societyInput = document.getElementById('checkoutSociety');
+                var flat = (flatInput && flatInput.value.trim()) || state.user.flatHouseNumber || '';
+                var bldg = (bldgInput && bldgInput.value.trim()) || state.user.building || '';
+                var soc = (societyInput && societyInput.value.trim()) || state.user.society || '';
+                var addr = [flat, bldg, soc].filter(Boolean).join(', ');
                 buyerDetails = {
                     name: state.user.name || '',
                     phone: state.user.mobileNumber || '',
                     mobileNumber: state.user.mobileNumber || '',
-                    society: state.user.society || '',
+                    society: soc,
                     societyId: state.user.societyId || (state.user.societyRef ? state.user.societyRef.id : null),
-                    building: state.user.building || '',
-                    flatHouseNumber: state.user.flatHouseNumber || '',
+                    building: bldg,
+                    flatHouseNumber: flat,
                     deliveryAddress: addr
                 };
+                state.user.flatHouseNumber = flat;
+                state.user.building = bldg;
+                state.user.society = soc;
             }
             var placeBody = {
                 paymentStatus: cod ? 'PENDING' : 'PAID',

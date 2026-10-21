@@ -168,6 +168,9 @@ document.addEventListener('click', async function (e) {
                 try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
                 await placeOrderWithStatus('PENDING'); break;
             case 'select-pay-method': state.payMethod = t.dataset.method; await render(); break;
+            case 'toggle-checkout-address':
+                state.editingCheckoutAddress = !state.editingCheckoutAddress;
+                await render(); break;
             case 'select-pay-status': // Confirm Order: Paid / Will Pay Later (UI selection only)
                 state.payPreference = t.dataset.status === 'PENDING' || t.dataset.status === 'WILL_PAY_LATER'
                     ? 'PENDING' : 'PAID';
