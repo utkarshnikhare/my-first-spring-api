@@ -220,6 +220,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorDto> handleGenericException(Exception ex) {
         logger.error("Unhandled exception: ", ex);
-        return new ResponseEntity<>(new ApiErrorDto("INTERNAL_ERROR", "An unexpected error occurred. Please try again.", 500), HttpStatus.INTERNAL_SERVER_ERROR);
+        String details = ex.getMessage() != null && !ex.getMessage().isBlank()
+                ? ex.getMessage()
+                : (ex.getCause() != null && ex.getCause().getMessage() != null
+                    ? ex.getCause().getMessage()
+                    : "An unexpected error occurred. Please try again.");
+        return new ResponseEntity<>(new ApiErrorDto("INTERNAL_ERROR", details, 500), HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }
