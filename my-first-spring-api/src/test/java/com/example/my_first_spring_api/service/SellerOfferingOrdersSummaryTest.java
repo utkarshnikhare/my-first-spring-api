@@ -260,4 +260,27 @@ class SellerOfferingOrdersSummaryTest {
                 otherSeller, product.getId(), LocalDate.now(), null, null))
                 .isInstanceOf(SellerNotAuthorizedException.class);
     }
+    @Test
+    void nullDateMatchesOrdersAcrossAllDatesAndPopulatesBuyerPhone() {
+        Order o1 = place(buyerA, 3, BigDecimal.valueOf(40), PaymentStatus.PAID, OrderStatus.CONFIRMED);
+        o1.getItems().get(0).setScheduledDate(LocalDate.now().plusDays(5));
+        orders.saveAndFlush(o1);
+
+        Order o2 = place(buyerB, 2, BigDecimal.valueOf(40), PaymentStatus.PENDING, OrderStatus.ORDERED);
+        o2.getItems().get(0).setScheduledDate(LocalDate.now().minusDays(2));
+        orders.saveAndFlush(o2);
+
+        // Query with null date (representing 'all' dates)
+        OrderItemDetailDto d = sellerApp.getOrderItemDetail(seller, product.getId(), null, null, null);
+        assertThat(d.getTotalOrders()).isEqualTo(2);
+        assertThat(d.getCustomers()).hasSize(2);
+
+        // Verify buyer phone is populated
+        assertThat(d.getCustomers().get(0).getBuyerPhone()).isNotBlank();
+        assertThat(d.getCustomers().get(1).getBuyerPhone()).isNotBlank();
+
+        // Delivery progress should count both active orders
+        assertThat(d.getDeliveryProgress()).isNotNull();
+        assertThat(d.getDeliveryProgress().getActiveOrderCount()).isEqualTo(2);
+    }
 }

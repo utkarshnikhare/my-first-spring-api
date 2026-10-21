@@ -878,7 +878,8 @@ public class OrderService {
     }
 
     private boolean orderContainsProductOnDate(Order order, Long productId, LocalDate date) {
-        if (order.getItems() == null || date == null) return false;
+        if (order.getItems() == null) return false;
+        if (date == null) return orderContainsProduct(order, productId);
         for (OrderItem item : order.getItems()) {
             if (item.getProduct() == null || !productId.equals(item.getProduct().getId())) continue;
             LocalDate fulfilment = item.getScheduledDate();
@@ -1018,7 +1019,8 @@ public class OrderService {
                 buyerSummary.setName(order.getBuyer().getName());
                 buyerSummary.setMobileNumber(order.getBuyer().getMobileNumber());
                 buyerSummary.setFlatHouseNumber(order.getBuyer().getFlatHouseNumber());
-                buyerSummary.setSociety(order.getBuyer().getSociety());
+                buyerSummary.setSociety(order.getBuyer().getSociety() != null ? order.getBuyer().getSociety()
+                        : (order.getBuyer().getSocietyRef() != null ? order.getBuyer().getSocietyRef().getName() : null));
                 buyerSummary.setBuilding(order.getBuyer().getBuilding());
                 dto.setBuyer(buyerSummary);
             }
