@@ -63,19 +63,27 @@ public class DiscoveryService {
     }
 
     private List<Product> visibleProducts(User buyer) {
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
         return productRepository.findAll().stream()
                 .filter(p -> p.getKitchen() != null && KitchenVisibility.isPubliclyVisible(p.getKitchen()) && KitchenVisibility.isServiceAreaVisible(p.getKitchen(), buyer))
                 .filter(p -> !p.isOrdersPaused())
+                .filter(p -> p.getAvailableDate() == null || !p.getAvailableDate().isBefore(today))
                 .collect(Collectors.toList());
     }
 
     private static boolean orderableToday(Product p) {
-        return Boolean.TRUE.equals(p.getAvailableToday()) && !Boolean.TRUE.equals(p.getIsPreorder())
-                && OfferingTiming.isWindowOpenNow(p);
+        if (p == null) return false;
+        if (!Boolean.TRUE.equals(p.getAvailableToday())) return false;
+        if (Boolean.TRUE.equals(p.getIsPreorder())) return false;
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        if (p.getAvailableDate() != null && p.getAvailableDate().isBefore(today)) return false;
+        return OfferingTiming.isWindowOpenNow(p);
     }
 
     private static boolean availableTomorrow(Product p) {
-        return LocalDate.now().plusDays(1).equals(p.getAvailableDate())
+        if (p == null) return false;
+        LocalDate tomorrow = LocalDate.now(AppTimeZone.ZONE).plusDays(1);
+        return tomorrow.equals(p.getAvailableDate())
                 && Boolean.TRUE.equals(p.getIsPreorder()) && OfferingTiming.isWindowOpenNow(p);
     }
 

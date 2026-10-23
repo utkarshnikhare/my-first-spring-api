@@ -406,9 +406,11 @@ function applyOfferingDatePicker(picker) {
     }
 }
 function sellerDate(dateKey) {
-    if (dateKey === 'tomorrow') return localDateStr(new Date(Date.now() + 864e5));
+    // Asia/Kolkata is UTC+5:30 regardless of the browser's local zone.
+    var istTodayMs = Date.now() + 330 * 60000;
+    if (dateKey === 'tomorrow') return new Date(istTodayMs + 864e5).toISOString().slice(0, 10);
     if (dateKey && dateKey !== 'today' && dateKey !== 'pick') return dateKey;
-    return localDateStr(new Date());
+    return new Date(istTodayMs).toISOString().slice(0, 10);
 }
 function prettyDateTime(iso) {
     if (!iso) return '';
