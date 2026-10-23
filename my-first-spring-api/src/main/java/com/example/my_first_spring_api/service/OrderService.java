@@ -11,6 +11,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.my_first_spring_api.service.AvailabilityService;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -37,6 +39,9 @@ public class OrderService {
      */
     @Autowired
     private RecurringScheduleService recurringScheduleService;
+
+    @Autowired(required = false)
+    private AvailabilityService availabilityService;
 
     @Autowired(required = false)
     private SocietyDirectory societyDirectory;
@@ -460,6 +465,16 @@ public class OrderService {
                     orderRepository.delete(order);
                     throw new IllegalArgumentException("This kitchen (" + kitchenSociety + ") does not deliver to your society (" + buyerSociety + ").");
                 }
+            }
+        }
+        // Checkout revalidation: re-check each offering is still orderable right
+        // before stock is committed. This catches past-date, sold-out, paused,
+        // order-window-closed, and unavailable-area items that became invalid
+        // after the draft was created.
+        if (availabilityService != null) {
+            for (OrderItem item : order.getItems()) {
+                Product product = item.getProduct();
+                availabilityService.assertOrderable(product, buyer, "checkout");
             }
         }
         validateOrderItemsForPlacement(order);
