@@ -21,6 +21,8 @@ import java.util.stream.Collectors;
 @Transactional
 public class OrderService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OrderService.class);
+
     private final OrderRepository orderRepository;
     private final KitchenRepository kitchenRepository;
     private final ProductRepository productRepository;
@@ -35,6 +37,12 @@ public class OrderService {
      */
     @Autowired
     private RecurringScheduleService recurringScheduleService;
+
+    @Autowired(required = false)
+    private SocietyDirectory societyDirectory;
+
+    @Autowired(required = false)
+    private SocietyRepository societyRepository;
 
     public static final String DRAFT_ORDER_SESSION_KEY = "DRAFT_ORDER_ID";
     private static final String BUYER_SESSION_KEY = "BUYER_USER";
@@ -399,9 +407,38 @@ public class OrderService {
         }
         order.setBuyer(buyer);
         if (buyerDetails != null) updateBuyerDetails(buyer, buyerDetails);
-        if (customInstructions != null && !customInstructions.isBlank()) order.setCustomInstructions(customInstructions);
+        if (customInstructions != null && !customInstructions.isBlank()) {
+            order.setCustomInstructions(customInstructions);
+            order.setSpecialInstructions(customInstructions);
+        }
+        String deliveryAddress = (buyerDetails != null && buyerDetails.getDeliveryAddress() != null && !buyerDetails.getDeliveryAddress().isBlank())
+                ? buyerDetails.getDeliveryAddress()
+                : (buyer != null
+                        ? String.join(", ", java.util.stream.Stream.of(buyer.getFlatHouseNumber(), buyer.getBuilding(), buyer.getSociety())
+                                .filter(s -> s != null && !s.isBlank()).toList())
+                        : "");
+        order.setDeliveryAddress(deliveryAddress);
         // First-order verification: ensure buyer profile is complete before placing an order.
         // Required fields: society, building, flat/house number. Mobile is set at login.
+        if (buyer.getSociety() == null || buyer.getSociety().isBlank()) {
+            if (buyer.getSocietyRef() != null && buyer.getSocietyRef().getName() != null) {
+                buyer.setSociety(buyer.getSocietyRef().getName());
+            } else if (buyerDetails != null && buyerDetails.getSociety() != null && !buyerDetails.getSociety().isBlank()) {
+                buyer.setSociety(buyerDetails.getSociety());
+            }
+        }
+        if (buyer.getBuilding() == null || buyer.getBuilding().isBlank()) {
+            if (buyerDetails != null && buyerDetails.getBuilding() != null && !buyerDetails.getBuilding().isBlank()) {
+                buyer.setBuilding(buyerDetails.getBuilding());
+            }
+        }
+        if (buyer.getFlatHouseNumber() == null || buyer.getFlatHouseNumber().isBlank()) {
+            if (buyerDetails != null && buyerDetails.getFlatHouseNumber() != null && !buyerDetails.getFlatHouseNumber().isBlank()) {
+                buyer.setFlatHouseNumber(buyerDetails.getFlatHouseNumber());
+            } else if (buyerDetails != null && buyerDetails.getDeliveryAddress() != null && !buyerDetails.getDeliveryAddress().isBlank()) {
+                buyer.setFlatHouseNumber(buyerDetails.getDeliveryAddress());
+            }
+        }
         if (buyer.getSociety() == null || buyer.getSociety().isBlank()
                 || buyer.getBuilding() == null || buyer.getBuilding().isBlank()
                 || buyer.getFlatHouseNumber() == null || buyer.getFlatHouseNumber().isBlank()) {
@@ -413,11 +450,31 @@ public class OrderService {
             orderRepository.delete(order);
             throw new IllegalArgumentException("This kitchen does not serve your selected area. Please choose another kitchen.");
         }
+        // Cross-society delivery validation: verify delivery compatibility
+        String buyerSociety = buyer.getSociety();
+        String kitchenSociety = order.getKitchen() != null ? order.getKitchen().getSociety() : null;
+        if (kitchenSociety != null && !kitchenSociety.isBlank() && buyerSociety != null && !buyerSociety.isBlank()) {
+            if (!kitchenSociety.trim().equalsIgnoreCase(buyerSociety.trim())) {
+                if (!KitchenVisibility.isServiceAreaVisible(order.getKitchen(), buyer)) {
+                    session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
+                    orderRepository.delete(order);
+                    throw new IllegalArgumentException("This kitchen (" + kitchenSociety + ") does not deliver to your society (" + buyerSociety + ").");
+                }
+            }
+        }
         validateOrderItemsForPlacement(order);
         consumeStock(order);
+        // ProductRepository.consumeStock uses clearAutomatically=true which detaches entities.
+        // Re-attach order and buyer so all entity references are managed and proxies valid.
+        if (order.getId() != null) {
+            order = orderRepository.findByIdWithItems(order.getId()).orElse(order);
+        }
+        if (buyer != null && buyer.getId() != null) {
+            buyer = userRepository.findById(buyer.getId()).orElse(buyer);
+        }
         // Notify seller if any tracked offering newly sold out as a result of this order.
         notifyNewlySoldOut(order);
-        boolean isHomemade = order.getKitchen() != null && order.getKitchen().getSellerType() == SellerType.HOMEMADE_PRODUCTS;
+        boolean isHomemade = KitchenVisibility.isHomemadeStore(order.getKitchen());
         PaymentStatus effectivePaymentStatus = paymentStatus == null || paymentStatus == PaymentStatus.WILL_PAY_LATER
                 ? PaymentStatus.PENDING : paymentStatus;
         if (effectivePaymentStatus == PaymentStatus.PAID && !isHomemade) {
@@ -434,21 +491,34 @@ public class OrderService {
         if (order.getOrderTime() == null) {
             order.setOrderTime(LocalDateTime.now());
         }
-        orderRepository.save(order);
+        order = orderRepository.save(order);
+        orderRepository.flush();
         session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
-        analyticsService.record(AnalyticsService.EV_ORDER_PLACED, buyer.getId(),
-                buyer.getMobileNumber(), order.getKitchen() != null ? order.getKitchen().getId() : null,
-                orderPlacedDetail(order, buyer));
+        try {
+            analyticsService.record(AnalyticsService.EV_ORDER_PLACED, buyer != null ? buyer.getId() : null,
+                    buyer != null ? buyer.getMobileNumber() : null, order.getKitchen() != null ? order.getKitchen().getId() : null,
+                    orderPlacedDetail(order, buyer));
+        } catch (Exception ex) {
+            log.warn("Analytics event failed for order {}: {}", order.getOrderNumber(), ex.getMessage());
+        }
         // Handover 12: roll the commercial fact into the durable daily aggregate
         // at the moment the order is placed - the only point where it is
         // counted exactly once. Delivery and cancellation deliberately do NOT
         // call this: the upsert is additive, so a second call would double-count.
-        retentionService.recordOrderFact(order);
+        try {
+            retentionService.recordOrderFact(order);
+        } catch (Exception ex) {
+            log.warn("Retention record failed for order {}: {}", order.getOrderNumber(), ex.getMessage());
+        }
         String productSummary = order.getItems() == null ? "items" : order.getItems().stream()
                 .map(item -> item.getProduct() != null ? item.getProduct().getName() : "item")
                 .collect(Collectors.joining(", "));
-        if (order.getKitchen() != null && order.getKitchen().getSeller() != null) {
-            notificationService.sendNewOrderNotification(order.getKitchen().getSeller(), order.getOrderNumber(), productSummary);
+        try {
+            if (order.getKitchen() != null && order.getKitchen().getSeller() != null) {
+                notificationService.sendNewOrderNotification(order.getKitchen().getSeller(), order.getOrderNumber(), productSummary);
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to dispatch new order notification for order {}: {}", order.getOrderNumber(), ex.getMessage());
         }
         return toOrderDto(order);
     }
@@ -808,7 +878,8 @@ public class OrderService {
     }
 
     private boolean orderContainsProductOnDate(Order order, Long productId, LocalDate date) {
-        if (order.getItems() == null || date == null) return false;
+        if (order.getItems() == null) return false;
+        if (date == null) return orderContainsProduct(order, productId);
         for (OrderItem item : order.getItems()) {
             if (item.getProduct() == null || !productId.equals(item.getProduct().getId())) continue;
             LocalDate fulfilment = item.getScheduledDate();
@@ -937,16 +1008,19 @@ public class OrderService {
         dto.setAcknowledgedBySellerId(order.getAcknowledgedBy() != null ? order.getAcknowledgedBy().getId() : null);
         Kitchen kitchen = order.getKitchen();
         if (kitchen != null) {
-            dto.setKitchen(new OrderDto.KitchenSummary(
+            OrderDto.KitchenSummary ks = new OrderDto.KitchenSummary(
                     kitchen.getId(), kitchen.getName(), kitchen.getDisplayName(),
-                    kitchen.getImageUrl(), kitchen.getRating()));
+                    kitchen.getImageUrl(), kitchen.getRating());
+            ks.setSociety(kitchen.getSociety());
+            dto.setKitchen(ks);
         }
             if (order.getBuyer() != null) {
                 OrderDto.BuyerSummary buyerSummary = new OrderDto.BuyerSummary();
                 buyerSummary.setName(order.getBuyer().getName());
                 buyerSummary.setMobileNumber(order.getBuyer().getMobileNumber());
                 buyerSummary.setFlatHouseNumber(order.getBuyer().getFlatHouseNumber());
-                buyerSummary.setSociety(order.getBuyer().getSociety());
+                buyerSummary.setSociety(order.getBuyer().getSociety() != null ? order.getBuyer().getSociety()
+                        : (order.getBuyer().getSocietyRef() != null ? order.getBuyer().getSocietyRef().getName() : null));
                 buyerSummary.setBuilding(order.getBuyer().getBuilding());
                 dto.setBuyer(buyerSummary);
             }
@@ -1008,6 +1082,9 @@ public class OrderService {
                     .orElseThrow(() -> new ProductNotFoundException(item.getProduct().getId()));
             if (product.getKitchen() == null || !product.getKitchen().getId().equals(order.getKitchen().getId())) {
                 throw new IllegalArgumentException("One of the selected offerings no longer belongs to this kitchen.");
+            }
+            if (!Boolean.TRUE.equals(product.getKitchen().getAvailableToday())) {
+                throw new IllegalArgumentException("The kitchen '" + product.getKitchen().getDisplayName() + "' is not currently accepting orders.");
             }
             if (Boolean.TRUE.equals(product.getOrdersPaused())) {
                 throw new IllegalArgumentException("Orders are paused for '" + product.getName() + "'.");
@@ -1107,11 +1184,12 @@ public class OrderService {
                 if (updated == 0) {
                     throw new IllegalArgumentException("Not enough stock left for '" + product.getName() + "'. Please reduce quantity.");
                 }
-                Product fresh = productRepository.findById(e.getKey()).orElse(null);
-                if (fresh != null && fresh.getRemainingQuantity() != null && fresh.getRemainingQuantity() <= 0) {
-                    fresh.setAvailableToday(false);
-                    productRepository.save(fresh);
+                product.setRemainingQuantity(Math.max(0, product.getRemainingQuantity() - e.getValue()));
+                product.setBookedQuantity((product.getBookedQuantity() == null ? 0 : product.getBookedQuantity()) + e.getValue());
+                if (product.getRemainingQuantity() <= 0) {
+                    product.setAvailableToday(false);
                 }
+                productRepository.save(product);
             } else {
                 product.setBookedQuantity((product.getBookedQuantity() == null ? 0 : product.getBookedQuantity()) + e.getValue());
                 productRepository.save(product);
@@ -1157,7 +1235,8 @@ public class OrderService {
      * Each product is notified at most once per order even when the draft lists it more than once.
      */
     private void notifyNewlySoldOut(Order order) {
-        if (order.getKitchen() == null || order.getKitchen().getSeller() == null) return;
+        try {
+            if (order.getKitchen() == null || order.getKitchen().getSeller() == null) return;
         if (order.getItems() == null) return;
         Set<Long> notifiedProductIds = new HashSet<>();
         for (OrderItem item : order.getItems()) {
@@ -1168,11 +1247,19 @@ public class OrderService {
                 notificationService.sendSoldOutNotification(order.getKitchen().getSeller(), fresh.getName());
             }
         }
+        } catch (Exception ex) {
+            log.warn("Failed to dispatch sold out notification: {}", ex.getMessage());
+        }
     }
 
     private void updateBuyerDetails(User buyer, PlaceOrderRequest.BuyerDetails buyerDetails) {
         if (buyerDetails.getName() != null && !buyerDetails.getName().isBlank()) {
             buyer.setName(buyerDetails.getName());
+        }
+        if (buyerDetails.getMobileNumber() != null && !buyerDetails.getMobileNumber().isBlank()) {
+            buyer.setMobileNumber(buyerDetails.getMobileNumber());
+        } else if (buyerDetails.getPhone() != null && !buyerDetails.getPhone().isBlank()) {
+            buyer.setMobileNumber(buyerDetails.getPhone());
         }
         if (buyerDetails.getFlatHouseNumber() != null && !buyerDetails.getFlatHouseNumber().isBlank()) {
             buyer.setFlatHouseNumber(buyerDetails.getFlatHouseNumber());
@@ -1183,7 +1270,34 @@ public class OrderService {
         if (buyerDetails.getBuilding() != null && !buyerDetails.getBuilding().isBlank()) {
             buyer.setBuilding(buyerDetails.getBuilding());
         }
+        if (buyerDetails.getSocietyId() != null && societyRepository != null) {
+            societyRepository.findById(buyerDetails.getSocietyId()).ifPresent(s -> {
+                buyer.setSocietyRef(s);
+                if (buyer.getSociety() == null || buyer.getSociety().isBlank()) {
+                    buyer.setSociety(s.getName());
+                }
+                if (s.getArea() != null) {
+                    buyer.setAreaRef(s.getArea());
+                    if (buyer.getArea() == null || buyer.getArea().isBlank()) {
+                        buyer.setArea(s.getArea().getName());
+                    }
+                }
+            });
+        }
+        if (buyerDetails.getDeliveryAddress() != null && !buyerDetails.getDeliveryAddress().isBlank()) {
+            if (buyer.getFlatHouseNumber() == null || buyer.getFlatHouseNumber().isBlank()) {
+                buyer.setFlatHouseNumber(buyerDetails.getDeliveryAddress());
+            }
+        }
         userRepository.save(buyer);
+    }
+
+    @Transactional(readOnly = true)
+    public Long resolveKitchenIdForProduct(Long productId) {
+        if (productId == null) return null;
+        return productRepository.findById(productId)
+                .map(p -> p.getKitchen() != null ? p.getKitchen().getId() : null)
+                .orElse(null);
     }
 
     /**
@@ -1199,23 +1313,42 @@ public class OrderService {
     private static String orderPlacedDetail(Order order, User buyer) {
         StringBuilder sb = new StringBuilder(order.getOrderNumber() == null ? "ORDER" : order.getOrderNumber());
         sb.append(";value=").append(order.getTotalAmount() != null ? order.getTotalAmount() : "0");
-        Kitchen kitchen = order.getKitchen();
-        if (kitchen != null) {
-            sb.append(";storefront=").append(kitchen.getId());
-            if (kitchen.getSeller() != null) sb.append(";seller=").append(kitchen.getSeller().getId());
-            sb.append(";category=").append(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : "UNKNOWN");
-        }
-        Society society = buyer.getSocietyRef();
-        if (society != null) {
-            sb.append(";societyId=").append(society.getId()).append(";society=").append(society.getName());
-        } else if (buyer.getSociety() != null && !buyer.getSociety().isBlank()) {
-            sb.append(";society=").append(buyer.getSociety());
-        }
-        Area area = buyer.getAreaRef() != null ? buyer.getAreaRef() : (society != null ? society.getArea() : null);
-        if (area != null) {
-            sb.append(";areaId=").append(area.getId()).append(";area=").append(area.getName());
-        } else if (buyer.getArea() != null && !buyer.getArea().isBlank()) {
-            sb.append(";area=").append(buyer.getArea());
+        try {
+            Kitchen kitchen = order.getKitchen();
+            if (kitchen != null) {
+                sb.append(";storefront=").append(kitchen.getId());
+                try {
+                    if (kitchen.getSeller() != null) sb.append(";seller=").append(kitchen.getSeller().getId());
+                } catch (Exception ignored) {}
+                sb.append(";category=").append(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : "UNKNOWN");
+            }
+        } catch (Exception ignored) {}
+        if (buyer != null) {
+            Society society = null;
+            try {
+                society = buyer.getSocietyRef();
+                if (society != null) {
+                    sb.append(";societyId=").append(society.getId()).append(";society=").append(society.getName());
+                } else if (buyer.getSociety() != null && !buyer.getSociety().isBlank()) {
+                    sb.append(";society=").append(buyer.getSociety());
+                }
+            } catch (Exception ignored) {
+                if (buyer.getSociety() != null && !buyer.getSociety().isBlank()) {
+                    sb.append(";society=").append(buyer.getSociety());
+                }
+            }
+            try {
+                Area area = buyer.getAreaRef() != null ? buyer.getAreaRef() : (society != null ? society.getArea() : null);
+                if (area != null) {
+                    sb.append(";areaId=").append(area.getId()).append(";area=").append(area.getName());
+                } else if (buyer.getArea() != null && !buyer.getArea().isBlank()) {
+                    sb.append(";area=").append(buyer.getArea());
+                }
+            } catch (Exception ignored) {
+                if (buyer.getArea() != null && !buyer.getArea().isBlank()) {
+                    sb.append(";area=").append(buyer.getArea());
+                }
+            }
         }
         sb.append(";payment=").append(order.getPaymentStatus() != null ? order.getPaymentStatus().name() : "UNKNOWN");
         return sb.toString();

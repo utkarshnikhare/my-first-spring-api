@@ -3,6 +3,8 @@ package com.example.my_first_spring_api;
 import com.example.my_first_spring_api.dto.ApiErrorDto;
 import com.example.my_first_spring_api.exception.BuyerNotAuthenticatedException;
 import com.example.my_first_spring_api.exception.BuyerProfileIncompleteException;
+import com.example.my_first_spring_api.exception.AccountAlreadyExistsException;
+import com.example.my_first_spring_api.exception.InvalidCredentialsException;
 import com.example.my_first_spring_api.exception.InvalidKitchenSelectionException;
 import com.example.my_first_spring_api.exception.KitchenNotEligibleException;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
@@ -10,8 +12,11 @@ import com.example.my_first_spring_api.exception.OrderNotFoundException;
 import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.exception.TemplateNotFoundException;
+import com.example.my_first_spring_api.exception.TooManyRequestsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -22,6 +27,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -113,6 +119,38 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(new ApiErrorDto("FORBIDDEN", ex.getMessage(), 403), HttpStatus.FORBIDDEN);
     }
 
+    @ExceptionHandler(AccountAlreadyExistsException.class)
+    public ResponseEntity<ApiErrorDto> handleAccountAlreadyExists(AccountAlreadyExistsException ex) {
+        return new ResponseEntity<>(new ApiErrorDto("ACCOUNT_ALREADY_EXISTS", ex.getMessage(), 409), HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ApiErrorDto> handleInvalidCredentials(InvalidCredentialsException ex) {
+        return new ResponseEntity<>(new ApiErrorDto("INVALID_CREDENTIALS", ex.getMessage(), 401), HttpStatus.UNAUTHORIZED);
+    }
+
+    /**
+     * Login / registration rate limit exceeded ({@link TooManyRequestsException}).
+     *
+     * <p>The message is intentionally generic and non-sensitive: it must not reveal
+     * whether a given mobile number exists, nor which counter (per-mobile vs per-IP)
+     * tripped. Logged at WARN with no user identifiers for the same reason.</p>
+     */
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ApiErrorDto> handleTooManyRequests(TooManyRequestsException ex) {
+        logger.warn("Rate limit exceeded: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+                .body(new ApiErrorDto("TOO_MANY_REQUESTS", ex.getMessage(), 429));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiErrorDto> handleResponseStatus(ResponseStatusException ex) {
+        HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
+        String message = ex.getReason() == null ? status.getReasonPhrase() : ex.getReason();
+        return new ResponseEntity<>(new ApiErrorDto("REQUEST_REJECTED", message, status.value()), status);
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiErrorDto> handleConflict(IllegalStateException ex) {
         return new ResponseEntity<>(new ApiErrorDto("CONFLICT", ex.getMessage(), 409), HttpStatus.CONFLICT);
@@ -128,8 +166,17 @@ public class GlobalExceptionHandler {
             MethodArgumentTypeMismatchException.class,
             HttpMessageNotReadableException.class})
     public ResponseEntity<ApiErrorDto> handleBadRequestWeb(Exception ex) {
-        logger.error("Bad request body binding: ", ex);
-        return new ResponseEntity<>(new ApiErrorDto("BAD_REQUEST", "Invalid request. Please check the submitted data.", 400), HttpStatus.BAD_REQUEST);
+        logger.warn("Bad request binding: {}", ex.getMessage());
+        String msg = "Invalid request. Please check the submitted data.";
+        if (ex instanceof MissingServletRequestParameterException missing) {
+            msg = "Missing required parameter: " + missing.getParameterName();
+        } else if (ex instanceof MethodArgumentTypeMismatchException mismatch) {
+            msg = "Invalid value for parameter: " + mismatch.getName();
+        } else if (ex instanceof HttpMessageNotReadableException readable && readable.getRootCause() != null
+                && readable.getRootCause().getMessage() != null && !readable.getRootCause().getMessage().isBlank()) {
+            msg = readable.getRootCause().getMessage();
+        }
+        return new ResponseEntity<>(new ApiErrorDto("BAD_REQUEST", msg, 400), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(DateTimeParseException.class)
@@ -147,10 +194,46 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(new ApiErrorDto("NOT_FOUND", "The requested endpoint does not exist.", 404), HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiErrorDto> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        logger.error("Data integrity violation: ", ex);
+        String message = "A data constraint was violated while processing your request. Please ensure all required fields are filled.";
+        if (ex.getRootCause() != null && ex.getRootCause().getMessage() != null) {
+            String rootMsg = ex.getRootCause().getMessage().toLowerCase();
+            if (rootMsg.contains("buyer_id")) {
+                message = "Please log in to place an order.";
+            } else if (rootMsg.contains("delivery_address")) {
+                message = "Please enter your delivery address.";
+            } else if (rootMsg.contains("society")) {
+                message = "Please select your society or enter your delivery address.";
+            } else if (rootMsg.contains("payment_status")) {
+                message = "Invalid or missing payment status.";
+            } else if (rootMsg.contains("order_status")) {
+                message = "Invalid or missing order status.";
+            } else if (rootMsg.contains("not-null") || rootMsg.contains("null value")) {
+                message = "Missing required information: " + ex.getRootCause().getMessage();
+            }
+        }
+        return new ResponseEntity<>(new ApiErrorDto("DATA_INTEGRITY_VIOLATION", message, 400), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(org.springframework.transaction.UnexpectedRollbackException.class)
+    public ResponseEntity<ApiErrorDto> handleUnexpectedRollback(org.springframework.transaction.UnexpectedRollbackException ex) {
+        logger.error("Unexpected rollback exception: ", ex);
+        Throwable root = org.springframework.core.NestedExceptionUtils.getMostSpecificCause(ex);
+        String msg = root != null && root.getMessage() != null ? root.getMessage() : ex.getMessage();
+        return new ResponseEntity<>(new ApiErrorDto("INTERNAL_ERROR", msg, 500), HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorDto> handleGenericException(Exception ex) {
         logger.error("Unhandled exception: ", ex);
-        return new ResponseEntity<>(new ApiErrorDto("INTERNAL_ERROR", "An unexpected error occurred. Please try again.", 500), HttpStatus.INTERNAL_SERVER_ERROR);
+        Throwable root = org.springframework.core.NestedExceptionUtils.getMostSpecificCause(ex);
+        String details = root != null && root.getMessage() != null && !root.getMessage().isBlank()
+                ? root.getMessage()
+                : (ex.getMessage() != null && !ex.getMessage().isBlank()
+                    ? ex.getMessage()
+                    : "An unexpected error occurred. Please try again.");
+        return new ResponseEntity<>(new ApiErrorDto("INTERNAL_ERROR", details, 500), HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }
-

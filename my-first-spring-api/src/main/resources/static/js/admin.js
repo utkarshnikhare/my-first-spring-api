@@ -8,7 +8,7 @@
  * developer link still resolves — they are simply not reachable from the normal
  * Admin navigation, which is the point of V1.
  */
-var A = { me: null, role: null, loginMobile: null, trafficPeriod: 'today', kitchenFilter: '', dashPeriod: 'today', buyerAreaId: '', buyerSocietyId: '' };
+var A = { me: null, role: null, authConfig: null, authConfigError: null, trafficPeriod: 'today', kitchenFilter: '', dashPeriod: 'today', buyerAreaId: '', buyerSocietyId: '' };
 // Resolved BEFORE the route table below. `adminAnalyticsView` used to be assigned
 // further down the file with `var`, and a `var` is not initialised until execution
 // reaches it - so while the route table was being built the '#/analytics' entry
@@ -62,6 +62,31 @@ function adminNormaliseHash() {
 }
 async function adminRender() {
     if (!A.role) { await adminGate(); return; }
+    var identity;
+    try {
+        identity = await api('/api/auth/me');
+    } catch (err) {
+        A.me = null;
+        A.role = null;
+        var errorContainer = viewEl();
+        if (errorContainer) errorContainer.innerHTML = adminErrorView(err);
+        return;
+    }
+    if (!identity || !identity.authenticated) {
+        A.me = null;
+        A.role = null;
+        renderLoginScreen();
+        return;
+    }
+    if (identity.role !== 'ADMIN' && identity.role !== 'SUPER_ADMIN') {
+        A.me = null;
+        A.role = null;
+        renderBlockedScreen(identity.role || 'UNKNOWN');
+        return;
+    }
+    A.me = identity;
+    A.role = identity.role;
+    showAdminApp();
     var hash = adminNormaliseHash();
     if (location.hash !== hash) {
         // replaceState avoids pushing a bogus entry onto the history stack.
@@ -104,7 +129,10 @@ function adminUpdateNav(hash) {
     if (key === 'home') key = 'dashboard';
     if (key === 'pending') key = 'approvals';
     var el = document.querySelector('[data-nav="' + key + '"]');
-    if (el) el.classList.add('active');
+    if (el) {
+        el.classList.add('active');
+        if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    }
 }
 function adminNavigate(hash) { if (location.hash === hash) adminRender(); else location.hash = hash; }
 // ==================== SEARCH ====================
@@ -199,6 +227,8 @@ function adminDate(iso) {
 async function adminGate() {
     var me = null;
     try { me = await api('/api/auth/me'); } catch (e) { me = null; }
+    try { A.authConfig = await api('/api/auth/config'); A.authConfigError = null; }
+    catch (configError) { A.authConfig = null; A.authConfigError = configError.message; }
     if (me && me.authenticated && (me.role === 'ADMIN' || me.role === 'SUPER_ADMIN')) {
         A.me = me; A.role = me.role;
         showAdminApp();
@@ -219,19 +249,39 @@ function showAdminApp() {
     if (badge) { badge.textContent = A.role; badge.classList.toggle('super', A.role === 'SUPER_ADMIN'); }
     if (nm) nm.textContent = A.me ? (A.me.name || A.me.mobileNumber || 'Admin') : 'Admin';
 }
+function hideAdminChrome() {
+    var top = $('#adminTopbar'), nav = $('#adminNav');
+    if (top) top.classList.add('hidden');
+    if (nav) nav.classList.add('hidden');
+    document.body.classList.remove('admin-authed');
+}
 function renderLoginScreen() {
+    hideAdminChrome();
+    var loginEnabled = !A.authConfig || (A.authConfig.directAuthEnabled &&
+        (A.authConfig.adminLoginConfigured || A.authConfig.superAdminLoginConfigured));
+    var configurationMessage = A.authConfig && !A.authConfig.directAuthEnabled
+        ? '<p class="admin-config-warning">Direct demo sign-in is disabled in this environment.</p>'
+        : A.authConfig && !loginEnabled
+            ? '<p class="admin-config-warning">Admin demo passwords are not configured. The owner must configure separate Admin and Super Admin secrets for this demo.</p>'
+            : A.authConfigError
+                ? '<p class="admin-config-warning">Could not verify demo sign-in configuration: ' + esc(A.authConfigError) + '</p>'
+                : '';
     viewEl().innerHTML =
         '<div class="login-wrap"><div class="admin-login">' +
         '<div class="al-brand-row"><div class="al-brand">🛡️ SocioMart Admin</div>' +
         '<button class="icon-btn" type="button" data-action="toggle-theme" aria-label="Toggle theme">🌓</button></div>' +
         '<h2>Admin Sign In</h2>' +
-        '<p class="muted small">Enter your mobile number to sign in. This console accepts ADMIN &amp; SUPER_ADMIN accounts.</p>' +
-        '<div class="form-group"><label for="alMobile">Mobile number</label><input id="alMobile" inputmode="numeric" maxlength="10" placeholder="10-digit mobile" autocomplete="tel"></div>' +
-        '<button class="btn btn-primary btn-block" type="button" data-action="admin-login">Sign In</button>' +
+        '<p class="muted small">Use the mobile number on your Admin account and its configured demo password. Admin and Super Admin passwords are separate.</p>' +
+        configurationMessage +
+        '<div class="form-group"><label for="alMobile">Mobile number</label><input id="alMobile" inputmode="numeric" maxlength="10" placeholder="10-digit mobile" autocomplete="username"></div>' +
+        '<div class="form-group"><label for="alPassword">Demo password</label><div class="password-input-wrapper"><input id="alPassword" type="password" maxlength="72" autocomplete="current-password"></div></div>' +
+        '<p class="muted small">Demo-only authentication; not production-ready.</p>' +
+        '<button class="btn btn-primary btn-block" type="button" data-action="admin-login"' + (!loginEnabled ? ' disabled' : '') + '>Sign In</button>' +
         '<a class="al-back" href="/index.html">← Back to buyer app</a>' +
         '</div></div>';
 }
 function renderBlockedScreen(role) {
+    hideAdminChrome();
     viewEl().innerHTML =
         '<div class="blocked-wrap"><div class="admin-blocked">' +
         '<div class="ab-icon">🚫</div>' +
@@ -264,10 +314,11 @@ async function adminAction(action, t) {
     try {
         switch (action) {
             case 'admin-login': {
-                var mobile = A.loginMobile || ($('#alMobile') ? $('#alMobile').value : '');
+                var mobile = $('#alMobile') ? $('#alMobile').value.trim() : '';
                 if (!mobile || !/^[6-9]\d{9}$/.test(mobile)) throw new Error('Enter a valid 10-digit mobile number');
-                A.loginMobile = mobile;
-                var resp = await api('/api/auth/demo-login', { method: 'POST', body: { mobileNumber: mobile } });
+                var password = $('#alPassword') ? $('#alPassword').value : '';
+                if (!password) throw new Error('Enter your demo password');
+                var resp = await api('/api/auth/login', { method: 'POST', body: { mobileNumber: mobile, password: password } });
                 if (resp && resp.authenticated && (resp.role === 'ADMIN' || resp.role === 'SUPER_ADMIN')) {
                     A.me = resp; A.role = resp.role;
                     showAdminApp();
@@ -312,7 +363,60 @@ async function adminAction(action, t) {
                 var id = Number(t.dataset.id);
                 await adminRunOnce(t, async function () {
                     await api('/api/admin/sellers/' + id + '/approve', { method: 'POST' });
-                    toast('Seller approved', 'success');
+                    toast('Seller approved and kitchen activated', 'success');
+                });
+                await adminRender();
+                break;
+            }
+            case 'review-seller-request': {
+                var sId = Number(t.dataset.id);
+                await adminOpenSellerReviewModal(sId);
+                break;
+            }
+            case 'close-review-modal': {
+                closeModal();
+                break;
+            }
+            case 'review-approve': {
+                var rAppId = Number(t.dataset.id);
+                closeModal();
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/sellers/' + rAppId + '/approve', { method: 'POST' });
+                    toast('Seller approved and kitchen activated', 'success');
+                });
+                await adminRender();
+                break;
+            }
+            case 'review-request-changes': {
+                var rRcId = Number(t.dataset.id);
+                var commentEl = $('#reviewComment');
+                var comment = commentEl ? commentEl.value.trim() : '';
+                if (!comment) {
+                    toast('Please enter comments explaining what changes the seller needs to make.', 'error');
+                    if (commentEl) commentEl.focus();
+                    break;
+                }
+                closeModal();
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/sellers/' + rRcId + '/request-changes', { method: 'POST', body: { reason: comment } });
+                    toast('Changes requested from seller', 'success');
+                });
+                await adminRender();
+                break;
+            }
+            case 'review-reject': {
+                var rRejId = Number(t.dataset.id);
+                var commentEl2 = $('#reviewComment');
+                var comment2 = commentEl2 ? commentEl2.value.trim() : '';
+                if (!comment2) {
+                    toast('Please enter a rejection reason in the comments box.', 'error');
+                    if (commentEl2) commentEl2.focus();
+                    break;
+                }
+                closeModal();
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/sellers/' + rRejId + '/reject', { method: 'POST', body: { reason: comment2 } });
+                    toast('Seller application rejected', 'success');
                 });
                 await adminRender();
                 break;
@@ -657,6 +761,37 @@ async function adminAction(action, t) {
             case 'admin-set-kitchen-filter': {
                 A.kitchenFilter = t.dataset.filter || '';
                 await adminRender();
+                break;
+            }
+            case 'admin-copy-kitchen-url': {
+                var copyUrl = t.dataset.url || '';
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(copyUrl);
+                    } else {
+                        var ta = document.createElement('textarea');
+                        ta.value = copyUrl; document.body.appendChild(ta); ta.select();
+                        document.execCommand('copy'); document.body.removeChild(ta);
+                    }
+                    toast('Link copied', 'success');
+                } catch (eCopy) { toast('Could not copy link', 'error'); }
+                break;
+            }
+            case 'admin-edit-slug': {
+                var slugKid = Number(t.dataset.kid);
+                var currentSlug = t.dataset.slug || '';
+                var next = window.prompt('Public kitchen URL slug (letters, numbers, single hyphens):', currentSlug);
+                if (next == null) break;
+                next = next.trim().toLowerCase();
+                if (!next) { toast('Enter a slug', 'error'); break; }
+                if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(next)) {
+                    toast('Use lowercase letters, numbers and single hyphens only.', 'error'); break;
+                }
+                try {
+                    await api('/api/admin/kitchens/' + slugKid + '/slug', { method: 'POST', body: { slug: next } });
+                    toast('Public URL updated', 'success');
+                    await adminRender();
+                } catch (eSlug) { toast(eSlug.message || 'Could not update the URL', 'error'); }
                 break;
             }
             case 'admin-edit-service-areas': {
@@ -1039,19 +1174,36 @@ function adminExportUrl(domain) {
 
 async function adminPendingView() {
     var list = await api('/api/admin/sellers/pending');
+    var isSuper = A.role === 'SUPER_ADMIN';
+    var myAreaId = A.me ? A.me.adminAreaId : null;
+    var mySociety = (A.me ? (A.me.society || A.me.adminAreaName) : '') || '';
+
+    // Area Admins only see sellers in their assigned society/area; Super Admins see all including unassigned
+    if (!isSuper && (myAreaId || mySociety)) {
+        list = (list || []).filter(function (s) {
+            if (myAreaId && s.areaId) return String(s.areaId) === String(myAreaId);
+            if (mySociety && s.society) return s.society.toLowerCase().trim() === mySociety.toLowerCase().trim();
+            if (mySociety && s.area) return s.area.toLowerCase().trim() === mySociety.toLowerCase().trim();
+            return false;
+        });
+    }
+
     var h = '<div class="view-enter">';
-    h += '<div class="section-head admin-section-head"><div><h1>Pending Approvals</h1><p class="muted small">' + (list ? list.length : 0) + ' seller(s) awaiting your decision</p></div></div>';
+    h += '<div class="section-head admin-section-head"><div><h1>Pending Approvals</h1><p class="muted small">' + (list ? list.length : 0) + ' seller(s) awaiting your decision' + (!isSuper && mySociety ? ' in ' + esc(mySociety) : '') + '</p></div></div>';
     if (!list || !list.length) {
-        return h + '<div class="admin-empty">🎉 All caught up — no pending seller approvals.</div>';
+        return h + '<div class="admin-empty">🎉 All caught up — no pending seller approvals' + (!isSuper && mySociety ? ' in ' + esc(mySociety) : '') + '.</div>';
     }
     list.forEach(function (s) {
         h += '<div class="seller-row">' +
             '<div class="sr-avatar">' + esc(String(s.name || '?').charAt(0).toUpperCase()) + '</div>' +
             '<div class="sr-body">' +
             '<div class="sr-name">' + esc(s.name || 'Unknown') + '</div>' +
-            '<div class="sr-meta">📱 ' + esc(s.mobileNumber || '—') + ' · Registered ' + adminDate(s.registeredAt) + '</div>' +
+            '<div class="sr-meta">📱 ' + esc(s.mobileNumber || '—') +
+            (s.society ? ' · 🏢 ' + esc(s.society) : (isSuper ? ' · <span class="pill pill-amber">Unassigned Society</span>' : '')) +
+            ' · Registered ' + adminDate(s.registeredAt) + '</div>' +
             '</div>' +
             '<div class="sr-actions">' +
+            '<button class="btn btn-secondary btn-sm" type="button" data-action="review-seller-request" data-id="' + s.id + '">View Details</button>' +
             '<button class="btn btn-success btn-sm" type="button" data-action="approve-seller" data-id="' + s.id + '">Approve</button>' +
             // Handover 7.1: Request Changes is a first-class decision, not a rejection.
             '<button class="btn btn-outline btn-sm" type="button" data-action="open-admin-reason" data-mode="requestChanges" data-id="' + s.id + '" data-name="' + esc(s.name || 'Seller') + '">Request Changes</button>' +
@@ -1060,6 +1212,77 @@ async function adminPendingView() {
     });
     h += '</div>';
     return h;
+}
+
+async function adminOpenSellerReviewModal(sellerId) {
+    try {
+        var d = await api('/api/admin/sellers/' + sellerId + '/detail');
+        var k = (d.kitchens && d.kitchens.length) ? d.kitchens[0] : null;
+        var addressParts = [d.flatHouseNumber, d.building, d.society].filter(Boolean);
+        var addressStr = addressParts.length ? addressParts.join(', ') : (d.society || 'Not provided');
+        var coverage = d.serviceSocieties || d.serviceArea || (k && k.serviceSocieties) || d.society || 'Not provided';
+        var ig = d.instagramLink || (k && k.instagramLink) || 'Not provided';
+        var ref = d.referralSource || 'Not provided';
+
+        var modalHtml = '<div class="admin-review-modal">' +
+            '<div class="arm-head">' +
+            '<h3>Review Seller Application</h3>' +
+            '<p class="muted small">Submitted registration details (read-only)</p>' +
+            '</div>' +
+            '<div class="arm-body">' +
+            '<div class="arm-section">' +
+            '<div class="arm-sec-title">Seller Contact Information</div>' +
+            '<div class="arm-grid">' +
+            '<div class="arm-field"><span class="arm-lbl">Seller Name:</span> <strong>' + esc(d.name || d.sellerName || '—') + '</strong></div>' +
+            '<div class="arm-field"><span class="arm-lbl">Mobile Number:</span> ' + esc(d.mobileNumber || '—') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">WhatsApp Number:</span> ' + esc(d.whatsappNumber || 'Not provided') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">Email:</span> ' + esc(d.email || 'Not provided') + '</div>' +
+            '</div></div>' +
+
+            '<div class="arm-section">' +
+            '<div class="arm-sec-title">Kitchen & Store Details</div>' +
+            '<div class="arm-grid">' +
+            '<div class="arm-field"><span class="arm-lbl">Kitchen / Store Name:</span> <strong>' + esc(d.kitchenName || (k && k.name) || 'Not provided') + '</strong></div>' +
+            '<div class="arm-field"><span class="arm-lbl">Kitchen Type:</span> ' + esc(d.sellerCategory || d.enabledTypes || 'KITCHEN') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">Speciality:</span> ' + esc(d.speciality || (k && k.speciality) || 'Not provided') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">Short Description:</span> ' + esc(d.shortDescription || (k && k.shortDescription) || 'Not provided') + '</div>' +
+            '</div></div>' +
+
+            '<div class="arm-section">' +
+            '<div class="arm-sec-title">Location & Delivery Coverage</div>' +
+            '<div class="arm-grid">' +
+            '<div class="arm-field"><span class="arm-lbl">Primary Location:</span> ' + esc(d.area || d.primaryAreaName || 'Not provided') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">Address:</span> ' + esc(addressStr) + '</div>' +
+            '<div class="arm-field arm-col-span-2"><span class="arm-lbl">Selected Delivery Societies / Areas:</span> ' + esc(coverage) + '</div>' +
+            '</div></div>' +
+
+            '<div class="arm-section">' +
+            '<div class="arm-sec-title">Referral & Social Links</div>' +
+            '<div class="arm-grid">' +
+            '<div class="arm-field"><span class="arm-lbl">Instagram:</span> ' + (ig !== 'Not provided' ? '<a href="' + esc(ig) + '" target="_blank" rel="noopener">' + esc(ig) + '</a>' : 'Not provided') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">Referral Source:</span> ' + esc(ref) + '</div>' +
+            '</div></div>' +
+
+            '<div class="arm-section">' +
+            '<label class="form-label font-700" for="reviewComment">Decision Comments / Feedback</label>' +
+            '<p class="muted tiny mb-1">Enter notes or required changes (mandatory for Request Changes / Reject):</p>' +
+            '<textarea class="form-input" id="reviewComment" rows="3" placeholder="Explain required changes or reasons for rejection..."></textarea>' +
+            '</div>' +
+
+            '</div>' + // .arm-body
+
+            '<div class="modal-actions arm-actions">' +
+            '<button class="btn btn-secondary" type="button" data-action="close-review-modal">Close</button>' +
+            '<button class="btn btn-outline" type="button" data-action="review-request-changes" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Request Changes</button>' +
+            '<button class="btn btn-danger" type="button" data-action="review-reject" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Reject</button>' +
+            '<button class="btn btn-success" type="button" data-action="review-approve" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Approve</button>' +
+            '</div>' +
+            '</div>';
+
+        openModal(modalHtml);
+    } catch (e) {
+        toast('Could not load seller details: ' + (e.message || 'Access denied'), 'error');
+    }
 }
 
 async function adminBuyersView() {
@@ -1114,6 +1337,20 @@ async function adminSellersView() {
     // the tab fail when the second call raced. Counts now come from the same array,
     // matching every other list screen.
     var list = await api('/api/admin/sellers');
+    var isSuper = A.role === 'SUPER_ADMIN';
+    var myAreaId = A.me ? A.me.adminAreaId : null;
+    var mySociety = (A.me ? (A.me.society || A.me.adminAreaName) : '') || '';
+
+    // Area Admins only see sellers in their assigned society/area
+    if (!isSuper && (myAreaId || mySociety)) {
+        list = (list || []).filter(function (s) {
+            if (myAreaId && s.areaId) return String(s.areaId) === String(myAreaId);
+            if (mySociety && s.society) return s.society.toLowerCase().trim() === mySociety.toLowerCase().trim();
+            if (mySociety && s.area) return s.area.toLowerCase().trim() === mySociety.toLowerCase().trim();
+            return false;
+        });
+    }
+
     var status = A.sellerStatus || '';
     var term = adminSearchTerm('sellers');
     var counts = { '': (list || []).length, PENDING: 0, APPROVED: 0, REJECTED: 0, SUSPENDED: 0, CHANGES_REQUESTED: 0 };
@@ -1197,6 +1434,16 @@ async function adminKitchensView() {
     var h = '<div class="view-enter">';
     h += '<div class="section-head admin-section-head"><div><h1>' + esc(title) + '</h1><p class="muted small">' +
         rows.length + ' of ' + (list ? list.length : 0) + ' stores</p></div></div>';
+    // Marketplace / Promotion Links: the /kitchens marketplace link an Admin can
+    // copy to promote the platform. Base URL comes from server config.
+    try {
+        var links = await api('/api/admin/marketplace-links');
+        window.__sociomartBaseUrl = links.baseUrl || '';
+        h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Marketplace / Promotion Links</h3>' +
+            '<div class="sr-meta">Marketplace: <code>' + esc(links.marketplaceUrl || '/kitchens') + '</code></div>' +
+            '<div class="mt-1"><a class="btn btn-secondary btn-sm" href="' + esc(links.marketplaceUrl || '/kitchens') + '" target="_blank" rel="noopener">View</a> ' +
+            '<button class="btn btn-secondary btn-sm" type="button" data-action="admin-copy-kitchen-url" data-url="' + esc(links.marketplaceUrl || '/kitchens') + '">Copy Marketplace Link</button></div></div>';
+    } catch (e) { /* links are a convenience; never block the page */ }
     h += adminSearchBar({
         key: 'kitchens',
         label: 'stores',
@@ -1214,6 +1461,9 @@ async function adminKitchensView() {
     rows.forEach(function (k) {
         var areas = k.serviceAreas || k.area || '';
         var areaText = areas ? areas.split(',').map(function (a) { return a.trim(); }).filter(Boolean).join(', ') : '';
+        // Public URL: base (same-origin unless PUBLIC_BASE_URL is configured) + /kitchen/{slug}.
+        var base = window.__sociomartBaseUrl || '';
+        var publicUrl = base + '/kitchen/' + encodeURIComponent(k.slug || k.name || '');
         h += '<div class="seller-row">' +
             '<div class="sr-avatar">🏪</div>' +
             '<div class="sr-body">' +
@@ -1227,6 +1477,11 @@ async function adminKitchensView() {
             // Handover 7.3: Admin-side storefront state, surfaced where it matters.
             (k.removed ? '<div class="sr-meta sr-reason">🚫 Removed from the buyer app by Admin</div>' : '') +
             (k.paused ? '<div class="sr-meta sr-reason">⏸ Paused by Admin — buyers cannot see this storefront</div>' : '') +
+            // Public URL row: View (opens the buyer storefront) + Copy URL.
+            '<div class="sr-meta">Public URL: <code>' + esc(publicUrl) + '</code></div>' +
+            '<div class="mt-1"><a class="btn btn-secondary btn-sm" href="' + esc(publicUrl) + '" target="_blank" rel="noopener">View</a> ' +
+            '<button class="btn btn-secondary btn-sm" type="button" data-action="admin-copy-kitchen-url" data-url="' + esc(publicUrl) + '">Copy URL</button> ' +
+            '<button class="btn btn-secondary btn-sm" type="button" data-action="admin-edit-slug" data-kid="' + k.id + '" data-slug="' + esc(k.slug || k.name || '') + '">Edit URL</button></div>' +
             '<div class="mt-1"><button class="btn btn-secondary btn-sm" type="button" data-action="admin-edit-service-areas" data-kid="' + k.id + '">Manage Service Areas</button> ' +
             '<button class="btn btn-secondary btn-sm" type="button" data-action="admin-diag-focus" data-kitchen-id="' + k.id + '">Diagnose</button> ' +
             // Handover 7.3 storefront controls. Pause and Resume are the same
@@ -2381,7 +2636,7 @@ async function adminHealthView() {
     h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Application</h3>' +
         '<div class="sr-meta">Name: ' + esc(data.application || '—') + '</div>' +
         '<div class="sr-meta">Active profiles: ' + esc((data.activeProfiles || []).join(', ') || 'default') + '</div>' +
-        '<div class="sr-meta">Demo login enabled: ' + (data.demoLoginEnabled ? 'yes' : 'no') + '</div>' +
+        '<div class="sr-meta">Credential-based demo sign-in enabled: ' + (data.directAuthEnabled ? 'yes' : 'no') + '</div>' +
         '</div>';
 
     h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Database</h3>' +

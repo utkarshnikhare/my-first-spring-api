@@ -12,8 +12,11 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import com.example.my_first_spring_api.security.UserSessionAuthorizationFilter;
@@ -26,56 +29,65 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(HttpSecurity http,
                                             UserSessionAuthorizationFilter userSessionAuthorizationFilter,
                                             Environment environment) throws Exception {
-        boolean demo = isDemoEnvironment(environment);
+        boolean localTools = environment.matchesProfiles("local");
+        // The CSRF token is published as a JS-readable cookie and the
+        // frontend echoes it back in the X-XSRF-TOKEN header (see
+        // api() in common.js). CookieCsrfTokenRepository only WRITES
+        // that cookie once the CsrfToken is resolved, and Spring
+        // defers that resolution by default - which would leave the
+        // browser with no cookie and make every unsafe request fail
+        // with 403 Forbidden. Clearing the request attribute name
+        // opts out of the deferral so the cookie is always issued.
+        CookieCsrfTokenRepository tokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        tokenRepository.setCookiePath("/");
+        CsrfTokenRequestAttributeHandler tokenHandler = new CsrfTokenRequestAttributeHandler();
+        tokenHandler.setCsrfRequestAttributeName(null);
         return http
                 .csrf(csrf -> {
-                    if (demo) {
-                        csrf.disable();
-                    } else {
-                        // The CSRF token is published as a JS-readable cookie and the
-                        // frontend echoes it back in the X-XSRF-TOKEN header (see
-                        // api() in common.js). CookieCsrfTokenRepository only WRITES
-                        // that cookie once the CsrfToken is resolved, and Spring
-                        // defers that resolution by default - which would leave the
-                        // browser with no cookie and make every unsafe request fail
-                        // with 403 Forbidden. Clearing the request attribute name
-                        // opts out of the deferral so the cookie is always issued.
-                        CookieCsrfTokenRepository tokenRepository =
-                                CookieCsrfTokenRepository.withHttpOnlyFalse();
-                        tokenRepository.setCookiePath("/");
-                        CsrfTokenRequestAttributeHandler tokenHandler =
-                                new CsrfTokenRequestAttributeHandler();
-                        tokenHandler.setCsrfRequestAttributeName(null);
-                        csrf.csrfTokenRepository(tokenRepository)
-                             .csrfTokenRequestHandler(tokenHandler);
+                    csrf.csrfTokenRepository(tokenRepository).csrfTokenRequestHandler(tokenHandler);
+                    if (localTools) {
+                        // The H2 console's own forms cannot send our token (developer tool, local only).
+                        csrf.ignoringRequestMatchers("/h2-console/**");
                     }
                 })
-                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
+                .headers(headers -> headers
+                        // Framing stays same-origin: the local H2 console is framed by its
+                        // own page, while buyer/seller/admin pages cannot be embedded by
+                        // an attacker site (clickjacking).
+                        .frameOptions(frame -> frame.sameOrigin())
+                        // Never let a browser MIME-sniff a response into a script/HTML
+                        // type - uploads and API responses must keep their declared type.
+                        .contentTypeOptions(contentTypeOptions -> { })
+                        // Referrer: send only the origin (never the full URL, which can
+                        // contain /kitchen/<slug> or ids) on cross-origin navigations.
+                        .referrerPolicy(referrer -> referrer.policy(
+                                ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)))
                 .addFilterBefore(userSessionAuthorizationFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/demo-login", "/api/seller-app/demo-login", "/h2-console/**")
-                            .access((authentication, context) -> new AuthorizationDecision(demo))
+                        .requestMatchers("/api/auth/demo-login", "/api/seller-app/demo-login").denyAll()
+                        // Developer tools: reachable only with the "local" profile, denied everywhere else.
+                        .requestMatchers("/h2-console/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
+                            .access((authentication, context) -> new AuthorizationDecision(localTools))
                         .requestMatchers("/api/superadmin/**").hasRole("SUPER_ADMIN")
                         .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers("/api/seller/**", "/api/seller-app/**").hasRole("SELLER")
                         .requestMatchers(
                                 "/api/auth/**",
-                                "/api/seller-app/demo-login",
+                                "/admin/login",
+                                "/api/health",
                                 "/api/marketplace",
                                 "/api/items",
                                 "/api/search",
                                 "/api/kitchens/**",
                                 "/api/products/**",
                                 "/api/discovery/**",
-                                "/h2-console/**",
-                                "/v3/api-docs/**",
-                                "/swagger-ui/**",
-                                "/swagger-ui.html",
                                 "/error",
                                 "/",
                                 "/index.html",
                                 "/seller.html",
                                 "/admin.html",
                                 "/kitchens",
+                                "/kitchen/**",
                                 "/css/**",
                                 "/js/**",
                                 "/favicon.ico"
@@ -97,10 +109,6 @@ public class SecurityConfig {
                 .build();
     }
 
-    public static boolean isDemoEnvironment(Environment environment) {
-        return environment.matchesProfiles("!prod & (demo | dev | default)");
-    }
-
     @Bean
     SecurityContextRepository securityContextRepository() {
         return new HttpSessionSecurityContextRepository();
@@ -109,5 +117,12 @@ public class SecurityConfig {
     @Bean
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public UserDetailsService userDetailsService() {
+        return username -> {
+            throw new UsernameNotFoundException("Authentication is handled via session-based auth endpoints");
+        };
     }
 }

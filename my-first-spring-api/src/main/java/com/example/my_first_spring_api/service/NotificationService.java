@@ -5,14 +5,19 @@ import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.model.NotificationEvent;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.repository.NotificationEventRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
 public class NotificationService {
+
+    private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
 
     private final NotificationEventRepository notificationEventRepository;
 
@@ -21,11 +26,13 @@ public class NotificationService {
         this.notificationEventRepository = notificationEventRepository;
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendNewOrderNotification(User seller, String orderNumber, String productSummary) {
         createEvent(seller, "New SocioMart order",
                 "You received an order for " + productSummary + ".\nOpen SocioMart to review and confirm.");
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendNewEnquiryNotification(User seller, String buyerName) {
         createEvent(seller, "New SocioMart enquiry",
                 buyerName + " has sent a custom request.\nOpen SocioMart to view the enquiry.");
@@ -36,6 +43,7 @@ public class NotificationService {
      * Idempotent: at most one sold-out event per (product, transition) — callers must guard against
      * repeated triggers (e.g. refresh) by invoking this only when the product newly hits zero.
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendSoldOutNotification(User seller, String productName) {
         createEvent(seller, "Offering sold out",
                 "\"" + productName + "\" just sold out. Update its quantity to keep taking orders.");
@@ -44,6 +52,7 @@ public class NotificationService {
     /**
      * Notifies a seller that a buyer cancelled an order.
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendOrderCancellationNotification(User seller, String orderNumber) {
         createEvent(seller, "Order cancelled",
                 "Order " + orderNumber + " was cancelled by the buyer. Inventory has been restored.");
@@ -52,6 +61,7 @@ public class NotificationService {
     /**
      * Notifies a buyer that the seller has confirmed/recorded their payment.
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendPaymentReceivedNotification(User buyer, String orderNumber) {
         createEvent(buyer, "Payment recorded",
                 "Your payment for order " + orderNumber + " has been recorded by the seller.");
@@ -62,6 +72,7 @@ public class NotificationService {
      * actually updated. Callers must invoke this only on a real state transition;
      * repeated Mark as Paid requests must not reach this method.
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendPaymentUpdatedNotification(User seller, String orderNumber) {
         createEvent(seller, "Payment updated",
                 "Payment for order " + orderNumber + " was updated. Open SocioMart to review the order.");
@@ -92,17 +103,24 @@ public class NotificationService {
                 event.getCreatedAt(), event.getDelivered());
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendReminder(User seller, String title, String body) {
         createEvent(seller, title, body);
     }
 
-    private void createEvent(User user, String title, String body) {
-        NotificationEvent event = new NotificationEvent();
-        event.setUserId(user.getId());
-        event.setUserMobile(user.getMobileNumber());
-        event.setTitle(title);
-        event.setBody(body);
-        event.setDelivered(false);
-        notificationEventRepository.save(event);
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void createEvent(User user, String title, String body) {
+        if (user == null || user.getId() == null) return;
+        try {
+            NotificationEvent event = new NotificationEvent();
+            event.setUserId(user.getId());
+            event.setUserMobile(user.getMobileNumber());
+            event.setTitle(title != null ? title : "Notification");
+            event.setBody(body != null ? body : "");
+            event.setDelivered(false);
+            notificationEventRepository.save(event);
+        } catch (Exception ex) {
+            log.warn("Could not save notification event for user {}: {}", user.getId(), ex.getMessage());
+        }
     }
 }

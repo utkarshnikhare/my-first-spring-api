@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * being evaluated.
  *
  * A top-level throw aborts the whole seller.js bundle, so nothing was registered:
- * no demo-login, no routing, no render. The page therefore stayed on the static
+ * no boot-time authentication, no routing, no render. The page therefore stayed on the static
  * spinner from seller.html forever, with zero API traffic.
  *
  * These checks guard the exact failure mode: a route handler must be a real
@@ -183,11 +183,12 @@ class SellerAppScriptStructureTest {
 
     @Test
     void sellerBootRegistersRenderSoTheSpinnerCanBeReplaced() {
-        // Boot must authenticate, then render; otherwise the static spinner in
-        // seller.html is never replaced.
-        assertThat(sellerJs).contains("/api/seller-app/demo-login");
+        // Boot renders either credential sign-in, pending approval status, or
+        // the seller dashboard; it must never auto-authenticate a seeded account.
+        assertThat(sellerJs).doesNotContain("/api/seller-app/demo-login");
+        assertThat(sellerJs).contains("api('/api/auth/login'");
         assertThat(sellerJs).contains("await sellerRender()");
-        assertThat(sellerJs).contains("location.hash = '#/home'");
+        assertThat(sellerJs).contains("history.replaceState(null, '', '#/home')");
     }
 
     @Test
@@ -202,8 +203,9 @@ class SellerAppScriptStructureTest {
                 .as("the guard must consult the server")
                 .contains("api('/api/auth/me')");
         assertThat(sellerJs)
-                .as("the guard must be able to restore the seller session")
-                .contains("api('/api/seller-app/demo-login'");
+                .as("the guard must require a user-supplied password instead of restoring by mobile")
+                .contains("api('/api/auth/login'");
+        assertThat(sellerJs).contains("me.sellerApprovalStatus === 'APPROVED'");
 
         // The guard must run before the route function is invoked, otherwise the
         // dashboard still renders the raw 403.
@@ -215,87 +217,53 @@ class SellerAppScriptStructureTest {
 
     @Test
     void sellerBootDoesNotSilentlySwallowAuthenticationFailure() {
-        // A failed seller login must surface a retry state, not fall through to
-        // render an "Only sellers can perform this action" screen.
-        assertThat(sellerJs).doesNotContain("console.warn('demo-login failed:'");
-        assertThat(sellerJs).contains("sellerAuthErrorHtml()");
+        // Failed credential sign-in must leave a visible sign-in/retry state.
+        assertThat(sellerJs).contains("sellerAuthHtml()");
         assertThat(sellerJs).contains("data-action=\"seller-retry\"");
+        assertThat(sellerJs).contains("Sign in failed: ");
     }
 
-    /**
-     * P0 regression - the pre-route guard alone does not stop the reported error.
-     *
-     * ensureSellerSession() and the route's own request are two separate HTTP
-     * calls, so a Buyer login landing between them still made an otherwise valid
-     * seller request fail 403, and the view rendered that raw error permanently
-     * ("Could not load dashboard / Only sellers can perform this action") with no
-     * way back except a manual reload.
-     *
-     * seller-scoped reads therefore go through sellerApi(), which heals the
-     * session and retries once. These assertions pin that contract so the fix
-     * cannot be silently dropped, and cannot become an unbounded retry loop.
-     */
     @Test
-    void sellerScopedRequestsRetryOnceAfterAnAuthFailure() {
+    void sellerScopedRequestsNeverRetryUsingAnotherIdentity() {
         assertThat(sellerJs)
-                .as("seller.js must define the self-healing seller request helper")
+                .as("seller.js must define the seller request helper")
                 .contains("async function sellerApi(path, opts)");
-        assertThat(sellerJs)
-                .as("only 401/403 may trigger a re-login and retry")
-                .contains("function isSellerAuthError(err)");
-        assertThat(sellerJs).contains("err.status === 401 || err.status === 403");
-        assertThat(sellerJs)
-                .as("the retry must re-establish the session, not invent one")
-                .contains("if (!(await restoreSellerSession())) throw err;");
-
-        // Bounded: exactly one retry after the catch, and no loop construct.
         String helper = sellerJs.substring(
                 sellerJs.indexOf("async function sellerApi(path, opts)"),
-                sellerJs.indexOf("function sellerAuthErrorHtml()"));
+                sellerJs.indexOf("function sellerAreaOptions("));
         assertThat(helper.split("return await api\\(path, opts\\);", -1))
-                .as("sellerApi must call the transport at most twice (initial + one retry)")
-                .hasSize(3);
-        assertThat(helper).doesNotContain("while");
-        assertThat(helper).doesNotContain("for (");
-        assertThat(helper).doesNotContain("setTimeout");
-        assertThat(helper).doesNotContain("setInterval");
+                .as("sellerApi sends each operation exactly once")
+                .hasSize(2);
+        assertThat(helper).doesNotContain("restoreSellerSession");
     }
 
     @Test
-    void everySellerScopedCallGoesThroughTheSelfHealingHelper() {
-        // restoreSellerSession() performs the login itself, so it must keep using
-        // the raw api(); every OTHER /api/seller-app|/api/seller call must heal.
-        String body = sellerJs.substring(sellerJs.indexOf("function sellerAuthErrorHtml()"));
+    void sellerScopedCallsUseTheAuthenticatedRequestHelper() {
+        String body = sellerJs.substring(sellerJs.indexOf("function sellerAuthHtml()"));
         Matcher raw = Pattern.compile("(?<!seller)\\bapi\\('(/api/(?:seller-app|seller)/[^']*)'").matcher(body);
         while (raw.find()) {
             assertThat(raw.group(1))
-                    .as("seller-scoped call must use sellerApi() so a lost session self-heals")
-                    .doesNotStartWith("/api/seller-app/demo-login");
+                    .as("seller-scoped calls must not authenticate as another account")
+                    .doesNotContain("demo-login");
         }
-        // And the heal path must not recurse into itself.
-        String restore = sellerJs.substring(
-                sellerJs.indexOf("async function restoreSellerSession()"),
-                sellerJs.indexOf("function isSellerAuthError(err)"));
-        assertThat(restore)
-                .as("restoreSellerSession must call the transport directly, never sellerApi")
-                .doesNotContain("sellerApi(");
     }
 
     @Test
-    void theSelfHealDoesNotWeakenAuthorizationOrFakeData() {
-        // The fix must never fabricate a seller identity or dashboard payload:
-        // the expected role is still read back from the server's own response.
+    void sellerAuthenticationDoesNotWeakenAuthorizationOrFakeData() {
         assertThat(sellerJs)
                 .as("role must be verified from the server response")
-                .contains("s.role === 'SELLER'");
+                .contains("me.role === 'SELLER'");
+        assertThat(sellerJs)
+                .as("seller dashboards remain gated on the persisted approval status")
+                .contains("me.sellerApprovalStatus === 'APPROVED'");
+        assertThat(sellerJs).doesNotContain("/api/seller-app/demo-login");
         assertThat(sellerJs)
                 .as("no hardcoded seller id / kitchen may be introduced")
                 .doesNotContain("kitchenId: 1,")
                 .doesNotContain("userId === 3");
-        // Genuine non-auth failures must still surface, not be swallowed.
         assertThat(sellerJs)
-                .as("a non-auth error must propagate untouched")
-                .contains("if (!isSellerAuthError(err)) throw err;");
+                .as("failed requests must surface to the page or user")
+                .contains("toast('Sign in failed: ' + err.message, 'error')");
     }
 
     // ------------------------------------------------------------------

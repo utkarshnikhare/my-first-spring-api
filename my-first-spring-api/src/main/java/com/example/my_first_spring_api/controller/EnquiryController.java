@@ -74,6 +74,10 @@ public class EnquiryController {
         if (user.getRole() != com.example.my_first_spring_api.model.UserRole.SELLER) {
             throw new com.example.my_first_spring_api.exception.SellerNotAuthorizedException("Seller access required");
         }
+        if (!user.isApprovedSeller()) {
+            throw new com.example.my_first_spring_api.exception.SellerNotAuthorizedException(
+                    "Your seller account is awaiting Admin approval.");
+        }
         return user;
     }
 }

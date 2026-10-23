@@ -48,6 +48,15 @@ function imgFallback(imgEl) {
     parent.textContent = emoji;
 }
 
+// Global image fallback capture listener: catches broken images even if dynamically injected without explicit onerror
+if (typeof window !== 'undefined') {
+    window.addEventListener('error', function (e) {
+        if (e && e.target && e.target.tagName === 'IMG') {
+            imgFallback(e.target);
+        }
+    }, true);
+}
+
 function emojiFor(name) {
     var n = (name || '').toLowerCase();
     if (n.indexOf('dosa') >= 0 || n.indexOf('idli') >= 0 || n.indexOf('rice') >= 0 || n.indexOf('biryani') >= 0) return '🍚';
@@ -64,12 +73,17 @@ function emojiFor(name) {
 function prettyTime(hhmm) {
     if (!hhmm) return '';
     var s = String(hhmm).trim();
+    if (s.indexOf('T') !== -1) {
+        s = s.split('T')[1];
+    }
+    if (s.indexOf('+') !== -1) s = s.split('+')[0];
+    if (s.indexOf('Z') !== -1) s = s.split('Z')[0];
     if (/[AP]M$/i.test(s)) {
         return s.replace(/\s+/g, ' ').replace(/\s*([AP]M)\s*$/i, ' $1');
     }
     var parts = s.split(':');
     var h = parseInt(parts[0], 10);
-    var m = parts[1] || '00';
+    var m = (parts[1] || '00').slice(0, 2);
     if (isNaN(h)) return hhmm;
     var ampm = h >= 12 ? 'PM' : 'AM';
     h = h % 12;
@@ -77,9 +91,19 @@ function prettyTime(hhmm) {
     return h + ':' + m + ' ' + ampm;
 }
 
+function localDateStr(d) {
+    if (!d) d = new Date();
+    var y = d.getFullYear();
+    var m = ('0' + (d.getMonth() + 1)).slice(-2);
+    var day = ('0' + d.getDate()).slice(-2);
+    return y + '-' + m + '-' + day;
+}
+
 function prettyDate(iso) {
     if (!iso) return '';
+    if (iso === 'all') return 'All dates';
     var d = new Date(iso + 'T00:00:00');
+    if (isNaN(d.getTime())) return iso;
     var today = new Date();
     today.setHours(0, 0, 0, 0);
     var diff = Math.round((d - today) / 86400000);
@@ -164,9 +188,24 @@ async function api(path, opts) {
         data = text;
     }
     if (!res.ok) {
-        var msg = (data && data.message) || (data && data.error) || ('HTTP ' + res.status);
+        var msg = null;
+        if (data) {
+            if (typeof data === 'string' && data.trim()) {
+                msg = data.trim();
+            } else if (data.message && typeof data.message === 'string') {
+                msg = data.message;
+            } else if (data.error && typeof data.error === 'string') {
+                msg = data.error;
+            } else if (data.detail && typeof data.detail === 'string') {
+                msg = data.detail;
+            } else if (typeof data === 'object') {
+                var fieldValues = Object.values(data).filter(function (v) { return typeof v === 'string'; });
+                if (fieldValues.length) msg = fieldValues.join('; ');
+            }
+        }
+        if (!msg) msg = 'HTTP ' + res.status;
         if (res.status === 403 && (msg === 'Forbidden' || msg === 'Access Denied')) {
-            msg = 'Your session is missing a security token. Please reload the page and sign in again.';
+            msg = 'This request is not permitted for the current session. Refresh the page and sign in with an authorized account.';
         }
         if (CONFIG.DEBUG) console.warn('API error:', path, msg);
         throw new ApiError(msg, res.status, data);
@@ -235,10 +274,19 @@ function updateNotificationUi(items) {
 async function loadUnreadNotifications() {
     if (!document.querySelector('[data-notification-badge], .notif-panel')) return;
     try {
+        var identity = await api('/api/auth/me');
+        if (!identity || identity.authenticated !== true ||
+                (identity.role !== 'BUYER' && identity.role !== 'SELLER') ||
+                (identity.role === 'SELLER' && identity.sellerApprovalStatus !== 'APPROVED')) {
+            updateNotificationUi([]);
+            return;
+        }
         updateNotificationUi(await api('/api/notifications'));
     } catch (err) {
-        if (err instanceof ApiError && err.status === 401) updateNotificationUi([]);
-        else updateNotificationUi([]);
+        updateNotificationUi([]);
+        if (!(err instanceof ApiError && err.status === 401)) {
+            toast('Could not load notifications: ' + err.message, 'error');
+        }
     }
 }
 
@@ -461,6 +509,13 @@ function commitItem(newItem, kitchen) {
     toast('Added to your order from ' + kitchen.displayName, 'success');
 }
 
+function isBuyer(user) {
+    if (!user) return false;
+    if (user.role === 'BUYER') return true;
+    if (Array.isArray(user.roles) && user.roles.includes('ROLE_BUYER')) return true;
+    return false;
+}
+
 // ==================== Deferred Auth Gate (Spec 1.1) ====================
 /**
  * Identity-bound actions (place order, toggle favourite, submit enquiry) call
@@ -469,9 +524,10 @@ function commitItem(newItem, kitchen) {
  */
 
 function requireAuth(onAuthenticated) {
-    if (state.user) {
+    if (state.user && isBuyer(state.user)) {
         return confirmSessionThen(onAuthenticated);
     }
+    state.user = null;
     state.pendingAuthAction = onAuthenticated;
     openAuthModal();
     return Promise.resolve();
@@ -493,7 +549,7 @@ async function confirmSessionThen(onAuthenticated) {
     var live = false;
     try {
         var me = await api('/api/auth/me');
-        if (me && me.authenticated) {
+        if (me && me.authenticated && isBuyer(me)) {
             state.user = me;
             live = true;
         }
@@ -501,29 +557,87 @@ async function confirmSessionThen(onAuthenticated) {
         // Probe failed (network/parse): treat the session as unverified.
     }
     if (live) return onAuthenticated();
-    // Stale or unknown session — clear the local identity and ask for login.
+    // Stale or non-buyer session — clear the local identity and ask for login.
     state.user = null;
     state.pendingAuthAction = onAuthenticated;
     openAuthModal();
 }
 
+var buyerRegistrationOptions = null;
+
 function openAuthModal() {
     openModal(
         '<div class="modal-icon">🔐</div>' +
         '<h3>Login required</h3>' +
-        '<p>Enter your mobile number to continue. You can keep browsing freely.</p>' +
+        '<p>Sign in with your mobile number and demo password. You can keep browsing freely.</p>' +
         '<form id="authForm" class="mt-3">' +
         '<div class="form-group">' +
         '<label class="form-label" for="authMobile">Mobile number</label>' +
-        '<input class="form-input" id="authMobile" name="mobileNumber" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" required>' +
+        '<input class="form-input" id="authMobile" name="mobileNumber" inputmode="numeric" maxlength="10" autocomplete="tel" placeholder="10-digit mobile number" required>' +
+        '</div>' +
+        '<div class="form-group">' +
+        '<label class="form-label" for="authPassword">Password</label>' +
+        '<div class="password-input-wrapper"><input class="form-input" id="authPassword" name="password" type="password" minlength="10" maxlength="72" autocomplete="current-password" required></div>' +
         '</div>' +
         '<button class="btn btn-primary btn-block" type="submit" id="authSubmit">Log in</button>' +
+        '<button class="btn btn-secondary btn-block mt-2" type="button" data-action="buyer-register">Create buyer account</button>' +
         '</form>'
     );
     $('#authForm').addEventListener('submit', function (e) {
         e.preventDefault();
         handleAuthLogin();
     });
+}
+
+async function openBuyerRegistrationModal() {
+    try {
+        if (!buyerRegistrationOptions) {
+            buyerRegistrationOptions = await api('/api/auth/registration-options');
+        }
+        var areaOptions = (buyerRegistrationOptions || []).map(function (area) {
+            return '<option value="' + esc(area.id) + '">' + esc(area.name) + '</option>';
+        }).join('');
+        openModal(
+            '<div class="modal-icon">👋</div>' +
+            '<h3>Create buyer account</h3>' +
+            '<p>Register directly for the demo. No OTP or SMS is required.</p>' +
+            '<form id="buyerRegistrationForm" class="mt-3">' +
+            '<div class="form-group"><label class="form-label" for="buyerRegName">Full name</label>' +
+            '<input class="form-input" id="buyerRegName" name="name" maxlength="120" required autocomplete="name"></div>' +
+            '<div class="form-group"><label class="form-label" for="buyerRegMobile">Mobile number</label>' +
+            '<input class="form-input" id="buyerRegMobile" name="mobileNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" required autocomplete="tel"></div>' +
+            '<div class="form-group"><label class="form-label" for="buyerRegPassword">Create password</label>' +
+            '<div class="password-input-wrapper"><input class="form-input" id="buyerRegPassword" name="password" type="password" minlength="10" maxlength="72" required autocomplete="new-password"></div>' +
+            '<small class="muted">Use at least 10 characters. This is demo sign-in, not production authentication.</small></div>' +
+            '<div class="form-group"><label class="form-label" for="buyerRegArea">Area</label>' +
+            '<select class="form-input" id="buyerRegArea" name="areaId" required><option value="">Select area</option>' + areaOptions + '</select></div>' +
+            '<div class="form-group"><label class="form-label" for="buyerRegSociety">Society</label>' +
+            '<select class="form-input" id="buyerRegSociety" name="societyId" required><option value="">Select society</option></select></div>' +
+            '<div class="form-group"><label class="form-label" for="buyerRegBuilding">Building / wing</label>' +
+            '<input class="form-input" id="buyerRegBuilding" name="building" maxlength="120" required autocomplete="address-line2"></div>' +
+            '<div class="form-group"><label class="form-label" for="buyerRegFlat">Flat / house number</label>' +
+            '<input class="form-input" id="buyerRegFlat" name="flatHouseNumber" maxlength="80" required autocomplete="address-line1"></div>' +
+            '<button class="btn btn-primary btn-block" type="submit" id="buyerRegSubmit">Create account</button>' +
+            '<button class="btn btn-secondary btn-block mt-2" type="button" data-action="buyer-login">Back to login</button>' +
+            '</form>'
+        );
+        var area = $('#buyerRegArea');
+        var society = $('#buyerRegSociety');
+        var renderSocieties = function () {
+            var selected = (buyerRegistrationOptions || []).find(function (entry) {
+                return String(entry.id) === String(area.value);
+            });
+            society.innerHTML = '<option value="">Select society</option>' +
+                ((selected && selected.societies) || []).map(function (row) {
+                    return '<option value="' + esc(row.id) + '">' + esc(row.name) + '</option>';
+                }).join('');
+        };
+        area.addEventListener('change', renderSocieties);
+        renderSocieties();
+        $('#buyerRegistrationForm').addEventListener('submit', handleBuyerRegistration);
+    } catch (err) {
+        toast('Could not load registration options: ' + err.message, 'error');
+    }
 }
 
 async function handleAuthLogin() {
@@ -537,13 +651,51 @@ async function handleAuthLogin() {
     btn.innerHTML = '<span class="btn-spinner"></span> Logging in...';
     var me;
     try {
-        me = await api('/api/auth/demo-login', { method: 'POST', body: { mobileNumber: mobile } });
+        me = await api('/api/auth/login', { method: 'POST', body: {
+            mobileNumber: mobile,
+            password: $('#authPassword').value
+        } });
     } catch (err) {
         btn.disabled = false;
         btn.textContent = 'Log in';
         toast('Login failed: ' + err.message, 'error');
         return;
     }
+    if (me && !isBuyer(me)) {
+        btn.disabled = false;
+        btn.textContent = 'Log in';
+        toast('This account (' + (me.name || me.mobileNumber) + ') is registered as a ' + (me.role ? me.role.toLowerCase() : 'seller') + '. Please log in with a buyer account or create a buyer account.', 'error');
+        return;
+    }
+    await finishBuyerAuthentication(me);
+}
+
+async function handleBuyerRegistration(event) {
+    event.preventDefault();
+    var form = $('#buyerRegistrationForm');
+    var btn = $('#buyerRegSubmit');
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spinner"></span> Creating account...';
+    try {
+        var me = await api('/api/auth/register/buyer', { method: 'POST', body: {
+            name: $('#buyerRegName').value.trim(),
+            mobileNumber: $('#buyerRegMobile').value.trim(),
+            password: $('#buyerRegPassword').value,
+            areaId: Number($('#buyerRegArea').value),
+            societyId: Number($('#buyerRegSociety').value),
+            building: $('#buyerRegBuilding').value.trim(),
+            flatHouseNumber: $('#buyerRegFlat').value.trim()
+        } });
+        await finishBuyerAuthentication(me);
+    } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Create account';
+        toast('Registration failed: ' + err.message, 'error');
+    }
+}
+
+async function finishBuyerAuthentication(me) {
     state.user = me;
     closeModal();
     toast('Welcome, ' + (me.name || 'neighbour') + '!', 'success');
@@ -568,6 +720,7 @@ async function withAuthGate(actionFn) {
         return await actionFn();
     } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
+            state.user = null;
             // Hand the action to the auth gate. Awaited so a deferred failure
             // surfaces to our caller instead of becoming an unhandled rejection.
             return await requireAuth(actionFn);
@@ -575,3 +728,117 @@ async function withAuthGate(actionFn) {
         throw err;
     }
 }
+
+/* =======================================================================
+   UNIVERSAL SHOW/HIDE PASSWORD EYE TOGGLE
+   Accessible, responsive toggle for every password field across the app.
+   ======================================================================= */
+
+var EYE_OPEN_SVG = '<svg class="eye-icon eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+
+var EYE_SLASH_SVG = '<svg class="eye-icon eye-slashed" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+
+function initPasswordToggles(root) {
+    var scope = root || document;
+    if (!scope || !scope.querySelectorAll) return;
+    var pwdInputs = scope.querySelectorAll('input[type="password"], input[data-password-toggle="true"]');
+    for (var i = 0; i < pwdInputs.length; i++) {
+        setupPasswordToggle(pwdInputs[i]);
+    }
+}
+
+function setupPasswordToggle(input) {
+    if (!input || input.getAttribute('data-password-toggle-initialized') === 'true') {
+        return;
+    }
+    input.setAttribute('data-password-toggle-initialized', 'true');
+    input.setAttribute('data-password-toggle', 'true');
+
+    var parent = input.parentElement;
+    var wrapper = parent && parent.classList.contains('password-input-wrapper') ? parent : null;
+
+    if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'password-input-wrapper';
+        if (input.parentNode) {
+            input.parentNode.insertBefore(wrapper, input);
+        }
+        wrapper.appendChild(input);
+    }
+
+    var existingBtn = wrapper.querySelector('.password-toggle-btn');
+    if (existingBtn) return;
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'password-toggle-btn';
+    btn.setAttribute('aria-label', input.type === 'password' ? 'Show password' : 'Hide password');
+    btn.setAttribute('title', input.type === 'password' ? 'Show password' : 'Hide password');
+    btn.setAttribute('tabindex', '-1');
+    btn.innerHTML = input.type === 'password' ? EYE_SLASH_SVG : EYE_OPEN_SVG;
+
+    btn.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+    });
+
+    btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var isHidden = input.type === 'password';
+        input.type = isHidden ? 'text' : 'password';
+        btn.innerHTML = isHidden ? EYE_OPEN_SVG : EYE_SLASH_SVG;
+        btn.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+        btn.setAttribute('title', isHidden ? 'Hide password' : 'Show password');
+        try {
+            input.focus();
+            if (input.setSelectionRange && input.value) {
+                var len = input.value.length;
+                input.setSelectionRange(len, len);
+            }
+        } catch (err) {}
+    });
+
+    wrapper.appendChild(btn);
+}
+
+if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') {
+    var passwordObserver = new MutationObserver(function (mutations) {
+        for (var i = 0; i < mutations.length; i++) {
+            var mutation = mutations[i];
+            if (mutation.addedNodes && mutation.addedNodes.length > 0) {
+                for (var j = 0; j < mutation.addedNodes.length; j++) {
+                    var node = mutation.addedNodes[j];
+                    if (node.nodeType === 1) {
+                        if (node.matches && (node.matches('input[type="password"]') || node.matches('input[data-password-toggle="true"]'))) {
+                            setupPasswordToggle(node);
+                        } else if (node.querySelectorAll) {
+                            initPasswordToggles(node);
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    if (document.body) {
+        passwordObserver.observe(document.body, { childList: true, subtree: true });
+    } else {
+        document.addEventListener('DOMContentLoaded', function () {
+            passwordObserver.observe(document.body, { childList: true, subtree: true });
+        });
+    }
+}
+
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () {
+            initPasswordToggles();
+        });
+    } else {
+        initPasswordToggles();
+    }
+}
+
+window.initPasswordToggles = initPasswordToggles;
+window.setupPasswordToggle = setupPasswordToggle;
+

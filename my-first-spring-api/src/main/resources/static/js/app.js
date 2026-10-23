@@ -41,16 +41,37 @@ function resolveRoute(hash) {
     return { fn: homeView, arg: '#/home' };
 }
 
+/**
+ * Clean-URL routes served by the backend SPA forward: /kitchen/{slug} and
+ * /kitchens. These are read from location.pathname so a deep link or a page
+ * refresh lands directly on the right view with no hash. In-app navigation
+ * still uses hash routes, so a hash always takes precedence when present.
+ *
+ * The kitchen route is handed a "slug:<slug>" argument so kitchenPageView knows
+ * to resolve by public-URL slug rather than a numeric id.
+ */
+function resolvePathRoute(path) {
+    if (!path) return null;
+    var km = path.match(/^\/kitchen\/(.+)$/);
+    if (km) return { fn: kitchenPageView, arg: 'slug:' + decodeURIComponent(km[1]) };
+    if (path === '/kitchens' || path === '/kitchens/') return { fn: kitchensView, arg: '#/kitchens' };
+    return null;
+}
+
 async function render() {
-    var hash = location.hash || '#/home';
-    var route = resolveRoute(hash);
+    // A hash always wins once the buyer has navigated inside the SPA. With no
+    // hash (a deep link or a refresh on /kitchen/{slug} or /kitchens) the clean
+    // path decides, which is what makes those URLs work directly.
+    var hash = location.hash;
+    var route = hash ? resolveRoute(hash)
+        : (resolvePathRoute(location.pathname) || resolveRoute('#/home'));
     var view = viewEl();
     view.innerHTML = '<div class="page-loading"><div class="spinner"></div></div>';
     closeSheet();
     try {
         var html = await route.fn(route.arg);
         view.innerHTML = html || '';
-        updateNav(hash);
+        updateNav(hash || location.pathname);
         await loadUnreadNotifications();
         updateCartBar();
         if (typeof applyThemeUiState === 'function') applyThemeUiState();
@@ -87,6 +108,7 @@ document.addEventListener('click', async function (e) {
     try {
         switch (a) {
             case 'go-back': history.back(); break;
+            case 'explore-kitchens': navigate('#/kitchens'); break;
             case 'noop': break;
             case 'toggle-notifs': await toggleNotifications(t.dataset.panelId); break;
             case 'read-notification': await readNotification(t.dataset.notificationId); break;
@@ -113,6 +135,8 @@ document.addEventListener('click', async function (e) {
                 break;
             }
             case 'open-login': openAuthModal(); break;
+            case 'buyer-register': await openBuyerRegistrationModal(); break;
+            case 'buyer-login': openAuthModal(); break;
             case 'read-more': {
                 var full = decodeURIComponent(t.dataset.full || '');
                 var parent = t.closest('.about-text') || t.closest('.oc-desc');
@@ -144,6 +168,9 @@ document.addEventListener('click', async function (e) {
                 try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
                 await placeOrderWithStatus('PENDING'); break;
             case 'select-pay-method': state.payMethod = t.dataset.method; await render(); break;
+            case 'toggle-checkout-address':
+                state.editingCheckoutAddress = !state.editingCheckoutAddress;
+                await render(); break;
             case 'select-pay-status': // Confirm Order: Paid / Will Pay Later (UI selection only)
                 state.payPreference = t.dataset.status === 'PENDING' || t.dataset.status === 'WILL_PAY_LATER'
                     ? 'PENDING' : 'PAID';
@@ -308,8 +335,11 @@ window.addEventListener('DOMContentLoaded', async function () {
     initTheme();
     try {
         var me = await api('/api/auth/me');
-        state.user = (me && me.authenticated) ? me : null;
+        state.user = (me && me.authenticated && isBuyer(me)) ? me : null;
     } catch (e) { state.user = null; }
-    if (!location.hash) location.hash = '#/home';
+    // Only fall back to the Home hash when there is neither an in-app hash nor a
+    // clean backend route (/kitchen/{slug}, /kitchens) to render. Setting a hash
+    // here would otherwise clobber a deep-linked clean URL.
+    if (!location.hash && !resolvePathRoute(location.pathname)) location.hash = '#/home';
     await render();
 });

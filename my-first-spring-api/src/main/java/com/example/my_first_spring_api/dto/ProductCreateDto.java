@@ -1,5 +1,7 @@
 package com.example.my_first_spring_api.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -18,23 +20,40 @@ public class ProductCreateDto {
     @Positive(message = "Price must be positive")
     private BigDecimal price;
 
-    private String priceUnit;
+    @JsonAlias({"priceUnit", "price_unit"})
+    private String priceUnit = "portion";
+
+    @JsonAlias({"unit"})
+    private String unit = "portion";
+
     private String imageUrl;
-    private Boolean availableToday;
+
+    @JsonAlias({"is_available", "isAvailable"})
+    private Boolean availableToday = Boolean.TRUE;
+
+    @JsonAlias({"is_veg", "isVeg", "veg"})
+    private Boolean isVeg = Boolean.TRUE;
     @NotNull(message = "Offering For is required")
+    @JsonAlias({"offeringDate", "date"})
     private LocalDate availableDate;
+
+    @JsonAlias({"ordersOpenTime", "openTime"})
     private String orderWindowStart;
-    @NotBlank(message = "Orders Close is required")
+
+    @JsonAlias({"ordersCloseTime", "closeTime", "cutoffTime"})
     private String orderWindowEnd;
+
     @NotBlank(message = "Delivery / Ready By is required")
+    @JsonAlias({"deliveryTime", "deliveryDateTime", "readyBy"})
     private String readyByTime;
+
     @Positive(message = "Quantity Available must be at least 1; leave blank for unlimited")
     private Integer maxQuantity;
     private Integer remainingQuantity;
     private Boolean isPreorder;
 
-    @NotNull(message = "Select at least one category")
-    @Size(min = 1, message = "Select at least one category")
+    @JsonAlias({"category"})
+    @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY)
     private List<String> categories;
 
     /** Optional recurring-schedule config; when present, the new product is
@@ -48,12 +67,24 @@ public class ProductCreateDto {
     public void setDescription(String description) { this.description = description; }
     public BigDecimal getPrice() { return price; }
     public void setPrice(BigDecimal price) { this.price = price; }
-    public String getPriceUnit() { return priceUnit; }
-    public void setPriceUnit(String priceUnit) { this.priceUnit = priceUnit; }
+    public String getPriceUnit() { return priceUnit != null && !priceUnit.isBlank() ? priceUnit : unit; }
+    public void setPriceUnit(String priceUnit) {
+        this.priceUnit = priceUnit;
+        if (this.unit == null || this.unit.isBlank()) this.unit = priceUnit;
+    }
+    public String getUnit() { return unit != null && !unit.isBlank() ? unit : (priceUnit != null && !priceUnit.isBlank() ? priceUnit : "portion"); }
+    public void setUnit(String unit) {
+        this.unit = unit;
+        if (this.priceUnit == null || this.priceUnit.isBlank()) this.priceUnit = unit;
+    }
     public String getImageUrl() { return imageUrl; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
-    public Boolean getAvailableToday() { return availableToday; }
-    public void setAvailableToday(Boolean availableToday) { this.availableToday = availableToday; }
+    public Boolean getAvailableToday() { return availableToday != null ? availableToday : Boolean.TRUE; }
+    public void setAvailableToday(Boolean availableToday) { this.availableToday = (availableToday != null) ? availableToday : Boolean.TRUE; }
+    public Boolean getIsAvailable() { return getAvailableToday(); }
+    public void setIsAvailable(Boolean isAvailable) { setAvailableToday(isAvailable); }
+    public Boolean getIsVeg() { return isVeg != null ? isVeg : Boolean.TRUE; }
+    public void setIsVeg(Boolean isVeg) { this.isVeg = (isVeg != null) ? isVeg : Boolean.TRUE; }
     public LocalDate getAvailableDate() { return availableDate; }
     public void setAvailableDate(LocalDate availableDate) { this.availableDate = availableDate; }
     public String getOrderWindowStart() { return orderWindowStart; }
@@ -69,7 +100,24 @@ public class ProductCreateDto {
     public Boolean getIsPreorder() { return isPreorder; }
     public void setIsPreorder(Boolean isPreorder) { this.isPreorder = isPreorder; }
     public List<String> getCategories() { return categories; }
-    public void setCategories(List<String> categories) { this.categories = categories; }
+    public void setCategories(List<String> categories) {
+        if (categories == null) {
+            this.categories = null;
+            return;
+        }
+        List<String> flattened = new java.util.ArrayList<>();
+        for (String c : categories) {
+            if (c != null && !c.isBlank()) {
+                for (String part : c.split(",")) {
+                    String trimmed = part.trim();
+                    if (!trimmed.isEmpty()) {
+                        flattened.add(trimmed);
+                    }
+                }
+            }
+        }
+        this.categories = flattened;
+    }
 
     public RecurringScheduleDto getRecurringSchedule() { return recurringSchedule; }
     public void setRecurringSchedule(RecurringScheduleDto recurringSchedule) { this.recurringSchedule = recurringSchedule; }

@@ -279,4 +279,53 @@ class KitchenVisibilityEligibilityTest {
         assertThat(KitchenVisibility.isServiceAreaVisible(legacy, null)).isTrue();
         assertThat(KitchenVisibility.isServiceAreaVisible(idCovered, null)).isTrue();
     }
+
+    @Test
+    void aKitchenWithServiceAreasStringAllowsBuyerWithoutSocietyForDraftFlow() {
+        Kitchen k = bareKitchen("vis-areas-draft-");
+        k.setServiceAreas("Pride World City, " + alpha.getName());
+        k = kitchenRepository.save(k);
+
+        assertThat(KitchenVisibility.isServiceAreaVisible(k, buyerWithoutSociety()))
+                .as("draft creation before profile completion must be permitted for serviceAreas kitchens")
+                .isTrue();
+    }
+
+    @Test
+    void aKitchenWithServiceAreasStringResolvesBuyerBySocietyRef() {
+        Kitchen k = bareKitchen("vis-areas-ref-");
+        k.setServiceAreas("Pride World City, " + alpha.getName());
+        k = kitchenRepository.save(k);
+
+        User b = new User("Vis Areas RefOnly " + sfx, uniqueMobile(), "B-1", UserRole.BUYER);
+        b.setSocietyRef(alpha);
+        b = userRepository.save(b);
+
+        assertThat(KitchenVisibility.isServiceAreaVisible(k, b))
+                .as("serviceAreas kitchens must resolve buyer through societyRef")
+                .isTrue();
+
+        User bBeta = new User("Vis Areas Beta " + sfx, uniqueMobile(), "B-2", UserRole.BUYER);
+        bBeta.setSocietyRef(beta);
+        bBeta = userRepository.save(bBeta);
+
+        assertThat(KitchenVisibility.isServiceAreaVisible(k, bBeta))
+                .as("unmatched societyRef must be refused")
+                .isFalse();
+    }
+
+    @Test
+    void aKitchenWithServiceAreasStringTrimsBuyerSociety() {
+        Kitchen k = bareKitchen("vis-areas-trim-");
+        k.setServiceAreas("Pride World City, " + alpha.getName());
+        k = kitchenRepository.save(k);
+
+        User b = new User("Vis Untrimmed " + sfx, uniqueMobile(), "B-3", UserRole.BUYER);
+        b.setSociety("  " + alpha.getName() + "  ");
+        b = userRepository.save(b);
+
+        assertThat(KitchenVisibility.isServiceAreaVisible(k, b))
+                .as("whitespace in buyer society must be trimmed")
+                .isTrue();
+    }
 }

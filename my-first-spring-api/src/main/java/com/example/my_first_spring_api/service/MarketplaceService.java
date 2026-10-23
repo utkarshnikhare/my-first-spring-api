@@ -12,7 +12,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -108,8 +110,8 @@ public class MarketplaceService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
-        String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(), java.time.LocalTime.now());
-        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle));
+        String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
         // Recurring projection (V2 §14): today's resolved occurrence values,
         // or the next occurrence date for the buyer pre-order badge.
@@ -120,6 +122,14 @@ public class MarketplaceService {
     }
 
     private boolean isCurrentlyOrderable(ProductDto product) {
+        if ("HISTORY".equalsIgnoreCase(product.getLifecycleState())) {
+            return false;
+        }
+        if (product.getAvailableDate() != null
+                && product.getAvailableDate().isBefore(LocalDate.now(AppTimeZone.ZONE))
+                && !Boolean.TRUE.equals(product.getRecurring())) {
+            return false;
+        }
         return !Boolean.TRUE.equals(product.getOrdersClosed())
                 && !Boolean.TRUE.equals(product.getOrdersPaused())
                 && !Boolean.TRUE.equals(product.getSoldOut())

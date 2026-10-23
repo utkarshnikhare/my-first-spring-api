@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Admin System Health screen.
  *
  * <p>The screen must report only what the running application can actually prove.
- * Two properties matter and are pinned here: the demo-login flag is read through the
+ * Two properties matter and are pinned here: the direct-auth flag is read through the
  * very same helper Spring Security uses, so the screen can never disagree with the
  * real gate; and "database reachable" is the result of a real JPA round trip rather
  * than a hard-coded "OK".</p>
@@ -47,11 +47,10 @@ class AdminSystemHealthTest {
         // screen can never disagree with the real gate. Asserting equality against that
         // helper is the real contract; the literal below just documents the outcome for
         // the "test" profile, which is not one of demo/dev/default and so is not a demo
-        // environment. (It used to read as true, which would have been a wrong
-        // expectation rather than a wrong implementation.)
-        assertThat(health.get("demoLoginEnabled"))
-                .isEqualTo(com.example.my_first_spring_api.SecurityConfig.isDemoEnvironment(environment));
-        assertThat(health.get("demoLoginEnabled")).isEqualTo(Boolean.FALSE);
+        // environment. (Password login is enabled by default: sociomart.auth.password-login-enabled=true)
+        assertThat(health.get("directAuthEnabled"))
+                .isEqualTo(com.example.my_first_spring_api.AuthSettings.passwordLoginEnabled(environment));
+        assertThat(health.get("directAuthEnabled")).isEqualTo(Boolean.TRUE);
     }
 
     @SuppressWarnings("unchecked")
@@ -87,7 +86,7 @@ class AdminSystemHealthTest {
         Map<String, Object> second = adminService.systemHealth();
 
         assertThat(second).isEqualTo(first);
-        assertThat(first).containsKeys("application", "activeProfiles", "demoLoginEnabled",
+        assertThat(first).containsKeys("application", "activeProfiles", "directAuthEnabled",
                 "database", "locationMaster");
     }
 }

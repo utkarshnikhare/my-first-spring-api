@@ -28,8 +28,13 @@ import org.springframework.mock.web.MockHttpSession;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -100,28 +105,9 @@ class DemoMarketplaceE2ETest {
         return sellerService.createKitchen(dto, seller);
     }
 
-    /**
-     * A brand-new offering with a known stock level.
-     *
-     * <p>The order window is derived from the REAL current clock rather than hardcoded,
-     * because the backend correctly refuses an order once today's cutoff has passed
-     * ("Orders Close must not already have passed"). Close = now + 2h, delivery =
-     * now + 4h, which keeps the offering genuinely orderable at the moment it is created.</p>
-     */
+    /** A brand-new same-day offering with a known stock level and an all-day test window. */
     private ProductDto newProduct(User seller, Long kitchenId, String name, int stock) {
-        LocalDateTime now = LocalDateTime.now();
-        int nowMin = now.getHour() * 60 + now.getMinute();
-        // The close window is now + 2h, capped at 22:00 so the offering stays
-        // orderable. When the cap is reached exactly at the current minute (or
-        // we are past 22:00), the offering cannot be created for today; move it
-        // to tomorrow so the window stays open at creation time.
         LocalDate offeringDate = LocalDate.now();
-        int closeMin = Math.min(nowMin + 120, 22 * 60);
-        if (closeMin <= nowMin) {
-            offeringDate = LocalDate.now().plusDays(1);
-            closeMin = 22 * 60;
-        }
-        int readyMin = Math.min(nowMin + 240, 23 * 60);
         ProductCreateDto dto = new ProductCreateDto();
         dto.setName(name);
         dto.setPrice(new BigDecimal("120.00"));
@@ -129,16 +115,8 @@ class DemoMarketplaceE2ETest {
         dto.setAvailableToday(Boolean.TRUE);
         dto.setMaxQuantity(stock);
         dto.setRemainingQuantity(stock);
-        dto.setOrderWindowEnd(String.format("%02d:%02d", closeMin / 60, closeMin % 60));
-        // The ready time must land on/after the offering date. For today's
-        // offerings the legacy HH:mm format is anchored to today, so it is fine;
-        // for tomorrow's offerings we pass a full date-time so the ready date
-        // lands on the offering date instead of today.
-        String readyBy = String.format("%02d:%02d", readyMin / 60, readyMin % 60);
-        if (offeringDate.isAfter(LocalDate.now())) {
-            readyBy = offeringDate.atTime(readyMin / 60, readyMin % 60).toString();
-        }
-        dto.setReadyByTime(readyBy);
+        dto.setOrderWindowEnd("23:59");
+        dto.setReadyByTime(offeringDate.plusDays(1).atTime(0, 1).toString());
         dto.setCategories(List.of("LUNCH"));
         return sellerService.createProduct(kitchenId, dto, seller);
     }
@@ -307,6 +285,90 @@ class DemoMarketplaceE2ETest {
                 .as("5 - 2 = 3").isEqualTo(3);
         assertThat(placed.getTotalAmount()).as("3*120 + 2*120 = 600")
                 .isEqualByComparingTo(new BigDecimal("600.00"));
+    }
+
+    @Test
+    @DisplayName("Checkout persists the order and atomically moves quantity from remaining to booked")
+    void checkoutPersistsOrderAndConsumesInventory() {
+        Area area = locationService.createArea("Checkout Area " + nextMobile());
+        Society society = locationService.createSociety(area.getId(), "Checkout Society " + nextMobile());
+        User seller = approvedSeller("checkout");
+        KitchenDto kitchen = newKitchen(seller, area, society);
+        ProductDto product = newProduct(seller, kitchen.getId(), "Checkout Offering", 3);
+        User buyer = completeBuyer("checkout", society);
+        MockHttpSession session = new MockHttpSession();
+        buyerSession(session, buyer);
+
+        OrderDto placed = order(session, kitchen.getId(), List.of(item(product.getId(), 2)));
+
+        assertThat(placed.getId()).isNotNull();
+        assertThat(placed.getOrderStatus().toString()).isEqualTo("ORDERED");
+        assertThat(orderRepository.findByIdWithItems(placed.getId()).orElseThrow().getItems())
+                .singleElement()
+                .satisfies(saved -> assertThat(saved.getQuantity()).isEqualTo(2));
+        Product savedProduct = productRepository.findById(product.getId()).orElseThrow();
+        assertThat(savedProduct.getRemainingQuantity()).isEqualTo(1);
+        assertThat(savedProduct.getBookedQuantity()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("Concurrent checkout requests cannot sell the same final unit twice")
+    void concurrentBuyersCannotOversellFinalUnit() throws Exception {
+        Area area = locationService.createArea("Concurrent Area " + nextMobile());
+        Society society = locationService.createSociety(area.getId(), "Concurrent Society " + nextMobile());
+        User seller = approvedSeller("concurrent");
+        KitchenDto kitchen = newKitchen(seller, area, society);
+        ProductDto product = newProduct(seller, kitchen.getId(), "Final Unit Offering", 1);
+        User firstBuyer = completeBuyer("concurrent-first", society);
+        User secondBuyer = completeBuyer("concurrent-second", society);
+        MockHttpSession firstSession = new MockHttpSession();
+        MockHttpSession secondSession = new MockHttpSession();
+        buyerSession(firstSession, firstBuyer);
+        buyerSession(secondSession, secondBuyer);
+
+        orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(item(product.getId(), 1)), firstSession);
+        orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(item(product.getId(), 1)), secondSession);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<OrderDto>> attempts = List.of(
+                executor.submit(() -> placeAfterBarrier(firstSession, ready, start)),
+                executor.submit(() -> placeAfterBarrier(secondSession, ready, start)));
+        try {
+            assertThat(ready.await(10, TimeUnit.SECONDS)).as("both buyers are ready to check out").isTrue();
+            start.countDown();
+            int placed = 0;
+            int rejected = 0;
+            for (Future<OrderDto> attempt : attempts) {
+                try {
+                    assertThat(attempt.get(20, TimeUnit.SECONDS).getId()).isNotNull();
+                    placed++;
+                } catch (ExecutionException failure) {
+                    assertThat(failure.getCause()).isInstanceOf(IllegalArgumentException.class);
+                    rejected++;
+                }
+            }
+
+            assertThat(placed).isEqualTo(1);
+            assertThat(rejected).isEqualTo(1);
+            Product savedProduct = productRepository.findById(product.getId()).orElseThrow();
+            assertThat(savedProduct.getRemainingQuantity()).isZero();
+            assertThat(savedProduct.getRemainingQuantity()).isNotNegative();
+            assertThat(savedProduct.getBookedQuantity()).isEqualTo(1);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    private OrderDto placeAfterBarrier(MockHttpSession session, CountDownLatch ready, CountDownLatch start)
+            throws InterruptedException {
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Timed out waiting for concurrent checkout start.");
+        }
+        return orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
     }
 
     @Test

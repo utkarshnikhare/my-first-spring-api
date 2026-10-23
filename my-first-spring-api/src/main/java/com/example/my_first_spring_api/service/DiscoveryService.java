@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -142,7 +143,7 @@ public class DiscoveryService {
     private KitchenCard toCard(Kitchen k, List<Product> items, Set<Long> orderedKitchenIds) {
         KitchenCard card = new KitchenCard();
         card.setId(k.getId());
-        card.setSlug(k.getName());
+        card.setSlug(k.publicSlug());
         card.setDisplayName(k.getDisplayName());
         card.setImageUrl(k.getImageUrl());
         card.setShortDescription(k.getShortDescription());
@@ -288,12 +289,13 @@ public class DiscoveryService {
     @Transactional(readOnly = true)
     public List<KitchenCard> getHomemadeStores(User buyer) {
         return kitchenRepository.findAll().stream()
-                .filter(k -> k.getSellerType() == com.example.my_first_spring_api.model.SellerType.HOMEMADE_PRODUCTS)
+                .filter(KitchenVisibility::isHomemadeStore)
                 .filter(KitchenVisibility::isPubliclyVisible)
                 .filter(k -> KitchenVisibility.isServiceAreaVisible(k, buyer))
                 .map(k -> {
                     List<Product> items = productRepository.findByKitchenAndAvailableTodayTrueOrderByCreatedAtDesc(k).stream()
                             .filter(p -> !p.isOrdersPaused())
+                            .filter(p -> p.getAvailableDate() == null || !p.getAvailableDate().isBefore(LocalDate.now(AppTimeZone.ZONE)))
                             .collect(Collectors.toList());
                     return toHomemadeCard(k, items);
                 })
@@ -304,7 +306,7 @@ public class DiscoveryService {
     @Transactional(readOnly = true)
     public KitchenDetailDto getHomemadeStoreDetail(String slug, User buyer) {
         Kitchen kitchen = kitchenRepository.findByName(slug).orElse(null);
-        if (kitchen == null || kitchen.getSellerType() != com.example.my_first_spring_api.model.SellerType.HOMEMADE_PRODUCTS) return null;
+        if (kitchen == null || !KitchenVisibility.isHomemadeStore(kitchen)) return null;
         if (!KitchenVisibility.isPubliclyVisible(kitchen)) return null;
         if (!KitchenVisibility.isServiceAreaVisible(kitchen, buyer)) return null;
         return kitchenService.getKitchenDetailById(kitchen.getId(), buyer);
@@ -313,7 +315,7 @@ public class DiscoveryService {
     private KitchenCard toHomemadeCard(Kitchen k, List<Product> items) {
         KitchenCard card = new KitchenCard();
         card.setId(k.getId());
-        card.setSlug(k.getName());
+        card.setSlug(k.publicSlug());
         card.setDisplayName(k.getDisplayName());
         card.setImageUrl(k.getImageUrl());
         card.setShortDescription(k.getShortDescription() != null ? k.getShortDescription() : k.getDescription());

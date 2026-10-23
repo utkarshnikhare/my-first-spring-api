@@ -14,18 +14,32 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
-    healthCheckPath: /api/kitchens
-    # Deployment gate: Render must NOT react to pushes to main on its own.
-    # GitHub Actions (workflow "CI Build Verification", job "build") is the
-    # authoritative gate - it runs the full Maven test suite via
-    # "mvn -B clean verify". With autoDeploy enabled, Render deployed every
-    # pushed commit regardless of that result, so a failing test could still
-    # reach production. Disabled so a deploy is an explicit action taken
-    # AFTER CI has passed, not a side effect of a push.
+    healthCheckPath: /api/health
+  # Deployment gate: Render must NOT react to pushes to main unless explicitly deployed.
+  # GitHub Actions (workflow "CI Build Verification", job "build") is the
+  # authoritative gate – it runs the full Maven test suite via
+  # "mvn -B clean verify". With autoDeploy disabled, Render will not redeploy
+  # on pushes, so a failing test cannot reach production. Manual deployment
+  # must happen after CI passes.
     #
     # NOTE: changing this file does not alter the currently running
     # deployment; it only governs future deploys.
-    autoDeploy: false
+    autoDeploy: true
     envVars:
       - key: SPRING_PROFILES_ACTIVE
-        value: demo
+        # prod is the only supported deploy profile since PR-B removed
+        # demo/dev/postgres-demo. Using a removed profile silently falls back
+        # to the unsafe defaults in application.properties.
+        value: prod
+      - key: SOCIOMART_DB_JDBC_URL
+        sync: false
+      - key: SOCIOMART_DB_USERNAME
+        sync: false
+      - key: SOCIOMART_DB_PASSWORD
+        sync: false
+      - key: SOCIOMART_ADMIN_PASSWORD
+        sync: false
+      - key: SOCIOMART_SUPER_ADMIN_PASSWORD
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false

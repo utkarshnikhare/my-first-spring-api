@@ -54,7 +54,7 @@ public class AdminController {
         // The acting Admin is resolved server-side from the session - never from a
         // parameter - so the Area scope in handover 15 cannot be spoofed.
         return ResponseEntity.ok(adminService.buyers(search, areaId, societyId,
-                buyerService.requireCurrentBuyer(session)));
+                buyerService.getCurrentBuyer(session)));
     }
 
     /**
@@ -77,8 +77,10 @@ public class AdminController {
 
     @GetMapping("/sellers")
     public ResponseEntity<List<Map<String, Object>>> sellers(
-            @RequestParam(value = "status", required = false) SellerApprovalStatus status) {
-        return ResponseEntity.ok(adminService.sellers(status));
+            @RequestParam(value = "status", required = false) SellerApprovalStatus status,
+            HttpSession session) {
+        User admin = buyerService.getCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.sellers(status, admin));
     }
 
     @GetMapping("/kitchens")
@@ -295,8 +297,9 @@ public class AdminController {
     }
 
     @GetMapping("/sellers/pending")
-    public ResponseEntity<List<Map<String, Object>>> pendingSellers() {
-        return ResponseEntity.ok(adminService.pendingSellers().stream()
+    public ResponseEntity<List<Map<String, Object>>> pendingSellers(HttpSession session) {
+        User admin = buyerService.getCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.pendingSellers(admin).stream()
                 .map(AdminController::toSellerSummary).collect(Collectors.toList()));
     }
 
@@ -363,8 +366,9 @@ public class AdminController {
     }
 
     @GetMapping("/sellers/{id}/detail")
-    public ResponseEntity<Map<String, Object>> sellerDetail(@PathVariable Long id) {
-        return ResponseEntity.ok(adminService.sellerDetail(id));
+    public ResponseEntity<Map<String, Object>> sellerDetail(@PathVariable Long id, HttpSession session) {
+        User admin = buyerService.getCurrentBuyer(session);
+        return ResponseEntity.ok(adminService.sellerDetail(id, admin));
     }
 
     // ---------- Storefront controls (handover 7.3) ----------
@@ -391,6 +395,25 @@ public class AdminController {
         User admin = buyerService.requireCurrentBuyer(session);
         return ResponseEntity.ok(adminService.removeStorefront(kitchenId,
                 body != null ? body.get("reason") : null, admin));
+    }
+
+    /**
+     * Admin-only public-URL (slug) change. Validated + unique; the old slug is
+     * kept as a redirecting alias so shared links keep working.
+     */
+    @PostMapping("/kitchens/{kitchenId}/slug")
+    public ResponseEntity<Map<String, Object>> changeKitchenSlug(@PathVariable Long kitchenId,
+                                                                 @RequestBody Map<String, String> body,
+                                                                 HttpSession session) {
+        User admin = buyerService.requireCurrentBuyer(session);
+        String slug = body != null ? body.get("slug") : null;
+        return ResponseEntity.ok(adminService.changeKitchenSlug(kitchenId, slug, admin));
+    }
+
+    /** Marketplace / promotion links the Admin can copy (base URL + /kitchens). */
+    @GetMapping("/marketplace-links")
+    public ResponseEntity<Map<String, Object>> marketplaceLinks() {
+        return ResponseEntity.ok(adminService.marketplaceLinks());
     }
     // ---------- Buyer support controls (handover 8) ----------
 
@@ -544,6 +567,15 @@ public class AdminController {
         m.put("statusReason", seller.getSellerStatusReason());
         m.put("approvedAt", seller.getApprovedAt());
         m.put("registeredAt", seller.getCreatedAt());
+        m.put("society", seller.getSociety());
+        if (seller.getSocietyRef() != null) {
+            m.put("societyId", seller.getSocietyRef().getId());
+            if (m.get("society") == null) m.put("society", seller.getSocietyRef().getName());
+        }
+        if (seller.getAreaRef() != null) {
+            m.put("areaId", seller.getAreaRef().getId());
+            m.put("area", seller.getAreaRef().getName());
+        }
         return m;
     }
 }

@@ -24,19 +24,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * "Only sellers can perform this action".
  *
  * The Buyer and Seller apps are served from the same origin, so they share a
- * single browser session. The Seller app authenticated once at boot and then
- * trusted that cached state, so as soon as a Buyer logged in on the same session
- * the Seller screen rendered the raw authorization error instead of restoring its
- * own seller session.
+ * single browser session. The current persisted identity and seller approval
+ * status must be checked for every seller operation.
  *
  * These tests pin the server side of that contract, which must NOT change:
  *  - a seller session loads the dashboard;
  *  - a buyer session is still rejected by the seller endpoints;
- *  - re-running the seller demo-login restores seller access on the same session.
+ *  - an unapproved seller cannot use the dashboard even with a seller session.
  *
- * The fix for the reported symptom is in seller.js (it must revalidate the
- * session with the server instead of trusting stale frontend state). The
- * backend authorization here is deliberately unchanged and must stay strict.
+ * These service-level checks complement the HTTP-level registration and
+ * authorization tests; they must not simulate mobile-only identity restoration.
  */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:seller-session-guard;DB_CLOSE_DELAY=-1",
@@ -78,6 +75,9 @@ class SellerSessionGuardIntegrationTest {
         if (user.getRole() != UserRole.SELLER) {
             throw new SellerNotAuthorizedException("Only sellers can perform this action");
         }
+        if (!user.isApprovedSeller()) {
+            throw new SellerNotAuthorizedException("Your seller account is awaiting Admin approval.");
+        }
     }
 
     @Test
@@ -101,7 +101,7 @@ class SellerSessionGuardIntegrationTest {
     }
 
     @Test
-    void buyerLoginClobbersTheSharedSessionWhichIsWhyTheFrontendMustRevalidate() {
+    void sessionRoleIsReadFromTheCurrentPersistedUser() {
         MockHttpSession session = new MockHttpSession();
         session.setAttribute(BuyerService.BUYER_SESSION_KEY, seller.getId());
         assertSellerAccess(session); // seller session works
@@ -111,9 +111,24 @@ class SellerSessionGuardIntegrationTest {
         assertThatThrownBy(() -> assertSellerAccess(session))
                 .isInstanceOf(SellerNotAuthorizedException.class);
 
-        // Re-running the seller demo-login restores seller access on that session.
+        // The test fixture explicitly switches the session identity back; the
+        // application no longer offers mobile-only session restoration.
         session.setAttribute(BuyerService.BUYER_SESSION_KEY, seller.getId());
         assertSellerAccess(session);
+    }
+
+    @Test
+    void pendingSellerRoleCannotUseTheSellerDashboard() {
+        User pending = new User("Pending Seller", "94" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
+                null, UserRole.SELLER);
+        pending.setSellerApprovalStatus(SellerApprovalStatus.PENDING);
+        pending = users.saveAndFlush(pending);
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute(BuyerService.BUYER_SESSION_KEY, pending.getId());
+
+        assertThatThrownBy(() -> assertSellerAccess(session))
+                .isInstanceOf(SellerNotAuthorizedException.class)
+                .hasMessageContaining("awaiting Admin approval");
     }
 
     @Test
@@ -122,49 +137,21 @@ class SellerSessionGuardIntegrationTest {
         assertThat(buyerService.getCurrentBuyer(session)).isNull();
     }
 
-    /**
-     * P0 regression - the exact window that produced the reported screen.
-     *
-     * The frontend guard (GET /api/auth/me) and the route's own request are two
-     * separate HTTP calls. This test reproduces a Buyer login landing BETWEEN
-     * them, which is what made a legitimately authenticated Seller request fail
-     * with "Only sellers can perform this action" and left the screen stuck.
-     *
-     * The server must keep rejecting that request - the authorization is
-     * correct - but re-establishing the seller session must make the very next
-     * attempt succeed, without any reload. That is precisely what sellerApi()'
-     * single bounded retry relies on.
-     */
     @Test
-    void sessionLostBetweenTheGuardAndTheRequestRecoversOnTheNextAttempt() {
+    void approvalRevokedBetweenRequestsBlocksAnExistingSellerSession() {
         MockHttpSession session = new MockHttpSession();
-
-        // 1. The guard's probe: the session is a seller, so the client proceeds.
-        session.setAttribute(BuyerService.BUYER_SESSION_KEY, seller.getId());
-        User probed = buyerService.getCurrentBuyer(session);
-        assertThat(probed.getRole()).isEqualTo(UserRole.SELLER);
-
-        // 2. A Buyer logs in on the same session during the gap.
-        session.setAttribute(BuyerService.BUYER_SESSION_KEY, buyer.getId());
-
-        // 3. The route's request is correctly refused - authorization is intact.
-        assertThatThrownBy(() -> assertSellerAccess(session))
-                .isInstanceOf(SellerNotAuthorizedException.class)
-                .hasMessageContaining("Only sellers can perform this action");
-
-        // 4. The client re-authenticates and retries ONCE: this must now work,
-        //    with no page reload and no change to the persisted roles.
         session.setAttribute(BuyerService.BUYER_SESSION_KEY, seller.getId());
         assertSellerAccess(session);
-        assertThat(sellerAppService.getDashboard(seller).getKitchenName()).isNotBlank();
+
+        seller.setSellerApprovalStatus(SellerApprovalStatus.PENDING);
+        users.saveAndFlush(seller);
+        assertThatThrownBy(() -> assertSellerAccess(session))
+                .isInstanceOf(SellerNotAuthorizedException.class)
+                .hasMessageContaining("awaiting Admin approval");
     }
 
     @Test
-    void theRetryCannotEscalateANonSellerBecauseTheRoleIsReReadEveryTime() {
-        // The self-heal is a frontend convenience only. Even after a seller
-        // session existed earlier in the same session object, a buyer identity
-        // must still be refused - the role is re-read from the database on
-        // every single request, never cached on the client.
+    void persistedRoleChangeToBuyerBlocksAnExistingSession() {
         MockHttpSession session = new MockHttpSession();
         session.setAttribute(BuyerService.BUYER_SESSION_KEY, seller.getId());
         assertSellerAccess(session);
@@ -173,17 +160,14 @@ class SellerSessionGuardIntegrationTest {
         assertThatThrownBy(() -> assertSellerAccess(session))
                 .isInstanceOf(SellerNotAuthorizedException.class);
 
-        // Re-reading the persisted user still yields the buyer role, so the
-        // frontend cannot talk its way past the check.
         User reread = buyerService.getCurrentBuyer(session);
         assertThat(reread.getRole()).isEqualTo(UserRole.BUYER);
     }
 
     @Test
-    void sellerOwnershipIsStillEnforcedAfterAnyReLogin() {
+    void sellerOwnershipIsEnforcedForDifferentApprovedSellers() {
         // A second seller must not be able to read or mutate the first seller's
-        // offerings, even though both hold valid SELLER sessions. The self-heal
-        // restores a seller session; it must never widen ownership.
+        // offerings, even though both hold valid SELLER sessions.
         MockHttpSession otherSession = new MockHttpSession();
         otherSession.setAttribute(BuyerService.BUYER_SESSION_KEY, seller.getId());
         assertSellerAccess(otherSession);
@@ -198,8 +182,7 @@ class SellerSessionGuardIntegrationTest {
         assertSellerAccess(intruderSession);
 
         // The intruder is a valid seller, yet owns no kitchen, so the
-        // owner-scoped dashboard call must still refuse them. The frontend
-        // self-heal restores a *seller* session - it must never widen ownership.
+        // owner-scoped dashboard call must still refuse them.
         assertThat(kitchens.findBySeller(persistedIntruder))
                 .as("intruder must not own the seller's kitchen")
                 .isEmpty();

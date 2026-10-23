@@ -96,7 +96,10 @@ function kitchenCardHtml(k) {
     var items = (k.itemNames || []);
     var preview = items.slice(0, 5).map(esc).join(' · ');
     var more = items.length > 5 ? ' <strong>+' + (items.length - 5) + ' more</strong>' : '';
-    var kUrl = '#/kitchen/' + k.id;
+    // Prefer the permanent public-URL slug so a card opens the shareable
+    // /kitchen/{slug} page; fall back to the numeric id hash route if a card
+    // ever arrives without a slug (defensive, never expected for active kitchens).
+    var kUrl = k.slug ? '/kitchen/' + encodeURIComponent(k.slug) : '#/kitchen/' + k.id;
     return '<div class="kitchen-card">' +
         '<div class="kc-top">' +
         '<a class="kc-avatar" href="' + kUrl + '" aria-label="Open ' + esc(k.displayName || '') + '">' +
@@ -119,15 +122,18 @@ function fulfilmentBadge(item) {
     if (item.isPreorder && item.preorderType === 'FLEXIBLE') {
         return '<span class="fulfil-badge fb-purple">🟣 Pre-order — choose your slot</span>';
     }
-    if (item.isPreorder || item.scheduledDate) {
-        return '<span class="fulfil-badge fb-blue">🔵 Delivery ' + esc(prettyDate(item.scheduledDate)) +
-            (item.readyBy ? ' by ' + esc(prettyTime(item.readyBy)) : '') + '</span>';
+    var fDate = item.scheduledDate || item.availableDate;
+    var rb = item.readyBy ? prettyTime(item.readyBy) : '';
+    if (fDate && (!item.isPreorder ? prettyDate(fDate) !== 'Today' : true)) {
+        return '<span class="fulfil-badge fb-blue">🔵 Delivery ' + esc(prettyDate(fDate)) +
+            (rb ? ' by ' + esc(rb) : '') + '</span>';
     }
-    var rb = item.readyBy || '';
-    if (rb.indexOf('evening') >= 0 || rb.indexOf('PM') >= 0) {
-        return '<span class="fulfil-badge fb-amber">🟡 ' + esc(rb.replace('today', 'this evening').replace('Delivery by', 'Delivery by')) + '</span>';
+    if (rb) {
+        var isEvening = rb.indexOf('evening') >= 0 || rb.indexOf('PM') >= 0;
+        var label = 'Delivery by ' + rb + (rb.indexOf('today') >= 0 ? '' : ' today');
+        return '<span class="fulfil-badge ' + (isEvening ? 'fb-amber">🟡 ' : 'fb-green">🟢 ') + esc(label) + '</span>';
     }
-    return '<span class="fulfil-badge fb-green">🟢 ' + esc(item.readyBy || 'Delivery by 4:00 PM today') + '</span>';
+    return '<span class="fulfil-badge fb-green">🟢 Delivery by 4:00 PM today</span>';
 }
 
 function emptyHtml(icon, title, message, actionHtml) {
@@ -424,8 +430,10 @@ async function homemadeStoreView(hash) {
         var today = (detail.products || []).filter(function (p) {
             return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate()) && p.availableToday;
         });
+        today = sortByClosingTime(today);
         var preorder = (detail.preorderProducts && detail.preorderProducts.length) ? detail.preorderProducts :
             (detail.products || []).filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
+        preorder = sortByClosingTime(preorder);
         if (today.length) {
             h += '<h3 class="mb-2">Available Now</h3><div class="products-grid">';
             today.forEach(function (p) {
@@ -479,14 +487,31 @@ function ineligibleKitchenHtml(e) {
 }
 
 async function kitchenPageView(hash) {
-    var id = hash.split('/')[2];
+    // Two entry shapes reach this view:
+    //   - a hash route "#/kitchen/{id}"  (existing in-app links / seller preview)
+    //   - a clean route "slug:{slug}"    (deep link or refresh on /kitchen/{slug})
+    // The clean route resolves the kitchen by its permanent public-URL slug via
+    // the public by-slug API; the hash route keeps resolving by numeric id so
+    // every existing "#/kitchen/{id}" link keeps working unchanged.
+    var bySlug = typeof hash === 'string' && hash.indexOf('slug:') === 0;
+    var id = bySlug ? decodeURIComponent(hash.slice(5)) : decodeURIComponent(hash.split('/')[2] || '');
     var h = '<div class="view-enter">';
     await loadFavSet();
     try {
-        var detail = await api('/api/kitchens/id/' + id);
+        var detailPath = bySlug
+            ? '/api/kitchens/by-slug/' + encodeURIComponent(id)
+            : (/^\d+$/.test(id)
+                ? '/api/kitchens/id/' + encodeURIComponent(id)
+                : '/api/kitchens/' + encodeURIComponent(id));
+        var detail = await api(detailPath);
         var k = detail.kitchen;
         if (k && k.paused) {
-            h += emptyHtml('⏸️', 'This kitchen is currently closed.', 'Please check again later.');
+            // SELLER_PAUSED: temporarily closed, no new orders, but the buyer can
+            // still explore other kitchens. (ADMIN_SUSPENDED / PENDING / REJECTED
+            // / REMOVED never reach here - the backend conceals them as 404.)
+            h += emptyHtml('⏸️', 'This kitchen is temporarily closed.',
+                'It is not accepting new orders right now. Please check back later.',
+                exploreOtherKitchensHtml());
             return h;
         }
         // Handover 6/18 storefront_view. Fire-and-forget AFTER the storefront is
@@ -496,9 +521,14 @@ async function kitchenPageView(hash) {
         var today = (detail.products || []).filter(function (p) {
             return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate());
         });
+        today = sortByClosingTime(today);
         var preorder = (detail.preorderProducts && detail.preorderProducts.length)
             ? detail.preorderProducts
             : (detail.products || []).filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
+        preorder = sortByClosingTime(preorder);
+
+        // Explore Other Kitchens near the top navigation.
+        h += exploreOtherKitchensHtml();
 
         // Hero — banner, avatar, identity, tags, socials (no kitchen-level
         // "Orders Open" indicator; item-level timing lives on each offering card)
@@ -557,6 +587,7 @@ async function kitchenPageView(hash) {
 
         // Coming Up strip (secondary tease of upcoming scheduled dishes)
         var upcoming = preorder.filter(function (p) { return p.availableDate; });
+        upcoming = sortByClosingTime(upcoming);
         if (upcoming.length) {
             h += '<h3 class="section-gap mb-2">📅 Coming Up</h3><div class="upcoming-strip">' +
                 upcoming.slice(0, 6).map(function (p) {
@@ -566,6 +597,9 @@ async function kitchenPageView(hash) {
                         '<div class="tiny muted mt-1">⏰ Order by ' + (p.cutoffTime ? esc(prettyTime(p.cutoffTime)) : '—') + '</div></div>';
                 }).join('') + '</div>';
         }
+
+        // Explore Other Kitchens near the bottom of the page too.
+        h += '<div class="section-gap">' + exploreOtherKitchensHtml() + '</div>';
     } catch (e) {
         h += ineligibleKitchenHtml(e);
     }
@@ -573,12 +607,62 @@ async function kitchenPageView(hash) {
     return h;
 }
 
+function parseClosingMinutes(t) {
+    if (!t) return 99999;
+    var s = String(t).trim();
+    var ampmMatch = s.match(/(.*?)\s*([AP]M)$/i);
+    if (ampmMatch) {
+        var parts = ampmMatch[1].split(':');
+        var h = parseInt(parts[0], 10) || 0;
+        var m = parseInt(parts[1], 10) || 0;
+        var isPm = ampmMatch[2].toUpperCase() === 'PM';
+        if (isPm && h < 12) h += 12;
+        if (!isPm && h === 12) h = 0;
+        return h * 60 + m;
+    }
+    var parts = s.split(':');
+    var h = parseInt(parts[0], 10) || 0;
+    var m = parseInt(parts[1], 10) || 0;
+    return h * 60 + m;
+}
+
+function sortByClosingTime(products) {
+    return (products || []).slice().sort(function (a, b) {
+        var tA = parseClosingMinutes(a.cutoffTime || a.orderWindowEnd);
+        var tB = parseClosingMinutes(b.cutoffTime || b.orderWindowEnd);
+        return tA - tB;
+    });
+}
+
+function isCartItemClosed(item) {
+    if (!item) return false;
+    var d = item.scheduledDate || item.availableDate;
+    var todayIso = localDateStr(new Date());
+    if (d && d < todayIso) return true;
+    if (d && d > todayIso) return false; // future pre-order
+    var cutoff = item.cutoff || item.cutoffTime || item.orderWindowEnd;
+    if (!cutoff) return false;
+    var closeMin = parseClosingMinutes(cutoff);
+    var now = new Date();
+    var nowMin = now.getHours() * 60 + now.getMinutes();
+    return nowMin > closeMin;
+}
+
+/**
+ * A visible "Explore Other Kitchens" action linking to the all kitchens view
+ * (#/kitchens), shown near the top and lower down on the public kitchen page so a
+ * buyer who cannot order here always has a way back into discovery.
+ */
+function exploreOtherKitchensHtml() {
+    return '<a class="btn btn-secondary btn-block btn-sm" href="#/kitchens" data-action="explore-kitchens">🧭 Explore Other Kitchens</a>';
+}
+
 function quickPostsHtml(posts) {
     if (!posts || !posts.length) return '';
     var h = '<h3 class="section-gap mb-2">📢 Today\'s Quick Posts</h3><div class="quick-posts">';
     posts.forEach(function (p) {
         h += '<div class="card pad card-mb"><div>' + esc(p.message) + '</div>' +
-            (p.imageData ? '<img class="mt-2" style="max-width:100%;border-radius:8px" src="' + esc(p.imageData) + '" alt="Kitchen quick post">' : '') + '</div>';
+            (p.imageData ? '<img class="mt-2" style="max-width:100%;border-radius:8px" src="' + esc(p.imageData) + '" alt="Kitchen quick post" onerror="imgFallback(this)">' : '') + '</div>';
     });
     return h + '</div>';
 }
@@ -607,30 +691,26 @@ function buyerScarcityLabel(p) {
 function offeringCardHtml(p, kitchen, isPreorderSection) {
     var soldOut = p.soldOut || (p.remainingQuantity != null && p.remainingQuantity <= 0);
     var paused = !!p.ordersPaused;
-    var ordersClosed = !!p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED';
     var isPre = !!p.isPreorder || !!isPreorderSection;
-    // V2 §14: a recurring offering whose next selling date is in the future
-    // presents exactly like a pre-order WITH its delivery date. Today's
-    // occurrence (or a one-time item) keeps the normal "Today" presentation.
     var nowD = new Date();
     var todayIso = nowD.getFullYear() + '-' + String(nowD.getMonth() + 1).padStart(2, '0') + '-' + String(nowD.getDate()).padStart(2, '0');
     var isNextOcc = !isPre && !!p.recurring && !!p.nextOccurrenceDate && p.nextOccurrenceDate !== todayIso;
     var isPreOrNext = isPre || isNextOcc;
+    var isPast = p.lifecycleState === 'HISTORY' || (!isPreOrNext && p.availableDate && p.availableDate < todayIso);
+    var ordersClosed = !!p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED' || isPast;
     var kitchenJson = encodeURIComponent(JSON.stringify({ id: kitchen.id, displayName: kitchen.displayName }));
     var timingHtml;
     if (isPreOrNext) {
         var timingDate = isPre ? p.availableDate : p.nextOccurrenceDate;
-        // "Order by" / "Delivery by" read from the same persisted cutoff and
-        // delivery data the seller configured - only the Buyer-facing wording changed.
         var orderBy = timingDate ? prettyDate(timingDate) : '';
         if (p.cutoffTime) orderBy = (orderBy ? orderBy + ', ' : '') + prettyTime(p.cutoffTime);
         var deliverBy = timingDate ? prettyDate(timingDate) : '';
-        if (p.readyByTime) deliverBy = (deliverBy ? deliverBy + ', ' : '') + p.readyByTime;
+        if (p.readyByTime) deliverBy = (deliverBy ? deliverBy + ', ' : '') + prettyTime(p.readyByTime);
         timingHtml = '<p class="oc-timing">⏰ <strong>Order by:</strong> ' + esc(orderBy || '—') + '</p>' +
             '<p class="oc-timing">📅 <strong>Delivery by:</strong> ' + esc(deliverBy || '—') + '</p>';
     } else {
         var t1 = p.cutoffTime ? ('Order by ' + prettyTime(p.cutoffTime)) : '';
-        var t2 = p.readyByTime ? (' · Ready ' + p.readyByTime) : '';
+        var t2 = p.readyByTime ? (' · Ready ' + prettyTime(p.readyByTime)) : '';
         timingHtml = '<p class="oc-timing">⏰ ' + esc(t1 + t2) + '</p>';
     }
     return '<div class="offering-card' + (soldOut ? ' sold-out' : '') + (paused ? ' paused' : '') + (isPreOrNext ? ' is-preorder' : '') + '">' +
@@ -695,7 +775,7 @@ function openOrderSheet(productJson, kitchenJson) {
         toast('Orders are paused for this offering', 'error');
         return;
     }
-    if (p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED') {
+    if (p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED' || p.lifecycleState === 'HISTORY') {
         closeSheet();
         toast('ORDERS CLOSED — this offering can no longer be ordered', 'error');
         return;
@@ -790,8 +870,9 @@ function sheetAdd() {
         productId: p.id, name: p.name, price: p.price, unit: p.priceUnit || 'serving', qty: sheet.qty,
         isPreorder: !!p.isPreorder, preorderType: p.preorderType || null,
         readyBy: p.readyByTime || null, cutoff: p.cutoffTime || null,
+        availableDate: p.availableDate || null,
         scheduledDate: p.isPreorder ? (sheet.date || p.availableDate || null)
-            : (p.recurring && p.nextOccurrenceDate ? p.nextOccurrenceDate : null),
+            : (p.recurring && p.nextOccurrenceDate ? p.nextOccurrenceDate : (p.availableDate || null)),
         scheduledSlot: p.isPreorder ? sheet.slot : null
     };
     addToCart(item, k, function (committed) {
@@ -849,6 +930,13 @@ async function orderSummaryView() {
         '<button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button>' +
         '<h2 class="flex-1 font-700">Order Summary</h2></div>';
     h += '<p class="muted small text-sm card-mb">🏪 ' + esc(cart.kitchenName) + '</p>';
+    var anyClosed = cart.items.some(isCartItemClosed);
+    if (anyClosed) {
+        h += '<div class="card pad card-mb" style="background:#fef2f2; border:1px solid #f87171; border-radius:12px; color:#991b1b;">' +
+            '<p class="font-700">⏰ Some offerings have closed for today</p>' +
+            '<p class="small mt-1">The order cutoff for highlighted dishes has passed. Please remove them to proceed with checkout.</p>' +
+            '</div>';
+    }
 
     h += '<div class="card pad card-mb">';
     cart.items.forEach(function (item, idx) {
@@ -857,6 +945,7 @@ async function orderSummaryView() {
             '<span class="si-price">' + money(item.price * item.qty) + '</span></div>' +
             '<p class="si-sub">' + money(item.price) + ' × ' + item.qty + ' ' + esc(item.unit || '') + '</p>' +
             fulfilmentBadge(item) +
+            (isCartItemClosed(item) ? '<div class="mt-1"><span class="pill pill-red">⏰ Cutoff passed — Orders closed</span></div>' : '') +
             (item.isPreorder && item.preorderType === 'FLEXIBLE'
                 ? '<div class="si-controls"><span class="tiny muted">Slot: ' + esc(prettyDate(item.scheduledDate)) + ' · ' + esc(item.scheduledSlot || '') + '</span></div>'
                 : '') +
@@ -907,6 +996,21 @@ async function cartRemove(idx) {
 async function goCheckout() {
     var cart = getCart();
     if (!cart || !cart.items || !cart.items.length) { toast('Your order is empty', 'error'); return; }
+    var closedItems = (cart.items || []).filter(isCartItemClosed);
+    if (closedItems.length > 0) {
+        var names = closedItems.map(function (i) { return i.name; }).join(', ');
+        toast('Cannot place order: ' + names + ' cutoff has passed for today. Please remove closed items from cart.', 'error');
+        return;
+    }
+    if (!state.user || !state.user.authenticated || !isBuyer(state.user)) {
+        return requireAuth(function () { return goCheckout(); });
+    }
+    var btn = document.querySelector('[data-action="go-checkout"]');
+    var origHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="btn-spinner"></span> Preparing order...';
+    }
     var note = $('#orderNote') ? $('#orderNote').value.trim() : '';
     try {
         await withAuthGate(async function () {
@@ -914,17 +1018,23 @@ async function goCheckout() {
             // Session may be valid even when this tab's UI state isn't (e.g. login
             // happened in another tab). Sync the UI identity so Confirm Order and
             // My Orders show the real buyer. Display-state only — no flow change.
-            if (!state.user) {
+            if (!state.user || !isBuyer(state.user)) {
                 try {
                     var me = await api('/api/auth/me');
-                    if (me && me.authenticated) state.user = me;
+                    if (me && me.authenticated && isBuyer(me)) state.user = me;
                 } catch (e2) {}
             }
             state.pendingCheckout = { note: note };
             navigate('#/confirm'); // Draft created once (idempotent) → review → payment
         });
     } catch (err) {
-        if (!(err instanceof ApiError && err.status === 401)) toast(err.message, 'error');
+        var reason = (err && err.data && (err.data.message || err.data.error)) || (err && err.message) || 'Could not prepare checkout. Please try again.';
+        toast(reason, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
     }
 }
 
@@ -945,23 +1055,12 @@ async function rebuildDraftFromCart() {
 }
 
 /**
- * Re-establish THIS buyer's own server session after another same-origin login
- * (the Seller app's demo-login) replaced it.
- *
- * It uses the mobile number the server itself handed us for this buyer, so no
- * identity is hardcoded and the server still re-checks the persisted role. This
- * mirrors the Seller app's own session recovery. Returns false when it cannot.
+ * A session can be replaced by a different same-origin login. Do not restore it
+ * from a mobile number alone: ask the buyer to authenticate with their password.
  */
 async function restoreBuyerSession() {
-    var mobile = (state.user && state.user.mobileNumber) || '';
-    if (!/^\d{10}$/.test(mobile)) return false;
-    try {
-        var me = await api('/api/auth/demo-login', { method: 'POST', body: { mobileNumber: mobile } });
-        if (me && me.authenticated && me.role === 'BUYER') {
-            state.user = me;
-            return true;
-        }
-    } catch (e) { /* fall through */ }
+    state.user = null;
+    openAuthModal();
     return false;
 }
 
@@ -986,12 +1085,63 @@ function isRecoverableOrderSessionError(err) {
 /** Place the draft order directly with the selected payment status. */
 async function placeOrderWithStatus(paymentStatus) {
     if (state.placingOrder) return;
+    if (!state.user || !state.user.authenticated || !isBuyer(state.user)) {
+        return requireAuth(function () { return placeOrderWithStatus(paymentStatus); });
+    }
     var note = (state.pendingCheckout && state.pendingCheckout.note) || '';
     state.placingOrder = true;
     try {
         await withAuthGate(async function () {
             var submittedPaymentStatus = paymentStatus === 'WILL_PAY_LATER' ? 'PENDING' : paymentStatus;
-            var placeBody = { paymentStatus: submittedPaymentStatus, customInstructions: note };
+            var buyerDetails = null;
+            if (state.user) {
+                var flatInput = document.getElementById('checkoutFlat');
+                var bldgInput = document.getElementById('checkoutBuilding');
+                var societyInput = document.getElementById('checkoutSociety');
+                var flat = (flatInput && flatInput.value.trim()) || state.user.flatHouseNumber || '';
+                var bldg = (bldgInput && bldgInput.value.trim()) || state.user.building || '';
+                var soc = (societyInput && societyInput.value.trim()) || state.user.society || '';
+                var addr = [flat, bldg, soc].filter(Boolean).join(', ');
+                buyerDetails = {
+                    name: state.user.name || '',
+                    phone: state.user.mobileNumber || '',
+                    mobileNumber: state.user.mobileNumber || '',
+                    society: soc,
+                    societyId: state.user.societyId || (state.user.societyRef ? state.user.societyRef.id : null),
+                    building: bldg,
+                    flatHouseNumber: flat,
+                    deliveryAddress: addr
+                };
+                state.user.flatHouseNumber = flat;
+                state.user.building = bldg;
+                state.user.society = soc;
+            }
+            var cart = getCart();
+            var placeBody = {
+                kitchenId: cart ? cart.kitchenId : null,
+                items: (cart && cart.items) ? cart.items.map(function (i) {
+                    return { productId: i.productId, quantity: i.qty, scheduledDate: i.scheduledDate || null, scheduledSlot: i.scheduledSlot || null };
+                }) : null,
+                paymentStatus: submittedPaymentStatus,
+                customInstructions: note,
+                specialInstructions: note,
+                deliveryAddress: buyerDetails ? buyerDetails.deliveryAddress : '',
+                society: buyerDetails ? buyerDetails.society : '',
+                societyId: buyerDetails ? buyerDetails.societyId : null,
+                buyerDetails: buyerDetails
+            };
+            // Ensure draft is synchronized with cart without falsely rejecting valid orders
+            if (cart && cart.items && cart.items.length) {
+                var draftCheck = null;
+                try {
+                    draftCheck = await api('/api/buyer/orders/draft');
+                } catch (e) {
+                    draftCheck = null;
+                }
+                if (!draftCheck || !draftCheck.items || !draftCheck.items.length) {
+                    await rebuildDraftFromCart();
+                }
+            }
             var placed;
             try {
                 placed = await api('/api/buyer/orders/place', { method: 'POST', body: placeBody });
@@ -1013,12 +1163,18 @@ async function placeOrderWithStatus(paymentStatus) {
             navigate('#/payment-success');
         });
     } catch (err) {
-        if (!(err instanceof ApiError && err.status === 401)) toast(err.message, 'error');
+        var reason = (err && err.data && (err.data.message || err.data.error)) || (err && err.message) || 'Could not place order. Please try again.';
+        if (!(err instanceof ApiError && err.status === 401)) toast(reason, 'error');
         // This screen is now unusable, so return the buyer to their cart, where
         // the selection is still present and the order can simply be retried.
         if (err instanceof ApiError && (err.status === 400 || err.status === 404)) {
             await render();
             navigate('#/summary');
+        } else if (err instanceof ApiError && err.status === 422) {
+            state.editingCheckoutAddress = true;
+            await render();
+            var el = document.getElementById('checkoutFlat');
+            if (el) el.focus();
         }
     } finally {
         state.placingOrder = false;
@@ -1039,6 +1195,16 @@ async function confirmOrderView() {
     try {
         draft = await api('/api/buyer/orders/draft');
     } catch (e) { draft = null; }
+    if (!draft || !draft.items || !draft.items.length) {
+        var cart = getCart();
+        if (cart && cart.items && cart.items.length) {
+            try {
+                if (await rebuildDraftFromCart()) {
+                    draft = await api('/api/buyer/orders/draft');
+                }
+            } catch (e2) {}
+        }
+    }
     if (!draft || !draft.items || !draft.items.length) {
         h += backBarHtml('Confirm Order') +
             emptyHtml('🧾', 'No active order', 'Your order was already submitted or your selection expired.',
@@ -1080,11 +1246,41 @@ async function confirmOrderView() {
 
     // 6: Delivery address from the logged-in buyer profile
     var u = state.user || {};
-    h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Deliver to</h3>' +
-        '<p class="font-700 mb-1">' + esc(u.name || 'Buyer') + '</p>' +
-        '<p class="muted small">' +
-        esc([u.society || LOCATION, u.building, u.flatHouseNumber].filter(Boolean).join(' · ')) +
-        (u.mobileNumber ? '<br>📱 ' + esc(u.mobileNumber) : '') + '</p></div>';
+    var hasCompleteAddress = Boolean((u.society || LOCATION) && u.building && u.flatHouseNumber);
+    var showAddressForm = !hasCompleteAddress || state.editingCheckoutAddress;
+    h += '<div class="card pad card-mb"><div class="flex items-center justify-between mb-2">' +
+        '<h3 class="font-700">Deliver to</h3>' +
+        (hasCompleteAddress ? '<button type="button" class="btn btn-sm btn-ghost" data-action="toggle-checkout-address" style="font-size:0.8rem;padding:2px 8px;">' + (showAddressForm ? 'Done' : 'Edit') + '</button>' : '') +
+        '</div>';
+    if (!showAddressForm) {
+        h += '<p class="font-700 mb-1">' + esc(u.name || 'Buyer') + '</p>' +
+            '<p class="muted small">' +
+            esc([u.society || LOCATION, u.building, u.flatHouseNumber].filter(Boolean).join(' · ')) +
+            (u.mobileNumber ? '<br>📱 ' + esc(u.mobileNumber) : '') + '</p>';
+    } else {
+        h += '<div id="checkoutAddressBlock" class="mt-2">' +
+            (!hasCompleteAddress ? '<p class="small mb-2" style="color:var(--amber-dark, #b45309); font-weight:600;">⚠️ Please enter your flat/house and building to complete delivery details:</p>' : '') +
+            '<div class="form-group mb-2"><label class="tiny muted" for="checkoutFlat">Flat / House Number *</label>' +
+            '<input class="form-input form-input-sm" id="checkoutFlat" placeholder="e.g. Flat 302, 4th Floor" value="' + esc(u.flatHouseNumber || '') + '" required></div>' +
+            '<div class="form-group mb-2"><label class="tiny muted" for="checkoutBuilding">Building / Wing / Tower *</label>' +
+            '<input class="form-input form-input-sm" id="checkoutBuilding" placeholder="e.g. Tower B, Palm Wing" value="' + esc(u.building || '') + '" required></div>' +
+            '<div class="form-group mb-2"><label class="tiny muted" for="checkoutSociety">Society / Community *</label>' +
+            '<input class="form-input form-input-sm" id="checkoutSociety" placeholder="Society name" value="' + esc(u.society || LOCATION || '') + '" required></div>' +
+            '</div>';
+    }
+    h += '</div>';
+
+    // Cross-society delivery validation: warn buyer if delivery address society does not match kitchen's active society
+    var buyerSociety = ((u && u.society) || LOCATION || '').trim();
+    var kitchenSociety = (draft.kitchen && (draft.kitchen.society || draft.kitchen.name) ? (draft.kitchen.society || '') : '').trim();
+    if (kitchenSociety && buyerSociety && kitchenSociety.toLowerCase() !== buyerSociety.toLowerCase()) {
+        h += '<div class="card pad card-mb" style="border-left: 4px solid var(--amber, #f59e0b); background: var(--amber-light, #fffbeb);">' +
+            '<div class="flex items-center gap-2">' +
+            '<span style="font-size: 1.25rem;">⚠️</span>' +
+            '<div><strong style="color: var(--amber-dark, #b45309);">Cross-Society Delivery Notice</strong>' +
+            '<p class="small mt-1" style="color: #78350f;">This kitchen is in <b>' + esc(kitchenSociety) + '</b> while your delivery address is in <b>' + esc(buyerSociety) + '</b>. Delivery may take longer or require direct coordination with the kitchen.</p>' +
+            '</div></div></div>';
+    }
 
     // Remark carried from the Order Summary note
     var note = (state.pendingCheckout && state.pendingCheckout.note) || '';
@@ -1204,6 +1400,9 @@ async function paymentView() {
 /** Confirm payment: processing state → place real order via API → success screen. */
 async function confirmPayment(btnEl) {
     if (state.placingOrder) return; // idempotency guard: no double submissions
+    if (!state.user || !state.user.authenticated || !isBuyer(state.user)) {
+        return requireAuth(function () { return confirmPayment(btnEl); });
+    }
     var note = (state.pendingCheckout && state.pendingCheckout.note) || '';
     var cod = btnEl && btnEl.dataset.cod === '1';
     state.placingOrder = true;
@@ -1214,10 +1413,68 @@ async function confirmPayment(btnEl) {
     }
     try {
         await withAuthGate(async function () {
-            var placed = await api('/api/buyer/orders/place', {
-                method: 'POST',
-                body: { paymentStatus: cod ? 'PENDING' : 'PAID', customInstructions: note }
-            });
+            var buyerDetails = null;
+            if (state.user) {
+                var flatInput = document.getElementById('checkoutFlat');
+                var bldgInput = document.getElementById('checkoutBuilding');
+                var societyInput = document.getElementById('checkoutSociety');
+                var flat = (flatInput && flatInput.value.trim()) || state.user.flatHouseNumber || '';
+                var bldg = (bldgInput && bldgInput.value.trim()) || state.user.building || '';
+                var soc = (societyInput && societyInput.value.trim()) || state.user.society || '';
+                var addr = [flat, bldg, soc].filter(Boolean).join(', ');
+                buyerDetails = {
+                    name: state.user.name || '',
+                    phone: state.user.mobileNumber || '',
+                    mobileNumber: state.user.mobileNumber || '',
+                    society: soc,
+                    societyId: state.user.societyId || (state.user.societyRef ? state.user.societyRef.id : null),
+                    building: bldg,
+                    flatHouseNumber: flat,
+                    deliveryAddress: addr
+                };
+                state.user.flatHouseNumber = flat;
+                state.user.building = bldg;
+                state.user.society = soc;
+            }
+            var cart = getCart();
+            var submittedPaymentStatus = cod ? 'PENDING' : 'PAID';
+            var placeBody = {
+                kitchenId: cart ? cart.kitchenId : null,
+                items: (cart && cart.items) ? cart.items.map(function (i) {
+                    return { productId: i.productId, quantity: i.qty, scheduledDate: i.scheduledDate || null, scheduledSlot: i.scheduledSlot || null };
+                }) : null,
+                paymentStatus: submittedPaymentStatus,
+                customInstructions: note,
+                specialInstructions: note,
+                deliveryAddress: buyerDetails ? buyerDetails.deliveryAddress : '',
+                society: buyerDetails ? buyerDetails.society : '',
+                societyId: buyerDetails ? buyerDetails.societyId : null,
+                buyerDetails: buyerDetails
+            };
+            // Ensure draft is synchronized with cart without falsely rejecting valid orders
+            if (cart && cart.items && cart.items.length) {
+                var draftCheck = null;
+                try {
+                    draftCheck = await api('/api/buyer/orders/draft');
+                } catch (e) {
+                    draftCheck = null;
+                }
+                if (!draftCheck || !draftCheck.items || !draftCheck.items.length) {
+                    await rebuildDraftFromCart();
+                }
+            }
+            var placed;
+            try {
+                placed = await api('/api/buyer/orders/place', {
+                    method: 'POST',
+                    body: placeBody
+                });
+            } catch (err) {
+                if (!isRecoverableOrderSessionError(err)) throw err;
+                if (!(await restoreBuyerSession())) throw err;
+                if (!(await rebuildDraftFromCart())) throw err;
+                placed = await api('/api/buyer/orders/place', { method: 'POST', body: placeBody });
+            }
             clearCart();
             state.pendingCheckout = null;
             state.lastOrder = placed;
@@ -1225,7 +1482,15 @@ async function confirmPayment(btnEl) {
         });
     } catch (err) {
         if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = original; }
-        if (!(err instanceof ApiError && err.status === 401)) toast(err.message, 'error');
+        var reason = (err && err.data && (err.data.message || err.data.error)) || (err && err.message) || 'Could not place order. Please try again.';
+        if (!(err instanceof ApiError && err.status === 401)) toast(reason, 'error');
+        if (err instanceof ApiError && (err.status === 400 || err.status === 404)) {
+            await render();
+            navigate('#/summary');
+        } else if (err instanceof ApiError && err.status === 422) {
+            state.editingCheckoutAddress = true;
+            await render();
+        }
     } finally {
         state.placingOrder = false;
     }
@@ -1284,7 +1549,7 @@ async function comparisonView(hash) {
             h += offers.map(function (o) {
                 return '<div class="compare-card">' +
                     '<div class="cc-top">' +
-                    '<div class="kc-avatar">' + (o.kitchenImageUrl ? '<img src="' + esc(o.kitchenImageUrl) + '" alt="' + esc(o.kitchenDisplayName) + '">' : '🏪') + '</div>' +
+                    '<div class="kc-avatar" data-emoji="🏪">' + (o.kitchenImageUrl ? '<img src="' + esc(o.kitchenImageUrl) + '" alt="' + esc(o.kitchenDisplayName) + '" onerror="imgFallback(this)">' : '🏪') + '</div>' +
                     '<div class="kc-info"><div class="kc-name">' + esc(o.kitchenDisplayName) + '</div>' +
                     '<p class="kc-desc">' + esc(o.tagline || '') + '</p>' +
                     '<div class="kc-meta">' + statusPill(o.status) +
@@ -1298,7 +1563,7 @@ async function comparisonView(hash) {
                     '<div class="cc-cell"><div class="cc-label">Order by</div><div class="cc-value">' +
                     esc(o.orderBy ? prettyTime(o.orderBy) : '—') + '</div></div>' +
                     '<div class="cc-cell"><div class="cc-label">Ready by</div><div class="cc-value">' +
-                    esc(o.readyBy || '—') + '</div></div>' +
+                    esc(o.readyBy ? prettyTime(o.readyBy) : '—') + '</div></div>' +
                     '</div>' +
                     '<a class="btn btn-secondary btn-block btn-sm" href="#/kitchen/' + o.kitchenId + '">Visit ' +
                     esc(o.kitchenDisplayName) + '\'s Kitchen →</a>' +
@@ -1318,7 +1583,7 @@ async function favouritesView() {
     var h = '<div class="view-enter"><div class="page-head"><h1>❤️ Favourite Kitchens</h1>' +
         '<p class="muted small">Save up to 3 community kitchens for quick access.</p></div>';
 
-    if (!state.user) {
+    if (!state.user || !isBuyer(state.user)) {
         h += emptyHtml('🔐', 'Login to view your favourites', 'Your saved kitchens appear here once you log in.',
             '<button class="btn btn-primary card-mt" type="button" data-action="open-login">Log in</button>');
         h += '</div>';
@@ -1369,7 +1634,7 @@ async function ordersView() {
         '<button type="button" class="' + (tab === 'enquiries' ? 'active' : '') + '" data-action="set-orders-tab" data-tab="enquiries">Enquiries</button>' +
         '</div>';
 
-    if (!state.user) {
+    if (!state.user || !isBuyer(state.user)) {
         h += emptyHtml('🔐', 'Login to view your history', 'Your orders and enquiries appear here.',
             '<button class="btn btn-primary card-mt" type="button" data-action="open-login">Log in</button>');
         h += '</div>';
@@ -1536,7 +1801,7 @@ async function orderDetailView(hash) {
 async function profileView() {
     var h = '<div class="view-enter"><div class="page-head"><h1>Profile</h1></div>';
 
-    if (!state.user) {
+    if (!state.user || !isBuyer(state.user)) {
         // Logged-out state: login prompt (Spec Screen 8)
         h += '<div class="card pad text-center">' +
             '<div class="font-size-2-4 mb-2">👋</div>' +

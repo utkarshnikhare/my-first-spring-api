@@ -23,6 +23,44 @@ class InventoryRestorationIntegrationTest {
     @Autowired UserRepository users;
     @Autowired KitchenRepository kitchens;
     @Autowired ProductRepository products;
+    @Autowired OrderRepository orders;
+    @Autowired OrderService orderService;
+
+    @Test
+    @Transactional
+    void cancellingPersistedOrderRestoresInventoryExactlyOnce() {
+        Product product = offering(false);
+        product.setMaxQuantity(1);
+        product.setRemainingQuantity(0);
+        product.setBookedQuantity(1);
+        product.setAvailableToday(false);
+        products.saveAndFlush(product);
+
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        User buyer = users.saveAndFlush(new User("Buyer" + suffix, "93" + suffix + "0001", "A-1",
+                UserRole.BUYER));
+        Order placed = new Order(buyer, product.getKitchen());
+        placed.setOrderNumber("INV-CANCEL-" + suffix);
+        placed.setOrderStatus(OrderStatus.ORDERED);
+        placed.setPaymentStatus(PaymentStatus.PENDING);
+        placed.addItem(new OrderItem(product, 1, product.getPrice()));
+        placed.recalculateTotal();
+        placed = orders.saveAndFlush(placed);
+
+        orderService.cancelOrder(placed.getId(), buyer);
+        Order cancelled = orders.findById(placed.getId()).orElseThrow();
+        Product restored = products.findById(product.getId()).orElseThrow();
+        assertThat(cancelled.getOrderStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(cancelled.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(restored.getRemainingQuantity()).isEqualTo(1);
+        assertThat(restored.getBookedQuantity()).isZero();
+        assertThat(restored.getAvailableToday()).isTrue();
+
+        orderService.cancelOrder(placed.getId(), buyer);
+        Product afterRetry = products.findById(product.getId()).orElseThrow();
+        assertThat(afterRetry.getRemainingQuantity()).isEqualTo(1);
+        assertThat(afterRetry.getBookedQuantity()).isZero();
+    }
 
     @Test
     @Transactional

@@ -141,4 +141,14 @@ class SellerOrderDetailUiTest {
                 .contains("SELLER OFFERING ORDERS / ORDER DETAIL (SCREEN 7B)");
         assertThat(buyerJs).as("buyer is untouched by this phase").doesNotContain("od-root");
     }
+    @Test
+    void offeringOrdersDisplaysAddressAndPhoneWithWhatsApp() {
+        assertThat(sellerJs)
+                .as("displays customer phone and WhatsApp link in rows")
+                .contains("c.buyerPhone")
+                .contains("buildWhatsAppChatLink(c.buyerPhone)")
+                .as("order product cards are clickable")
+                .contains("data-action=\"open-offering-orders\"")
+                .contains("case 'open-offering-orders':");
+    }
 }

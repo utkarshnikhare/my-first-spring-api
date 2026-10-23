@@ -64,6 +64,16 @@ public class AdminService {
         this.environment = environment;
     }
 
+    /** Public-URL slug authority for the Admin slug editor. Field-injected so the many focused tests that build AdminService by hand keep working. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private SlugService slugService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.my_first_spring_api.repository.SocietyRepository societyRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.my_first_spring_api.repository.AreaRepository areaRepository;
+
     // ==================== Dashboard ====================
 
     @Transactional(readOnly = true)
@@ -392,7 +402,8 @@ public class AdminService {
         final Set<Long> orderTermMatches = buyersMatchingOrderTerm;
         return all.stream().filter(b -> {
             if (effectiveSociety != null) {
-                if (b.getSocietyRef() == null || !effectiveSociety.equals(b.getSocietyRef().getId())) return false;
+                Long socId = resolveBuyerSocietyId(b);
+                if (socId == null || !effectiveSociety.equals(socId)) return false;
             }
             // Null-safe, and compared the good way round: a buyer with no Area
             // reference yet must be EXCLUDED by an Area filter, not blow up the
@@ -450,9 +461,9 @@ public class AdminService {
         m.put("id", b.getId());
         m.put("name", b.getName());
         m.put("mobileNumber", b.getMobileNumber());
-        m.put("society", b.getSociety());
-        m.put("societyId", b.getSocietyRef() != null ? b.getSocietyRef().getId() : null);
-        m.put("area", b.getArea());
+        m.put("society", b.getSociety() != null ? b.getSociety() : (b.getSocietyRef() != null ? b.getSocietyRef().getName() : null));
+        m.put("societyId", resolveBuyerSocietyId(b));
+        m.put("area", b.getArea() != null ? b.getArea() : (b.getAreaRef() != null ? b.getAreaRef().getName() : (b.getSocietyRef() != null && b.getSocietyRef().getArea() != null ? b.getSocietyRef().getArea().getName() : null)));
         m.put("areaId", resolveBuyerAreaId(b));
         m.put("building", b.getBuilding());
         m.put("flatHouseNumber", b.getFlatHouseNumber());
@@ -484,9 +495,19 @@ public class AdminService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> sellers(SellerApprovalStatus status) {
+        return sellers(status, null);
+    }
+
+    public List<Map<String, Object>> sellers(SellerApprovalStatus status, User actingAdmin) {
+        Long scope = adminAreaScope(actingAdmin);
         List<User> sellers = status != null
                 ? userRepository.findByRoleAndSellerApprovalStatus(UserRole.SELLER, status)
                 : userRepository.findByRole(UserRole.SELLER);
+        if (scope != null) {
+            sellers = sellers.stream()
+                    .filter(s -> scope.equals(sellerAreaId(s)))
+                    .collect(Collectors.toList());
+        }
         return sellers.stream().map(s -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", s.getId());
@@ -521,6 +542,7 @@ public class AdminService {
         return kitchens(null);
     }
 
+    @Transactional(readOnly = true)
     public List<Map<String, Object>> kitchens(String sellerTypeFilter) {
         List<Kitchen> all = kitchenRepository.findAll();
         return all.stream()
@@ -529,6 +551,7 @@ public class AdminService {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("id", k.getId());
                 m.put("name", k.getName());
+                m.put("slug", k.publicSlug());
                 m.put("displayName", k.getDisplayName());
                 m.put("sellerId", k.getSeller() != null ? k.getSeller().getId() : null);
                 m.put("sellerName", k.getSeller() != null ? k.getSeller().getName() : null);
@@ -1065,11 +1088,22 @@ public class AdminService {
 
     /** The Area a seller operates in, or null when it cannot be determined. */
     private Long sellerAreaId(User seller) {
+        if (seller == null) return null;
+        if (seller.getAreaRef() != null) return seller.getAreaRef().getId();
+        if (seller.getSocietyRef() != null && seller.getSocietyRef().getArea() != null) {
+            return seller.getSocietyRef().getArea().getId();
+        }
         for (Kitchen k : kitchenRepository.findBySeller(seller)) {
             if (k.getServedSocieties() != null) {
                 for (Society soc : k.getServedSocieties()) {
                     if (soc.getArea() != null) return soc.getArea().getId();
                 }
+            }
+        }
+        if (seller.getSociety() != null && !seller.getSociety().isBlank() && societyRepository != null) {
+            List<Society> matches = societyRepository.findByNameKey(Society.deriveNameKey(seller.getSociety().trim()));
+            if (matches != null && !matches.isEmpty() && matches.get(0).getArea() != null) {
+                return matches.get(0).getArea().getId();
             }
         }
         return null;
@@ -1370,14 +1404,66 @@ public class AdminService {
     }
 
     /**
+     * Resolves a buyer's community ID, either from their explicit reference or from
+     * their registered free-text society name.
+     */
+    private Long resolveBuyerSocietyId(User buyer) {
+        if (buyer == null) return null;
+        if (buyer.getSocietyRef() != null) return buyer.getSocietyRef().getId();
+        if (buyer.getSociety() != null && !buyer.getSociety().isBlank()) {
+            if (locationService != null) {
+                Optional<Society> match = locationService.resolveLegacySociety(buyer.getSociety().trim());
+                if (match.isPresent()) return match.get().getId();
+            }
+            if (societyRepository != null) {
+                List<Society> matches = societyRepository.findByNameKey(Society.deriveNameKey(buyer.getSociety().trim()));
+                if (matches != null && !matches.isEmpty()) {
+                    return matches.get(0).getId();
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * The buyer's area, resolved through their own reference or - for a profile
-     * that only ever set the society - through that society's parent area.
+     * that only ever set the society or text area - through that society's parent area
+     * or matching area name.
      */
     private Long resolveBuyerAreaId(User buyer) {
         if (buyer == null) return null;
         if (buyer.getAreaRef() != null) return buyer.getAreaRef().getId();
         if (buyer.getSocietyRef() != null && buyer.getSocietyRef().getArea() != null) {
             return buyer.getSocietyRef().getArea().getId();
+        }
+        if (buyer.getSociety() != null && !buyer.getSociety().isBlank()) {
+            if (locationService != null) {
+                Optional<Society> s = locationService.resolveLegacySociety(buyer.getSociety().trim());
+                if (s.isPresent() && s.get().getArea() != null) {
+                    return s.get().getArea().getId();
+                }
+            }
+            if (societyRepository != null) {
+                List<Society> matches = societyRepository.findByNameKey(Society.deriveNameKey(buyer.getSociety().trim()));
+                if (matches != null && !matches.isEmpty() && matches.get(0).getArea() != null) {
+                    return matches.get(0).getArea().getId();
+                }
+            }
+        }
+        if (buyer.getArea() != null && !buyer.getArea().isBlank()) {
+            if (areaRepository != null) {
+                Optional<Area> a = areaRepository.findByNameIgnoreCase(buyer.getArea().trim());
+                if (a.isPresent()) {
+                    return a.get().getId();
+                }
+            }
+            if (locationService != null) {
+                for (Area a : locationService.findAllAreas()) {
+                    if (a != null && a.getName() != null && a.getName().equalsIgnoreCase(buyer.getArea().trim())) {
+                        return a.getId();
+                    }
+                }
+            }
         }
         return null;
     }
@@ -1512,7 +1598,19 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
 
     @Transactional(readOnly = true)
     public List<User> pendingSellers() {
-        return userRepository.findByRoleAndSellerApprovalStatus(UserRole.SELLER, SellerApprovalStatus.PENDING);
+        return pendingSellers(null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<User> pendingSellers(User actingAdmin) {
+        Long scope = adminAreaScope(actingAdmin);
+        List<User> list = userRepository.findByRoleAndSellerApprovalStatus(UserRole.SELLER, SellerApprovalStatus.PENDING);
+        if (scope != null) {
+            return list.stream()
+                    .filter(s -> scope.equals(sellerAreaId(s)))
+                    .collect(Collectors.toList());
+        }
+        return list;
     }
 
     @Transactional
@@ -1528,6 +1626,12 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
         analyticsService.record(AnalyticsService.EV_SELLER_APPROVED, seller.getId(),
                 seller.getMobileNumber(), null, "approved by " + actingAdmin.getMobileNumber());
         User saved = userRepository.save(seller);
+        // Ensure newly approved sellers automatically have their kitchen set to active
+        kitchenRepository.findBySeller(seller).forEach(kitchen -> {
+            kitchen.setStorefrontPaused(false);
+            kitchen.setAvailableToday(true);
+            kitchenRepository.save(kitchen);
+        });
         auditService.record(AdminAuditService.SELLER_APPROVED, actingAdmin, "SELLER",
                 seller.getId(), seller.getName(), String.valueOf(from), "APPROVED", null);
         return saved;
@@ -1536,6 +1640,7 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
     @Transactional
     public User rejectSeller(Long sellerId, String reason, User actingAdmin) {
         User seller = requireSeller(sellerId);
+        requireSellerAccess(seller, actingAdmin);
         SellerApprovalStatus from = seller.getSellerApprovalStatus();
         seller.setSellerApprovalStatus(SellerApprovalStatus.REJECTED);
         seller.setSellerStatusReason(trimToNull(reason));
@@ -1560,6 +1665,7 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
             throw new IllegalArgumentException("A reason is required when requesting changes from a seller.");
         }
         User seller = requireSeller(sellerId);
+        requireSellerAccess(seller, actingAdmin);
         SellerApprovalStatus from = seller.getSellerApprovalStatus();
         seller.setSellerApprovalStatus(SellerApprovalStatus.CHANGES_REQUESTED);
         seller.setSellerStatusReason(reason.trim());
@@ -1581,6 +1687,7 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
             throw new IllegalArgumentException("A reason is required when suspending a seller.");
         }
         User seller = requireSeller(sellerId);
+        requireSellerAccess(seller, actingAdmin);
         SellerApprovalStatus from = seller.getSellerApprovalStatus();
         seller.setSellerApprovalStatus(SellerApprovalStatus.SUSPENDED);
         seller.setSellerStatusReason(reason.trim());
@@ -1945,10 +2052,59 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("kitchenId", k.getId());
         m.put("name", k.getDisplayName());
+        m.put("slug", k.publicSlug());
         m.put("sellerId", k.getSeller() != null ? k.getSeller().getId() : null);
         m.put("paused", k.isStorefrontPaused());
         m.put("availableToday", k.getAvailableToday());
         m.put("removed", k.getSeller() != null && k.getSeller().isStorefrontRemoved());
+        return m;
+    }
+
+    /**
+     * Admin-only public-URL (slug) change. Validated and de-duplicated by
+     * {@link SlugService}; the previous slug is preserved as a redirecting alias
+     * so already-shared {@code /kitchen/{old}} links keep working. The display
+     * name is untouched. Audited with before/after.
+     */
+    @Transactional
+    public Map<String, Object> changeKitchenSlug(Long kitchenId, String newSlug, User actingAdmin) {
+        if (slugService == null) {
+            throw new IllegalStateException("Slug management is unavailable.");
+        }
+        Kitchen k = requireKitchen(kitchenId);
+        String before = k.publicSlug();
+        String after = slugService.changeSlug(k, newSlug);
+        auditService.record(AdminAuditService.KITCHEN_SLUG_CHANGED, actingAdmin, "KITCHEN",
+                k.getId(), k.getDisplayName(), before, after, null);
+        Map<String, Object> m = storefrontState(k);
+        m.put("publicUrl", publicBaseUrl() + "/kitchen/" + after);
+        return m;
+    }
+
+    /**
+     * The public base URL for building shareable links. Comes from the
+     * {@code PUBLIC_BASE_URL} environment variable (no hard-coded domain); when
+     * unset it falls back to a relative origin so links stay same-origin.
+     */
+    public String publicBaseUrl() {
+        String configured = environment != null ? environment.getProperty("PUBLIC_BASE_URL") : null;
+        if (configured == null || configured.isBlank()) {
+            configured = environment != null ? environment.getProperty("sociomart.public-base-url") : null;
+        }
+        if (configured != null && !configured.isBlank()) {
+            return configured.trim().replaceAll("/+$", "");
+        }
+        return ""; // same-origin: the UI prefixes these with its own origin
+    }
+
+    /** The marketplace / promotion links an Admin can copy (Admin -> Kitchens). */
+    @Transactional(readOnly = true)
+    public Map<String, Object> marketplaceLinks() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        String base = publicBaseUrl();
+        m.put("baseUrl", base);
+        m.put("marketplacePath", "/kitchens");
+        m.put("marketplaceUrl", base + "/kitchens");
         return m;
     }
 
@@ -2083,7 +2239,13 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
      */
     @Transactional(readOnly = true)
     public Map<String, Object> sellerDetail(Long sellerId) {
+        return sellerDetail(sellerId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> sellerDetail(Long sellerId, User actingAdmin) {
         User seller = requireSeller(sellerId);
+        requireSellerAccess(seller, actingAdmin);
         List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
         List<Order> orders = orderRepository.findAll().stream()
                 .filter(o -> o.getKitchen() != null && o.getKitchen().getSeller() != null
@@ -2100,13 +2262,23 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
         boolean hasKitchen = false, hasHomemade = false;
         List<Map<String, Object>> storefronts = new ArrayList<>();
         for (Kitchen k : kitchens) {
-            boolean homemade = k.getSellerType() != null
-                    && k.getSellerType() == com.example.my_first_spring_api.model.SellerType.HOMEMADE_PRODUCTS;
-            if (homemade) hasHomemade = true; else hasKitchen = true;
+            boolean homemade = k.getSellerType() == com.example.my_first_spring_api.model.SellerType.HOMEMADE_PRODUCTS
+                    || k.getSellerType() == com.example.my_first_spring_api.model.SellerType.BOTH;
+            boolean kitchen = k.getSellerType() == null
+                    || k.getSellerType() == com.example.my_first_spring_api.model.SellerType.KITCHEN
+                    || k.getSellerType() == com.example.my_first_spring_api.model.SellerType.BOTH;
+            if (homemade) hasHomemade = true;
+            if (kitchen) hasKitchen = true;
             Map<String, Object> s = new LinkedHashMap<>();
             s.put("id", k.getId());
             s.put("name", k.getDisplayName());
+            s.put("slug", k.getSlug() != null ? k.getSlug() : k.getName());
             s.put("sellerType", k.getSellerType() != null ? k.getSellerType().name() : null);
+            s.put("speciality", k.getSpeciality());
+            s.put("shortDescription", k.getShortDescription());
+            s.put("description", k.getDescription());
+            s.put("instagramLink", k.getInstagramLink());
+            s.put("whatsappLink", k.getWhatsappLink());
             s.put("paused", k.isStorefrontPaused());
             s.put("availableToday", k.getAvailableToday());
             s.put("society", k.getSociety());
@@ -2130,6 +2302,15 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
         m.put("id", seller.getId());
         m.put("name", seller.getName());
         m.put("mobileNumber", seller.getMobileNumber());
+        m.put("whatsappNumber", seller.getSellerWhatsappNumber());
+        m.put("email", seller.getEmail());
+        m.put("alternateContact", seller.getSellerAlternateContact());
+        m.put("area", seller.getArea() != null ? seller.getArea() : (seller.getAreaRef() != null ? seller.getAreaRef().getName() : null));
+        m.put("society", seller.getSociety() != null ? seller.getSociety() : (seller.getSocietyRef() != null ? seller.getSocietyRef().getName() : null));
+        m.put("building", seller.getBuilding());
+        m.put("flatHouseNumber", seller.getFlatHouseNumber());
+        m.put("sellerCategory", seller.getSellerCategory());
+        m.put("createdAt", seller.getCreatedAt());
         m.put("status", seller.getSellerApprovalStatus());
         m.put("statusReason", seller.getSellerStatusReason());
         m.put("approvedAt", seller.getApprovedAt());
@@ -2143,9 +2324,6 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
         m.put("averageOrderValue", orders.isEmpty() ? BigDecimal.ZERO
                 : value.divide(BigDecimal.valueOf(orders.size()), 2, java.math.RoundingMode.HALF_UP));
         m.put("recentOrders", orders.stream().limit(20).map(this::adminOrderRow).toList());
-        // Handover 7.2: the seller detail must carry support notes and the account
-        // status, so an Admin can see why a seller is blocked without leaving the
-        // screen. Both are internal-only fields.
         m.put("supportNote", seller.getSupportNote());
         m.put("accountStatus", seller.isBlocked() ? "BLOCKED" : "ACTIVE");
         m.put("blocked", seller.isBlocked());
@@ -2252,11 +2430,17 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
 
     @Transactional
     public void ensureBootstrapAccounts() {
-        if (userRepository.findByMobileNumber(SUPER_ADMIN_MOBILE).isEmpty()) {
-            userRepository.save(new User("Super Admin", SUPER_ADMIN_MOBILE, null, UserRole.SUPER_ADMIN));
+        ensureBootstrapAccounts(SUPER_ADMIN_MOBILE, ADMIN_MOBILE);
+    }
+
+    /** Creates the built-in accounts only when their mobile is free; existing rows are never touched. */
+    @Transactional
+    public void ensureBootstrapAccounts(String superAdminMobile, String adminMobile) {
+        if (userRepository.findByMobileNumber(superAdminMobile).isEmpty()) {
+            userRepository.save(new User("Super Admin", superAdminMobile, null, UserRole.SUPER_ADMIN));
         }
-        if (userRepository.findByMobileNumber(ADMIN_MOBILE).isEmpty()) {
-            userRepository.save(new User("Platform Admin", ADMIN_MOBILE, null, UserRole.ADMIN));
+        if (userRepository.findByMobileNumber(adminMobile).isEmpty()) {
+            userRepository.save(new User("Platform Admin", adminMobile, null, UserRole.ADMIN));
         }
     }
 
@@ -2694,7 +2878,7 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
      * Lightweight, factual runtime status for the Admin System Health screen.
      *
      * <p>Only values the running application can actually report: the active Spring
-     * profiles, whether demo login is on (via the very helper the security config
+     * profiles, whether credential-based direct demo authentication is on (via the helper the security config
      * itself uses, so it cannot disagree with the real gate), and a genuine round trip
      * through JPA proving the database is reachable. Nothing is simulated.</p>
      */
@@ -2710,8 +2894,8 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
         if (profiles.isEmpty()) profiles = new ArrayList<>(Collections.singletonList("default"));
         out.put("activeProfiles", profiles);
 
-        out.put("demoLoginEnabled", environment != null
-                && com.example.my_first_spring_api.SecurityConfig.isDemoEnvironment(environment));
+        out.put("directAuthEnabled", environment != null
+                && com.example.my_first_spring_api.AuthSettings.passwordLoginEnabled(environment));
 
         Map<String, Object> database = new LinkedHashMap<>();
         try {

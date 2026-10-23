@@ -43,7 +43,23 @@ public class SellerController {
         User user = authService.getCurrentBuyer(session);
         if (user == null) throw new BuyerNotAuthenticatedException("Authentication required. Please log in.");
         if (user.getRole() != UserRole.SELLER) throw new SellerNotAuthorizedException("Only sellers can perform this action");
+        if (!user.isApprovedSeller()) {
+            throw new SellerNotAuthorizedException("Your seller account is awaiting Admin approval.");
+        }
         return user;
+    }
+
+    @GetMapping("/profile")
+    public ResponseEntity<com.example.my_first_spring_api.dto.SellerProfileDto> getProfile(HttpSession session) {
+        User seller = requireSeller(session);
+        return ResponseEntity.ok(sellerService.getSellerProfile(seller));
+    }
+
+    @PutMapping("/profile")
+    public ResponseEntity<com.example.my_first_spring_api.dto.SellerProfileDto> updateProfile(
+            @RequestBody com.example.my_first_spring_api.dto.SellerProfileDto dto, HttpSession session) {
+        User seller = requireSeller(session);
+        return ResponseEntity.ok(sellerService.updateSellerProfile(seller, dto));
     }
 
     @GetMapping("/kitchen")
@@ -113,7 +129,7 @@ public class SellerController {
     }
 
     @PostMapping("/products")
-    public ResponseEntity<ProductDto> createProduct(@RequestParam("kitchenId") Long kitchenId,
+    public ResponseEntity<ProductDto> createProduct(@RequestParam(value = "kitchenId", required = false) Long kitchenId,
                                                     @Valid @RequestBody ProductCreateDto dto, HttpSession session) {
         User seller = requireSeller(session);
         return ResponseEntity.ok(sellerService.createProduct(kitchenId, dto, seller));

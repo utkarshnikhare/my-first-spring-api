@@ -27,6 +27,16 @@ public class AuthResponseDto {
      * source-compatible. Absent for buyers.</p>
      */
     private String sellerStatusReason;
+    private String kitchenSlug;
+    private String kitchenUrl;
+    /**
+     * True when the user authenticated with a one-time temporary password issued
+     * by a Super Admin (manual recovery flow). The client MUST route the user to
+     * the change-password screen; every other API call is blocked server-side
+     * until the password is changed. Additive field with its own accessors, so
+     * every existing constructor call site stays source-compatible.
+     */
+    private boolean mustChangePassword;
 
     public AuthResponseDto() {}
 
@@ -88,4 +98,10 @@ public class AuthResponseDto {
     public void setSellerApprovalStatus(SellerApprovalStatus sellerApprovalStatus) { this.sellerApprovalStatus = sellerApprovalStatus; }
     public String getSellerStatusReason() { return sellerStatusReason; }
     public void setSellerStatusReason(String sellerStatusReason) { this.sellerStatusReason = sellerStatusReason; }
+    public String getKitchenSlug() { return kitchenSlug; }
+    public void setKitchenSlug(String kitchenSlug) { this.kitchenSlug = kitchenSlug; }
+    public String getKitchenUrl() { return kitchenUrl; }
+    public void setKitchenUrl(String kitchenUrl) { this.kitchenUrl = kitchenUrl; }
+    public boolean isMustChangePassword() { return mustChangePassword; }
+    public void setMustChangePassword(boolean mustChangePassword) { this.mustChangePassword = mustChangePassword; }
 }

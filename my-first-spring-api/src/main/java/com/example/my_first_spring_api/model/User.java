@@ -1,6 +1,7 @@
 package com.example.my_first_spring_api.model;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.LocalDateTime;
 
 @Entity
@@ -15,6 +16,23 @@ public class User {
 
     @Column(name = "mobile_number", unique = true)
     private String mobileNumber;
+
+    @JsonIgnore
+    @Column(name = "password_hash")
+    private String passwordHash;
+
+    /** Optional contact e-mail used by the forgot-password flow (see V7 Flyway migration). */
+    @Column(name = "email", nullable = true)
+    private String email;
+
+    @Column(name = "seller_whatsapp_number", length = 32)
+    private String sellerWhatsappNumber;
+
+    @Column(name = "seller_alternate_contact", length = 32)
+    private String sellerAlternateContact;
+
+    @Column(name = "seller_category", length = 30)
+    private String sellerCategory;
 
     @Column(name = "flat_house_number")
     private String flatHouseNumber;
@@ -157,6 +175,24 @@ public class User {
     public void setName(String name) { this.name = name; }
     public String getMobileNumber() { return mobileNumber; }
     public void setMobileNumber(String mobileNumber) { this.mobileNumber = mobileNumber; }
+    @JsonIgnore
+    public String getPasswordHash() { return passwordHash; }
+    public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getSellerWhatsappNumber() { return sellerWhatsappNumber; }
+    public void setSellerWhatsappNumber(String sellerWhatsappNumber) { this.sellerWhatsappNumber = sellerWhatsappNumber; }
+    public String getSellerAlternateContact() { return sellerAlternateContact; }
+    public void setSellerAlternateContact(String sellerAlternateContact) { this.sellerAlternateContact = sellerAlternateContact; }
+    public String getSellerCategory() { return sellerCategory; }
+    public void setSellerCategory(String sellerCategory) { this.sellerCategory = sellerCategory; }
     public String getFlatHouseNumber() { return flatHouseNumber; }
     public void setFlatHouseNumber(String flatHouseNumber) { this.flatHouseNumber = flatHouseNumber; }
     public String getSociety() { return society; }

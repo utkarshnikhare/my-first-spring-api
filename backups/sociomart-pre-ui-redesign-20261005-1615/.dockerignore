@@ -1,0 +1,48 @@
+# Ignore Maven target/build artifacts
+target/
+bin/
+
+# Ignore local H2 database files
+data/
+*.db
+*.db.mv.db
+*.db.trace.db
+
+# Ignore log files
+*.log
+*.out
+*.err
+
+# Ignore IDE files
+.idea/
+.vscode/
+*.iml
+
+# Ignore Git metadata
+.git/
+.gitignore
+
+# Ignore GitHub Actions
+.github/
+
+# Ignore Kilo config
+.kilo/
+
+# Ignore OS files
+Thumbs.db
+.DS_Store
+
+# Ignore test artifacts
+test-e2e.ps1
+test-puppeteer.js
+login*.json
+login*.ps1
+*_cookies.txt
+
+# Ignore application configs that shouldn't be in build context
+application-dev.properties
+application-prod.properties
+
+# Ignore Dockerfile itself (already in context)
+Dockerfile
+render.yaml

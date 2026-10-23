@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import com.example.my_first_spring_api.dto.ProductCreateDto;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Product;
@@ -195,5 +196,239 @@ class SellerServiceCreateOfferingValidationTest {
         dto.setOrderWindowEnd("25:99");
         assertThrows(IllegalArgumentException.class,
                 () -> sellerService.createProduct(1L, dto, approvedSeller()));
+    }
+
+    @Test
+    void readyByOneDayBeforeOfferingIsRebasedInsteadOfRejected() {
+        // Client-clock day-boundary skew: readyBy carries yesterday's date while
+        // the offering is for tomorrow. The time-of-day must be moved onto the
+        // offering date instead of failing the whole create with a 400.
+        LocalDate today = LocalDate.now();
+        LocalDate tomorrow = today.plusDays(1);
+        allowFutureMenus();
+        ProductCreateDto dto = validDto();
+        dto.setAvailableDate(tomorrow);
+        dto.setReadyByTime(LocalDateTime.of(today, LocalTime.of(12, 0)).toString());
+        var result = sellerService.createProduct(1L, dto, approvedSeller());
+        assertThat(result.getAvailableDate()).isEqualTo(tomorrow);
+        assertThat(result.getReadyByTime())
+                .isEqualTo(LocalDateTime.of(tomorrow, LocalTime.NOON).toString());
+    }
+
+    @Test
+    void readyByMultiDayBeforeOfferingIsRebasedKeepingTimeOfDay() {
+        LocalDate today = LocalDate.now();
+        LocalDate offering = today.plusDays(2);
+        allowFutureMenus();
+        ProductCreateDto dto = validDto();
+        dto.setAvailableDate(offering);
+        dto.setReadyByTime(LocalDateTime.of(today.minusDays(1), LocalTime.of(23, 30)).toString());
+        var result = sellerService.createProduct(1L, dto, approvedSeller());
+        assertThat(result.getReadyByTime())
+                .isEqualTo(LocalDateTime.of(offering, LocalTime.of(23, 30)).toString());
+    }
+
+    @Test
+    void readyByOnTheNextDayIsAcceptedForTodayOffering() {
+        // e2e marketplace-lifecycle case: offering Today, readyBy spans tomorrow.
+        LocalDate today = LocalDate.now();
+        allowFutureMenus();
+        ProductCreateDto dto = validDto();
+        dto.setAvailableDate(today);
+        dto.setReadyByTime(LocalDateTime.of(today.plusDays(1), LocalTime.NOON).toString());
+        var result = sellerService.createProduct(1L, dto, approvedSeller());
+        assertThat(result.getReadyByTime())
+                .isEqualTo(LocalDateTime.of(today.plusDays(1), LocalTime.NOON).toString());
+    }
+
+    @Test
+    void nullKitchenIdResolvesFromSellerOwnedKitchen() {
+        when(kitchenRepository.findBySeller(any(User.class))).thenReturn(List.of(approvedKitchen()));
+        ProductCreateDto dto = validDto();
+        var result = sellerService.createProduct(null, dto, approvedSeller());
+        assertThat(result).isNotNull();
+        assertThat(result.getKitchenId()).isEqualTo(1L);
+    }
+
+    @Test
+    void nullKitchenIdBootstrapsDefaultKitchenWhenSellerHasNoKitchen() {
+        allowFutureMenus();
+        User seller = approvedSeller();
+        Kitchen bootstrapped = new Kitchen("seller-s-kitchen", "Seller's Kitchen", "", null, seller);
+        bootstrapped.setId(99L);
+        when(kitchenRepository.findBySeller(any(User.class))).thenReturn(List.of());
+        when(kitchenRepository.findByName(anyString())).thenReturn(Optional.empty());
+        when(kitchenRepository.findBySlug(anyString())).thenReturn(Optional.empty());
+        when(kitchenRepository.saveAndFlush(any(Kitchen.class))).thenReturn(bootstrapped);
+
+        ProductCreateDto dto = validDto();
+        var result = sellerService.createProduct(null, dto, seller);
+        assertThat(result).isNotNull();
+        assertThat(result.getKitchenId()).isNotNull();
+    }
+
+    @Test
+    void createOfferingWithMobilePayloadOmittedKitchenIdSavesCleanlyWithNonNullKitchenAndCategory() {
+        allowFutureMenus();
+        User seller = approvedSeller();
+        Kitchen bootstrapped = new Kitchen("seller-s-kitchen", "Seller's Kitchen", "", null, seller);
+        bootstrapped.setId(42L);
+        when(kitchenRepository.findBySeller(any(User.class))).thenReturn(List.of());
+        when(kitchenRepository.findByName(anyString())).thenReturn(Optional.empty());
+        when(kitchenRepository.findBySlug(anyString())).thenReturn(Optional.empty());
+        when(kitchenRepository.saveAndFlush(any(Kitchen.class))).thenReturn(bootstrapped);
+
+        LocalDate tomorrow = LocalDate.now(com.example.my_first_spring_api.AppTimeZone.ZONE).plusDays(1);
+        ProductCreateDto dto = new ProductCreateDto();
+        dto.setName("Special Dinner Thali");
+        dto.setDescription(null);
+        dto.setPrice(new BigDecimal("180.00"));
+        dto.setPriceUnit("Per Plate");
+        dto.setAvailableDate(tomorrow);
+        dto.setOrderWindowStart(null);
+        dto.setOrderWindowEnd("11:30");
+        dto.setReadyByTime(tomorrow + "T12:15");
+        dto.setCategories(List.of("Dinner"));
+        dto.setMaxQuantity(25);
+
+        // Omitted kitchenId (null), Delivery: tomorrow 12:15, Category: Dinner
+        var result = sellerService.createProduct(null, dto, seller);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getKitchenId()).isNotNull();
+        assertThat(result.getKitchenId()).isEqualTo(42L);
+        assertThat(result.getCategory()).isNotNull();
+        assertThat(result.getCategory()).isEqualTo("DINNER");
+        assertThat(result.getDescription()).isNotNull();
+        assertThat(result.getDescription()).isEqualTo("");
+        assertThat(result.getAvailableDate()).isEqualTo(tomorrow);
+    }
+
+    @Test
+    void categoryMappingNormalizesMixedCaseAndCommaSeparatedStrings() {
+        ProductCreateDto dto = validDto();
+        dto.setCategories(List.of("Dinner, Breakfast", "snacks"));
+        var result = sellerService.createProduct(1L, dto, approvedSeller());
+        assertThat(result.getCategory()).isEqualTo("DINNER,BREAKFAST,SNACKS");
+    }
+
+    @Test
+    void readyByWithUtcZIsConvertedToKolkataLocalTime() {
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        ProductCreateDto dto = validDto();
+        dto.setAvailableDate(tomorrow);
+        // 14:00 UTC = 19:30 IST (+5:30)
+        dto.setReadyByTime(tomorrow + "T14:00:00Z");
+        var result = sellerService.createProduct(1L, dto, approvedSeller());
+        assertThat(result.getReadyByTime()).isEqualTo(tomorrow + "T19:30");
+    }
+
+    @Test
+    void jacksonDeserializesAliasesCorrectly() throws Exception {
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+        String json = "{\n" +
+                "  \"name\": \"Thali\",\n" +
+                "  \"price\": 120,\n" +
+                "  \"offeringDate\": \"2026-10-20\",\n" +
+                "  \"ordersOpenTime\": \"10:00\",\n" +
+                "  \"ordersCloseTime\": \"13:00\",\n" +
+                "  \"deliveryDateTime\": \"2026-10-20T13:30\",\n" +
+                "  \"category\": \"Dinner\"\n" +
+                "}";
+        ProductCreateDto parsed = mapper.readValue(json, ProductCreateDto.class);
+        assertThat(parsed.getName()).isEqualTo("Thali");
+        assertThat(parsed.getAvailableDate()).isEqualTo(LocalDate.of(2026, 10, 20));
+        assertThat(parsed.getOrderWindowStart()).isEqualTo("10:00");
+        assertThat(parsed.getOrderWindowEnd()).isEqualTo("13:00");
+        assertThat(parsed.getReadyByTime()).isEqualTo("2026-10-20T13:30");
+        assertThat(parsed.getCategories()).containsExactly("Dinner");
+    }
+
+    @Test
+    void pastOrdersCloseWithFutureDeliveryIsAutoCorrectedAndAccepted() {
+        allowFutureMenus();
+        ProductCreateDto dto = validDto();
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        dto.setAvailableDate(tomorrow);
+        // Pre-order offering: orderingDate is today.
+        // User accidentally inputs an AM time in past instead of PM.
+        // Delivery is tomorrow at 23:59.
+        LocalTime now = LocalTime.now(AppTimeZone.ZONE);
+        String amInput;
+        String expectedPm;
+        if (now.isBefore(LocalTime.of(12, 0))) {
+            amInput = "04:00";
+            expectedPm = "16:00";
+        } else if (now.isBefore(LocalTime.of(22, 0))) {
+            int targetHour = Math.min(23, now.getHour() + 2);
+            int amHour = targetHour - 12;
+            amInput = String.format(java.util.Locale.ROOT, "%02d:00", amHour);
+            expectedPm = String.format(java.util.Locale.ROOT, "%02d:00", targetHour);
+        } else {
+            amInput = "04:00";
+            expectedPm = "23:59";
+        }
+        dto.setOrderWindowEnd(amInput);
+        dto.setReadyByTime(tomorrow + "T23:59");
+
+        var result = sellerService.createProduct(1L, dto, approvedSeller());
+        assertThat(result).isNotNull();
+        assertThat(result.getOrderWindowEnd()).isEqualTo(expectedPm);
+        assertThat(result.getCutoffTime()).isEqualTo(expectedPm);
+    }
+
+    @Test
+    void createOfferingWithMissingIsAvailableAndUnitSavesCleanlyWithAllNonNullDefaults() {
+        allowFutureMenus();
+        ProductCreateDto dto = new ProductCreateDto();
+        dto.setName("Default Dish");
+        dto.setPrice(BigDecimal.valueOf(99));
+        dto.setAvailableDate(LocalDate.now().plusDays(1));
+        dto.setOrderWindowEnd("23:58");
+        dto.setReadyByTime(LocalDateTime.of(LocalDate.now().plusDays(1), LocalTime.of(23, 59)).toString());
+        dto.setAvailableToday(null);
+        dto.setIsAvailable(null);
+        dto.setIsVeg(null);
+        dto.setUnit(null);
+        dto.setPriceUnit(null);
+        dto.setDescription(null);
+        dto.setCategories(null);
+
+        var result = sellerService.createProduct(1L, dto, approvedSeller());
+
+        assertThat(result).isNotNull();
+        assertThat(result.getAvailableToday()).isTrue();
+        assertThat(result.getIsAvailable()).isTrue();
+        assertThat(result.getUnit()).isEqualTo("portion");
+        assertThat(result.getPriceUnit()).isEqualTo("portion");
+        assertThat(result.getIsVeg()).isTrue();
+        assertThat(result.getCategory()).isEqualTo("DINNER");
+        assertThat(result.getDescription()).isEqualTo("");
+    }
+
+    @Test
+    void productEntityGuaranteesNonNullDefaultsOnPrePersistAndSetters() {
+        Product product = new Product();
+        product.setAvailableToday(null);
+        product.setIsVeg(null);
+        product.setDescription(null);
+        product.setCategory(null);
+        product.setUnit(null);
+
+        assertThat(product.getAvailableToday()).isTrue();
+        assertThat(product.getIsAvailable()).isTrue();
+        assertThat(product.getIsVeg()).isTrue();
+        assertThat(product.getDescription()).isEqualTo("");
+        assertThat(product.getCategory()).isEqualTo("DINNER");
+        assertThat(product.getUnit()).isEqualTo("portion");
+
+        product.ensureNonNullFields();
+        assertThat(product.getAvailableToday()).isTrue();
+        assertThat(product.getIsAvailable()).isTrue();
+        assertThat(product.getIsVeg()).isTrue();
+        assertThat(product.getDescription()).isEqualTo("");
+        assertThat(product.getCategory()).isEqualTo("DINNER");
+        assertThat(product.getUnit()).isEqualTo("portion");
     }
 }

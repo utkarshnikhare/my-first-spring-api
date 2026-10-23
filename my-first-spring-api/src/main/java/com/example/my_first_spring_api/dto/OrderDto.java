@@ -36,11 +36,16 @@ public class OrderDto {
         private String displayName;
         private String imageUrl;
         private Double rating;
+        private String society;
 
         public KitchenSummary() {}
         public KitchenSummary(Long id, String name, String displayName, String imageUrl, Double rating) {
             this.id = id; this.name = name; this.displayName = displayName;
             this.imageUrl = imageUrl; this.rating = rating;
+        }
+        public KitchenSummary(Long id, String name, String displayName, String imageUrl, Double rating, String society) {
+            this.id = id; this.name = name; this.displayName = displayName;
+            this.imageUrl = imageUrl; this.rating = rating; this.society = society;
         }
 
         public Long getId() { return id; }
@@ -53,6 +58,8 @@ public class OrderDto {
         public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
         public Double getRating() { return rating; }
         public void setRating(Double rating) { this.rating = rating; }
+        public String getSociety() { return society; }
+        public void setSociety(String society) { this.society = society; }
     }
 
     public static class BuyerSummary {

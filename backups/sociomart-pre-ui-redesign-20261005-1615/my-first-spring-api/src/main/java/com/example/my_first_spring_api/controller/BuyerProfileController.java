@@ -1,0 +1,45 @@
+package com.example.my_first_spring_api.controller;
+
+import com.example.my_first_spring_api.dto.AreaDto;
+import com.example.my_first_spring_api.dto.BuyerProfileDto;
+import com.example.my_first_spring_api.service.BuyerService;
+import jakarta.servlet.http.HttpSession;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/buyer/profile")
+public class BuyerProfileController {
+
+    private final BuyerService buyerService;
+
+    @Autowired
+    public BuyerProfileController(BuyerService buyerService) {
+        this.buyerService = buyerService;
+    }
+
+    @GetMapping
+    public ResponseEntity<BuyerProfileDto> getProfile(HttpSession session) {
+        return ResponseEntity.ok(buyerService.getProfile(session));
+    }
+
+    /** Communities a buyer may choose from, from the authoritative society directory. */
+    @GetMapping("/societies")
+    public ResponseEntity<List<String>> getSelectableSocieties(HttpSession session) {
+        return ResponseEntity.ok(buyerService.getSelectableSocieties(session));
+    }
+
+    /** Approved areas and the societies inside each, for the dependent dropdowns. */
+    @GetMapping("/areas")
+    public ResponseEntity<List<AreaDto>> getAreas(HttpSession session) {
+        return ResponseEntity.ok(buyerService.getAreas(session));
+    }
+
+    @PutMapping
+    public ResponseEntity<BuyerProfileDto> updateProfile(@RequestBody BuyerProfileDto profileDto, HttpSession session) {
+        return ResponseEntity.ok(buyerService.updateProfile(profileDto, session));
+    }
+}
