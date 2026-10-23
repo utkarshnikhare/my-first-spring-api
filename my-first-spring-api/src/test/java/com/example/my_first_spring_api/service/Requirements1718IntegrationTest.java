@@ -16,6 +16,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import com.example.my_first_spring_api.AppTimeZone;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
@@ -162,7 +163,8 @@ class Requirements1718IntegrationTest {
     private Product product(String name, LocalDate date, boolean preorder) {
         Product p = new Product(kitchen, name, "", BigDecimal.valueOf(40), null);
         p.setAvailableDate(date);
-        p.setAvailableToday(date.equals(LocalDate.now()) && !preorder);
+        // Use business timezone (Asia/Kolkata) consistently with production; prevents CI failure when system TZ differs from AppTimeZone.ZONE
+p.setAvailableToday(date.equals(LocalDate.now(AppTimeZone.ZONE)) && !preorder);
         p.setIsPreorder(preorder);
         p.setMaxQuantity(3);
         p.setRemainingQuantity(3);
