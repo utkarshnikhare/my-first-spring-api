@@ -178,12 +178,24 @@ class RecurringFoundationPersistenceTest {
 
   @Test
   void acceptanceScenario() {
-    // 1. Create schedule
-    RecurringSchedule sch = schedules.save(newSchedule(product, 14));
-    // Simulate generation for dates: 10/12 (Mon), 10/14 (Wed), 10/16 (Fri)
-    Occurrence mon = occurrences.save(new Occurrence(sch, LocalDate.of(2026, 10, 12)));
-    Occurrence wed = occurrences.save(new Occurrence(sch, LocalDate.of(2026, 10, 14)));
-    Occurrence fri = occurrences.save(new Occurrence(sch, LocalDate.of(2026, 10, 16)));
+    // 1. Create schedule. Use a fixed far-future reference date so this test is
+    // deterministic and does not depend on the machine's current date.
+    LocalDate referenceDate = LocalDate.of(2099, 10, 1);
+    LocalDate monday = referenceDate.with(java.time.temporal.TemporalAdjusters.next(DayOfWeek.MONDAY));
+    LocalDate wednesday = monday.plusDays(2);
+    LocalDate friday = monday.plusDays(4);
+
+    RecurringSchedule sch = new RecurringSchedule(product, monday.minusWeeks(2), friday.plusWeeks(2),
+        EnumSet.of(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY));
+    sch.setDefaultQuantity(14);
+    sch.setDefaultOrderCloseTime("13:00");
+    sch.setDefaultReadyByTime("3:00 PM");
+    sch = schedules.save(sch);
+
+    // Simulate generation for the future Monday, Wednesday and Friday occurrences.
+    Occurrence mon = occurrences.save(new Occurrence(sch, monday));
+    Occurrence wed = occurrences.save(new Occurrence(sch, wednesday));
+    Occurrence fri = occurrences.save(new Occurrence(sch, friday));
     
     // Default setting for occurrences
     for (Occurrence o : java.util.List.of(mon, wed, fri)) {
@@ -230,7 +242,8 @@ class RecurringFoundationPersistenceTest {
     scheduleService.updateSchedule(sch.getId(), updateDto);
     
     // Verify future occurrences updated
-    // Note: Assuming "today" in updateSchedule is before 10/12, all are future.
+    // All three simulated occurrences are after updateSchedule's "today", so all
+    // are treated as future rows and receive the updated defaults.
     assertThat(occurrences.findById(mon.getId()).get().getQuantity()).isEqualTo(18);
     assertThat(occurrences.findById(mon.getId()).get().getReadyByTime()).isEqualTo("13:30");
     
