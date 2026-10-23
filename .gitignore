@@ -11,6 +11,7 @@ target/
 *.err
 *.txt
 *.ps1
+*.diff
 
 # Local binaries / tooling (cloudflared etc.) - never commit executables
 tools/
