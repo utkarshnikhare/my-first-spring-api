@@ -11,9 +11,8 @@ var FAV_CACHE = null; // Set of favourited kitchen ids; null = not loaded yet
 var FAV_FULL_CACHE = null; // Full FavouriteDto list from last /api/favourites call; null = not loaded/failed
 
 function todayDate() {
-    var now = new Date();
-    var offset = now.getTimezoneOffset();
-    return new Date(now.getTime() - offset * 60000).toISOString().slice(0, 10);
+    // Asia/Kolkata is UTC+5:30 regardless of the browser's local zone.
+    return new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
 }
 
 function favSet() {
@@ -428,7 +427,7 @@ async function homemadeStoreView(hash) {
             h += '<div class="mb-2"><span class="muted small">Serves: ' + esc(areas.join(', ')) + '</span></div>';
         }
         var today = (detail.products || []).filter(function (p) {
-            return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate()) && p.availableToday;
+            return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate()) && p.availableToday && (!p.availableDate || p.availableDate >= todayDate());
         });
         today = sortByClosingTime(today);
         var preorder = (detail.preorderProducts && detail.preorderProducts.length) ? detail.preorderProducts :
@@ -519,7 +518,7 @@ async function kitchenPageView(hash) {
         // counts as traffic. Analytics must never block or fail the page.
         recordAnalyticsView('HOMEMADE_STOREFRONT_VIEW', k && k.id);
         var today = (detail.products || []).filter(function (p) {
-            return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate());
+            return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate()) && (!p.availableDate || p.availableDate >= todayDate());
         });
         today = sortByClosingTime(today);
         var preorder = (detail.preorderProducts && detail.preorderProducts.length)
