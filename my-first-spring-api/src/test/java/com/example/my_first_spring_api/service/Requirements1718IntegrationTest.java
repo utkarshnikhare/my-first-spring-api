@@ -136,7 +136,7 @@ class Requirements1718IntegrationTest {
 
         assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, null, null, session))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("orders today are closed");
+                .hasMessageContaining("orders for checkout are closed");
         assertThat(orders.findById(draft.getId()).orElseThrow().getOrderStatus()).isEqualTo(OrderStatus.DRAFT);
         assertThat(products.findById(product.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(3);
     }
@@ -164,7 +164,7 @@ class Requirements1718IntegrationTest {
         Product p = new Product(kitchen, name, "", BigDecimal.valueOf(40), null);
         p.setAvailableDate(date);
         // Use business timezone (Asia/Kolkata) consistently with production; prevents CI failure when system TZ differs from AppTimeZone.ZONE
-p.setAvailableToday(date.equals(LocalDate.now(AppTimeZone.ZONE)) && !preorder);
+        p.setAvailableToday(date.equals(LocalDate.now(AppTimeZone.ZONE)) && !preorder);
         p.setIsPreorder(preorder);
         p.setMaxQuantity(3);
         p.setRemainingQuantity(3);
