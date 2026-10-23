@@ -18,6 +18,7 @@ public interface OccurrenceRepository extends JpaRepository<Occurrence, Long> {
     List<Occurrence> findByScheduleIdOrderByOccurrenceDateAsc(Long scheduleId);
     List<Occurrence> findByScheduleId(Long scheduleId);
     boolean existsByScheduleIdAndOccurrenceDate(Long scheduleId, LocalDate date);
+    List<Occurrence> findByOccurrenceDateBefore(LocalDate date);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select o from Occurrence o where o.id = :id")
