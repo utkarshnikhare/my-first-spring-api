@@ -31,24 +31,28 @@
 
 ## 3. Verified Test & Build Results
 - **Maven Verification:**
-  - Command: `./mvnw.cmd clean verify`
-  - Result: **BUILD SUCCESS**
-  - Test Summary: **623 tests run, 0 failures, 0 errors, 2 skipped** (Docker Testcontainers skipped as Docker daemon is not active locally).
+  - Command: `.\mvnw.cmd test`
+  - Result: **BUILD SUCCESS (exit code 0)**
+  - Test Summary: **700 tests run, 0 failures, 0 errors, 5 skipped** (Docker Testcontainers skipped as Docker daemon is not active locally).
 - **Targeted UI & Script Regression Tests:**
   - `SellerAppScriptStructureTest`: 15 passed (0 failures).
   - `SellerFilterScriptStructureTest`: 7 passed (0 failures).
   - `SellerHistoryResponsiveLayoutTest`: 7 passed (0 failures).
   - `SellerKitchenPreviewTest`: 6 passed (0 failures).
   - `SellerServiceCategoryTest`: 3 passed (0 failures).
+  - `RecurringBuyerOrderFlowTest`: 8 passed (0 failures).
 - **Playwright E2E Suite:**
   - Command: `npx playwright test` (port 18082, demo profile)
-  - Result: **4 passed (43.4s)**
-    - `[desktop] › buyer-registration.spec.cjs`: PASSED
-    - `[desktop] › marketplace-lifecycle.spec.cjs`: PASSED
-    - `[desktop] › seller-onboarding.spec.cjs`: PASSED
-    - `[mobile] › mobile-registration.mobile.spec.cjs`: PASSED
+  - Result: **4 passed (40.9s, exit code 0)**
+    - `[desktop] › buyer-registration.spec.cjs`: PASSED (4.1s)
+    - `[desktop] › marketplace-lifecycle.spec.cjs`: PASSED (13.3s)
+    - `[desktop] › seller-onboarding.spec.cjs`: PASSED (3.6s)
+    - `[mobile] › mobile-registration.mobile.spec.cjs`: PASSED (2.7s)
 
-## 4. Modified & Untracked Files
+## 4. Current Branch & Commit Status
+- **Current Branch:** `feature/seller-category-prompt` (synchronized with `origin/main` via merge `0035dc8`)
+- **Latest Commit:** `93e9a68` (`fix(e2e): align storefront order buttons, pending seller auth, and offering order drilldown`)
+- **Pushed to Remote:** `origin feature/seller-category-prompt`
 - **Modified:**
   - `e2e/support.cjs`
   - `src/main/java/com/example/my_first_spring_api/controller/AuthController.java`

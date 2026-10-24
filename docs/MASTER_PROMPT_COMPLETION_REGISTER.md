@@ -21,8 +21,9 @@ This register maps every distinct user prompt and its constituent tasks/requirem
 *✅* – Done, *🔄* – In Progress / Ready, *❓* – Pending clarification, *⚠️* – Blocked.
 
 ## Current Test Status Summary
-- **Maven Full Suite:** 623 tests run, 0 failures, 0 errors, 2 skipped (BUILD SUCCESS).
-- **Playwright Full Suite:** 4 passed (43.4s) across desktop and mobile suites.
+- **Maven Full Suite:** 700 tests run, 0 failures, 0 errors, 5 skipped (BUILD SUCCESS, exit code 0).
+- **Playwright Full Suite:** 4 passed (40.9s, exit code 0) across desktop and mobile suites (`buyer-registration.spec.cjs`, `marketplace-lifecycle.spec.cjs`, `seller-onboarding.spec.cjs`, `mobile-registration.mobile.spec.cjs`).
+- **Latest Commit:** `93e9a68` on `feature/seller-category-prompt`.
 
 ---
 *This file is continuously updated as work progresses.*
