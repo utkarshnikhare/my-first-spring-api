@@ -15,6 +15,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import com.example.my_first_spring_api.security.UserSessionAuthorizationFilter;
@@ -71,6 +73,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/seller/**", "/api/seller-app/**").hasRole("SELLER")
                         .requestMatchers(
                                 "/api/auth/**",
+                                "/admin/login",
                                 "/api/health",
                                 "/api/marketplace",
                                 "/api/items",
@@ -114,5 +117,12 @@ public class SecurityConfig {
     @Bean
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public UserDetailsService userDetailsService() {
+        return username -> {
+            throw new UsernameNotFoundException("Authentication is handled via session-based auth endpoints");
+        };
     }
 }

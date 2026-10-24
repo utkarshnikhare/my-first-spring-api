@@ -108,6 +108,7 @@ document.addEventListener('click', async function (e) {
     try {
         switch (a) {
             case 'go-back': history.back(); break;
+            case 'explore-kitchens': navigate('#/kitchens'); break;
             case 'noop': break;
             case 'toggle-notifs': await toggleNotifications(t.dataset.panelId); break;
             case 'read-notification': await readNotification(t.dataset.notificationId); break;
@@ -167,6 +168,9 @@ document.addEventListener('click', async function (e) {
                 try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
                 await placeOrderWithStatus('PENDING'); break;
             case 'select-pay-method': state.payMethod = t.dataset.method; await render(); break;
+            case 'toggle-checkout-address':
+                state.editingCheckoutAddress = !state.editingCheckoutAddress;
+                await render(); break;
             case 'select-pay-status': // Confirm Order: Paid / Will Pay Later (UI selection only)
                 state.payPreference = t.dataset.status === 'PENDING' || t.dataset.status === 'WILL_PAY_LATER'
                     ? 'PENDING' : 'PAID';
@@ -331,7 +335,7 @@ window.addEventListener('DOMContentLoaded', async function () {
     initTheme();
     try {
         var me = await api('/api/auth/me');
-        state.user = (me && me.authenticated) ? me : null;
+        state.user = (me && me.authenticated && isBuyer(me)) ? me : null;
     } catch (e) { state.user = null; }
     // Only fall back to the Home hash when there is neither an in-app hash nor a
     // clean backend route (/kitchen/{slug}, /kitchens) to render. Setting a hash

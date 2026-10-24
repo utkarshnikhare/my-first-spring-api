@@ -129,7 +129,10 @@ function adminUpdateNav(hash) {
     if (key === 'home') key = 'dashboard';
     if (key === 'pending') key = 'approvals';
     var el = document.querySelector('[data-nav="' + key + '"]');
-    if (el) el.classList.add('active');
+    if (el) {
+        el.classList.add('active');
+        if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    }
 }
 function adminNavigate(hash) { if (location.hash === hash) adminRender(); else location.hash = hash; }
 // ==================== SEARCH ====================
@@ -271,7 +274,7 @@ function renderLoginScreen() {
         '<p class="muted small">Use the mobile number on your Admin account and its configured demo password. Admin and Super Admin passwords are separate.</p>' +
         configurationMessage +
         '<div class="form-group"><label for="alMobile">Mobile number</label><input id="alMobile" inputmode="numeric" maxlength="10" placeholder="10-digit mobile" autocomplete="username"></div>' +
-        '<div class="form-group"><label for="alPassword">Demo password</label><input id="alPassword" type="password" maxlength="72" autocomplete="current-password"></div>' +
+        '<div class="form-group"><label for="alPassword">Demo password</label><div class="password-input-wrapper"><input id="alPassword" type="password" maxlength="72" autocomplete="current-password"></div></div>' +
         '<p class="muted small">Demo-only authentication; not production-ready.</p>' +
         '<button class="btn btn-primary btn-block" type="button" data-action="admin-login"' + (!loginEnabled ? ' disabled' : '') + '>Sign In</button>' +
         '<a class="al-back" href="/index.html">← Back to buyer app</a>' +
@@ -360,7 +363,60 @@ async function adminAction(action, t) {
                 var id = Number(t.dataset.id);
                 await adminRunOnce(t, async function () {
                     await api('/api/admin/sellers/' + id + '/approve', { method: 'POST' });
-                    toast('Seller approved', 'success');
+                    toast('Seller approved and kitchen activated', 'success');
+                });
+                await adminRender();
+                break;
+            }
+            case 'review-seller-request': {
+                var sId = Number(t.dataset.id);
+                await adminOpenSellerReviewModal(sId);
+                break;
+            }
+            case 'close-review-modal': {
+                closeModal();
+                break;
+            }
+            case 'review-approve': {
+                var rAppId = Number(t.dataset.id);
+                closeModal();
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/sellers/' + rAppId + '/approve', { method: 'POST' });
+                    toast('Seller approved and kitchen activated', 'success');
+                });
+                await adminRender();
+                break;
+            }
+            case 'review-request-changes': {
+                var rRcId = Number(t.dataset.id);
+                var commentEl = $('#reviewComment');
+                var comment = commentEl ? commentEl.value.trim() : '';
+                if (!comment) {
+                    toast('Please enter comments explaining what changes the seller needs to make.', 'error');
+                    if (commentEl) commentEl.focus();
+                    break;
+                }
+                closeModal();
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/sellers/' + rRcId + '/request-changes', { method: 'POST', body: { reason: comment } });
+                    toast('Changes requested from seller', 'success');
+                });
+                await adminRender();
+                break;
+            }
+            case 'review-reject': {
+                var rRejId = Number(t.dataset.id);
+                var commentEl2 = $('#reviewComment');
+                var comment2 = commentEl2 ? commentEl2.value.trim() : '';
+                if (!comment2) {
+                    toast('Please enter a rejection reason in the comments box.', 'error');
+                    if (commentEl2) commentEl2.focus();
+                    break;
+                }
+                closeModal();
+                await adminRunOnce(t, async function () {
+                    await api('/api/admin/sellers/' + rRejId + '/reject', { method: 'POST', body: { reason: comment2 } });
+                    toast('Seller application rejected', 'success');
                 });
                 await adminRender();
                 break;
@@ -1118,19 +1174,36 @@ function adminExportUrl(domain) {
 
 async function adminPendingView() {
     var list = await api('/api/admin/sellers/pending');
+    var isSuper = A.role === 'SUPER_ADMIN';
+    var myAreaId = A.me ? A.me.adminAreaId : null;
+    var mySociety = (A.me ? (A.me.society || A.me.adminAreaName) : '') || '';
+
+    // Area Admins only see sellers in their assigned society/area; Super Admins see all including unassigned
+    if (!isSuper && (myAreaId || mySociety)) {
+        list = (list || []).filter(function (s) {
+            if (myAreaId && s.areaId) return String(s.areaId) === String(myAreaId);
+            if (mySociety && s.society) return s.society.toLowerCase().trim() === mySociety.toLowerCase().trim();
+            if (mySociety && s.area) return s.area.toLowerCase().trim() === mySociety.toLowerCase().trim();
+            return false;
+        });
+    }
+
     var h = '<div class="view-enter">';
-    h += '<div class="section-head admin-section-head"><div><h1>Pending Approvals</h1><p class="muted small">' + (list ? list.length : 0) + ' seller(s) awaiting your decision</p></div></div>';
+    h += '<div class="section-head admin-section-head"><div><h1>Pending Approvals</h1><p class="muted small">' + (list ? list.length : 0) + ' seller(s) awaiting your decision' + (!isSuper && mySociety ? ' in ' + esc(mySociety) : '') + '</p></div></div>';
     if (!list || !list.length) {
-        return h + '<div class="admin-empty">🎉 All caught up — no pending seller approvals.</div>';
+        return h + '<div class="admin-empty">🎉 All caught up — no pending seller approvals' + (!isSuper && mySociety ? ' in ' + esc(mySociety) : '') + '.</div>';
     }
     list.forEach(function (s) {
         h += '<div class="seller-row">' +
             '<div class="sr-avatar">' + esc(String(s.name || '?').charAt(0).toUpperCase()) + '</div>' +
             '<div class="sr-body">' +
             '<div class="sr-name">' + esc(s.name || 'Unknown') + '</div>' +
-            '<div class="sr-meta">📱 ' + esc(s.mobileNumber || '—') + ' · Registered ' + adminDate(s.registeredAt) + '</div>' +
+            '<div class="sr-meta">📱 ' + esc(s.mobileNumber || '—') +
+            (s.society ? ' · 🏢 ' + esc(s.society) : (isSuper ? ' · <span class="pill pill-amber">Unassigned Society</span>' : '')) +
+            ' · Registered ' + adminDate(s.registeredAt) + '</div>' +
             '</div>' +
             '<div class="sr-actions">' +
+            '<button class="btn btn-secondary btn-sm" type="button" data-action="review-seller-request" data-id="' + s.id + '">View Details</button>' +
             '<button class="btn btn-success btn-sm" type="button" data-action="approve-seller" data-id="' + s.id + '">Approve</button>' +
             // Handover 7.1: Request Changes is a first-class decision, not a rejection.
             '<button class="btn btn-outline btn-sm" type="button" data-action="open-admin-reason" data-mode="requestChanges" data-id="' + s.id + '" data-name="' + esc(s.name || 'Seller') + '">Request Changes</button>' +
@@ -1139,6 +1212,77 @@ async function adminPendingView() {
     });
     h += '</div>';
     return h;
+}
+
+async function adminOpenSellerReviewModal(sellerId) {
+    try {
+        var d = await api('/api/admin/sellers/' + sellerId + '/detail');
+        var k = (d.kitchens && d.kitchens.length) ? d.kitchens[0] : null;
+        var addressParts = [d.flatHouseNumber, d.building, d.society].filter(Boolean);
+        var addressStr = addressParts.length ? addressParts.join(', ') : (d.society || 'Not provided');
+        var coverage = d.serviceSocieties || d.serviceArea || (k && k.serviceSocieties) || d.society || 'Not provided';
+        var ig = d.instagramLink || (k && k.instagramLink) || 'Not provided';
+        var ref = d.referralSource || 'Not provided';
+
+        var modalHtml = '<div class="admin-review-modal">' +
+            '<div class="arm-head">' +
+            '<h3>Review Seller Application</h3>' +
+            '<p class="muted small">Submitted registration details (read-only)</p>' +
+            '</div>' +
+            '<div class="arm-body">' +
+            '<div class="arm-section">' +
+            '<div class="arm-sec-title">Seller Contact Information</div>' +
+            '<div class="arm-grid">' +
+            '<div class="arm-field"><span class="arm-lbl">Seller Name:</span> <strong>' + esc(d.name || d.sellerName || '—') + '</strong></div>' +
+            '<div class="arm-field"><span class="arm-lbl">Mobile Number:</span> ' + esc(d.mobileNumber || '—') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">WhatsApp Number:</span> ' + esc(d.whatsappNumber || 'Not provided') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">Email:</span> ' + esc(d.email || 'Not provided') + '</div>' +
+            '</div></div>' +
+
+            '<div class="arm-section">' +
+            '<div class="arm-sec-title">Kitchen & Store Details</div>' +
+            '<div class="arm-grid">' +
+            '<div class="arm-field"><span class="arm-lbl">Kitchen / Store Name:</span> <strong>' + esc(d.kitchenName || (k && k.name) || 'Not provided') + '</strong></div>' +
+            '<div class="arm-field"><span class="arm-lbl">Kitchen Type:</span> ' + esc(d.sellerCategory || d.enabledTypes || 'KITCHEN') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">Speciality:</span> ' + esc(d.speciality || (k && k.speciality) || 'Not provided') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">Short Description:</span> ' + esc(d.shortDescription || (k && k.shortDescription) || 'Not provided') + '</div>' +
+            '</div></div>' +
+
+            '<div class="arm-section">' +
+            '<div class="arm-sec-title">Location & Delivery Coverage</div>' +
+            '<div class="arm-grid">' +
+            '<div class="arm-field"><span class="arm-lbl">Primary Location:</span> ' + esc(d.area || d.primaryAreaName || 'Not provided') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">Address:</span> ' + esc(addressStr) + '</div>' +
+            '<div class="arm-field arm-col-span-2"><span class="arm-lbl">Selected Delivery Societies / Areas:</span> ' + esc(coverage) + '</div>' +
+            '</div></div>' +
+
+            '<div class="arm-section">' +
+            '<div class="arm-sec-title">Referral & Social Links</div>' +
+            '<div class="arm-grid">' +
+            '<div class="arm-field"><span class="arm-lbl">Instagram:</span> ' + (ig !== 'Not provided' ? '<a href="' + esc(ig) + '" target="_blank" rel="noopener">' + esc(ig) + '</a>' : 'Not provided') + '</div>' +
+            '<div class="arm-field"><span class="arm-lbl">Referral Source:</span> ' + esc(ref) + '</div>' +
+            '</div></div>' +
+
+            '<div class="arm-section">' +
+            '<label class="form-label font-700" for="reviewComment">Decision Comments / Feedback</label>' +
+            '<p class="muted tiny mb-1">Enter notes or required changes (mandatory for Request Changes / Reject):</p>' +
+            '<textarea class="form-input" id="reviewComment" rows="3" placeholder="Explain required changes or reasons for rejection..."></textarea>' +
+            '</div>' +
+
+            '</div>' + // .arm-body
+
+            '<div class="modal-actions arm-actions">' +
+            '<button class="btn btn-secondary" type="button" data-action="close-review-modal">Close</button>' +
+            '<button class="btn btn-outline" type="button" data-action="review-request-changes" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Request Changes</button>' +
+            '<button class="btn btn-danger" type="button" data-action="review-reject" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Reject</button>' +
+            '<button class="btn btn-success" type="button" data-action="review-approve" data-id="' + d.id + '" data-name="' + esc(d.name || '') + '">Approve</button>' +
+            '</div>' +
+            '</div>';
+
+        openModal(modalHtml);
+    } catch (e) {
+        toast('Could not load seller details: ' + (e.message || 'Access denied'), 'error');
+    }
 }
 
 async function adminBuyersView() {
@@ -1193,6 +1337,20 @@ async function adminSellersView() {
     // the tab fail when the second call raced. Counts now come from the same array,
     // matching every other list screen.
     var list = await api('/api/admin/sellers');
+    var isSuper = A.role === 'SUPER_ADMIN';
+    var myAreaId = A.me ? A.me.adminAreaId : null;
+    var mySociety = (A.me ? (A.me.society || A.me.adminAreaName) : '') || '';
+
+    // Area Admins only see sellers in their assigned society/area
+    if (!isSuper && (myAreaId || mySociety)) {
+        list = (list || []).filter(function (s) {
+            if (myAreaId && s.areaId) return String(s.areaId) === String(myAreaId);
+            if (mySociety && s.society) return s.society.toLowerCase().trim() === mySociety.toLowerCase().trim();
+            if (mySociety && s.area) return s.area.toLowerCase().trim() === mySociety.toLowerCase().trim();
+            return false;
+        });
+    }
+
     var status = A.sellerStatus || '';
     var term = adminSearchTerm('sellers');
     var counts = { '': (list || []).length, PENDING: 0, APPROVED: 0, REJECTED: 0, SUSPENDED: 0, CHANGES_REQUESTED: 0 };

@@ -57,6 +57,7 @@ public class OrderItemDetailDto {
         private BigDecimal pricePerUnit;
         private BigDecimal totalAmount;
         private String buyerName;
+        private String buyerPhone;
         private String buyerFlat;
         private String building;
         private String society;
@@ -89,6 +90,8 @@ public class OrderItemDetailDto {
         public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
         public String getBuyerName() { return buyerName; }
         public void setBuyerName(String buyerName) { this.buyerName = buyerName; }
+        public String getBuyerPhone() { return buyerPhone; }
+        public void setBuyerPhone(String buyerPhone) { this.buyerPhone = buyerPhone; }
         public String getBuyerFlat() { return buyerFlat; }
         public void setBuyerFlat(String buyerFlat) { this.buyerFlat = buyerFlat; }
         public String getBuilding() { return building; }

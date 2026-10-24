@@ -29,9 +29,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -82,6 +84,8 @@ public class SellerAppService {
      */
     @Autowired
     private RecurringScheduleService recurringScheduleService;
+    @Autowired(required = false)
+    private SlugService slugService;
 
     @Autowired
     public SellerAppService(KitchenRepository kitchenRepository,
@@ -239,7 +243,8 @@ public class SellerAppService {
                 .orElseThrow(() -> new TemplateNotFoundException(templateId));
         if (!template.getSeller().getId().equals(seller.getId()))
             throw new SellerNotAuthorizedException("Not your template");
-        Kitchen kitchen = getOwnedKitchen(seller);
+        List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
+        Kitchen kitchen = !kitchens.isEmpty() ? kitchens.get(0) : bootstrapDefaultKitchen(seller);
         boolean preorder = date != null && date.isAfter(java.time.LocalDate.now());
         assertFeatureCompliance(seller, preorder, date);
         Product product = templateToProduct(template, kitchen, date);
@@ -760,7 +765,15 @@ public class SellerAppService {
     private boolean itemMatchesDate(Order order, OrderItem item, LocalDate date) {
         if (date == null) return true;
         LocalDate fulfilment = item.getScheduledDate();
-        if (fulfilment == null && order.getCreatedAt() != null) fulfilment = order.getCreatedAt().toLocalDate();
+        if (fulfilment == null && item.getProduct() != null && item.getProduct().getAvailableDate() != null) {
+            fulfilment = item.getProduct().getAvailableDate();
+        }
+        if (fulfilment == null && order.getOrderTime() != null) {
+            fulfilment = order.getOrderTime().toLocalDate();
+        }
+        if (fulfilment == null && order.getCreatedAt() != null) {
+            fulfilment = order.getCreatedAt().toLocalDate();
+        }
         return date != null && date.equals(fulfilment);
     }
 
@@ -770,7 +783,7 @@ public class SellerAppService {
             // legacy casing still matches while a partial value can never pull in
             // unrelated records. Buyers without society never match a selection.
             String wanted = society.trim();
-            String buyerSociety = order.getBuyer() != null ? order.getBuyer().getSociety() : null;
+            String buyerSociety = order.getBuyer() != null ? (order.getBuyer().getSociety() != null ? order.getBuyer().getSociety() : (order.getBuyer().getSocietyRef() != null ? order.getBuyer().getSocietyRef().getName() : null)) : null;
             if (buyerSociety == null || !buyerSociety.trim().equalsIgnoreCase(wanted)) {
                 return false;
             }
@@ -829,10 +842,11 @@ public class SellerAppService {
         row.setTotalAmount(lineTotal);
         if (order.getBuyer() != null) {
             row.setBuyerName(order.getBuyer().getName());
+            row.setBuyerPhone(order.getBuyer().getMobileNumber());
 
             row.setBuyerFlat(order.getBuyer().getFlatHouseNumber());
             row.setBuilding(order.getBuyer().getBuilding());
-            row.setSociety(order.getBuyer().getSociety());
+            row.setSociety(order.getBuyer().getSociety() != null ? order.getBuyer().getSociety() : (order.getBuyer().getSocietyRef() != null ? order.getBuyer().getSocietyRef().getName() : null));
         } else {
             row.setBuyerName("Unknown");
         }
@@ -948,6 +962,40 @@ public class SellerAppService {
         return kitchens.get(0);
     }
 
+    private Kitchen bootstrapDefaultKitchen(User seller) {
+        String sellerName = (seller.getName() != null && !seller.getName().isBlank())
+                ? seller.getName().trim()
+                : "Seller";
+        String displayName = sellerName + "'s Kitchen";
+        String base = SlugService.slugify(displayName);
+        if (base.isBlank()) {
+            base = "kitchen-" + (seller.getId() != null ? seller.getId() : System.currentTimeMillis());
+        }
+        Kitchen kitchen = new Kitchen();
+        kitchen.setDisplayName(displayName);
+        kitchen.setDescription("");
+        kitchen.setSeller(seller);
+        kitchen.setSellerType(com.example.my_first_spring_api.model.SellerType.KITCHEN);
+        kitchen.setAvailableToday(true);
+        if (seller.getSociety() != null && !seller.getSociety().isBlank()) {
+            kitchen.setSociety(seller.getSociety());
+            kitchen.setServiceAreas(seller.getSociety());
+        }
+        if (slugService != null) {
+            slugService.reserveUniqueSlug(kitchen, base);
+        } else {
+            String candidate = base;
+            int counter = 2;
+            while (kitchenRepository.findByName(candidate).isPresent() || kitchenRepository.findBySlug(candidate).isPresent()) {
+                candidate = base + "-" + counter++;
+            }
+            kitchen.setName(candidate);
+            kitchen.setSlug(candidate);
+            kitchen = kitchenRepository.saveAndFlush(kitchen);
+        }
+        return kitchen;
+    }
+
     private void assertFeatureCompliance(User seller, boolean isPreorder, LocalDate availableDate) {
         if (isPreorder) {
             featureService.assertSellerCanUse(seller, FeatureService.KEY_PREORDERS);
@@ -996,8 +1044,8 @@ public class SellerAppService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
-        String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(), java.time.LocalTime.now());
-        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle));
+        String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
         dto.setCreatedAt(product.getCreatedAt());
         return dto;
@@ -1029,19 +1077,21 @@ public class SellerAppService {
         }
         String close = requirePublicationClose(template.getOrderWindowEnd(), template.getCutoffTime());
         String readyBy = OfferingTiming.rebaseReadyByTime(template.getReadyByTime(), offeringDate);
-        OfferingTiming.validateNewOffering(offeringDate, preorder,
+        close = OfferingTiming.validateNewOffering(offeringDate, preorder,
                 template.getOrderWindowStart(), close, readyBy);
         Product product = new Product(kitchen, template.getName(), template.getDescription(),
                 template.getPrice(), template.getImageUrl());
-        product.setPriceUnit(template.getPriceUnit());
+        product.setPriceUnit(template.getPriceUnit() != null ? template.getPriceUnit() : "portion");
+        product.setUnit(template.getPriceUnit() != null ? template.getPriceUnit() : "portion");
         product.setAvailableDate(offeringDate);
-        product.setAvailableToday(offeringDate.equals(LocalDate.now()) && !preorder);
+        product.setAvailableToday(Boolean.TRUE);
+        product.setIsVeg(Boolean.TRUE);
         product.setOrderWindowStart(template.getOrderWindowStart());
         product.setOrderWindowEnd(close);
         product.setMaxQuantity(template.getMaxQuantity());
         product.setRemainingQuantity(template.getMaxQuantity());
         product.setIsPreorder(preorder);
-        product.setCategory(template.getCategory() != null ? template.getCategory().name() : null);
+        product.setCategory(template.getCategory() != null ? template.getCategory().name() : "DINNER");
         product.setCutoffTime(close);
         product.setReadyByTime(readyBy);
         product.setBookedQuantity(0);
@@ -1073,13 +1123,15 @@ public class SellerAppService {
         String readyBy = flexible
                 ? offeringDate + "T23:59"
                 : OfferingTiming.rebaseReadyByTime(original.getReadyByTime(), offeringDate);
-        OfferingTiming.validateNewOffering(offeringDate, preorder,
+        close = OfferingTiming.validateNewOffering(offeringDate, preorder,
                 original.getOrderWindowStart(), close, readyBy);
         Product clone = new Product(kitchen, original.getName(), original.getDescription(),
                 original.getPrice(), original.getImageUrl());
-        clone.setPriceUnit(original.getPriceUnit());
+        clone.setPriceUnit(original.getPriceUnit() != null ? original.getPriceUnit() : "portion");
+        clone.setUnit(original.getUnit() != null ? original.getUnit() : "portion");
         clone.setAvailableDate(offeringDate);
-        clone.setAvailableToday(offeringDate.equals(LocalDate.now()) && !preorder);
+        clone.setAvailableToday(Boolean.TRUE);
+        clone.setIsVeg(original.getIsVeg() != null ? original.getIsVeg() : Boolean.TRUE);
         clone.setOrderWindowStart(null);
         clone.setOrderWindowEnd(close);
         Integer independentMax = original.getMaxQuantity() != null && original.getMaxQuantity() > 0
@@ -1087,7 +1139,7 @@ public class SellerAppService {
         clone.setMaxQuantity(independentMax);
         clone.setRemainingQuantity(independentMax);
         clone.setIsPreorder(preorder);
-        clone.setCategory(original.getCategory());
+        clone.setCategory(original.getCategory() != null && !original.getCategory().isBlank() ? original.getCategory() : "DINNER");
         clone.setCutoffTime(close);
         clone.setReadyByTime(readyBy);
         clone.setPreorderType(original.getPreorderType());

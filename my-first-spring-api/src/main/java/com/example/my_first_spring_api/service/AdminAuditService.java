@@ -56,6 +56,14 @@ public class AdminAuditService {
     // Security (Phase D): login rate-limit lockout, written by AuthController when the
     // 5-failures-in-15-minutes threshold trips. actor is SYSTEM (no authenticated user).
     public static final String LOGIN_LOCKED_OUT = "LOGIN_LOCKED_OUT";
+    // Manual password recovery (Admin-mediated reset V1): every state transition of a
+    // password_reset_requests row is written through record() - Request -> Review ->
+    // Generation -> Use -> Forced change.
+    public static final String PASSWORD_RECOVERY_REQUESTED = "PASSWORD_RECOVERY_REQUESTED";
+    public static final String PASSWORD_RECOVERY_APPROVED = "PASSWORD_RECOVERY_APPROVED";
+    public static final String PASSWORD_RECOVERY_REJECTED = "PASSWORD_RECOVERY_REJECTED";
+    public static final String PASSWORD_TEMP_USED = "PASSWORD_TEMP_USED";
+    public static final String PASSWORD_CHANGED = "PASSWORD_CHANGED";
 
     private static final int MAX_REASON = 1000;
 

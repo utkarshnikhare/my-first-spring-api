@@ -5,7 +5,10 @@ import com.example.my_first_spring_api.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -38,6 +41,8 @@ import java.util.*;
  */
 @Service
 public class RetentionService {
+
+    private static final Logger log = LoggerFactory.getLogger(RetentionService.class);
 
     public static final String SETTING_KEY = "order_retention_days";
     public static final int DEFAULT_RETENTION_DAYS = 5;
@@ -114,14 +119,22 @@ public class RetentionService {
      * never leave an aggregate row for an order that does not exist. It is
      * wrapped in a catch-all because analytics must never break checkout.</p>
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordOrderFact(Order order) {
         if (order == null) return;
         try {
             LocalDate day = orderDay(order);
             if (day == null) return;
             Kitchen kitchen = order.getKitchen();
-            User seller = kitchen != null ? kitchen.getSeller() : null;
+            User seller = null;
+            try {
+                seller = kitchen != null ? kitchen.getSeller() : null;
+                if (seller != null) {
+                    seller.getId();
+                }
+            } catch (Exception ex) {
+                seller = null;
+            }
             User buyer = order.getBuyer();
             String category = kitchen != null && kitchen.getSellerType() != null
                     ? kitchen.getSellerType().name() : null;
@@ -129,16 +142,20 @@ public class RetentionService {
             Long areaId = null; String areaName = null;
             Long societyId = null; String societyName = null;
             if (buyer != null) {
-                if (buyer.getAreaRef() != null) {
-                    areaId = buyer.getAreaRef().getId();
-                    areaName = buyer.getAreaRef().getName();
-                }
-                if (buyer.getSocietyRef() != null) {
-                    societyId = buyer.getSocietyRef().getId();
-                    societyName = buyer.getSocietyRef().getName();
-                }
-                if (societyName == null) societyName = buyer.getSociety();
-                if (areaName == null) areaName = buyer.getArea();
+                societyName = buyer.getSociety();
+                areaName = buyer.getArea();
+                try {
+                    if (buyer.getAreaRef() != null) {
+                        areaId = buyer.getAreaRef().getId();
+                        if (areaName == null) areaName = buyer.getAreaRef().getName();
+                    }
+                } catch (Exception ignored) {}
+                try {
+                    if (buyer.getSocietyRef() != null) {
+                        societyId = buyer.getSocietyRef().getId();
+                        if (societyName == null) societyName = buyer.getSocietyRef().getName();
+                    }
+                } catch (Exception ignored) {}
             }
 
             // A cancelled order contributes no count and no value to the rollup.
@@ -165,8 +182,8 @@ public class RetentionService {
             row.setOrderCount(row.getOrderCount() + count);
             row.setRecordedOrderValue(row.getRecordedOrderValue().add(value));
             aggregates.save(row);
-        } catch (RuntimeException ignored) {
-            // Aggregation must never break the order flow it observes.
+        } catch (Exception ex) {
+            log.warn("Could not record daily order aggregate: {}", ex.getMessage());
         }
     }
 

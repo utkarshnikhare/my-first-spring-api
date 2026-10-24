@@ -133,4 +133,20 @@ class SellerIndividualOrderUiTest {
         assertThat(buyerJs).as("buyer is untouched by this phase").doesNotContain("oic-root");
         assertThat(adminJs).as("admin is untouched by this phase").doesNotContain("oic-root");
     }
+    @Test
+    void individualOrderDisplaysDeliveryAddressAndStatusAndToggle() {
+        String v = view();
+        assertThat(v)
+                .as("displays deliver to address block")
+                .contains("Deliver To:")
+                .contains("addrParts.join")
+                .as("displays delivery status badge")
+                .contains("Delivery:")
+                .as("renders toggle-delivery-order action")
+                .contains("data-action=\"toggle-delivery-order\"");
+        assertThat(sellerJs)
+                .as("click handler includes toggle-delivery-order")
+                .contains("case 'toggle-delivery-order':")
+                .contains("/delivery-status");
+    }
 }

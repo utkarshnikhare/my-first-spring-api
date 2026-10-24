@@ -20,6 +20,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 
 import java.util.List;
 import java.util.Map;
@@ -294,6 +295,73 @@ class DirectRegistrationSecurityIntegrationTest {
                 .andReturn();
         MockHttpSession superSession = (MockHttpSession) superLogin.getRequest().getSession(false);
         mvc.perform(get("/api/superadmin/admins").session(superSession)).andExpect(status().isOk());
+    }
+
+    @Test
+    void pendingSellerLoginExplainsAwaitingApprovalUntilAnAdminApproves() throws Exception {
+        String mobile = uniqueMobile("7");
+        Long sellerId = registerSeller(mobile);
+
+        // The correct password is refused with the SPECIFIC approval message, not a
+        // generic "invalid credentials" answer.
+        login(mobile, SELLER_TEST_PASSWORD)
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Your account is pending admin approval"));
+
+        // ...but only when the password is correct: the specific message can never be
+        // used to probe which mobile numbers are registered as pending sellers.
+        login(mobile, WRONG_TEST_PASSWORD)
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Invalid mobile number or password."));
+
+        User admin = users.saveAndFlush(new User("Approval Admin", uniqueMobile("9"), null, UserRole.ADMIN));
+        MockHttpSession adminSession = (MockHttpSession) mvc.perform(post("/api/auth/login")
+                        .with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(Map.of(
+                                "mobileNumber", admin.getMobileNumber(), "password", ADMIN_TEST_PASSWORD))))
+                .andExpect(status().isOk()).andReturn().getRequest().getSession(false);
+        mvc.perform(post("/api/admin/sellers/" + sellerId + "/approve")
+                        .with(csrf()).session(adminSession))
+                .andExpect(status().isOk());
+
+        // Once approved, the very same credentials log in normally.
+        login(mobile, SELLER_TEST_PASSWORD).andExpect(status().isOk());
+    }
+
+    /** Registers a PENDING seller through the real HTTP flow and returns its id. */
+    private Long registerSeller(String mobile) throws Exception {
+        Map<String, Object> sellerRequest = Map.ofEntries(
+                Map.entry("sellerName", "Seller " + suffix),
+                Map.entry("mobileNumber", mobile),
+                Map.entry("password", SELLER_TEST_PASSWORD),
+                Map.entry("whatsappNumber", uniqueMobile("8")),
+                Map.entry("alternateContact", uniqueMobile("9")),
+                Map.entry("kitchenName", "Kitchen " + suffix),
+                Map.entry("kitchenSlug", "kitchen-" + suffix),
+                Map.entry("speciality", "Maharashtrian breakfast"),
+                Map.entry("sellerCategory", "BOTH"),
+                Map.entry("shortDescription", "Test seller storefront"),
+                Map.entry("instagramLink", "https://instagram.com/demo"),
+                Map.entry("primaryAreaId", areaId),
+                Map.entry("primarySocietyId", societyId),
+                Map.entry("building", "C Wing"),
+                Map.entry("serviceAreaId", areaId),
+                Map.entry("serviceSocietyIds", List.of(societyId)));
+        MvcResult registered = mvc.perform(post("/api/auth/register/seller")
+                        .with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(sellerRequest)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.sellerApprovalStatus").value("PENDING"))
+                .andReturn();
+        return objectMapper.readTree(registered.getResponse().getContentAsByteArray())
+                .get("userId").asLong();
+    }
+
+    private ResultActions login(String mobile, String password) throws Exception {
+        return mvc.perform(post("/api/auth/login")
+                .with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(Map.of(
+                        "mobileNumber", mobile, "password", password))));
     }
 
     private static String uniqueMobile(String prefix) {

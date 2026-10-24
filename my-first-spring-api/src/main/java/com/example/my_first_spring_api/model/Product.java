@@ -20,19 +20,25 @@ public class Product {
     private String name;
 
     @Column(columnDefinition = "TEXT")
-    private String description;
+    private String description = "";
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 
     @Column(name = "price_unit")
-    private String priceUnit;
+    private String priceUnit = "portion";
+
+    @Transient
+    private String unit = "portion";
 
     @Column(name = "image_url")
     private String imageUrl;
 
     @Column(name = "available_today")
-    private Boolean availableToday = true;
+    private Boolean availableToday = Boolean.TRUE;
+
+    @Transient
+    private Boolean isVeg = Boolean.TRUE;
 
     @Column(name = "available_date")
     private LocalDate availableDate;
@@ -60,7 +66,7 @@ public class Product {
 
     /** Comma-separated food categories for buyer discovery (e.g. "BREAKFAST,SNACKS"). */
     @Column(name = "category")
-    private String category;
+    private String category = "DINNER";
 
     /**
      * OFFERING-LEVEL order cutoff (HH:mm, e.g. "11:30"). Cutoffs NEVER belong to
@@ -98,14 +104,24 @@ public class Product {
     private LocalDateTime updatedAt;
 
     @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+    @PreUpdate
+    public void ensureNonNullFields() {
+        if (this.createdAt == null) this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+        if (this.availableToday == null) this.availableToday = Boolean.TRUE;
+        if (this.isVeg == null) this.isVeg = Boolean.TRUE;
+        if (this.description == null) this.description = "";
+        if (this.category == null || this.category.isBlank()) this.category = "DINNER";
+        if (this.unit == null || this.unit.isBlank()) this.unit = "portion";
+        if (this.priceUnit == null || this.priceUnit.isBlank()) this.priceUnit = this.unit;
     }
 
-    @PreUpdate
+    protected void onCreate() {
+        ensureNonNullFields();
+    }
+
     protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        ensureNonNullFields();
     }
 
     public Product() {}
@@ -113,9 +129,14 @@ public class Product {
     public Product(Kitchen kitchen, String name, String description, BigDecimal price, String imageUrl) {
         this.kitchen = kitchen;
         this.name = name;
-        this.description = description;
+        this.description = description != null ? description : "";
         this.price = price;
         this.imageUrl = imageUrl;
+        this.availableToday = Boolean.TRUE;
+        this.isVeg = Boolean.TRUE;
+        this.category = "DINNER";
+        this.unit = "portion";
+        this.priceUnit = "portion";
     }
 
     public Long getId() { return id; }
@@ -124,16 +145,29 @@ public class Product {
     public void setKitchen(Kitchen kitchen) { this.kitchen = kitchen; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+    public String getDescription() { return description != null ? description : ""; }
+    public void setDescription(String description) { this.description = (description != null) ? description : ""; }
     public BigDecimal getPrice() { return price; }
     public void setPrice(BigDecimal price) { this.price = price; }
-    public String getPriceUnit() { return priceUnit; }
-    public void setPriceUnit(String priceUnit) { this.priceUnit = priceUnit; }
+    public String getPriceUnit() { return priceUnit != null ? priceUnit : unit; }
+    public void setPriceUnit(String priceUnit) {
+        this.priceUnit = (priceUnit != null && !priceUnit.isBlank()) ? priceUnit : this.unit;
+        this.unit = this.priceUnit;
+    }
+    public String getUnit() { return unit != null ? unit : (priceUnit != null ? priceUnit : "portion"); }
+    public void setUnit(String unit) {
+        this.unit = (unit != null && !unit.isBlank()) ? unit : "portion";
+        if (this.priceUnit == null || this.priceUnit.isBlank()) this.priceUnit = this.unit;
+    }
     public String getImageUrl() { return imageUrl; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
-    public Boolean getAvailableToday() { return availableToday; }
-    public void setAvailableToday(Boolean availableToday) { this.availableToday = availableToday; }
+    public Boolean getAvailableToday() { return availableToday != null ? availableToday : Boolean.TRUE; }
+    public void setAvailableToday(Boolean availableToday) { this.availableToday = (availableToday != null) ? availableToday : Boolean.TRUE; }
+    @Transient
+    public Boolean getIsAvailable() { return getAvailableToday(); }
+    public void setIsAvailable(Boolean isAvailable) { setAvailableToday(isAvailable); }
+    public Boolean getIsVeg() { return isVeg != null ? isVeg : Boolean.TRUE; }
+    public void setIsVeg(Boolean isVeg) { this.isVeg = (isVeg != null) ? isVeg : Boolean.TRUE; }
     public Boolean getOrdersPaused() { return ordersPaused; }
     public void setOrdersPaused(Boolean ordersPaused) { this.ordersPaused = ordersPaused; }
     public boolean isOrdersPaused() { return Boolean.TRUE.equals(ordersPaused); }
@@ -151,8 +185,8 @@ public class Product {
     public void setRating(Double rating) { this.rating = rating; }
     public Boolean getIsPreorder() { return isPreorder; }
     public void setIsPreorder(Boolean isPreorder) { this.isPreorder = isPreorder; }
-    public String getCategory() { return category; }
-    public void setCategory(String category) { this.category = category; }
+    public String getCategory() { return category != null && !category.isBlank() ? category : "DINNER"; }
+    public void setCategory(String category) { this.category = (category != null && !category.isBlank()) ? category : "DINNER"; }
     public String getCutoffTime() { return cutoffTime; }
     public void setCutoffTime(String cutoffTime) { this.cutoffTime = cutoffTime; }
     public String getReadyByTime() { return readyByTime; }

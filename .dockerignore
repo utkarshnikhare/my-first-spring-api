@@ -39,10 +39,6 @@ login*.json
 login*.ps1
 *_cookies.txt
 
-# Ignore application configs that shouldn't be in build context
-application-dev.properties
-application-prod.properties
-
 # Ignore Dockerfile itself (already in context)
 Dockerfile
 render.yaml

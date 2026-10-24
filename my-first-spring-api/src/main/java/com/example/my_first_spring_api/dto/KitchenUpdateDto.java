@@ -21,6 +21,7 @@ public class KitchenUpdateDto {
     private java.util.List<Long> societyIds;
     private String building;
     private String whatsappLink;
+    private String whatsappNumber;
     private String instagramLink;
     private String galleryImages;
     private String upiId;
@@ -51,6 +52,8 @@ public class KitchenUpdateDto {
     public void setBuilding(String building) { this.building = building; }
     public String getWhatsappLink() { return whatsappLink; }
     public void setWhatsappLink(String whatsappLink) { this.whatsappLink = whatsappLink; }
+    public String getWhatsappNumber() { return whatsappNumber; }
+    public void setWhatsappNumber(String whatsappNumber) { this.whatsappNumber = whatsappNumber; }
     public String getInstagramLink() { return instagramLink; }
     public void setInstagramLink(String instagramLink) { this.instagramLink = instagramLink; }
     public String getGalleryImages() { return galleryImages; }

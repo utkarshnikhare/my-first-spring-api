@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -63,22 +64,30 @@ public class DiscoveryService {
     }
 
     private List<Product> visibleProducts(User buyer) {
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
         return productRepository.findAll().stream()
                 .filter(p -> p.getKitchen() != null && KitchenVisibility.isKitchenStore(p.getKitchen())
                         && KitchenVisibility.isKitchenProduct(p)
                         && KitchenVisibility.isPubliclyVisible(p.getKitchen())
                         && KitchenVisibility.isServiceAreaVisible(p.getKitchen(), buyer))
                 .filter(p -> !p.isOrdersPaused())
+                .filter(p -> p.getAvailableDate() == null || !p.getAvailableDate().isBefore(today))
                 .collect(Collectors.toList());
     }
 
     private static boolean orderableToday(Product p) {
-        return Boolean.TRUE.equals(p.getAvailableToday()) && !Boolean.TRUE.equals(p.getIsPreorder())
-                && OfferingTiming.isWindowOpenNow(p);
+        if (p == null) return false;
+        if (!Boolean.TRUE.equals(p.getAvailableToday())) return false;
+        if (Boolean.TRUE.equals(p.getIsPreorder())) return false;
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        if (p.getAvailableDate() != null && p.getAvailableDate().isBefore(today)) return false;
+        return OfferingTiming.isWindowOpenNow(p);
     }
 
     private static boolean availableTomorrow(Product p) {
-        return LocalDate.now().plusDays(1).equals(p.getAvailableDate())
+        if (p == null) return false;
+        LocalDate tomorrow = LocalDate.now(AppTimeZone.ZONE).plusDays(1);
+        return tomorrow.equals(p.getAvailableDate())
                 && Boolean.TRUE.equals(p.getIsPreorder()) && OfferingTiming.isWindowOpenNow(p);
     }
 
@@ -299,6 +308,7 @@ public class DiscoveryService {
                     List<Product> items = productRepository.findByKitchenAndAvailableTodayTrueOrderByCreatedAtDesc(k).stream()
                             .filter(KitchenVisibility::isHomemadeProduct)
                             .filter(p -> !p.isOrdersPaused())
+                            .filter(p -> p.getAvailableDate() == null || !p.getAvailableDate().isBefore(LocalDate.now(AppTimeZone.ZONE)))
                             .collect(Collectors.toList());
                     return toHomemadeCard(k, items);
                 })

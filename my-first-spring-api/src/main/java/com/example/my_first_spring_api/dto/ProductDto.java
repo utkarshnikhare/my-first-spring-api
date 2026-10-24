@@ -11,9 +11,11 @@ public class ProductDto {
     private String name;
     private String description;
     private BigDecimal price;
-    private String priceUnit;
+    private String priceUnit = "portion";
+    private String unit = "portion";
     private String imageUrl;
-    private Boolean availableToday;
+    private Boolean availableToday = Boolean.TRUE;
+    private Boolean isVeg = Boolean.TRUE;
     private LocalDate availableDate;
     private Boolean ordersPaused;
     private String orderWindowStart;
@@ -85,12 +87,24 @@ public class ProductDto {
     public void setDescription(String description) { this.description = description; }
     public BigDecimal getPrice() { return price; }
     public void setPrice(BigDecimal price) { this.price = price; }
-    public String getPriceUnit() { return priceUnit; }
-    public void setPriceUnit(String priceUnit) { this.priceUnit = priceUnit; }
+    public String getPriceUnit() { return priceUnit != null && !priceUnit.isBlank() ? priceUnit : unit; }
+    public void setPriceUnit(String priceUnit) {
+        this.priceUnit = priceUnit;
+        if (this.unit == null || this.unit.isBlank()) this.unit = priceUnit;
+    }
+    public String getUnit() { return unit != null && !unit.isBlank() ? unit : (priceUnit != null && !priceUnit.isBlank() ? priceUnit : "portion"); }
+    public void setUnit(String unit) {
+        this.unit = unit;
+        if (this.priceUnit == null || this.priceUnit.isBlank()) this.priceUnit = unit;
+    }
     public String getImageUrl() { return imageUrl; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
-    public Boolean getAvailableToday() { return availableToday; }
-    public void setAvailableToday(Boolean availableToday) { this.availableToday = availableToday; }
+    public Boolean getAvailableToday() { return availableToday != null ? availableToday : Boolean.TRUE; }
+    public void setAvailableToday(Boolean availableToday) { this.availableToday = (availableToday != null) ? availableToday : Boolean.TRUE; }
+    public Boolean getIsAvailable() { return getAvailableToday(); }
+    public void setIsAvailable(Boolean isAvailable) { setAvailableToday(isAvailable); }
+    public Boolean getIsVeg() { return isVeg != null ? isVeg : Boolean.TRUE; }
+    public void setIsVeg(Boolean isVeg) { this.isVeg = (isVeg != null) ? isVeg : Boolean.TRUE; }
     public LocalDate getAvailableDate() { return availableDate; }
     public void setAvailableDate(LocalDate availableDate) { this.availableDate = availableDate; }
     public Boolean getOrdersPaused() { return ordersPaused; }

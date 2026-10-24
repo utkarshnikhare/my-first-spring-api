@@ -30,6 +30,14 @@ public class AuthResponseDto {
     private String kitchenSlug;
     private String kitchenUrl;
     private String sellerCategory;
+    /**
+     * True when the user authenticated with a one-time temporary password issued
+     * by a Super Admin (manual recovery flow). The client MUST route the user to
+     * the change-password screen; every other API call is blocked server-side
+     * until the password is changed. Additive field with its own accessors, so
+     * every existing constructor call site stays source-compatible.
+     */
+    private boolean mustChangePassword;
 
     public AuthResponseDto() {}
 
@@ -97,4 +105,6 @@ public class AuthResponseDto {
     public void setKitchenUrl(String kitchenUrl) { this.kitchenUrl = kitchenUrl; }
     public String getSellerCategory() { return sellerCategory; }
     public void setSellerCategory(String sellerCategory) { this.sellerCategory = sellerCategory; }
+    public boolean isMustChangePassword() { return mustChangePassword; }
+    public void setMustChangePassword(boolean mustChangePassword) { this.mustChangePassword = mustChangePassword; }
 }

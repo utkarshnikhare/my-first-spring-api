@@ -41,6 +41,9 @@ test('seller approval -> live offering -> buyer order -> inventory -> seller del
   await offeringForm.locator('[name="price"]').fill('75');
   await offeringForm.locator('[name="maxQuantity"]').fill('1');
   await offeringForm.locator('input[name="categories"][value="LUNCH"]').check();
+  if (await offeringForm.locator('#orderCloseDropdown').count() > 0) {
+    await offeringForm.locator('#orderCloseDropdown').selectOption('custom');
+  }
   await offeringForm.locator('[name="orderWindowEnd"]').fill('23:59');
   const readyBy = new Date();
   readyBy.setDate(readyBy.getDate() + 1);

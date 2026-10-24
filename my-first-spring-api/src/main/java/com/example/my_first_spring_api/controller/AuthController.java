@@ -2,7 +2,10 @@ package com.example.my_first_spring_api.controller;
 
 import com.example.my_first_spring_api.dto.AuthResponseDto;
 import com.example.my_first_spring_api.dto.BuyerRegistrationRequestDto;
+import com.example.my_first_spring_api.dto.ChangePasswordRequestDto;
 import com.example.my_first_spring_api.dto.CredentialLoginRequestDto;
+import com.example.my_first_spring_api.dto.ForgotPasswordRequestDto;
+import com.example.my_first_spring_api.dto.ResetPasswordRequestDto;
 import com.example.my_first_spring_api.dto.SellerRegistrationRequestDto;
 import com.example.my_first_spring_api.exception.InvalidCredentialsException;
 import com.example.my_first_spring_api.model.User;
@@ -10,7 +13,9 @@ import com.example.my_first_spring_api.security.AuthRateLimiter;
 import com.example.my_first_spring_api.service.AdminAuditService;
 import com.example.my_first_spring_api.service.BuyerService;
 import com.example.my_first_spring_api.service.AuthService;
+import com.example.my_first_spring_api.service.AuthService.PasswordResetResponseDto;
 import com.example.my_first_spring_api.service.OrderService;
+import com.example.my_first_spring_api.service.PasswordRecoveryService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -48,6 +53,12 @@ public class AuthController {
     /** Append-only audit for login lockouts. Optional for the same reason as above. */
     @Autowired(required = false)
     private AdminAuditService auditService;
+    /**
+     * Manual (Admin-mediated) password recovery. Optional field-injection for the
+     * same hand-constructed-test reason; call sites are null-guarded.
+     */
+    @Autowired(required = false)
+    private PasswordRecoveryService passwordRecovery;
 
     @Autowired
     public AuthController(BuyerService buyerService, AuthService authService,
@@ -102,28 +113,86 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 
-    @PostMapping("/login")
+    @PostMapping(value = {"/login", "/admin", "/admin/login"})
     public ResponseEntity<AuthResponseDto> login(@Valid @RequestBody CredentialLoginRequestDto request,
                                                   HttpServletRequest servletRequest,
                                                   HttpServletResponse response) {
         String mobile = request.getMobileNumber();
         String ip = clientIp(servletRequest);
+        String uri = servletRequest != null ? servletRequest.getRequestURI() : null;
+        boolean isAdmin = (uri != null && uri.contains("/admin"))
+                || (rateLimiter != null && rateLimiter.isAdminMobile(mobile));
         if (rateLimiter != null) {
             // Rejects with 429 when this mobile or IP is currently locked out.
             rateLimiter.assertLoginAllowed(mobile, ip);
         }
         try {
-            User user = authService.login(request);
+            AuthService.LoginResult outcome = authService.loginWithOutcome(request);
+            User user = outcome.user();
             if (rateLimiter != null) {
                 rateLimiter.clearLoginFailures(mobile);
             }
-            return ResponseEntity.ok(authenticate(user, "Logged in successfully", servletRequest, response));
+            boolean tempPasswordLogin = outcome.tempPasswordLogin();
+            return ResponseEntity.ok(authenticate(user, tempPasswordLogin
+                    ? "Logged in with your temporary password. You must set a new password to continue."
+                    : "Logged in successfully", servletRequest, response, tempPasswordLogin));
         } catch (InvalidCredentialsException ex) {
-            if (rateLimiter != null && rateLimiter.recordLoginFailure(mobile, ip)) {
+            if (rateLimiter != null && rateLimiter.recordLoginFailure(mobile, ip, isAdmin)) {
                 auditLoginLockout(mobile, ip);
             }
             throw ex;
         }
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequestDto request,
+                                             HttpServletRequest servletRequest) {
+        if (StringUtils.hasText(request.getMobileNumber())) {
+            // Manual (Admin-mediated) recovery V1: always the same neutral answer, and a
+            // PENDING row in the Super Admin review queue. Buyers and unknown mobiles
+            // get the identical answer and create nothing - no account probing.
+            String mobile = request.getMobileNumber().trim();
+            String ip = clientIp(servletRequest);
+            if (rateLimiter != null) {
+                rateLimiter.assertRecoveryAllowed(mobile, ip);
+                rateLimiter.recordRecovery(mobile, ip);
+            }
+            if (passwordRecovery != null) {
+                passwordRecovery.requestRecoveryByMobile(mobile);
+            }
+            return ResponseEntity.ok(Map.of("message",
+                    PasswordRecoveryService.NEUTRAL_REQUEST_MESSAGE));
+        }
+        if (!StringUtils.hasText(request.getEmail())) {
+            throw new IllegalArgumentException(
+                    "Provide the e-mail or the mobile number registered with your account.");
+        }
+        PasswordResetResponseDto response = authService.requestPasswordReset(request.getEmail());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Forced (or voluntary) password change. Verifies the current password - the
+     * original one or the temporary password that opened this session - writes the
+     * new BCrypt hash (>= 10 characters, confirmation must match) and lifts the
+     * forced-change session flag.
+     */
+    @PostMapping("/change-password")
+    public ResponseEntity<Map<String, String>> changePassword(
+            @Valid @RequestBody ChangePasswordRequestDto request, HttpSession session) {
+        User user = buyerService.requireCurrentBuyer(session);
+        authService.changePassword(user, request.getCurrentPassword(), request.getNewPassword(),
+                request.getConfirmPassword());
+        session.removeAttribute(PasswordRecoveryService.MUST_CHANGE_PASSWORD_SESSION_ATTR);
+        return ResponseEntity.ok(Map.of("message",
+                "Password changed successfully. You can now continue normally."));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequestDto request) {
+        authService.resetPassword(request.getToken(), request.getNewPassword());
+        return ResponseEntity.ok(Map.of("message",
+                "Password has been reset. You can now log in with your new password."));
     }
 
     @GetMapping("/me")
@@ -160,12 +229,24 @@ public class AuthController {
 
     private AuthResponseDto authenticate(User user, String message, HttpServletRequest request,
                                          HttpServletResponse response) {
+        return authenticate(user, message, request, response, false);
+    }
+
+    private AuthResponseDto authenticate(User user, String message, HttpServletRequest request,
+                                         HttpServletResponse response, boolean mustChangePassword) {
         HttpSession session = request.getSession(true);
         if (!java.util.Objects.equals(session.getAttribute(BuyerService.BUYER_SESSION_KEY), user.getId())) {
             session.removeAttribute(OrderService.DRAFT_ORDER_SESSION_KEY);
         }
         request.changeSessionId();
         session.setAttribute(BuyerService.BUYER_SESSION_KEY, user.getId());
+        // Manual recovery: every fresh login starts from a clean slate; only a
+        // temporary-password login carries the forced-change flag into the session
+        // (JDBC-backed, so it survives a restart). The interceptor reads this flag.
+        session.removeAttribute(PasswordRecoveryService.MUST_CHANGE_PASSWORD_SESSION_ATTR);
+        if (mustChangePassword) {
+            session.setAttribute(PasswordRecoveryService.MUST_CHANGE_PASSWORD_SESSION_ATTR, Boolean.TRUE);
+        }
         Authentication authentication = new UsernamePasswordAuthenticationToken(
                 user.getId(), null,
                 List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name())));
@@ -173,7 +254,9 @@ public class AuthController {
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
         securityContextRepository.saveContext(context, request, response);
-        return toAuthResponse(user, message);
+        AuthResponseDto dto = toAuthResponse(user, message);
+        dto.setMustChangePassword(mustChangePassword);
+        return dto;
     }
 
     private static AuthResponseDto toAuthResponse(User user, String message) {

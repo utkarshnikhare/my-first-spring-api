@@ -557,6 +557,26 @@ class AdminHandoverGapTest {
     }
 
     @Test
+    @DisplayName("s15: an Area Admin sees buyers with unlinked or text-stored society/area without dropping them")
+    void areaAdminSeesBuyersWithTextSocietyOrArea() {
+        Area mine = locationService.createArea("ScopeTextMine " + sfx);
+        Society soc = locationService.createSociety(mine.getId(), "ScopeTextSoc " + sfx);
+        User textBuyer = buyer();
+        textBuyer.setSociety(soc.getName());
+        textBuyer.setSocietyRef(null);
+        textBuyer.setAreaRef(null);
+        users.save(textBuyer);
+
+        User areaAdmin = areaAdminFor(mine);
+
+        List<Map<String, Object>> visible = adminService.buyers(null, null, null, areaAdmin);
+        assertThat(visible).extracting(m -> m.get("id")).contains(textBuyer.getId());
+        Map<String, Object> row = visible.stream().filter(m -> m.get("id").equals(textBuyer.getId())).findFirst().orElseThrow();
+        assertThat(row.get("areaId")).isEqualTo(mine.getId());
+        assertThat(row.get("societyId")).isEqualTo(soc.getId());
+    }
+
+    @Test
     @DisplayName("s15: an Area Admin's own Area overrides a request for a different Area")
     void areaScopeCannotBeWidenedByTheRequest() {
         Area mine = locationService.createArea("ScopeC " + sfx);

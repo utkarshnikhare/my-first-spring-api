@@ -178,17 +178,24 @@ class RecurringFoundationPersistenceTest {
 
   @Test
   void acceptanceScenario() {
-    // 1. Create schedule
-    RecurringSchedule sch = schedules.save(newSchedule(product, 14));
-    // Simulate generation for the next Mon / Wed / Fri. The dates are computed
-    // RELATIVE to "today" (never hard-coded) because updateSchedule only
-    // refreshes occurrences strictly after today: the original fixed October
-    // 2026 dates expired the moment the calendar reached 2026-10-12 itself and
-    // Monday stopped being a future occurrence.
-    LocalDate monDate = LocalDate.now().with(DayOfWeek.MONDAY).plusWeeks(1);
-    Occurrence mon = occurrences.save(new Occurrence(sch, monDate));
-    Occurrence wed = occurrences.save(new Occurrence(sch, monDate.plusDays(2)));
-    Occurrence fri = occurrences.save(new Occurrence(sch, monDate.plusDays(4)));
+    // 1. Create schedule. Use a fixed far-future reference date so this test is
+    // deterministic and does not depend on the machine's current date.
+    LocalDate referenceDate = LocalDate.of(2099, 10, 1);
+    LocalDate monday = referenceDate.with(java.time.temporal.TemporalAdjusters.next(DayOfWeek.MONDAY));
+    LocalDate wednesday = monday.plusDays(2);
+    LocalDate friday = monday.plusDays(4);
+
+    RecurringSchedule sch = new RecurringSchedule(product, monday.minusWeeks(2), friday.plusWeeks(2),
+        EnumSet.of(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY));
+    sch.setDefaultQuantity(14);
+    sch.setDefaultOrderCloseTime("13:00");
+    sch.setDefaultReadyByTime("3:00 PM");
+    sch = schedules.save(sch);
+
+    // Simulate generation for the future Monday, Wednesday and Friday occurrences.
+    Occurrence mon = occurrences.save(new Occurrence(sch, monday));
+    Occurrence wed = occurrences.save(new Occurrence(sch, wednesday));
+    Occurrence fri = occurrences.save(new Occurrence(sch, friday));
     
     // Default setting for occurrences
     for (Occurrence o : java.util.List.of(mon, wed, fri)) {
@@ -235,7 +242,8 @@ class RecurringFoundationPersistenceTest {
     scheduleService.updateSchedule(sch.getId(), updateDto);
     
     // Verify future occurrences updated
-    // Note: Assuming "today" in updateSchedule is before 10/12, all are future.
+    // All three simulated occurrences are after updateSchedule's "today", so all
+    // are treated as future rows and receive the updated defaults.
     assertThat(occurrences.findById(mon.getId()).get().getQuantity()).isEqualTo(18);
     assertThat(occurrences.findById(mon.getId()).get().getReadyByTime()).isEqualTo("13:30");
     

@@ -23,6 +23,7 @@ import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.OrderItemRepository;
 import com.example.my_first_spring_api.repository.ProductRepository;
 import com.example.my_first_spring_api.repository.UserRepository;
+import com.example.my_first_spring_api.AppTimeZone;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,7 +49,8 @@ public class SellerService {
     /** Public-URL slug authority. Field-injected so manually-constructed test instances keep working. */
     @Autowired
     private SlugService slugService;
-    @Autowired
+
+    @Autowired(required = false)
     private UserRepository userRepository;
 
     @Autowired
@@ -143,7 +145,12 @@ public class SellerService {
         if (dto.getSociety() != null) throw new IllegalArgumentException("Primary Society is a protected field and cannot be changed");
         if (dto.getBuilding() != null) throw new IllegalArgumentException("Primary Building is a protected field and cannot be changed");
         if (dto.getName() != null) throw new IllegalArgumentException("Kitchen URL name is a protected field and cannot be changed");
-        if (dto.getDisplayName() != null && !dto.getDisplayName().isBlank()) kitchen.setDisplayName(dto.getDisplayName());
+        if (dto.getDisplayName() != null) {
+            if (dto.getDisplayName().trim().isEmpty()) {
+                throw new IllegalArgumentException("Kitchen Name cannot be blank.");
+            }
+            kitchen.setDisplayName(dto.getDisplayName().trim());
+        }
         if (dto.getDescription() != null) kitchen.setDescription(dto.getDescription());
         if (dto.getShortDescription() != null) kitchen.setShortDescription(dto.getShortDescription());
         if (dto.getSpeciality() != null) kitchen.setSpeciality(dto.getSpeciality());
@@ -159,6 +166,15 @@ public class SellerService {
                     societyDirectory.validateAndNormalize(dto.getServiceAreas()));
         }
         if (dto.getWhatsappLink() != null) kitchen.setWhatsappLink(dto.getWhatsappLink());
+        if (dto.getWhatsappNumber() != null) {
+            String cleanWa = dto.getWhatsappNumber().trim();
+            if (kitchen.getSeller() != null) {
+                kitchen.getSeller().setSellerWhatsappNumber(cleanWa.isEmpty() ? null : cleanWa);
+                if (userRepository != null) {
+                    userRepository.save(kitchen.getSeller());
+                }
+            }
+        }
         if (dto.getInstagramLink() != null) kitchen.setInstagramLink(dto.getInstagramLink());
         if (dto.getUpiId() != null) kitchen.setUpiId(dto.getUpiId());
         if (dto.getGalleryImages() != null) kitchen.setGalleryImages(dto.getGalleryImages());
@@ -233,27 +249,31 @@ public class SellerService {
     }
 
     public ProductDto createProduct(Long kitchenId, ProductCreateDto dto, User seller) {
-        Kitchen kitchen = getOwnedKitchen(kitchenId, seller);
-        LocalDate offeringDate = dto.getAvailableDate();
-        LocalDate today = java.time.LocalDate.now();
+        Kitchen kitchen = resolveOfferingKitchen(kitchenId, seller);
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        LocalDate offeringDate = dto.getAvailableDate() != null ? dto.getAvailableDate() : today;
         boolean recurringRequest = dto.getRecurringSchedule() != null;
         boolean preorder = !recurringRequest && (dto.getIsPreorder() != null
-                ? dto.getIsPreorder() : offeringDate != null && offeringDate.isAfter(today));
-        if (!recurringRequest && offeringDate != null && offeringDate.isAfter(today) && !preorder) {
-            throw new IllegalArgumentException("Future offerings must be pre-orders.");
+                ? dto.getIsPreorder() : offeringDate.isAfter(today));
+        if (!recurringRequest && offeringDate.isAfter(today) && !preorder) {
+            preorder = true;
         }
         if (preorder && !offeringDate.isAfter(today)) {
-            throw new IllegalArgumentException("Pre-orders must be for a future offering date.");
+            preorder = false;
         }
         // Validate authoritative offering input before platform feature gating so
         // malformed requests receive the actionable field error, not a feature error.
         String orderWindowStart = OfferingTiming.normalizeHhmm(dto.getOrderWindowStart(), "Orders Open");
-        String orderWindowEnd = OfferingTiming.requireOrdersClose(dto.getOrderWindowEnd());
+        String orderWindowEnd = dto.getOrderWindowEnd() != null && !dto.getOrderWindowEnd().isBlank()
+                ? OfferingTiming.normalizeHhmm(dto.getOrderWindowEnd(), "Orders Close")
+                : null;
         String readyByTime = dto.getReadyByTime() == null ? null : dto.getReadyByTime().trim();
         Integer maxQuantity = dto.getMaxQuantity();
         if (recurringRequest) {
             RecurringScheduleDto rule = dto.getRecurringSchedule();
-            orderWindowEnd = OfferingTiming.requireOrdersClose(rule.getDefaultOrderCloseTime());
+            orderWindowEnd = rule.getDefaultOrderCloseTime() != null && !rule.getDefaultOrderCloseTime().isBlank()
+                    ? OfferingTiming.normalizeHhmm(rule.getDefaultOrderCloseTime(), "Orders Close")
+                    : "23:59";
             readyByTime = rule.getDefaultReadyByTime() == null ? null : rule.getDefaultReadyByTime().trim();
             maxQuantity = rule.getDefaultQuantity();
         }
@@ -272,13 +292,22 @@ public class SellerService {
                 throw new IllegalArgumentException("Default Delivery / Ready By is required.");
             }
         } else {
-            OfferingTiming.validateNewOffering(dto.getAvailableDate(), preorder,
+            // Cross-day tolerance: a client-computed readyBy can land a day (or
+            // more) before the offering date near a day boundary; rebase its
+            // time-of-day onto the offering date instead of rejecting a valid
+            // offering. Explicit "today"/"tomorrow" intent stays strict below.
+            readyByTime = OfferingTiming.rebaseReadyByTimeForOffering(readyByTime, offeringDate);
+            orderWindowEnd = OfferingTiming.validateNewOffering(offeringDate, preorder,
                     orderWindowStart, orderWindowEnd, readyByTime);
         }
         assertFeatureCompliance(seller, preorder, offeringDate, dto.getName());
-        Product product = new Product(kitchen, dto.getName(), dto.getDescription(), dto.getPrice(), dto.getImageUrl());
-        product.setPriceUnit(dto.getPriceUnit());
-        product.setAvailableToday(offeringDate.equals(java.time.LocalDate.now()) && !preorder);
+        String description = dto.getDescription() != null ? dto.getDescription() : "";
+        Product product = new Product(kitchen, dto.getName(), description, dto.getPrice(), dto.getImageUrl());
+        product.setDescription(description);
+        product.setPriceUnit(dto.getPriceUnit() != null ? dto.getPriceUnit() : "portion");
+        product.setUnit(dto.getUnit() != null ? dto.getUnit() : "portion");
+        product.setAvailableToday(dto.getAvailableToday() != null ? dto.getAvailableToday() : Boolean.TRUE);
+        product.setIsVeg(dto.getIsVeg() != null ? dto.getIsVeg() : Boolean.TRUE);
         product.setAvailableDate(offeringDate);
         product.setOrderWindowStart(orderWindowStart);
         product.setOrderWindowEnd(orderWindowEnd);
@@ -289,7 +318,17 @@ public class SellerService {
         product.setRemainingQuantity(maxQuantity);
         product.setIsPreorder(preorder);
         product.setReadyByTime(readyByTime);
-        product.setCategory(joinCategories(dto.getCategories()));
+
+        String category = joinCategories(dto.getCategories());
+        if (category == null || category.isBlank()) {
+            if (dto.getCategories() != null && !dto.getCategories().isEmpty()) {
+                category = dto.getCategories().get(0).trim().toUpperCase();
+            }
+        }
+        if (category == null || category.isBlank()) {
+            category = "DINNER";
+        }
+        product.setCategory(category);
 
         // Persist the product first so the recurring schedule's product foreign
         // key is valid. The recurring schedule + occurrences are created in the
@@ -314,19 +353,20 @@ public class SellerService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
         getOwnedKitchen(product.getKitchen().getId(), seller);
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
         boolean effectivePreorder = dto.getIsPreorder() != null
                 ? dto.getIsPreorder()
                 : (dto.getAvailableDate() != null
-                    ? dto.getAvailableDate().isAfter(java.time.LocalDate.now())
+                    ? dto.getAvailableDate().isAfter(today)
                     : Boolean.TRUE.equals(product.getIsPreorder()));
         java.time.LocalDate effectiveDate = dto.getAvailableDate() != null
                 ? dto.getAvailableDate() : (product.getAvailableDate() != null
                     ? product.getAvailableDate()
-                    : (effectivePreorder ? java.time.LocalDate.now().plusDays(1) : java.time.LocalDate.now()));
-        if (effectiveDate != null && effectiveDate.isAfter(java.time.LocalDate.now()) && !effectivePreorder) {
+                    : (effectivePreorder ? today.plusDays(1) : today));
+        if (effectiveDate != null && effectiveDate.isAfter(today) && !effectivePreorder) {
             throw new IllegalArgumentException("Future offerings must be pre-orders.");
         }
-        if (effectivePreorder && (effectiveDate == null || !effectiveDate.isAfter(java.time.LocalDate.now()))) {
+        if (effectivePreorder && (effectiveDate == null || !effectiveDate.isAfter(today))) {
             throw new IllegalArgumentException("Pre-orders must be for a future offering date.");
         }
         assertFeatureCompliance(seller, effectivePreorder, effectiveDate, product.getName());
@@ -365,7 +405,11 @@ public class SellerService {
                 || dto.getOrderWindowEnd() != null || dto.getCutoffTime() != null
                 || dto.getReadyByTime() != null || dto.getIsPreorder() != null;
         if (timingChanged) {
-            OfferingTiming.validateNewOffering(effectiveDate, effectivePreorder,
+            // Same cross-day tolerance as createProduct: rebase an early
+            // client-computed readyBy onto the effective offering date so a
+            // day-boundary skew is corrected instead of rejected.
+            effectiveReady = OfferingTiming.rebaseReadyByTimeForOffering(effectiveReady, effectiveDate);
+            effectiveClose = OfferingTiming.validateNewOffering(effectiveDate, effectivePreorder,
                     effectiveOpen, effectiveClose, effectiveReady);
         }
 
@@ -403,7 +447,7 @@ public class SellerService {
         if (dto.getRemainingQuantity() != null) product.setRemainingQuantity(dto.getRemainingQuantity());
         if (dto.getAvailableDate() != null) {
             product.setAvailableDate(dto.getAvailableDate());
-            product.setAvailableToday(dto.getAvailableDate().equals(java.time.LocalDate.now()) && !effectivePreorder);
+            product.setAvailableToday(dto.getAvailableDate().equals(LocalDate.now(AppTimeZone.ZONE)) && !effectivePreorder);
         }
         if (dto.getOrderWindowStart() != null) product.setOrderWindowStart(effectiveOpen);
         if (dto.getOrderWindowEnd() != null || dto.getCutoffTime() != null) {
@@ -456,7 +500,7 @@ public class SellerService {
         dto.setIsPreorder(product.getIsPreorder());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
-        dto.setLifecycleState(OfferingTiming.lifecycleState(product, LocalDate.now(), LocalTime.now()));
+        dto.setLifecycleState(OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE)));
         dto.setHasOrders(orderCount > 0);
         dto.setOrderCount((int) orderCount);
         return dto;
@@ -496,10 +540,73 @@ public class SellerService {
         return orderService.acknowledgeOrder(orderId, seller);
     }
 
+    private Kitchen resolveOfferingKitchen(Long kitchenId, User seller) {
+        if (kitchenId != null) {
+            Kitchen kitchen = kitchenRepository.findById(kitchenId)
+                    .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
+            if (!kitchen.getSeller().getId().equals(seller.getId())) {
+                throw new SellerNotAuthorizedException("You do not own this kitchen");
+            }
+            return kitchen;
+        }
+        List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
+        if (!kitchens.isEmpty()) {
+            return kitchens.get(0);
+        }
+        return bootstrapDefaultKitchen(seller);
+    }
+
     private Kitchen getOwnedKitchen(Long kitchenId, User seller) {
+        if (kitchenId == null) {
+            List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
+            if (kitchens.isEmpty()) {
+                throw new KitchenNotFoundException("No kitchen found for this seller account. Please set up your kitchen first.");
+            }
+            return kitchens.get(0);
+        }
         Kitchen kitchen = kitchenRepository.findById(kitchenId)
                 .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
         if (!kitchen.getSeller().getId().equals(seller.getId())) throw new SellerNotAuthorizedException("You do not own this kitchen");
+        return kitchen;
+    }
+
+    private Kitchen bootstrapDefaultKitchen(User seller) {
+        String sellerName = (seller.getName() != null && !seller.getName().isBlank())
+                ? seller.getName().trim()
+                : "Seller";
+        String displayName = sellerName + "'s Kitchen";
+        String base = SlugService.slugify(displayName);
+        if (base.isBlank()) {
+            base = "kitchen-" + (seller.getId() != null ? seller.getId() : System.currentTimeMillis());
+        }
+        Kitchen kitchen = new Kitchen();
+        kitchen.setDisplayName(displayName);
+        kitchen.setDescription("");
+        kitchen.setSeller(seller);
+        kitchen.setSellerType(com.example.my_first_spring_api.model.SellerType.KITCHEN);
+        kitchen.setAvailableToday(true);
+        if (seller.getSociety() != null && !seller.getSociety().isBlank()) {
+            kitchen.setSociety(seller.getSociety());
+            kitchen.setServiceAreas(seller.getSociety());
+        }
+        if (slugService != null) {
+            slugService.reserveUniqueSlug(kitchen, base);
+        } else {
+            String candidate = base;
+            int counter = 2;
+            while (kitchenRepository.findByName(candidate).isPresent() || kitchenRepository.findBySlug(candidate).isPresent()) {
+                candidate = base + "-" + counter++;
+            }
+            kitchen.setName(candidate);
+            kitchen.setSlug(candidate);
+            kitchen = kitchenRepository.saveAndFlush(kitchen);
+        }
+        if (seller.getSociety() != null && !seller.getSociety().isBlank() && locationService != null) {
+            try {
+                locationService.applyCoverageFromNames(kitchen,
+                        societyDirectory != null ? societyDirectory.validateAndNormalize(seller.getSociety()) : seller.getSociety());
+            } catch (Exception ignored) {}
+        }
         return kitchen;
     }
 
@@ -508,7 +615,10 @@ public class SellerService {
         if (categories == null || categories.isEmpty()) return null;
         return categories.stream()
                 .filter(c -> c != null && !c.isBlank())
-                .map(c -> c.trim().toUpperCase())
+                .flatMap(c -> java.util.Arrays.stream(c.split(",")))
+                .map(String::trim)
+                .filter(c -> !c.isEmpty())
+                .map(String::toUpperCase)
                 .distinct()
                 .collect(Collectors.joining(","));
     }
@@ -537,7 +647,7 @@ public class SellerService {
             featureService.assertSellerCanUse(seller, FeatureService.KEY_PREORDERS);
         }
         if (availableDate != null) {
-            long daysAhead = java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), availableDate);
+            long daysAhead = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(AppTimeZone.ZONE), availableDate);
             if (daysAhead > 0) {
                 if (!featureService.sellerHasAccess(seller, FeatureService.KEY_MENU_ADVANCE_DAYS)) {
                     throw new IllegalStateException(
@@ -572,6 +682,8 @@ public class SellerService {
                         .collect(java.util.stream.Collectors.toList()));
         dto.setBuilding(kitchen.getBuilding());
         dto.setWhatsappLink(kitchen.getWhatsappLink());
+        dto.setWhatsappNumber(kitchen.getSeller() != null ? kitchen.getSeller().getSellerWhatsappNumber() : null);
+        dto.setSlug(kitchen.getSlug() != null ? kitchen.getSlug() : kitchen.getName());
         dto.setInstagramLink(kitchen.getInstagramLink());
         dto.setUpiId(kitchen.getUpiId());
         dto.setGalleryImages(kitchen.getGalleryImages());
@@ -591,6 +703,8 @@ public class SellerService {
                 product.getDescription(), product.getPrice(), product.getImageUrl(),
                 product.getAvailableToday(), product.getRating());
         dto.setPriceUnit(product.getPriceUnit());
+        dto.setUnit(product.getUnit());
+        dto.setIsVeg(product.getIsVeg());
         dto.setAvailableDate(product.getAvailableDate());
         dto.setOrderWindowStart(product.getOrderWindowStart());
         dto.setOrderWindowEnd(product.getOrderWindowEnd());
@@ -608,10 +722,52 @@ public class SellerService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
-        String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(), java.time.LocalTime.now());
-        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle));
+        String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
         dto.setCreatedAt(product.getCreatedAt());
         return dto;
+    }
+
+    @Transactional(readOnly = true)
+    public com.example.my_first_spring_api.dto.SellerProfileDto getSellerProfile(User seller) {
+        var dto = new com.example.my_first_spring_api.dto.SellerProfileDto();
+        dto.setId(seller.getId());
+        dto.setName(seller.getName());
+        dto.setMobileNumber(seller.getMobileNumber());
+        dto.setWhatsappNumber(seller.getSellerWhatsappNumber());
+        dto.setEmail(seller.getEmail());
+        dto.setAlternateContact(seller.getSellerAlternateContact());
+        dto.setArea(seller.getArea() != null ? seller.getArea() : (seller.getAreaRef() != null ? seller.getAreaRef().getName() : null));
+        dto.setSociety(seller.getSociety() != null ? seller.getSociety() : (seller.getSocietyRef() != null ? seller.getSocietyRef().getName() : null));
+        dto.setBuilding(seller.getBuilding());
+        dto.setFlatHouseNumber(seller.getFlatHouseNumber());
+        dto.setSellerCategory(seller.getSellerCategory());
+        dto.setSellerApprovalStatus(seller.getSellerApprovalStatus() != null ? seller.getSellerApprovalStatus().name() : null);
+        return dto;
+    }
+
+    @Transactional
+    public com.example.my_first_spring_api.dto.SellerProfileDto updateSellerProfile(User seller, com.example.my_first_spring_api.dto.SellerProfileDto dto) {
+        if (dto.getWhatsappNumber() != null) {
+            String wa = dto.getWhatsappNumber().trim();
+            seller.setSellerWhatsappNumber(wa.isEmpty() ? null : wa);
+        }
+        if (dto.getEmail() != null) {
+            String em = dto.getEmail().trim();
+            seller.setEmail(em.isEmpty() ? null : em);
+        }
+        if (dto.getAlternateContact() != null) {
+            String alt = dto.getAlternateContact().trim();
+            seller.setSellerAlternateContact(alt.isEmpty() ? null : alt);
+        }
+        if (dto.getFlatHouseNumber() != null) {
+            seller.setFlatHouseNumber(dto.getFlatHouseNumber().trim());
+        }
+        if (dto.getBuilding() != null) {
+            seller.setBuilding(dto.getBuilding().trim());
+        }
+        User saved = (userRepository != null) ? userRepository.save(seller) : seller;
+        return getSellerProfile(saved);
     }
 }

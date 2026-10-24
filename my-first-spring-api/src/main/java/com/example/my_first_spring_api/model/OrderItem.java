@@ -26,6 +26,14 @@ public class OrderItem {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 
+    /** Legacy / database column synchronization with Supabase PostgreSQL schema */
+    @Column(name = "unit_price", precision = 10, scale = 2)
+    private BigDecimal unitPrice;
+
+    /** Legacy / database column synchronization with Supabase PostgreSQL schema */
+    @Column(name = "subtotal", precision = 10, scale = 2)
+    private BigDecimal subtotal;
+
     /** Buyer-chosen availability date for pre-order items (null = today). */
     @Column(name = "scheduled_date")
     private LocalDate scheduledDate;
@@ -48,11 +56,27 @@ public class OrderItem {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
+        syncFields();
     }
 
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+        syncFields();
+    }
+
+    public void syncFields() {
+        if (this.unitPrice == null) {
+            this.unitPrice = this.price != null ? this.price : BigDecimal.ZERO;
+        }
+        if (this.price == null && this.unitPrice != null) {
+            this.price = this.unitPrice;
+        }
+        if (this.subtotal == null) {
+            BigDecimal p = this.price != null ? this.price : (this.unitPrice != null ? this.unitPrice : BigDecimal.ZERO);
+            int q = this.quantity != null ? this.quantity : 1;
+            this.subtotal = p.multiply(BigDecimal.valueOf(q));
+        }
     }
 
     public OrderItem() {}
@@ -61,6 +85,10 @@ public class OrderItem {
         this.product = product;
         this.quantity = quantity;
         this.price = price;
+        this.unitPrice = price;
+        if (price != null && quantity != null) {
+            this.subtotal = price.multiply(BigDecimal.valueOf(quantity));
+        }
     }
 
     public Long getId() { return id; }
@@ -70,9 +98,38 @@ public class OrderItem {
     public Product getProduct() { return product; }
     public void setProduct(Product product) { this.product = product; }
     public Integer getQuantity() { return quantity; }
-    public void setQuantity(Integer quantity) { this.quantity = quantity; }
+    public void setQuantity(Integer quantity) {
+        this.quantity = quantity;
+        if (this.price != null && quantity != null) {
+            this.subtotal = this.price.multiply(BigDecimal.valueOf(quantity));
+        }
+    }
     public BigDecimal getPrice() { return price; }
-    public void setPrice(BigDecimal price) { this.price = price; }
+    public void setPrice(BigDecimal price) {
+        this.price = price;
+        if (this.unitPrice == null) {
+            this.unitPrice = price;
+        }
+        if (price != null && this.quantity != null) {
+            this.subtotal = price.multiply(BigDecimal.valueOf(this.quantity));
+        }
+    }
+    public BigDecimal getUnitPrice() { return unitPrice != null ? unitPrice : price; }
+    public void setUnitPrice(BigDecimal unitPrice) {
+        this.unitPrice = unitPrice;
+        if (this.price == null) {
+            this.price = unitPrice;
+        }
+    }
+    public BigDecimal getSubtotal() {
+        if (subtotal != null) return subtotal;
+        BigDecimal p = this.price != null ? this.price : BigDecimal.ZERO;
+        int q = this.quantity != null ? this.quantity : 1;
+        return p.multiply(BigDecimal.valueOf(q));
+    }
+    public void setSubtotal(BigDecimal subtotal) {
+        this.subtotal = subtotal;
+    }
     public LocalDate getScheduledDate() { return scheduledDate; }
     public void setScheduledDate(LocalDate scheduledDate) { this.scheduledDate = scheduledDate; }
     public String getScheduledSlot() { return scheduledSlot; }

@@ -2,7 +2,7 @@
 
 **A society-level marketplace connecting buyers with home-kitchen and homemade sellers. The demo includes Buyer, Seller and Admin apps, recurring offerings, date-specific occurrence overrides, seller-recorded delivery, and an operations console.**
 
-> **Project status:** Recurring Offerings V2 and Seller Dashboard V3 are implemented and covered by automated tests. The `prod` profile is configured for PostgreSQL with Flyway-managed schema and JDBC session persistence. The production deployment on Render is verified as healthy (HTTP 200), and all CI checks for the latest merge commit are green.
+> **Project status:** Recurring Offerings V2 and Seller Dashboard V3 are implemented and covered by automated tests. The `prod` profile is configured for PostgreSQL with Flyway-managed schema and JDBC session persistence. **Verified 2026-10-16:** all CI checks for the latest merge commit (`348697f`) are green (644 tests, 0 failures, 0 errors, 0 skipped in CI). **Production health is NOT verified:** the live `GET /api/health` probe returns HTTP 503 and the `V9` repair migration has not been deployed yet — the Render service must be redeployed manually (`autoDeploy: false`) before health can be confirmed.
 
 
 ## 🔗 Quick Links
@@ -812,7 +812,7 @@ Production deployment guide
 **PostgreSQL backup and recovery — known limitations**
 
 - No durable PostgreSQL host database and no paid resource is provisioned, and no backup/restore has been executed or verified. Before any real production migration, select and provision a host database, obtain an owner-approved backup/restore procedure, and test the restore on an isolated copy. Do not claim a backup/restore is verified without that evidence.
-- Because live data today is an in-memory H2 demo dataset, there is no operational backup/recovery plan in force. Import/restore must be performed on a preserved copy of live data with a roll-forward plan before any cutover.
+- The production service is configured against an external PostgreSQL database through the `prod` profile; its live contents and backup posture are **not verified from this repository**. No backup/restore has been executed or verified. Import/restore must be performed on a preserved copy of live data with a roll-forward plan before any cutover.
 
 **CI - the authoritative gate**
 
@@ -853,16 +853,17 @@ cd my-first-spring-api
 .\mvnw.cmd clean verify
 ```
 
-**Latest local result** (`.\mvnw.cmd -B test`, 2026-10-10; current unmerged feature branch)
+**Latest local result** (`.\mvnw.cmd -B clean verify`, 2026-10-16, `main` @ `348697f`)
 
 ```text
-Tests run: 592, Failures: 0, Errors: 0, Skipped: 1
+Tests run: 644, Failures: 0, Errors: 0, Skipped: 5
 BUILD SUCCESS
 ```
 
-The skipped test is the native PostgreSQL Testcontainers case; Docker is unavailable locally (the `docker`
-executable is not installed). H2 PostgreSQL-mode migration/schema validation ran locally. The current
-feature-branch Playwright run passed all 4 desktop/mobile tests:
+All 5 skipped tests are PostgreSQL/Testcontainers cases (`PostgresNativeMigrationTest`,
+`PostgresRuntimeSmokeTest`, `UserEmailMigrationRegressionTest`); Docker is unavailable locally (the `docker`
+executable is not installed), so they execute only in GitHub CI - where they ran and passed (CI run for
+`348697f`: 644 tests, 0 failures, 0 errors, 0 skipped). Playwright end-to-end tests run locally with:
 
 ```bash
 cd my-first-spring-api/e2e

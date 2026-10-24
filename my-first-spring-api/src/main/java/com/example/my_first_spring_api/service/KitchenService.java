@@ -18,7 +18,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -99,22 +101,49 @@ public class KitchenService {
         KitchenDto kitchenDto = toKitchenDto(kitchen);
         List<ProductDto> all = productRepository.findByKitchen(kitchen).stream()
                 .map(this::toProductDto).collect(Collectors.toList());
+        LocalDate todayDate = LocalDate.now(AppTimeZone.ZONE);
         List<ProductDto> preorder = all.stream()
-                .filter(p -> Boolean.TRUE.equals(p.getIsPreorder())
-                        || (Boolean.TRUE.equals(p.getRecurring()) && p.getNextOccurrenceDate() != null
-                            && p.getNextOccurrenceDate().isAfter(LocalDate.now())))
+                .filter(p -> {
+                    if (Boolean.TRUE.equals(p.getRecurring())) {
+                        return p.getNextOccurrenceDate() != null
+                                && p.getNextOccurrenceDate().isAfter(todayDate);
+                    }
+                    if (Boolean.TRUE.equals(p.getIsPreorder())) {
+                        if (p.getAvailableDate() != null && p.getAvailableDate().isBefore(todayDate)) {
+                            return false;
+                        }
+                        if ("HISTORY".equalsIgnoreCase(p.getLifecycleState())) {
+                            return false;
+                        }
+                        return true;
+                    }
+                    return false;
+                })
                 .collect(Collectors.toList());
         List<ProductDto> today = all.stream()
-                .filter(p -> !Boolean.TRUE.equals(p.getIsPreorder()) && Boolean.TRUE.equals(p.getAvailableToday())
-                        // A recurring offering whose schedule starts on a future
-                        // date is orderable ahead of that date (V2 §14 future
-                        // occurrence), so it must not vanish from the storefront.
-                        || (Boolean.TRUE.equals(p.getRecurring()) && p.getNextOccurrenceDate() != null
-                            && !p.getNextOccurrenceDate().isAfter(LocalDate.now())))
+                .filter(p -> {
+                    if (Boolean.TRUE.equals(p.getIsPreorder())) {
+                        return false;
+                    }
+                    if (Boolean.TRUE.equals(p.getRecurring())) {
+                        return p.getNextOccurrenceDate() != null
+                                && !p.getNextOccurrenceDate().isAfter(todayDate);
+                    }
+                    if (!Boolean.TRUE.equals(p.getAvailableToday())) {
+                        return false;
+                    }
+                    if (p.getAvailableDate() != null && p.getAvailableDate().isBefore(todayDate)) {
+                        return false;
+                    }
+                    if ("HISTORY".equalsIgnoreCase(p.getLifecycleState())) {
+                        return false;
+                    }
+                    return true;
+                })
                 .collect(Collectors.toList());
         KitchenDetailDto dto = new KitchenDetailDto(kitchenDto, today);
         dto.setPreorderProducts(preorder);
-        dto.setQuickPosts(toQuickPostDtos(quickPostRepository.findByKitchenAndPostedDateOrderByCreatedAtDesc(kitchen, LocalDate.now())));
+        dto.setQuickPosts(toQuickPostDtos(quickPostRepository.findByKitchenAndPostedDateOrderByCreatedAtDesc(kitchen, todayDate)));
         return dto;
     }
     /**
@@ -271,8 +300,8 @@ public class KitchenService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
-        String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(), java.time.LocalTime.now());
-        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle));
+        String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
         // Recurring: project today's resolved occurrence (or the next
         // occurrence's date) so the buyer sees the real per-day values and

@@ -21,6 +21,10 @@ public class User {
     @Column(name = "password_hash")
     private String passwordHash;
 
+    /** Optional contact e-mail used by the forgot-password flow (see V7 Flyway migration). */
+    @Column(name = "email", nullable = true)
+    private String email;
+
     @Column(name = "seller_whatsapp_number", length = 32)
     private String sellerWhatsappNumber;
 
@@ -174,6 +178,15 @@ public class User {
     @JsonIgnore
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
     public String getSellerWhatsappNumber() { return sellerWhatsappNumber; }
     public void setSellerWhatsappNumber(String sellerWhatsappNumber) { this.sellerWhatsappNumber = sellerWhatsappNumber; }
     public String getSellerAlternateContact() { return sellerAlternateContact; }
