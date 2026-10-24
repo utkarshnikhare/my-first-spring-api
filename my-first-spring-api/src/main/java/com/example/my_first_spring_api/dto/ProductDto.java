@@ -54,6 +54,7 @@ public class ProductDto {
      * (Edit Today / Edit This Date / Sold Out Today / View Orders for date).
      */
     private Long occurrenceId;
+    private String sellerType;
 
     public ProductDto() {}
 
@@ -136,4 +137,6 @@ public class ProductDto {
     public void setNextOccurrenceDate(LocalDate nextOccurrenceDate) { this.nextOccurrenceDate = nextOccurrenceDate; }
     public Long getOccurrenceId() { return occurrenceId; }
     public void setOccurrenceId(Long occurrenceId) { this.occurrenceId = occurrenceId; }
+    public String getSellerType() { return sellerType; }
+    public void setSellerType(String sellerType) { this.sellerType = sellerType; }
 }

@@ -51,7 +51,7 @@ class PostgresNativeMigrationTest {
     void flywayMigrationCreatesSchemaValidatedByHibernateOnPostgres() {
         // V4 adds the Spring Session tables; V5 adds hot-path indexes only
         // (no new tables), so the business table count is unchanged.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("5");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("6");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "

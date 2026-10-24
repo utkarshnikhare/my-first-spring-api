@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -31,7 +32,7 @@ public class UserSessionAuthorizationFilter extends OncePerRequestFilter {
     private final UserRepository userRepository;
 
     @Autowired
-    public UserSessionAuthorizationFilter(UserRepository userRepository) {
+    public UserSessionAuthorizationFilter(@Lazy UserRepository userRepository) {
         this.userRepository = userRepository;
     }
 

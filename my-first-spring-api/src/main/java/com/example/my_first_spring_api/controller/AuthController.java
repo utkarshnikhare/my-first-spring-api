@@ -182,6 +182,7 @@ public class AuthController {
                 user.getSellerApprovalStatus(), user.getSociety(), user.getBuilding());
         dto.setArea(user.getArea());
         dto.setSellerStatusReason(user.getSellerStatusReason());
+        dto.setSellerCategory(user.getSellerCategory());
         return dto;
     }
 

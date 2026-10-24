@@ -401,9 +401,16 @@ async function homemadeStoreView(hash) {
     var id = hash.split('/')[2];
     var h = '<div class="view-enter">';
     try {
-        var detail = await api('/api/kitchens/id/' + id);
+        var detail;
+        try {
+            detail = /^\d+$/.test(id)
+                ? await api('/api/kitchens/id/' + id)
+                : await api('/api/discovery/homemade/' + encodeURIComponent(id));
+        } catch (err) {
+            detail = await api('/api/kitchens/' + encodeURIComponent(id));
+        }
         var k = detail.kitchen;
-        if (!k || k.sellerType !== 'HOMEMADE_PRODUCTS') {
+        if (!k || (k.sellerType !== 'HOMEMADE_PRODUCTS' && k.sellerType !== 'BOTH')) {
             h += emptyHtml('🏪', 'Store not found', 'This store may not be available in your area.', '<a class="btn btn-primary" href="#/homemade">Back to Homemade</a>');
             return h;
         }
@@ -424,11 +431,22 @@ async function homemadeStoreView(hash) {
             var areas = k.serviceAreas.split(',').map(function (a) { return a.trim(); }).filter(Boolean);
             h += '<div class="mb-2"><span class="muted small">Serves: ' + esc(areas.join(', ')) + '</span></div>';
         }
+        var isMixed = k && k.sellerType === 'BOTH';
+        function isHomemadeProd(p) {
+            var c = (p.category || '').toLowerCase();
+            return /homemade|ghee|achar|papad|cake|sweet|jar|pack|snack|masala/.test(c);
+        }
         var today = (detail.products || []).filter(function (p) {
+            if (isMixed && !isHomemadeProd(p)) return false;
             return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate()) && p.availableToday;
         });
-        var preorder = (detail.preorderProducts && detail.preorderProducts.length) ? detail.preorderProducts :
-            (detail.products || []).filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
+        var preorder = (detail.preorderProducts && detail.preorderProducts.length) ? detail.preorderProducts.filter(function (p) {
+            if (isMixed && !isHomemadeProd(p)) return false;
+            return true;
+        }) : (detail.products || []).filter(function (p) {
+            if (isMixed && !isHomemadeProd(p)) return false;
+            return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate());
+        });
         if (today.length) {
             h += '<h3 class="mb-2">Available Now</h3><div class="products-grid">';
             today.forEach(function (p) {
@@ -493,12 +511,11 @@ async function kitchenPageView(hash) {
     var h = '<div class="view-enter">';
     await loadFavSet();
     try {
-        var detailPath = bySlug
-            ? '/api/kitchens/by-slug/' + encodeURIComponent(id)
+        var detail = bySlug
+            ? await api('/api/kitchens/by-slug/' + encodeURIComponent(id))
             : (/^\d+$/.test(id)
-                ? '/api/kitchens/id/' + encodeURIComponent(id)
-                : '/api/kitchens/' + encodeURIComponent(id));
-        var detail = await api(detailPath);
+                ? await api('/api/kitchens/id/' + id)
+                : await api('/api/kitchens/' + encodeURIComponent(id)));
         var k = detail.kitchen;
         if (k && k.paused) {
             // SELLER_PAUSED: temporarily closed, no new orders, but the buyer can
@@ -509,16 +526,34 @@ async function kitchenPageView(hash) {
                 exploreOtherKitchensHtml());
             return h;
         }
+        if (k && k.sellerType === 'HOMEMADE_PRODUCTS') {
+            h += emptyHtml('🍰', esc(k.displayName) + ' is a Homemade Store',
+                'Discover all cakes, ghee, achar, sweets & more from this seller.',
+                '<a class="btn btn-primary" href="#/homemade-store/' + esc(k.slug || k.name || k.id) + '">View Homemade Store</a>');
+            return h;
+        }
         // Handover 6/18 storefront_view. Fire-and-forget AFTER the storefront is
         // confirmed viewable, so a kitchen the buyer is not allowed to open never
         // counts as traffic. Analytics must never block or fail the page.
         recordAnalyticsView('HOMEMADE_STOREFRONT_VIEW', k && k.id);
+        var isMixed = k && k.sellerType === 'BOTH';
+        function isHomemadeProd(p) {
+            var c = (p.category || '').toLowerCase();
+            return /homemade|ghee|achar|papad|cake|sweet|jar|pack|snack|masala/.test(c);
+        }
         var today = (detail.products || []).filter(function (p) {
+            if (isMixed && isHomemadeProd(p)) return false;
             return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate());
         });
         var preorder = (detail.preorderProducts && detail.preorderProducts.length)
-            ? detail.preorderProducts
-            : (detail.products || []).filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
+            ? detail.preorderProducts.filter(function (p) {
+                if (isMixed && isHomemadeProd(p)) return false;
+                return true;
+            })
+            : (detail.products || []).filter(function (p) {
+                if (isMixed && isHomemadeProd(p)) return false;
+                return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate());
+            });
 
         // Explore Other Kitchens near the top navigation.
         h += exploreOtherKitchensHtml();
