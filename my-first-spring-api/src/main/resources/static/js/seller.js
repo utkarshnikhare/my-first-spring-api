@@ -834,9 +834,9 @@ async function sellerHomeView() {
                         h += sdOfferingCardHtml(p, orderCounts[p.id] != null ? orderCounts[p.id] : null);
                     });
                 }
-                // Large orange CTA -> the EXISTING create-offering entry point when offerings exist.
-                h += '<button class="sd-add" type="button" data-action="go-add"><span aria-hidden="true">＋</span> Add Offering</button>';
             }
+            // Large orange CTA -> the EXISTING create-offering entry point.
+            h += '<button class="sd-add" type="button" data-action="go-add"><span aria-hidden="true">＋</span> Add Offering</button>';
         }
         h += sdEarningsHtml(dash);
     } catch (e) {
@@ -2564,6 +2564,10 @@ async function sellerOrderDetailView(productId) {
     var h = '<div class="view-enter sd-root od-root">';
     try {
         var detail = await sellerApi(offeringDetailUrl(productId));
+        if (detail.totalOrders === 0 && detail.availableDate && detail.availableDate !== sellerDate(S.selectedDate) && (detail.dashboardBookedQuantity == null || detail.dashboardBookedQuantity > 0)) {
+            S.selectedDate = detail.availableDate;
+            detail = await sellerApi(offeringDetailUrl(productId));
+        }
         // Options come from the UNFILTERED society list for this offering/date, so
         // the dropdown can never collapse to the currently selected society and
         // switching between societies works repeatedly (also for status = non-All).

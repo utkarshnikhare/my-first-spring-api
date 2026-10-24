@@ -658,6 +658,7 @@ public class SellerAppService {
 
         OrderItemDetailDto dto = new OrderItemDetailDto();
         dto.setProductId(productId);
+        dto.setAvailableDate(product.getAvailableDate());
         dto.setProductName(product.getName());
         dto.setProductImageUrl(product.getImageUrl());
         // The dashboard card's "N booked" is the live reservation total for the
