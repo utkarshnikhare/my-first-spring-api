@@ -25,7 +25,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT o FROM Order o WHERE o.id = :id")
     Optional<Order> findByIdForUpdate(@Param("id") Long id);
     /** Full buyer/seller order read with items and offering snapshots initialized. */
-    @Query("SELECT DISTINCT o FROM Order o LEFT JOIN FETCH o.items i LEFT JOIN FETCH i.product WHERE o.id = :id")
+    @Query("SELECT DISTINCT o FROM Order o LEFT JOIN FETCH o.items i LEFT JOIN FETCH i.product LEFT JOIN FETCH o.kitchen k LEFT JOIN FETCH k.seller WHERE o.id = :id")
     Optional<Order> findByIdWithItems(@Param("id") Long id);
 
 

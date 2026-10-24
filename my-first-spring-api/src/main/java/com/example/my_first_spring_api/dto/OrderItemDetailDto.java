@@ -1,5 +1,7 @@
 package com.example.my_first_spring_api.dto;
 
+import java.time.LocalDate;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,6 +39,7 @@ public class OrderItemDetailDto {
     private Integer dashboardBookedQuantity;
     /** Price unit of the offering ("plate", "piece", ...) for wording the booked note. */
     private String productUnit;
+    private LocalDate availableDate;
 
     /**
      * Delivery progress for this offering on this date, plus the server-calculated
@@ -156,5 +159,7 @@ public class OrderItemDetailDto {
     public void setDashboardBookedQuantity(Integer dashboardBookedQuantity) { this.dashboardBookedQuantity = dashboardBookedQuantity; }
     public String getProductUnit() { return productUnit; }
     public void setProductUnit(String productUnit) { this.productUnit = productUnit; }
+    public LocalDate getAvailableDate() { return availableDate; }
+    public void setAvailableDate(LocalDate availableDate) { this.availableDate = availableDate; }
 }
 

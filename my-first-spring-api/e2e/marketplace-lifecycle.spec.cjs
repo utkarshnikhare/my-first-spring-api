@@ -40,20 +40,12 @@ test('seller approval -> live offering -> buyer order -> inventory -> seller del
   await offeringForm.locator('[name="description"]').fill('A browser-tested demo meal');
   await offeringForm.locator('[name="price"]').fill('75');
   await offeringForm.locator('[name="maxQuantity"]').fill('1');
-  await offeringForm.locator('input[name="categories"][value="LUNCH"]').check();
-  if (await offeringForm.locator('#orderCloseDropdown').count() > 0) {
-    await offeringForm.locator('#orderCloseDropdown').selectOption('custom');
+  if (await offeringForm.locator('button[data-preset="lunch"]').count() > 0) {
+    await offeringForm.locator('button[data-preset="lunch"]').click();
+  } else {
+    await offeringForm.locator('input[name="categories"][value="LUNCH"]').check();
+    await offeringForm.locator('[name="orderWindowEnd"]').fill('23:59');
   }
-  await offeringForm.locator('[name="orderWindowEnd"]').fill('23:59');
-  const readyBy = new Date();
-  readyBy.setDate(readyBy.getDate() + 1);
-  readyBy.setHours(12, 0, 0, 0);
-  const readyByValue = [
-    readyBy.getFullYear(),
-    String(readyBy.getMonth() + 1).padStart(2, '0'),
-    String(readyBy.getDate()).padStart(2, '0')
-  ].join('-') + `T${String(readyBy.getHours()).padStart(2, '0')}:${String(readyBy.getMinutes()).padStart(2, '0')}`;
-  await offeringForm.locator('[name="readyByTime"]').fill(readyByValue);
   await offeringForm.getByRole('button', { name: 'Publish Offering' }).click();
   await expect(page.locator('#createOfferingForm')).toHaveCount(0);
 
@@ -74,7 +66,7 @@ test('seller approval -> live offering -> buyer order -> inventory -> seller del
   const visitKitchen = page.getByRole('link', { name: new RegExp(`Visit ${seller.kitchenName}`) });
   await visitKitchen.click();
   await expect(page.locator('body')).toContainText(seller.kitchenName);
-  await page.getByRole('button', { name: 'ORDER', exact: true }).click();
+  await page.getByRole('button', { name: /^(ORDER|PRE-ORDER)$/ }).click();
   await expect(page.locator('#sheetRoot')).toBeVisible();
   await page.locator('#sheetRoot').getByRole('button', { name: 'Add to Order' }).click();
   await page.goto('/index.html#/summary');

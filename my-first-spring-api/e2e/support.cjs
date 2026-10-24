@@ -68,10 +68,14 @@ function newIdentity(prefix) {
 
 async function apiJson(page, path, { method = 'GET', body } = {}) {
   return page.evaluate(async ({ path, method, body }) => {
-    const init = { method, credentials: 'same-origin' };
+    const init = { method, credentials: 'same-origin', headers: {} };
     if (body !== undefined) {
-      init.headers = { 'Content-Type': 'application/json' };
+      init.headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(body);
+    }
+    const match = (document.cookie || '').match(/XSRF-TOKEN=([^;]+)/);
+    if (match) {
+      init.headers['X-XSRF-TOKEN'] = decodeURIComponent(match[1]);
     }
     const response = await fetch(path, init);
     const text = await response.text();

@@ -106,7 +106,14 @@ public class SellerService {
         kitchen.setUpiId(dto.getUpiId());
         kitchen.setAvailableToday(dto.getAvailableToday() != null ? dto.getAvailableToday() : true);
         if (dto.getSellerType() != null && !dto.getSellerType().isBlank()) {
-            try { kitchen.setSellerType(com.example.my_first_spring_api.model.SellerType.valueOf(dto.getSellerType().toUpperCase())); }
+            try {
+                com.example.my_first_spring_api.model.SellerType st = com.example.my_first_spring_api.model.SellerType.valueOf(dto.getSellerType().toUpperCase());
+                kitchen.setSellerType(st);
+                seller.setSellerCategory(st.name());
+                if (userRepository != null) {
+                    userRepository.save(seller);
+                }
+            }
             catch (IllegalArgumentException ignored) {}
         }
         // Reserve the slug FIRST, race-safely, so the very first INSERT is the
@@ -173,7 +180,14 @@ public class SellerService {
         if (dto.getGalleryImages() != null) kitchen.setGalleryImages(dto.getGalleryImages());
         if (dto.getAvailableToday() != null) kitchen.setAvailableToday(dto.getAvailableToday());
         if (dto.getSellerType() != null && !dto.getSellerType().isBlank()) {
-            try { kitchen.setSellerType(com.example.my_first_spring_api.model.SellerType.valueOf(dto.getSellerType().toUpperCase())); }
+            try {
+                com.example.my_first_spring_api.model.SellerType st = com.example.my_first_spring_api.model.SellerType.valueOf(dto.getSellerType().toUpperCase());
+                kitchen.setSellerType(st);
+                seller.setSellerCategory(st.name());
+                if (userRepository != null) {
+                    userRepository.save(seller);
+                }
+            }
             catch (IllegalArgumentException ignored) {}
         }
         return toKitchenDto(kitchenRepository.save(kitchen));
@@ -698,6 +712,7 @@ public class SellerService {
         dto.setRemainingQuantity(product.getRemainingQuantity());
         dto.setIsPreorder(product.getIsPreorder());
         dto.setKitchenSlug(kitchen != null ? kitchen.getName() : null);
+        dto.setSellerType(kitchen != null && kitchen.getSellerType() != null ? kitchen.getSellerType().name() : null);
         dto.setCategory(product.getCategory());
         dto.setCutoffTime(product.getCutoffTime());
         dto.setReadyByTime(product.getReadyByTime());
