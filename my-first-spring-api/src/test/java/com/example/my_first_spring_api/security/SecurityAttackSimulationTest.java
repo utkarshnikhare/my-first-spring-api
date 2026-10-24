@@ -392,6 +392,149 @@ public class SecurityAttackSimulationTest {
         assertThat(dbOrder.getCustomInstructions()).isEqualTo(xssPayload);
     }
 
+    @Test
+    @DisplayName("Attack 7: Mass assignment attempt via buyer profile update cannot elevate role or approval")
+    void attack_massAssignmentRoleElevationAttempt() throws Exception {
+        String mobile = uniqueMobile();
+        MockHttpSession buyerSession = registerBuyer(mobile, societyAId, areaAId);
+
+        User buyerBefore = users.findByMobileNumber(mobile).orElseThrow();
+        assertThat(buyerBefore.getRole()).isEqualTo(UserRole.BUYER);
+
+        // Malicious payload attempting to inject role ADMIN and APPROVED seller status
+        Map<String, Object> maliciousProfile = Map.of(
+                "name", "Attacker Buyer",
+                "role", "ADMIN",
+                "sellerApprovalStatus", "APPROVED",
+                "flatHouseNumber", "Fl-999"
+        );
+
+        mvc.perform(put("/api/buyer/profile").with(csrf())
+                        .session(buyerSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(maliciousProfile)))
+                .andExpect(status().isOk());
+
+        // Verify database entity is not elevated
+        User buyerAfter = users.findByMobileNumber(mobile).orElseThrow();
+        assertThat(buyerAfter.getRole()).isEqualTo(UserRole.BUYER);
+        assertThat(buyerAfter.getSellerApprovalStatus()).isNotEqualTo(SellerApprovalStatus.APPROVED);
+
+        // Attempting to access admin endpoints with this buyer session must still be rejected (403 Forbidden)
+        mvc.perform(get("/api/admin/overview")
+                        .session(buyerSession))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Attack 8: Client-supplied price tampering in order requests is completely ignored")
+    void attack_clientPriceTamperingIgnored() throws Exception {
+        String sellerMobile = uniqueMobile();
+        User seller = createApprovedSeller("Legit Seller " + suffix, sellerMobile, societyAId, areaAId);
+        Kitchen kitchen = createKitchen(seller, "Price Test Kitchen " + suffix, societyAId);
+        BigDecimal realPrice = new BigDecimal("150.00");
+        Product product = createProduct(kitchen, "Special Item " + suffix, realPrice, 10);
+
+        String buyerMobile = uniqueMobile();
+        MockHttpSession buyerSession = registerBuyer(buyerMobile, societyAId, areaAId);
+
+        // Buyer attempts to tamper with item price ($0.01 instead of $150.00)
+        Map<String, Object> tamperedItem = Map.of(
+                "productId", product.getId(),
+                "quantity", 2,
+                "price", new BigDecimal("0.01"),
+                "totalPrice", new BigDecimal("0.02")
+        );
+
+        Map<String, Object> placePayload = Map.of(
+                "kitchenId", kitchen.getId(),
+                "items", List.of(tamperedItem),
+                "totalPrice", new BigDecimal("0.02"),
+                "paymentStatus", "PENDING",
+                "buyerDetails", Map.of(
+                        "name", "Buyer " + suffix,
+                        "mobileNumber", buyerMobile,
+                        "flatHouseNumber", "Fl-1",
+                        "building", "B-1",
+                        "society", "Society A " + suffix
+                )
+        );
+
+        MvcResult result = mvc.perform(post("/api/buyer/orders/place").with(csrf())
+                        .session(buyerSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(placePayload)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        OrderDto placed = objectMapper.readValue(result.getResponse().getContentAsString(), OrderDto.class);
+        // Authoritative total must be 2 * 150.00 = 300.00, ignoring 0.02
+        assertThat(placed.getTotalAmount()).isEqualByComparingTo(new BigDecimal("300.00"));
+        assertThat(placed.getItems()).hasSize(1);
+        assertThat(placed.getItems().get(0).getPrice()).isEqualByComparingTo(realPrice);
+
+        Order dbOrder = orders.findByIdWithItems(placed.getId()).orElseThrow();
+        assertThat(dbOrder.getTotalAmount()).isEqualByComparingTo(new BigDecimal("300.00"));
+        assertThat(dbOrder.getItems()).hasSize(1);
+        assertThat(dbOrder.getItems().get(0).getPrice()).isEqualByComparingTo(realPrice);
+    }
+
+    @Test
+    @DisplayName("Attack 9: Invalid state transition - cancelled order cannot be moved to CONFIRMED")
+    void attack_invalidStateTransitionFromCancelled() throws Exception {
+        String sellerMobile = uniqueMobile();
+        User seller = createApprovedSeller("Status Seller " + suffix, sellerMobile, societyAId, areaAId);
+        Kitchen kitchen = createKitchen(seller, "Status Kitchen " + suffix, societyAId);
+        Product product = createProduct(kitchen, "Status Item " + suffix, new BigDecimal("50.00"), 10);
+
+        String buyerMobile = uniqueMobile();
+        MockHttpSession buyerSession = registerBuyer(buyerMobile, societyAId, areaAId);
+
+        // Place an order
+        Map<String, Object> placePayload = Map.of(
+                "kitchenId", kitchen.getId(),
+                "items", List.of(Map.of("productId", product.getId(), "quantity", 1)),
+                "paymentStatus", "PENDING",
+                "buyerDetails", Map.of(
+                        "name", "Buyer " + suffix,
+                        "mobileNumber", buyerMobile,
+                        "flatHouseNumber", "Fl-1",
+                        "building", "B-1",
+                        "society", "Society A " + suffix
+                )
+        );
+
+        MvcResult placeRes = mvc.perform(post("/api/buyer/orders/place").with(csrf())
+                        .session(buyerSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(placePayload)))
+                .andExpect(status().isOk())
+                .andReturn();
+        OrderDto placed = objectMapper.readValue(placeRes.getResponse().getContentAsString(), OrderDto.class);
+
+        // Buyer cancels the order
+        mvc.perform(post("/api/buyer/orders/" + placed.getId() + "/cancel").with(csrf())
+                        .session(buyerSession))
+                .andExpect(status().isOk());
+
+        Order cancelledOrder = orders.findById(placed.getId()).orElseThrow();
+        assertThat(cancelledOrder.getOrderStatus()).isEqualTo(OrderStatus.CANCELLED);
+
+        // Seller logs in
+        MockHttpSession sellerSession = loginUser(sellerMobile, PASSWORD);
+
+        // Seller attempts to transition CANCELLED order to CONFIRMED
+        mvc.perform(patch("/api/seller/orders/" + placed.getId() + "/status").with(csrf())
+                        .session(sellerSession)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(Map.of("orderStatus", "CONFIRMED"))))
+                .andExpect(status().isBadRequest());
+
+        // Verify order in database is still CANCELLED
+        Order finalOrder = orders.findById(placed.getId()).orElseThrow();
+        assertThat(finalOrder.getOrderStatus()).isEqualTo(OrderStatus.CANCELLED);
+    }
+
     // Helper methods
     private MockHttpSession registerBuyer(String mobile, Long socId, Long arId) throws Exception {
         MvcResult res = mvc.perform(post("/api/auth/register/buyer").with(csrf())

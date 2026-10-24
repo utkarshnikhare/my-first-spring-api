@@ -1199,15 +1199,8 @@ public class OrderService {
                 if (updated == 0) {
                     throw new IllegalArgumentException("Not enough stock left for '" + product.getName() + "'. Please reduce quantity.");
                 }
-                product.setRemainingQuantity(Math.max(0, product.getRemainingQuantity() - e.getValue()));
-                product.setBookedQuantity((product.getBookedQuantity() == null ? 0 : product.getBookedQuantity()) + e.getValue());
-                if (product.getRemainingQuantity() <= 0) {
-                    product.setAvailableToday(false);
-                }
-                productRepository.save(product);
             } else {
-                product.setBookedQuantity((product.getBookedQuantity() == null ? 0 : product.getBookedQuantity()) + e.getValue());
-                productRepository.save(product);
+                productRepository.decrementBookedQuantity(e.getKey(), -e.getValue());
             }
         }
     }
