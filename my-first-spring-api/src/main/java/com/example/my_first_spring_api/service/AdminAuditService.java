@@ -34,6 +34,8 @@ public class AdminAuditService {
     public static final String SELLER_APPROVED = "SELLER_APPROVED";
     public static final String SELLER_REJECTED = "SELLER_REJECTED";
     public static final String SELLER_CHANGES_REQUESTED = "SELLER_CHANGES_REQUESTED";
+    public static final String SELLER_RESUBMITTED = "SELLER_RESUBMITTED";
+    public static final String SELLER_CANCELLED = "SELLER_CANCELLED";
     public static final String SELLER_SUSPENDED = "SELLER_SUSPENDED";
     // Handover 7.3 lists "Suspend / Block seller" as SEPARATE controls. Suspend is
     // an approval-state action; block is an account-level action that also takes

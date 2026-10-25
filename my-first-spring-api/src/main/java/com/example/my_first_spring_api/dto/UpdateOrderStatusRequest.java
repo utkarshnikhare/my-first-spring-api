@@ -7,6 +7,11 @@ public class UpdateOrderStatusRequest {
     @NotNull(message = "Order status is required")
     private OrderStatus orderStatus;
 
+    private String reason;
+
     public OrderStatus getOrderStatus() { return orderStatus; }
     public void setOrderStatus(OrderStatus orderStatus) { this.orderStatus = orderStatus; }
+
+    public String getReason() { return reason; }
+    public void setReason(String reason) { this.reason = reason; }
 }

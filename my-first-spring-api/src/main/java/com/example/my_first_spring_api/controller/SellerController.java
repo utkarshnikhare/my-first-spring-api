@@ -39,6 +39,28 @@ public class SellerController {
         this.authService = authService;
     }
 
+    private User requireRegisteredSeller(HttpSession session) {
+        User user = authService.getCurrentBuyer(session);
+        if (user == null) throw new BuyerNotAuthenticatedException("Authentication required. Please log in.");
+        if (user.getRole() != UserRole.SELLER) throw new SellerNotAuthorizedException("Only sellers can perform this action");
+        return user;
+    }
+
+    @PostMapping("/application/resubmit")
+    public ResponseEntity<com.example.my_first_spring_api.dto.AuthResponseDto> resubmitApplication(
+            @RequestBody(required = false) java.util.Map<String, Object> body,
+            HttpSession session) {
+        User seller = requireRegisteredSeller(session);
+        return ResponseEntity.ok(sellerService.resubmitApplication(seller, body));
+    }
+
+    @PostMapping("/application/cancel")
+    public ResponseEntity<com.example.my_first_spring_api.dto.AuthResponseDto> cancelApplication(
+            HttpSession session) {
+        User seller = requireRegisteredSeller(session);
+        return ResponseEntity.ok(sellerService.cancelApplication(seller));
+    }
+
     private User requireSeller(HttpSession session) {
         User user = authService.getCurrentBuyer(session);
         if (user == null) throw new BuyerNotAuthenticatedException("Authentication required. Please log in.");
@@ -166,7 +188,7 @@ public class SellerController {
                                                       @Valid @RequestBody UpdateOrderStatusRequest request,
                                                       HttpSession session) {
         User seller = requireSeller(session);
-        return ResponseEntity.ok(sellerService.updateOrderStatus(orderId, request.getOrderStatus(), seller));
+        return ResponseEntity.ok(sellerService.updateOrderStatus(orderId, request.getOrderStatus(), request.getReason(), seller));
     }
 
     @PatchMapping("/orders/{orderId}/payment-status")

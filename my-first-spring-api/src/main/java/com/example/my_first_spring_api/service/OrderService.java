@@ -932,6 +932,10 @@ public class OrderService {
     }
 
     public OrderDto updateOrderStatus(Long orderId, OrderStatus newStatus, User seller) {
+        return updateOrderStatus(orderId, newStatus, null, seller);
+    }
+
+    public OrderDto updateOrderStatus(Long orderId, OrderStatus newStatus, String reason, User seller) {
         Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
         if (order.getKitchen() == null || !order.getKitchen().getSeller().getId().equals(seller.getId())) {
@@ -954,6 +958,13 @@ public class OrderService {
         }
         if (newStatus == OrderStatus.CANCELLED) {
             order = cancelOrderLocked(order);
+            if (reason != null && !reason.isBlank()) {
+                analyticsService.record("ORDER_CANCELLED_WITH_REASON",
+                        seller.getId(),
+                        reason,
+                        order.getKitchen() != null ? order.getKitchen().getId() : null,
+                        order.getOrderNumber());
+            }
             return toOrderDto(order);
         }
         order.setOrderStatus(newStatus);
