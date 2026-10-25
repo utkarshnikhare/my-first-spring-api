@@ -1552,7 +1552,7 @@ function paymentSuccessView() {
     h += '<div class="receipt-line font-800 border-top mt-2 pt-2">' +
         '<span>Total</span><span>' + money(o.totalAmount) + '</span></div>' +
         '<div class="flex gap-2 card-mt">' +
-        (paid ? '<span class="pill pill-green">Payment: PAID (Demo)</span>' : '<span class="pill pill-amber">Payment: Due on delivery</span>') +
+        (paid ? '<span class="pill pill-green">Payment: PAID (Demo)</span>' : (o.paymentStatus === 'WILL_PAY_LATER' ? '<span class="pill pill-amber">Payment: Pay later</span>' : '<span class="pill pill-amber">Payment: Awaiting seller verification</span>')) +
         (ORDER_BADGES[o.orderStatus] || '') + '</div></div>';
     h += '<div class="flex gap-3 card-mt">' +
         '<a class="btn btn-primary flex-1" href="#/orders">View My Orders</a>' +
@@ -1705,7 +1705,9 @@ async function ordersView() {
                         var orderBadge = ORDER_BADGES[o.orderStatus] || '<span class="pill pill-grey">' + esc(o.orderStatus || 'ORDERED') + '</span>';
                         var paymentBadge = payStatus === 'PAID'
                             ? '<span class="pill pill-green">Payment: PAID</span>'
-                            : '<span class="pill pill-amber">Payment: ' + esc(payStatus || 'PENDING') + '</span>';
+                            : (payStatus === 'WILL_PAY_LATER'
+                                ? '<span class="pill pill-amber">Payment: Pay later</span>'
+                                : '<span class="pill pill-amber">Payment: Awaiting verification</span>');
                         // Seller-recorded delivery completion, read from the SAME order
                         // row the seller wrote. It is a separate axis from payment and
                         // from order status, so all combinations are legal.

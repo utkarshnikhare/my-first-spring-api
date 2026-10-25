@@ -189,6 +189,7 @@ public class DiscoveryService {
         Map<Category, Long> counts = visibleProducts(buyer).stream()
                 .filter(p -> !p.isSoldOut())
                 .filter(p -> !p.isOrdersPaused())
+                .filter(p -> orderableToday(p) || openPreorder(p))
                 .flatMap(p -> {
                     String cats = p.getCategory();
                     if (cats == null || cats.isBlank()) return java.util.stream.Stream.of(Category.SPECIAL);

@@ -70,6 +70,7 @@ public class SecurityConfig {
                             .access((authentication, context) -> new AuthorizationDecision(localTools))
                         .requestMatchers("/api/superadmin/**").hasRole("SUPER_ADMIN")
                         .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers("/api/seller/application/**").hasAnyRole("SELLER", "SELLER_PENDING")
                         .requestMatchers("/api/seller/**", "/api/seller-app/**").hasRole("SELLER")
                         .requestMatchers(
                                 "/api/auth/**",

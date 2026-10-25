@@ -66,18 +66,40 @@ function sellerServiceSocietyHtml(areaId) {
 
 function sellerStatusHtml() {
     var status = (S.user && S.user.sellerApprovalStatus) || 'PENDING';
-    var title = status === 'REJECTED' ? 'Application needs attention' : 'Seller application pending';
+    var isChanges = status === 'CHANGES_REQUESTED';
+    var isPending = status === 'PENDING';
+    var title = isChanges ? 'Changes requested on your application' : (status === 'REJECTED' ? 'Application needs attention' : 'Seller application pending');
     var detail = (S.user && S.user.sellerStatusReason) ||
         'Your storefront is private until an Admin reviews and approves your application.';
     var kitchenUrl = (S.user && S.user.kitchenUrl) || S.kitchenUrl;
     var link = kitchenUrl
         ? '<p class="small">Your reserved kitchen URL: <a href="' + esc(kitchenUrl) + '">' + esc(kitchenUrl) + '</a></p>' : '';
+    
+    var resubmitBlock = '';
+    if (isChanges) {
+        resubmitBlock = '<div class="resubmit-box card pad card-mt mb-3" style="text-align:left;background:var(--bg-subtle,#f9fafb);border:1px solid var(--border,#e5e7eb);border-radius:8px;">' +
+            '<h3 style="margin-top:0;font-size:1rem;">Submit Requested Changes</h3>' +
+            '<p class="small text-muted">Review the note above and provide your updated details or response for the administrator.</p>' +
+            '<div class="form-group mb-2"><label for="resubmitKitchenName" class="form-label small">Store / Kitchen Name</label>' +
+            '<input class="form-input" id="resubmitKitchenName" value="' + esc((S.kitchen && S.kitchen.name) || '') + '" placeholder="Store name"></div>' +
+            '<div class="form-group mb-2"><label for="resubmitBio" class="form-label small">Response / Explanation for Admin</label>' +
+            '<textarea class="form-input" id="resubmitBio" rows="2" placeholder="Details of corrections made..."></textarea></div>' +
+            '<button class="btn btn-primary btn-block" type="button" data-action="seller-resubmit">Update &amp; Resubmit Application</button>' +
+            '</div>';
+    }
+
+    var cancelBtn = (isPending || isChanges)
+        ? ' <button class="btn btn-outline text-danger" type="button" data-action="seller-cancel-app">Cancel application</button>'
+        : '';
+
     return '<div class="login-wrap"><section class="admin-login seller-auth-card">' +
-        '<div class="modal-icon">🕒</div><h1>' + esc(title) + '</h1>' +
+        '<div class="modal-icon">' + (isChanges ? '⚠️' : '🕒') + '</div><h1>' + esc(title) + '</h1>' +
         '<p class="muted">Current status: <strong>' + esc(status) + '</strong></p>' +
         '<p>' + esc(detail) + '</p>' + link +
-        '<div class="seller-auth-actions"><button class="btn btn-secondary" type="button" data-action="seller-retry">Refresh status</button> ' +
-        '<button class="btn btn-outline" type="button" data-action="seller-logout">Log out</button></div>' +
+        resubmitBlock +
+        '<div class="seller-auth-actions"><button class="btn btn-secondary" type="button" data-action="seller-retry">Refresh status</button>' +
+        cancelBtn +
+        ' <button class="btn btn-outline" type="button" data-action="seller-logout">Log out</button></div>' +
         '</section></div>';
 }
 
@@ -2878,10 +2900,18 @@ async function sellerOrderDetailByOrderView(orderId) {
         var paymentStatus = order.paymentStatus || 'PENDING';
         var deliveryStatus = order.deliveryStatus || 'NOT_DELIVERED';
         var isDelivered = deliveryStatus === 'DELIVERED';
+        var displayStatus = order.displayStatus || (order.orderStatus === 'CANCELLED' ? 'Cancelled' : (isDelivered ? (paymentStatus === 'PAID' ? 'Delivered · Paid' : 'Delivered · Payment pending') : (paymentStatus === 'PAID' ? 'Confirmed · Paid' : (paymentStatus === 'WILL_PAY_LATER' ? 'Confirmed · Pay later' : 'Confirmed · Buyer says paid'))));
+        var displayClass = displayStatus.indexOf('Paid') >= 0 ? 'green' : (displayStatus === 'Cancelled' ? 'red' : 'orange');
         h += '<div class="dtc-badges oic-badges">';
+        h += '<span class="dtc-badge ' + displayClass + '" style="font-weight:600;"><span class="dtc-dot" aria-hidden="true"></span>' + esc(displayStatus) + '</span>';
         h += '<span class="dtc-badge ' + (paymentStatus === 'PAID' ? 'green' : 'orange') + '"><span class="dtc-dot" aria-hidden="true"></span>Payment: ' + esc(paymentStatus) + '</span>';
         h += '<span class="dtc-badge ' + (order.orderStatus === 'CANCELLED' ? 'red' : 'green') + '"><span class="dtc-dot" aria-hidden="true"></span>Order status: ' + esc(order.orderStatus || 'ORDERED') + '</span>';
         h += '<span class="dtc-badge ' + (isDelivered ? 'green' : 'orange') + '"><span class="dtc-dot" aria-hidden="true"></span>Delivery: ' + (isDelivered ? 'Delivered' : 'Not delivered') + '</span></div>';
+        if (order.paymentFollowUpRequired || (order.orderStatus === 'CANCELLED' && paymentStatus === 'PAID')) {
+            h += '<div class="alert alert-warning card pad mt-2 mb-2" style="background:#fffbeb;border:1px solid #fef3c7;color:#92400e;border-radius:6px;font-size:0.875rem;">' +
+                '⚠️ <strong>Payment Follow-up Required:</strong> This order was cancelled while marked as PAID. SocioMart does not process automated refunds. Please coordinate offline resolution with the customer if required.' +
+                '</div>';
+        }
         // Buyer / delivery detail card. Class hooks the existing actions and
         // tests rely on (odc-*, ei-*, data-action) are preserved verbatim.
         h += '<section class="card pad card-mb oic-card" aria-label="Buyer and items">';
@@ -3962,16 +3992,54 @@ document.addEventListener('click', async function (e) {
                 break;
             }
             case 'cancel-order': {
-                if (!confirm('Cancel this order?')) return;
+                var reason = prompt('Please enter the reason for cancelling this order:', 'Item unavailable / customer request');
+                if (reason === null) return;
                 if (t.disabled) return;
                 t.disabled = true;
                 try {
-                    await sellerApi('/api/seller/orders/' + encodeURIComponent(t.dataset.orderId) + '/status', { method: 'PATCH', body: { orderStatus: 'CANCELLED' } });
+                    await sellerApi('/api/seller/orders/' + encodeURIComponent(t.dataset.orderId) + '/status', {
+                        method: 'PATCH',
+                        body: { orderStatus: 'CANCELLED', reason: reason }
+                    });
                     toast('Order cancelled', 'success');
                     await sellerRender();
                 } catch (err) {
                     t.disabled = false;
                     toast(err.message || 'Could not cancel order', 'error');
+                }
+                break;
+            }
+            case 'seller-resubmit': {
+                var kName = (document.getElementById('resubmitKitchenName') || {}).value;
+                var bio = (document.getElementById('resubmitBio') || {}).value;
+                t.disabled = true;
+                try {
+                    await sellerApi('/api/seller/application/resubmit', {
+                        method: 'POST',
+                        body: { kitchenName: kName, bio: bio }
+                    });
+                    toast('Application updated and resubmitted for admin review', 'success');
+                    await initSellerSession();
+                    await sellerRender();
+                } catch (e) {
+                    t.disabled = false;
+                    toast(e.message || 'Could not resubmit application', 'error');
+                }
+                break;
+            }
+            case 'seller-cancel-app': {
+                if (!confirm('Are you sure you want to cancel your seller application?')) return;
+                t.disabled = true;
+                try {
+                    await sellerApi('/api/seller/application/cancel', {
+                        method: 'POST'
+                    });
+                    toast('Application cancelled', 'info');
+                    await initSellerSession();
+                    await sellerRender();
+                } catch (e) {
+                    t.disabled = false;
+                    toast(e.message || 'Could not cancel application', 'error');
                 }
                 break;
             }
