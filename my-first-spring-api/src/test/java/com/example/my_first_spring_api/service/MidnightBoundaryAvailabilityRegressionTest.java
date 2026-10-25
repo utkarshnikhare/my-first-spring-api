@@ -21,6 +21,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,6 +41,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @ActiveProfiles("test")
 public class MidnightBoundaryAvailabilityRegressionTest {
 
+    private static final AtomicLong MOBILE_SEQ = new AtomicLong(9700000000L);
+
     @Autowired private UserRepository userRepository;
     @Autowired private KitchenRepository kitchenRepository;
     @Autowired private ProductRepository productRepository;
@@ -54,7 +57,8 @@ public class MidnightBoundaryAvailabilityRegressionTest {
     @BeforeEach
     void setUp() {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
-        seller = new User("Seller " + suffix, "91" + suffix.replaceAll("[^0-9]", "0").substring(0, 4) + "01", "S-1", UserRole.SELLER);
+        String sellerMobile = String.valueOf(MOBILE_SEQ.incrementAndGet());
+        seller = new User("Seller " + suffix, sellerMobile, "S-1", UserRole.SELLER);
         seller.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
         seller = userRepository.saveAndFlush(seller);
 
@@ -62,7 +66,8 @@ public class MidnightBoundaryAvailabilityRegressionTest {
         kitchen.setSociety("Pride World City");
         kitchen = kitchenRepository.saveAndFlush(kitchen);
 
-        buyer = new User("Buyer " + suffix, "92" + suffix.replaceAll("[^0-9]", "0").substring(0, 4) + "02", "Flat 101", UserRole.BUYER);
+        String buyerMobile = String.valueOf(MOBILE_SEQ.incrementAndGet());
+        buyer = new User("Buyer " + suffix, buyerMobile, "Flat 101", UserRole.BUYER);
         buyer.setSociety("Pride World City");
         buyer.setBuilding("Tower A");
         buyer.setFlatHouseNumber("101");
