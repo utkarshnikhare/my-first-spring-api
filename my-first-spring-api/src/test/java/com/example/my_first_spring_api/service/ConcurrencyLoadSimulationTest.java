@@ -24,7 +24,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:concurrency-load-test;DB_CLOSE_DELAY=-1",
         "spring.jpa.hibernate.ddl-auto=create-drop",
-        "spring.jpa.open-in-view=false"
+        "spring.jpa.open-in-view=false",
+        "spring.datasource.hikari.maximum-pool-size=60",
+        "spring.datasource.hikari.connection-timeout=30000"
 })
 @ActiveProfiles("test")
 public class ConcurrencyLoadSimulationTest {
@@ -41,6 +43,16 @@ public class ConcurrencyLoadSimulationTest {
     @Test
     @DisplayName("Adversarial Concurrency: 25 simultaneous buyers ordering the single last remaining stock unit")
     void testConcurrentOrderPlacementOnLastUnitStock() throws Exception {
+        runConcurrentBuyersOnSingleStock(25);
+    }
+
+    @Test
+    @DisplayName("Adversarial Concurrency: 50 simultaneous buyers ordering the single last remaining stock unit (Target Pilot Load)")
+    void test50ConcurrentBuyersStockIntegrity() throws Exception {
+        runConcurrentBuyersOnSingleStock(50);
+    }
+
+    private void runConcurrentBuyersOnSingleStock(int buyerCount) throws Exception {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         Area area = areas.saveAndFlush(new Area("Area " + suffix));
         Society society = societies.saveAndFlush(new Society(area, "Society " + suffix));
@@ -71,12 +83,11 @@ public class ConcurrencyLoadSimulationTest {
         final Long productId = product.getId();
         final Long kitchenId = kitchen.getId();
 
-        int buyerCount = 25;
         List<User> buyerList = new ArrayList<>();
         List<MockHttpSession> sessionList = new ArrayList<>();
 
         for (int i = 0; i < buyerCount; i++) {
-            User buyer = new User("Buyer" + suffix + "_" + i, "92" + suffix + String.format("%02d", i), "Flat-" + i, UserRole.BUYER);
+            User buyer = new User("Buyer" + suffix + "_" + i, "92" + suffix + String.format("%03d", i), "Flat-" + i, UserRole.BUYER);
             buyer.setAreaRef(area);
             buyer.setSocietyRef(society);
             buyer.setSociety(society.getName());
@@ -123,7 +134,7 @@ public class ConcurrencyLoadSimulationTest {
                     bd.setBuilding(b.getBuilding());
                     bd.setFlatHouseNumber(b.getFlatHouseNumber());
 
-                    OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, bd, "concurrency test", s);
+                    OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, bd, "concurrency test " + buyerCount, s);
                     if (placed != null && placed.getOrderStatus() == OrderStatus.ORDERED) {
                         successCount.incrementAndGet();
                     }
@@ -136,21 +147,21 @@ public class ConcurrencyLoadSimulationTest {
             });
         }
 
-        startGate.countDown(); // Fire all 25 threads simultaneously
-        boolean completed = endGate.await(15, TimeUnit.SECONDS);
+        startGate.countDown(); // Fire all threads simultaneously
+        boolean completed = endGate.await(20, TimeUnit.SECONDS);
         executor.shutdown();
 
         assertThat(completed).isTrue();
         assertThat(successCount.get())
-                .as("Exactly ONE buyer must successfully acquire the single remaining unit")
+                .as("Exactly ONE buyer must successfully acquire the single remaining unit under %d concurrent threads", buyerCount)
                 .isEqualTo(1);
         assertThat(failureCount.get())
-                .as("The other 24 buyers must be rejected due to stock exhaustion")
-                .isEqualTo(24);
+                .as("The other %d buyers must be rejected due to stock exhaustion", buyerCount - 1)
+                .isEqualTo(buyerCount - 1);
 
         Product reloadedProduct = products.findById(productId).orElseThrow();
         assertThat(reloadedProduct.getRemainingQuantity())
-                .as("Stock must reach 0 and NEVER become negative")
+                .as("Stock must reach 0 and NEVER become negative under %d concurrent threads", buyerCount)
                 .isEqualTo(0);
     }
 
