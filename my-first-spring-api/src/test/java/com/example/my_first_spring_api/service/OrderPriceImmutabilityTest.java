@@ -219,4 +219,79 @@ class OrderPriceImmutabilityTest {
         assertThat(reorder.getItems().get(0).getPrice()).isEqualByComparingTo(BigDecimal.valueOf(40));
         assertThat(reorder.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(4000));
     }
+
+    @Test
+    void getSellerOrdersReturnsOnlyOwnersOrdersAfterBuyerPlacesTwoPlatesForUKKitchen() {
+        User seller = approvedSeller();
+        Kitchen ukKitchen = approvedKitchen(seller);
+        ukKitchen.setName("UK Kitchen");
+        ukKitchen.setDisplayName("UK Kitchen");
+
+        User buyer = new User("UK Buyer", "9876500002", "A-102", UserRole.BUYER);
+        buyer.setId(20L);
+        buyer.setSociety("Sunshine Society");
+        buyer.setBuilding("Building B");
+        buyer.setFlatHouseNumber("B-102");
+
+        Product ukProduct = new Product(ukKitchen, "UK Kitchen Plate", "desc", BigDecimal.valueOf(30), null);
+        ukProduct.setId(1L);
+        ukProduct.setAvailableToday(true);
+        ukProduct.setRemainingQuantity(50);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(ukProduct));
+
+        User otherSeller = new User("Other Seller", "9100000003", "B-201", UserRole.SELLER);
+        otherSeller.setId(30L);
+        otherSeller.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
+
+        Kitchen otherKitchen = new Kitchen("k2", "Other Kitchen", "d", null, otherSeller);
+        otherKitchen.setId(2L);
+        when(kitchenRepository.findById(2L)).thenReturn(Optional.of(otherKitchen));
+
+        User otherBuyer = new User("Other Buyer", "9876500003", "C-301", UserRole.BUYER);
+        otherBuyer.setId(40L);
+        otherBuyer.setSociety("Green Valley");
+        otherBuyer.setBuilding("Building C");
+        otherBuyer.setFlatHouseNumber("C-301");
+        when(userRepository.findById(40L)).thenReturn(Optional.of(otherBuyer));
+
+        Product otherProduct = new Product(otherKitchen, "Other Product", "desc", BigDecimal.valueOf(50), null);
+        otherProduct.setId(2L);
+        when(productRepository.findById(2L)).thenReturn(Optional.of(otherProduct));
+
+        when(kitchenRepository.findBySeller(seller)).thenReturn(List.of(ukKitchen));
+
+        Order otherOrder = new Order(otherBuyer, otherKitchen);
+        otherOrder.setId(300L);
+        otherOrder.setOrderNumber("ORDER-999");
+        otherOrder.setOrderStatus(OrderStatus.CONFIRMED);
+        otherOrder.setPaymentStatus(PaymentStatus.PAID);
+        OrderItem otherItem = new OrderItem(otherProduct, 1, BigDecimal.valueOf(50));
+        otherOrder.addItem(otherItem);
+        otherOrder.recalculateTotal();
+
+        Order ukOrder = new Order(buyer, ukKitchen);
+        ukOrder.setId(100L);
+        ukOrder.setOrderNumber("ORDER-100");
+        ukOrder.setOrderStatus(OrderStatus.CONFIRMED);
+        ukOrder.setPaymentStatus(PaymentStatus.PAID);
+        OrderItem ukItem = new OrderItem(ukProduct, 2, BigDecimal.valueOf(30));
+        ukOrder.addItem(ukItem);
+        ukOrder.recalculateTotal();
+
+        when(orderRepository.findByKitchenOrderByCreatedAtDesc(ukKitchen))
+                .thenReturn(List.of(ukOrder));
+        when(orderRepository.findByKitchenOrderByCreatedAtDesc(otherKitchen))
+                .thenReturn(List.of(otherOrder));
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        List<SellerOrderSummaryRowDto> sellerOrders = orderService.getSellerOrders(seller);
+
+        // The seller's own kitchen order appears in the listing
+        assertThat(sellerOrders).hasSize(1);
+        assertThat(sellerOrders.get(0).getOrderNumber()).isEqualTo("ORDER-100");
+        assertThat(sellerOrders.get(0).getBuyer().getName()).isEqualTo("UK Buyer");
+        assertThat(sellerOrders.get(0).getBuyer().getSociety()).isEqualTo("Sunshine Society");
+        assertThat(sellerOrders.get(0).getBuyer().getBuilding()).isEqualTo("Building B");
+        assertThat(sellerOrders.get(0).getBuyer().getFlatHouseNumber()).isEqualTo("B-102");
+    }
 }

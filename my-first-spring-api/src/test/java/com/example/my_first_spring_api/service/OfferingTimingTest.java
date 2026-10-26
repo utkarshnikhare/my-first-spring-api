@@ -207,25 +207,23 @@ class OfferingTimingTest {
     }
 
     @Test
-    void preorderPastCloseTimeIsAutoCorrectedToPm() {
-        // Offering is tomorrow (preorder=true, orderingDate=today).
-        // Now is 14:00 today. Close entered as 09:00 (9:00 AM today, in past).
-        // Delivery is tomorrow at 18:00.
-        // +12h makes 21:00 (9:00 PM today), which is valid and before tomorrow's delivery.
-        String corrected = OfferingTiming.validateNewOffering(TODAY.plusDays(1), true, null, "09:00",
+    void preorderValidMorningCutoffOnDeliveryDayPreserved() {
+        // Offering is tomorrow. Delivery is tomorrow at 18:00.
+        // Close entered as 09:00 (9:00 AM on delivery day, 9h before delivery).
+        // Since 09:00 on delivery day is strictly before 18:00 delivery and in the future, it is preserved.
+        String validated = OfferingTiming.validateNewOffering(TODAY.plusDays(1), true, null, "09:00",
                 "2026-09-25T18:00", TODAY, LocalTime.of(14, 0));
-        assertThat(corrected).isEqualTo("21:00");
+        assertThat(validated).isEqualTo("09:00");
     }
 
     @Test
-    void preorderPastCloseTimeClampsTo2359WhenDeliveryIsFutureDay() {
-        // Offering is tomorrow (preorder=true, orderingDate=today).
-        // Now is 22:00 today. Close entered as 18:00 (6:00 PM today, in past).
-        // +12h is 30:00 (invalid). Delivery is tomorrow at 18:00.
-        // Clamps to 23:59 on orderingDate (today).
-        String corrected = OfferingTiming.validateNewOffering(TODAY.plusDays(1), true, null, "18:00",
+    void preorderCloseAtOrAfterDeliveryHealsToOneHourBeforeDelivery() {
+        // Offering is tomorrow. Delivery is tomorrow at 18:00.
+        // Close entered as 18:00 (not before delivery).
+        // Auto-heals to delivery minus 60 minutes = 17:00.
+        String validated = OfferingTiming.validateNewOffering(TODAY.plusDays(1), true, null, "18:00",
                 "2026-09-25T18:00", TODAY, LocalTime.of(22, 0));
-        assertThat(corrected).isEqualTo("23:59");
+        assertThat(validated).isEqualTo("17:00");
     }
 
 

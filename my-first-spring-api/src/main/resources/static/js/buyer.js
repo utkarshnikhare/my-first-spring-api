@@ -11,8 +11,8 @@ var FAV_CACHE = null; // Set of favourited kitchen ids; null = not loaded yet
 var FAV_FULL_CACHE = null; // Full FavouriteDto list from last /api/favourites call; null = not loaded/failed
 
 function todayDate() {
-    // Asia/Kolkata is UTC+5:30 regardless of the browser's local zone.
-    return new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+    // Use Intl.DateTimeFormat with Asia/Kolkata timezone for reliable date-only values.
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
 
 function favSet() {
@@ -397,6 +397,13 @@ async function categoryView(hash) {
     return h;
 }
 
+// Helper to identify Homemade products
+function isHomemadeProduct(p) {
+    if (!p) return false;
+    var c = String(p.category || '').toLowerCase();
+    return /homemade|ghee|achar|papad|cake|sweet|jar|pack|masala/.test(c);
+}
+
 // ==================== Screen 4: Homemade storefront ====================
 
 async function homemadeStoreView(hash) {
@@ -405,7 +412,7 @@ async function homemadeStoreView(hash) {
     try {
         var detail = await api('/api/kitchens/id/' + id);
         var k = detail.kitchen;
-        if (!k || k.sellerType !== 'HOMEMADE_PRODUCTS') {
+        if (!k || (k.sellerType !== 'HOMEMADE_PRODUCTS' && k.sellerType !== 'BOTH')) {
             h += emptyHtml('🏪', 'Store not found', 'This store may not be available in your area.', '<a class="btn btn-primary" href="#/homemade">Back to Homemade</a>');
             return h;
         }
@@ -426,12 +433,17 @@ async function homemadeStoreView(hash) {
             var areas = k.serviceAreas.split(',').map(function (a) { return a.trim(); }).filter(Boolean);
             h += '<div class="mb-2"><span class="muted small">Serves: ' + esc(areas.join(', ')) + '</span></div>';
         }
-        var today = (detail.products || []).filter(function (p) {
+        var allProds = detail.products || [];
+        if (k.sellerType === 'BOTH') {
+            allProds = allProds.filter(isHomemadeProduct);
+        }
+        var today = allProds.filter(function (p) {
             return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate()) && p.availableToday && (!p.availableDate || p.availableDate >= todayDate());
         });
         today = sortByClosingTime(today);
-        var preorder = (detail.preorderProducts && detail.preorderProducts.length) ? detail.preorderProducts :
-            (detail.products || []).filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
+        var preorder = (detail.preorderProducts && detail.preorderProducts.length)
+            ? (k.sellerType === 'BOTH' ? detail.preorderProducts.filter(isHomemadeProduct) : detail.preorderProducts)
+            : allProds.filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
         preorder = sortByClosingTime(preorder);
         if (today.length) {
             h += '<h3 class="mb-2">Available Now</h3><div class="products-grid">';
@@ -516,14 +528,18 @@ async function kitchenPageView(hash) {
         // Handover 6/18 storefront_view. Fire-and-forget AFTER the storefront is
         // confirmed viewable, so a kitchen the buyer is not allowed to open never
         // counts as traffic. Analytics must never block or fail the page.
-        recordAnalyticsView('HOMEMADE_STOREFRONT_VIEW', k && k.id);
-        var today = (detail.products || []).filter(function (p) {
+        recordAnalyticsView(k && k.sellerType === 'HOMEMADE_PRODUCTS' ? 'HOMEMADE_STOREFRONT_VIEW' : 'MENU_VIEW', k && k.id);
+        var allProds = detail.products || [];
+        if (k && k.sellerType === 'BOTH') {
+            allProds = allProds.filter(function (p) { return !isHomemadeProduct(p); });
+        }
+        var today = allProds.filter(function (p) {
             return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate()) && (!p.availableDate || p.availableDate >= todayDate());
         });
         today = sortByClosingTime(today);
         var preorder = (detail.preorderProducts && detail.preorderProducts.length)
-            ? detail.preorderProducts
-            : (detail.products || []).filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
+            ? (k && k.sellerType === 'BOTH' ? detail.preorderProducts.filter(function (p) { return !isHomemadeProduct(p); }) : detail.preorderProducts)
+            : allProds.filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
         preorder = sortByClosingTime(preorder);
 
         // Explore Other Kitchens near the top navigation.

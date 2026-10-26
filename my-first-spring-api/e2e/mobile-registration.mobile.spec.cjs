@@ -35,7 +35,12 @@ test('mobile registration dialogs and long seller onboarding remain usable and a
   await page.locator('#sellerLoginForm').getByRole('button', { name: 'Sign in' }).click();
   expect((await wrongLogin).status()).toBe(401);
   expect((await readMe(page)).body.authenticated).toBe(false);
-  await loginSeller(page, seller, 'PENDING');
-  await expect(page.locator('body')).toContainText('Current status: PENDING');
+
+  await page.locator('#sellerLoginPassword').fill(seller.password);
+  const pendingLogin = page.waitForResponse(response =>
+    new URL(response.url()).pathname === '/api/auth/login' && response.request().method() === 'POST');
+  await page.locator('#sellerLoginForm').getByRole('button', { name: 'Sign in' }).click();
+  expect((await pendingLogin).status()).toBe(401);
+  await expect(page.locator('body')).toContainText('pending admin approval');
   expect(browserIssues).toEqual([]);
 });

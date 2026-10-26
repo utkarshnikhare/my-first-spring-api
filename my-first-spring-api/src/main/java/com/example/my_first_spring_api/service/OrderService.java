@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import com.example.my_first_spring_api.dto.*;
 import com.example.my_first_spring_api.exception.*;
 import com.example.my_first_spring_api.model.*;
@@ -188,10 +189,10 @@ public class OrderService {
     private void applyScheduling(Product product, OrderItemRequest req, OrderItem item) {
         boolean preorder = Boolean.TRUE.equals(product.getIsPreorder());
         if (!preorder) {
-            enforceCutoff(product, LocalDate.now(), "today");
+            enforceCutoff(product, LocalDate.now(AppTimeZone.ZONE), "today");
             return;
         }
-        LocalDate earliest = product.getAvailableDate() != null ? product.getAvailableDate() : LocalDate.now().plusDays(1);
+        LocalDate earliest = product.getAvailableDate() != null ? product.getAvailableDate() : LocalDate.now(AppTimeZone.ZONE).plusDays(1);
         LocalDate latest = product.getAvailableUntilDate() != null ? product.getAvailableUntilDate() : earliest;
         LocalDate scheduled;
         if (req.getScheduledDate() == null || req.getScheduledDate().isBlank()) {
@@ -207,8 +208,7 @@ public class OrderService {
             throw new IllegalArgumentException("'" + product.getName() + "' can be scheduled between "
                     + earliest + " and " + latest + ".");
         }
-        // The strict order deadline is the offering cutoff on the day before fulfilment.
-        enforceCutoff(product, scheduled.minusDays(1), "for " + scheduled + " availability");
+        enforceCutoff(product, scheduled, "for " + scheduled + " availability");
         if (product.getPreorderType() == PreorderType.FLEXIBLE) {
             List<String> slots = parseSlots(product.getTimeSlots());
             if (!slots.isEmpty()) {
@@ -225,8 +225,8 @@ public class OrderService {
     }
 
     /** Enforces Offering For date plus Orders Open/Close on both draft and placement. */
-    private void enforceCutoff(Product product, LocalDate cutoffDate, String context) {
-        OfferingTiming.enforceOrderWindow(product, cutoffDate, context);
+    private void enforceCutoff(Product product, LocalDate fulfillmentDate, String context) {
+        OfferingTiming.enforceOrderWindow(product, fulfillmentDate, context);
     }
 
     // ==================== RECURRING OCCURRENCE ORDERING (V2) ====================
@@ -269,7 +269,7 @@ public class OrderService {
      * per-date bucket total ("14 plates" means 14 plates for that date).
      */
     private void validateRecurringOrder(Product product, OccurrenceDto occ, int qty) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
         if (occ.getDate() == null || occ.getDate().isBefore(today)) {
             throw new IllegalArgumentException("'" + product.getName() + "' is no longer scheduled for " + occ.getDate() + ".");
         }
@@ -800,16 +800,21 @@ public class OrderService {
         // silently scoped progress and the bulk write to the wrong storefront,
         // so the second storefront's offering always reported 0 active orders
         // and "Mark All Delivered" did nothing at all.
-        Kitchen kitchen = requireOwnedProduct(productId, seller).getKitchen();
-        LocalDateTime now = LocalDateTime.now();
-        // The scope is measured BEFORE any write: this is the exact set the seller
-        // confirmed, and the same set the rows below are drawn from.
-        DeliveryProgressDto before = computeDeliveryProgress(productId, date, kitchen);
+        Product p = requireOwnedProduct(productId, seller);
+        Kitchen kitchen = p.getKitchen();
+        LocalDate targetDate = date;
+        boolean isRecurring = recurringScheduleService != null && recurringScheduleService.hasSchedule(productId);
+        DeliveryProgressDto before = computeDeliveryProgress(productId, targetDate, kitchen);
+        if (!isRecurring && before.getActiveOrderCount() == 0 && targetDate != null && p.getAvailableDate() != null && !targetDate.equals(p.getAvailableDate())) {
+            targetDate = p.getAvailableDate();
+            before = computeDeliveryProgress(productId, targetDate, kitchen);
+        }
         int confirmedScope = before.getBulkScopeOrderCount();
+        LocalDateTime now = LocalDateTime.now();
 
         int updated = 0;
         for (Order order : orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen)) {
-            if (!orderContainsProductOnDate(order, productId, date)) continue;
+            if (!orderContainsProductOnDate(order, productId, targetDate)) continue;
             if (!order.isActiveForDelivery()) continue;
             if (order.isDelivered()) continue; // stays Delivered, original timestamp kept
             if (order.applyDeliveryStatus(DeliveryStatus.DELIVERED, seller, now)) {
@@ -825,7 +830,7 @@ public class OrderService {
         }
         // Progress is recomputed from the SAME rows just written, so the numbers
         // the caller receives always describe committed server state.
-        DeliveryProgressDto progress = computeDeliveryProgress(productId, date, kitchen);
+        DeliveryProgressDto progress = computeDeliveryProgress(productId, targetDate, kitchen);
         if (updated != confirmedScope) {
             // Defensive: the scope measured BEFORE the write and the rows actually
             // changed must agree. A mismatch would mean the batch was only
@@ -854,9 +859,7 @@ public class OrderService {
 
     /** Shared counter used by the progress read AND the bulk write. */
     private DeliveryProgressDto computeDeliveryProgress(Long productId, LocalDate date, Kitchen kitchen) {
-        DeliveryProgressDto dto = new DeliveryProgressDto();
-        dto.setProductId(productId);
-        dto.setDate(date);
+        Product p = productRepository.findById(productId).orElse(null);
         int active = 0, delivered = 0;
         for (Order order : orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen)) {
             if (!orderContainsProductOnDate(order, productId, date)) continue;
@@ -864,6 +867,20 @@ public class OrderService {
             active++;
             if (order.isDelivered()) delivered++;
         }
+        LocalDate targetDate = date;
+        boolean isRecurring = recurringScheduleService != null && recurringScheduleService.hasSchedule(productId);
+        if (!isRecurring && active == 0 && date != null && p != null && p.getAvailableDate() != null && !date.equals(p.getAvailableDate())) {
+            targetDate = p.getAvailableDate();
+            for (Order order : orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen)) {
+                if (!orderContainsProductOnDate(order, productId, targetDate)) continue;
+                if (!order.isActiveForDelivery()) continue;
+                active++;
+                if (order.isDelivered()) delivered++;
+            }
+        }
+        DeliveryProgressDto dto = new DeliveryProgressDto();
+        dto.setProductId(productId);
+        dto.setDate(targetDate);
         dto.setActiveOrderCount(active);
         dto.setDeliveredCount(delivered);
         dto.setRemainingCount(active - delivered);
@@ -1129,18 +1146,18 @@ public class OrderService {
                 continue;
             }
             boolean preorder = Boolean.TRUE.equals(product.getIsPreorder());
-            LocalDate orderingDate = LocalDate.now();
+            LocalDate fulfillmentDate = LocalDate.now(AppTimeZone.ZONE);
             if (preorder) {
                 if (item.getScheduledDate() == null) {
-                    orderingDate = product.getAvailableDate() != null
-                            ? product.getAvailableDate().minusDays(1) : LocalDate.now();
+                    fulfillmentDate = product.getAvailableDate() != null
+                            ? product.getAvailableDate() : LocalDate.now(AppTimeZone.ZONE);
                 } else {
-                    orderingDate = item.getScheduledDate().minusDays(1);
+                    fulfillmentDate = item.getScheduledDate();
                 }
             }
             // Re-check at final placement: a draft may have been created before
             // Orders Open or before the offering's Orders Close time.
-            OfferingTiming.enforceOrderWindow(product, orderingDate, "today");
+            OfferingTiming.enforceOrderWindow(product, fulfillmentDate, "today");
             if (!preorder && Boolean.FALSE.equals(product.getAvailableToday())) {
                 throw new IllegalArgumentException("'" + product.getName() + "' is no longer available today.");
             }
@@ -1154,16 +1171,16 @@ public class OrderService {
                 throw new IllegalArgumentException("At most " + product.getMaxQuantity() + " units of '" + product.getName() + "' per order.");
             }
             if (!preorder) {
-                enforceCutoff(product, LocalDate.now(), "today");
+                enforceCutoff(product, LocalDate.now(AppTimeZone.ZONE), "today");
             } else {
                 LocalDate scheduled = item.getScheduledDate();
-                LocalDate earliest = product.getAvailableDate() != null ? product.getAvailableDate() : LocalDate.now().plusDays(1);
+                LocalDate earliest = product.getAvailableDate() != null ? product.getAvailableDate() : LocalDate.now(AppTimeZone.ZONE).plusDays(1);
                 LocalDate latest = product.getAvailableUntilDate() != null ? product.getAvailableUntilDate() : earliest;
                 if (scheduled == null || scheduled.isBefore(earliest) || scheduled.isAfter(latest)) {
                     throw new IllegalArgumentException("'" + product.getName() + "' can be scheduled between "
                             + earliest + " and " + latest + ".");
                 }
-                enforceCutoff(product, scheduled.minusDays(1), "for " + scheduled + " availability");
+                enforceCutoff(product, scheduled, "for " + scheduled + " availability");
                 if (product.getPreorderType() == PreorderType.FLEXIBLE) {
                     List<String> slots = parseSlots(product.getTimeSlots());
                     if (!slots.isEmpty() && (item.getScheduledSlot() == null || !slots.contains(item.getScheduledSlot()))) {
@@ -1199,15 +1216,9 @@ public class OrderService {
                 if (updated == 0) {
                     throw new IllegalArgumentException("Not enough stock left for '" + product.getName() + "'. Please reduce quantity.");
                 }
-                product.setRemainingQuantity(Math.max(0, product.getRemainingQuantity() - e.getValue()));
-                product.setBookedQuantity((product.getBookedQuantity() == null ? 0 : product.getBookedQuantity()) + e.getValue());
-                if (product.getRemainingQuantity() <= 0) {
-                    product.setAvailableToday(false);
-                }
-                productRepository.save(product);
+                productRepository.closeIfSoldOut(e.getKey());
             } else {
-                product.setBookedQuantity((product.getBookedQuantity() == null ? 0 : product.getBookedQuantity()) + e.getValue());
-                productRepository.save(product);
+                productRepository.incrementBookedQuantity(e.getKey(), e.getValue());
             }
         }
     }

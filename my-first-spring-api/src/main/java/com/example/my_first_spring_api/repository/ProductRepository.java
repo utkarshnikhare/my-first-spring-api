@@ -78,4 +78,16 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             "WHERE p.id = :productId AND p.remainingQuantity IS NOT NULL " +
             "AND p.remainingQuantity >= :qty")
     int consumeStock(@Param("productId") Long productId,@Param("qty") int qty);
+
+    /** Atomic close when offering is sold out after consumption. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE Product p SET p.availableToday = false, p.updatedAt = CURRENT_TIMESTAMP " +
+            "WHERE p.id = :productId AND p.remainingQuantity IS NOT NULL AND p.remainingQuantity <= 0")
+    int closeIfSoldOut(@Param("productId") Long productId);
+
+    /** Atomic increment for unlimited offerings when an order is placed. */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE Product p SET p.bookedQuantity = COALESCE(p.bookedQuantity, 0) + :qty, p.updatedAt = CURRENT_TIMESTAMP " +
+            "WHERE p.id = :productId AND p.remainingQuantity IS NULL")
+    int incrementBookedQuantity(@Param("productId") Long productId, @Param("qty") int qty);
 }

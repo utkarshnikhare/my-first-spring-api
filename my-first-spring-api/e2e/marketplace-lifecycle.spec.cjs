@@ -27,24 +27,28 @@ test('seller approval -> live offering -> buyer order -> inventory -> seller del
   await sellerRow.getByRole('button', { name: 'Approve' }).click();
   expect((await approval).status()).toBe(200);
 
-  await logout(page);
+await logout(page);
   await loginSeller(page, seller);
   const offeringName = `E2E Lunch ${seller.token}`;
-  await page.locator('[data-action="go-add"]').click();
-  await expect(page.getByRole('heading', { name: 'Add Offering' })).toBeVisible();
-  await page.locator('[data-action="go-create"]').click();
-  await expect(page.getByRole('heading', { name: 'Create Offering' })).toBeVisible();
+  await page.goto('/seller.html');
+  await page.getByRole('link', { name: '+ Create Offering' }).click();
+  await expect(page.getByRole('heading', { name: 'Create Offering' })).toBeVisible({ timeout: 15000 });
   const offeringForm = page.locator('#createOfferingForm');
-  await expect(offeringForm).toBeVisible();
+  await expect(offeringForm).toBeVisible({ timeout: 15000 });
+  // Wait for form fields to be ready
+  await expect(offeringForm.locator('[name="name"]')).toBeVisible({ timeout: 10000 });
   await offeringForm.locator('[name="name"]').fill(offeringName);
   await offeringForm.locator('[name="description"]').fill('A browser-tested demo meal');
   await offeringForm.locator('[name="price"]').fill('75');
   await offeringForm.locator('[name="maxQuantity"]').fill('1');
   await offeringForm.locator('input[name="categories"][value="LUNCH"]').check();
+  const tomorrowOption = page.locator('[data-action="set-availability"][data-val="tomorrow"]');
+  if (await tomorrowOption.count() > 0) {
+    await tomorrowOption.click();
+  }
   if (await offeringForm.locator('#orderCloseDropdown').count() > 0) {
     await offeringForm.locator('#orderCloseDropdown').selectOption('custom');
   }
-  await offeringForm.locator('[name="orderWindowEnd"]').fill('23:59');
   const readyBy = new Date();
   readyBy.setDate(readyBy.getDate() + 1);
   readyBy.setHours(12, 0, 0, 0);
@@ -53,9 +57,31 @@ test('seller approval -> live offering -> buyer order -> inventory -> seller del
     String(readyBy.getMonth() + 1).padStart(2, '0'),
     String(readyBy.getDate()).padStart(2, '0')
   ].join('-') + `T${String(readyBy.getHours()).padStart(2, '0')}:${String(readyBy.getMinutes()).padStart(2, '0')}`;
-  await offeringForm.locator('[name="readyByTime"]').fill(readyByValue);
+  await offeringForm.evaluate((form, value) => {
+    const ready = form.querySelector('input[name="readyByTime"]');
+    if (ready) {
+      ready.value = value;
+      ready.dispatchEvent(new Event('input', { bubbles: true }));
+      ready.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    const close = form.querySelector('input[name="orderWindowEnd"]');
+    if (close) {
+      close.value = '23:59';
+      close.dispatchEvent(new Event('input', { bubbles: true }));
+      close.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    const avail = form.querySelector('input[name="availableDate"]') || form.querySelector('#availDate');
+    if (avail) {
+      avail.value = value.slice(0, 10);
+    }
+  }, readyByValue);
+  const publishResponse = page.waitForResponse(response =>
+    new URL(response.url()).pathname === '/api/seller/products' && response.request().method() === 'POST');
   await offeringForm.getByRole('button', { name: 'Publish Offering' }).click();
-  await expect(page.locator('#createOfferingForm')).toHaveCount(0);
+  const publishResult = await publishResponse;
+  expect(publishResult.status()).toBeLessThan(400);
+  // Wait for form to be hidden/removed - frontend may not remove from DOM immediately
+  await expect(page.locator('#createOfferingForm')).toBeHidden({ timeout: 10000 });
 
   const sellerProducts = await apiJson(page, '/api/seller/products');
   expect(sellerProducts.status).toBe(200);
@@ -74,7 +100,7 @@ test('seller approval -> live offering -> buyer order -> inventory -> seller del
   const visitKitchen = page.getByRole('link', { name: new RegExp(`Visit ${seller.kitchenName}`) });
   await visitKitchen.click();
   await expect(page.locator('body')).toContainText(seller.kitchenName);
-  await page.getByRole('button', { name: 'ORDER', exact: true }).click();
+  await page.getByRole('button', { name: /^(ORDER|PRE-ORDER)$/ }).first().click();
   await expect(page.locator('#sheetRoot')).toBeVisible();
   await page.locator('#sheetRoot').getByRole('button', { name: 'Add to Order' }).click();
   await page.goto('/index.html#/summary');

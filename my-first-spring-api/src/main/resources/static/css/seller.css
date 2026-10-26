@@ -1,5 +1,5 @@
 /* ============================================================
-   SocioMart Seller App v1.0 — Mobile-first seller experience
+   SocioMart Seller App v1.0 â€” Mobile-first seller experience
    5-tab nav: Home / Kitchen / Orders / History / Earnings
    ============================================================ */
 
@@ -1381,7 +1381,7 @@
 .toast.info { background: var(--brand-3); }
 
 /* ============================================================
-   RESPONSIVE LAYER — mobile-first, same design language
+   RESPONSIVE LAYER â€” mobile-first, same design language
    ============================================================ */
 
 /* ---------- Overflow safety net (all sizes) ---------- */
@@ -1466,7 +1466,7 @@
 
 .sticky-footer-btn { bottom: calc(70px + env(safe-area-inset-bottom)); }
 
-/* ---------- Very small phones (320–380px): compact, nothing clipped ---------- */
+/* ---------- Very small phones (320â€“380px): compact, nothing clipped ---------- */
 
 @media (max-width: 380px) {
     .form-row-3 { grid-template-columns: 1fr; }
@@ -1487,7 +1487,7 @@
     .offering-card { padding: 12px; gap: 10px; }
 }
 
-/* ---------- Phones (≤430px): stack layout for safety ---------- */
+/* ---------- Phones (â‰¤430px): stack layout for safety ---------- */
 
 @media (max-width: 430px) {
     .modal-actions { flex-wrap: wrap; }
@@ -1552,7 +1552,7 @@
     .pathway-card { padding: 18px; }
 }
 
-/* ---------- Tablet (≥768px): same design, more room ---------- */
+/* ---------- Tablet (â‰¥768px): same design, more room ---------- */
 
 @media (min-width: 600px) {
     .seller-view { max-width: 720px; margin: 0 auto; }
@@ -1800,7 +1800,7 @@
     align-items: center;
 }
 
-/* The chip is a <label>, so the whole pill — not just the native box — is a
+/* The chip is a <label>, so the whole pill â€” not just the native box â€” is a
    tap target. It is scoped inside a clickable row, so the click is routed to
    the 'change' listener and never to the row's navigation. */
 .oc-delivered {
@@ -1835,7 +1835,7 @@
     background: var(--green-soft);
     border-color: var(--green);
 }
-.oc-delivered.on .oc-delivered-text::after { content: " ✓"; }
+.oc-delivered.on .oc-delivered-text::after { content: " âœ“"; }
 
 /* A cancelled/draft order takes no part in delivery tracking, but a row that
    was delivered BEFORE it was cancelled still shows that fact (read-only). */
@@ -2108,7 +2108,16 @@ html[data-theme="dark"] .sd-stat--blue  { background: #1B2740; }
 
 .sd-section { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
 .sd-section__title { margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--sd-text); }
-.sd-section__count { color: var(--sd-muted); font-weight: 700; }
+.sd-section__count { color: var(--sd-muted); font-weight: 700; margin-left: 4px; }
+.sd-section__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sd-section__add-btn {
+    min-height: 38px;
+    padding: 0 16px;
+    border-radius: 999px;
+    font-size: .85rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
 .sd-filter select {
     min-height: 38px; padding: 0 12px;
     border-radius: 999px;
@@ -2117,6 +2126,17 @@ html[data-theme="dark"] .sd-stat--blue  { background: #1B2740; }
     color: var(--sd-text); font-weight: 700; font-size: .82rem;
 }
 .sd-filter select:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 1px; }
+
+/* ---------- Offerings Grid ---------- */
+.sd-offerings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+    width: 100%;
+}
+@media (max-width: 480px) {
+    .sd-offerings-grid { grid-template-columns: 1fr; }
+}
 
 /* ---------- Offering card ---------- */
 
@@ -2180,20 +2200,75 @@ html[data-theme="dark"] .sd-stat--blue  { background: #1B2740; }
 .sd-btn--edit:hover, .sd-btn--soldout:hover { filter: brightness(.96); }
 .sd-btn--pause:hover { filter: brightness(.96); }
 
-/* ---------- Add Offering CTA ---------- */
+/* ---------- Add Offering CTA & Placeholder ---------- */
 
-.sd-add {
+a.sd-add, button.sd-add:not(.sd-add-placeholder) {
     display: flex; align-items: center; justify-content: center; gap: 8px;
-    width: 100%; min-height: 52px;
+    width: 100%; min-height: 48px;
     border: 0; border-radius: var(--sd-radius);
     background: var(--sd-orange); color: #fff;
-    font: inherit; font-size: 1rem; font-weight: 800;
+    font: inherit; font-size: 0.95rem; font-weight: 800;
     cursor: pointer;
-    box-shadow: 0 6px 20px rgba(198, 79, 0, .35);
+    box-shadow: 0 4px 14px rgba(198, 79, 0, .28);
+    text-decoration: none;
 }
-.sd-add:hover { background: var(--sd-orange-deep); }
-.sd-add:active { transform: scale(.98); }
-.sd-add:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+a.sd-add:hover, button.sd-add:not(.sd-add-placeholder):hover { background: var(--sd-orange-deep); }
+a.sd-add:active, button.sd-add:not(.sd-add-placeholder):active { transform: scale(.98); }
+a.sd-add:focus-visible, button.sd-add:not(.sd-add-placeholder):focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
+
+.sd-add-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 160px;
+    padding: 20px 16px;
+    background: transparent;
+    border: 2px dashed var(--sd-border);
+    border-radius: var(--sd-radius);
+    color: var(--sd-muted);
+    font: inherit;
+    cursor: pointer;
+    transition: all .2s ease;
+    text-align: center;
+    box-shadow: none;
+}
+.sd-add-placeholder:hover {
+    border-color: var(--sd-orange);
+    color: var(--sd-orange);
+    background: var(--sd-orange-soft);
+}
+.sd-add-placeholder:focus-visible {
+    outline: 2px solid var(--sd-orange);
+    outline-offset: 2px;
+}
+.sd-add-placeholder:active {
+    transform: scale(.98);
+}
+.sd-add-placeholder__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--sd-orange-soft);
+    color: var(--sd-orange);
+    display: grid;
+    place-items: center;
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+.sd-add-placeholder__title {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--sd-text);
+}
+.sd-add-placeholder:hover .sd-add-placeholder__title {
+    color: var(--sd-orange);
+}
+.sd-add-placeholder__sub {
+    font-size: 0.8rem;
+    color: var(--sd-muted);
+}
 
 /* ---------- Earnings summary ---------- */
 
@@ -2307,7 +2382,7 @@ html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #3321
 }
 
 /* ============================================================
-   SELLER ORDERS (SCREEN 7A) — approved "Order Summary" mockup.
+   SELLER ORDERS (SCREEN 7A) â€” approved "Order Summary" mockup.
 
    Every rule is scoped to `.so-root`, and that class is only ever rendered
    together with `.sd-root`, so the screen reuses the shared warm-orange
@@ -2577,7 +2652,7 @@ html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #3321
 }
 
 /* ============================================================
-   SELLER EARNINGS (SCREEN 8) — approved "Earnings" mockup.
+   SELLER EARNINGS (SCREEN 8) â€” approved "Earnings" mockup.
 
    Every rule is scoped to `.er-root`, and that class is only ever rendered
    together with `.sd-root`, so the screen reuses the shared warm-orange
@@ -2823,7 +2898,7 @@ html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #3321
 }
 
 /* ============================================================
-   SELLER OFFERING ORDERS / ORDER DETAIL (SCREEN 7B) — approved
+   SELLER OFFERING ORDERS / ORDER DETAIL (SCREEN 7B) â€” approved
    "Offering Orders Summary" mockup.
 
    Every rule is scoped to `.od-root`, and that class is only ever
@@ -2878,7 +2953,7 @@ html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #3321
 }
 .od-kitchen { margin: -4px 0 0; overflow-wrap: anywhere; }
 
-/* ---------- Summary card (mockup: name · orders · plates · amount) ---------- */
+/* ---------- Summary card (mockup: name Â· orders Â· plates Â· amount) ---------- */
 
 .od-root .drilldown-header.od-summary {
     margin-bottom: 0;
@@ -3087,7 +3162,7 @@ html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #3321
 }
 
 /* ============================================================
-   SELLER INDIVIDUAL ORDER (SCREEN 7C) — same visual language as
+   SELLER INDIVIDUAL ORDER (SCREEN 7C) â€” same visual language as
    the approved Offering Orders (Screen 7B) above.
    There is no separate mockup for this drill-down, so it reuses the
    7B header, summary-card, badge and touch-target treatment instead of
@@ -3661,4 +3736,122 @@ html[data-theme="dark"] .sd-earnings { background: linear-gradient(135deg, #3321
 
 [data-theme="dark"] .cancel-confirm-dialog h3 {
     color: #F9FAFB;
+}
+
+/* Radio cards for Homemade Availability */
+.radio-cards-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 6px;
+}
+.radio-card {
+    border: 1.5px solid var(--border, #E5E7EB);
+    border-radius: 12px;
+    padding: 12px 14px;
+    cursor: pointer;
+    background: var(--surface, #FFFFFF);
+    transition: all 0.15s ease;
+}
+.radio-card:hover {
+    border-color: var(--brand, #ea580c);
+}
+.radio-card.is-selected {
+    border-color: var(--brand, #ea580c);
+    background: var(--brand-soft, rgba(234, 88, 12, 0.08));
+    box-shadow: 0 0 0 1px var(--brand, #ea580c);
+}
+.rc-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text, #111827);
+    margin-bottom: 2px;
+}
+.rc-desc {
+    font-size: 0.8rem;
+    color: var(--muted, #6B7280);
+    line-height: 1.35;
+}
+
+/* Category Badges on Offering Cards & History */
+.sd-card__badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.sd-cat-badge, .badge-hm, .badge-kt {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.3;
+    white-space: nowrap;
+}
+.sd-cat-badge--hm, .badge-hm {
+    background: #FEF3C7;
+    color: #92400E;
+    border: 1px solid #FDE68A;
+}
+[data-theme="dark"] .sd-cat-badge--hm, [data-theme="dark"] .badge-hm {
+    background: rgba(217, 119, 6, 0.2);
+    color: #FCD34D;
+    border-color: rgba(217, 119, 6, 0.4);
+}
+.sd-cat-badge--kt, .badge-kt {
+    background: #E0E7FF;
+    color: #3730A3;
+    border: 1px solid #C7D2FE;
+}
+[data-theme="dark"] .sd-cat-badge--kt, [data-theme="dark"] .badge-kt {
+    background: rgba(79, 70, 229, 0.2);
+    color: #A5B4FC;
+    border-color: rgba(79, 70, 229, 0.4);
+}
+
+/* Publish Success & Preview Modals */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 16px;
+}
+.preview-modal-dialog {
+    background: var(--surface, #FFFFFF);
+    color: var(--text, #111827);
+    border: 1px solid var(--border, #E5E7EB);
+    border-radius: 16px;
+    max-width: 480px;
+    width: 100%;
+    padding: 24px;
+    box-shadow: var(--shadow-lg, 0 20px 25px -5px rgba(0, 0, 0, 0.1));
+}
+.preview-card-wrap {
+    border: 1.5px dashed var(--border, #D1D5DB);
+    border-radius: 12px;
+    padding: 16px;
+    margin: 16px 0;
+    background: var(--surface-2, #F9FAFB);
+    color: var(--text, #111827);
+}
+.store-link-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--surface-2, #F3F4F6);
+    border: 1px solid var(--border, #E5E7EB);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    margin: 14px 0;
+    word-break: break-all;
+    color: var(--text, #111827);
 }

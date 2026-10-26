@@ -651,9 +651,20 @@ public class SellerAppService {
         // Same rule as Screen 7A: an unplaced draft basket is not a customer
         // order and reserves nothing, so it must never show up as a row here
         // (it would make the row count disagree with the booked inventory).
+        LocalDate effectiveDate = date;
         List<Order> orders = new ArrayList<>();
         for (Order o : orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen)) {
             if (o.getOrderStatus() != OrderStatus.DRAFT && orderContainsProductOnDate(o, productId, date)) orders.add(o);
+        }
+        boolean isRecurring = (recurringScheduleService != null && recurringScheduleService.hasSchedule(productId))
+                || (recurringScheduleRepository != null && recurringScheduleRepository.findByProductId(productId).isPresent());
+        if (!isRecurring && orders.isEmpty() && date != null && product.getAvailableDate() != null && !date.equals(product.getAvailableDate())) {
+            for (Order o : orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen)) {
+                if (o.getOrderStatus() != OrderStatus.DRAFT && orderContainsProductOnDate(o, productId, product.getAvailableDate())) {
+                    orders.add(o);
+                    effectiveDate = product.getAvailableDate();
+                }
+            }
         }
 
         OrderItemDetailDto dto = new OrderItemDetailDto();
@@ -685,7 +696,7 @@ public class SellerAppService {
             BigDecimal itemRevenue = BigDecimal.ZERO;
             OrderItem matchedItem = null;
             for (OrderItem item : order.getItems()) {
-                if (item.getProduct().getId().equals(productId) && itemMatchesDate(order, item, date)) {
+                if (item.getProduct().getId().equals(productId) && itemMatchesDate(order, item, effectiveDate)) {
                     qtyForProduct += (item.getQuantity() != null ? item.getQuantity() : 0);
                     itemRevenue = itemRevenue.add(item.getPrice() != null
                             ? item.getPrice().multiply(BigDecimal.valueOf(
@@ -746,7 +757,7 @@ public class SellerAppService {
         // Delivery progress + the server-calculated bulk scope, from the SAME
         // OrderService counter the bulk write uses. Unfiltered by design: the
         // progress must describe the whole offering, not the visible subset.
-        dto.setDeliveryProgress(orderService.getDeliveryProgress(productId, date, seller));
+        dto.setDeliveryProgress(orderService.getDeliveryProgress(productId, effectiveDate, seller));
         return dto;
     }
 

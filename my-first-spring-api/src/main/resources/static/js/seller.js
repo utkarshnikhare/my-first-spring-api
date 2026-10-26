@@ -120,7 +120,10 @@ async function sellerAuthHtml() {
         '<div class="muted small" style="margin-top:4px">This name will be used as the URL to share your kitchen page. Enter the name carefully, as it cannot be changed later.</div></div>' +
         '<div class="form-group"><label for="sellerRegSlug">Choose public kitchen URL</label><div class="muted small" id="sellerRegSlugHint">sociomart-demo.onrender.com/kitchen/</div><input class="form-input" id="sellerRegSlug" name="kitchenSlug" minlength="3" maxlength="80" pattern="[A-Za-z0-9]+(-[A-Za-z0-9]+)*" required></div>' +
         '<div class="form-group"><label for="sellerRegSpeciality">Cuisine / speciality</label><input class="form-input" id="sellerRegSpeciality" name="speciality" maxlength="250" required></div>' +
-        '<div class="form-group"><label for="sellerRegCategory">Seller category</label><select class="form-input" id="sellerRegCategory" name="sellerCategory" required><option value="KITCHEN">Kitchen</option><option value="HOMEMADE_PRODUCTS">Homemade products</option><option value="BOTH">Both</option></select></div>' +
+        '<div class="form-group"><label for="sellerRegCategory">What would you like to sell on SocioMart? <span class="req">*</span></label><select class="form-input" id="sellerRegCategory" name="sellerCategory" required>' +
+        '<option value="KITCHEN">Kitchen / Food — breakfast, lunch, dinner and snacks</option>' +
+        '<option value="HOMEMADE_PRODUCTS">Homemade Products — cakes, ghee, achar, papad, sweets and other homemade products</option>' +
+        '<option value="BOTH">Both — Kitchen / Food and Homemade Products</option></select></div>' +
         '<div class="form-group"><label for="sellerRegShort">Short description (optional)</label><textarea class="form-input" id="sellerRegShort" name="shortDescription" maxlength="500"></textarea></div>' +
         '<div class="form-group"><label for="sellerRegInstagram">Instagram URL (optional)</label><input class="form-input" id="sellerRegInstagram" name="instagramLink" type="url" maxlength="255"></div>' +
         '<div class="form-group"><label for="sellerRegPrimaryArea">Primary area</label><select class="form-input" id="sellerRegPrimaryArea" name="primaryAreaId" required>' +
@@ -406,11 +409,14 @@ function applyOfferingDatePicker(picker) {
     }
 }
 function sellerDate(dateKey) {
-    // Asia/Kolkata is UTC+5:30 regardless of the browser's local zone.
-    var istTodayMs = Date.now() + 330 * 60000;
-    if (dateKey === 'tomorrow') return new Date(istTodayMs + 864e5).toISOString().slice(0, 10);
+    // Use Intl.DateTimeFormat with Asia/Kolkata timezone for reliable date calculations.
+    var istToday = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    if (dateKey === 'tomorrow') {
+        var parts = istToday.split('-').map(Number);
+        return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + 1)).toISOString().slice(0, 10);
+    }
     if (dateKey && dateKey !== 'today' && dateKey !== 'pick') return dateKey;
-    return new Date(istTodayMs).toISOString().slice(0, 10);
+    return istToday;
 }
 function prettyDateTime(iso) {
     if (!iso) return '';
@@ -446,8 +452,50 @@ function foodEmoji(name) {
     return '🍽️';
 }
 
+function isHomemadeProduct(p) {
+    if (!p) return false;
+    if (p.isHomemade) return true;
+    var cat = String(p.category || '').toLowerCase();
+    return cat.indexOf('homemade') !== -1 || cat.indexOf('ghee') !== -1 || cat.indexOf('achar') !== -1
+        || cat.indexOf('papad') !== -1 || cat.indexOf('cake') !== -1 || cat.indexOf('sweet') !== -1
+        || cat.indexOf('masala') !== -1;
+}
+
 // SCREEN 2: ADD OFFERING ENTRY POINT
 async function sellerAddView() {
+    var kitchen = S.myKitchen;
+    if (!kitchen) {
+        try { kitchen = await sellerApi('/api/seller/kitchen'); S.myKitchen = kitchen; } catch (e) {}
+    }
+    var st = (kitchen && kitchen.sellerType) || 'KITCHEN';
+
+    // Section 23.2: If seller supports BOTH, first ask "What are you listing?"
+    if (st === 'BOTH' && !S.offeringCategory) {
+        var h = '<div class="view-enter">';
+        h += '<div class="page-head"><h1>Add Offering</h1><p class="muted small">What are you listing on SocioMart?</p></div>';
+        h += '<div class="pathway-card" data-action="select-offering-type" data-type="KITCHEN">'
+            + '<div class="pc-icon">🍽️</div>'
+            + '<div class="pc-title">Kitchen Offering</div>'
+            + '<div class="pc-desc">Breakfast, lunch, dinner, snacks or daily meal pre-orders.</div>'
+            + '</div>';
+        h += '<div class="pathway-card" data-action="select-offering-type" data-type="HOMEMADE">'
+            + '<div class="pc-icon">🍯</div>'
+            + '<div class="pc-title">Homemade Product</div>'
+            + '<div class="pc-desc">Cakes, ghee, achar, papad, sweets, masala and other homemade products.</div>'
+            + '</div>';
+        h += '<p class="muted small mt-3"><a class="text-brand" href="#/my-offerings">← Back to My Offerings</a></p>';
+        h += '</div>';
+        return h;
+    }
+
+    // If Homemade only, or seller selected Homemade:
+    if (st === 'HOMEMADE_PRODUCTS' || S.offeringCategory === 'HOMEMADE') {
+        S.offeringCategory = 'HOMEMADE';
+        return await sellerCreateView();
+    }
+
+    // Default Kitchen flow (single-category Kitchen or selected Kitchen):
+    S.offeringCategory = 'KITCHEN';
     var h = '<div class="view-enter">';
     h += '<div class="page-head"><h1>Add Offering</h1><p class="muted small">Favourites are manual reusable templates (maximum 3). History is automatic published-offering history.</p></div>';
     h += '<p class="muted small mb-2"><a class="text-brand" href="#/history">View automatic History →</a></p>';
@@ -628,19 +676,27 @@ function sdOfferingCardHtml(p, orderCount) {
     var img = sellerImg(p.imageUrl);
     var remaining = p.remainingQuantity;
     var maxQty = p.maxQuantity;
+    var isHm = isHomemadeProduct(p);
+    var catBadge = '<span class="sd-cat-badge ' + (isHm ? 'sd-cat-badge--hm' : 'sd-cat-badge--kt') + '">' + (isHm ? '🍯 Homemade' : '🍽️ Kitchen') + '</span>';
     var h = '<div class="sd-card">';
-    h += '<div class="sd-card__photo" role="button" tabindex="0" data-action="open-offering-orders" data-pid="' + esc(p.id) + '" style="cursor:pointer;" data-emoji="' + foodEmoji(p.name) + '">';
+    h += '<div class="sd-card__photo" role="button" tabindex="0" data-action="open-offering-orders" data-pid="' + esc(p.id) + '" style="cursor:pointer;" data-emoji="' + foodEmoji(p.name) + '">'
         + (img ? '<img src="' + esc(img) + '" alt="' + esc(p.name) + '" onerror="imgFallback(this)">' : foodEmoji(p.name))
         + '</div>';
     h += '<div class="sd-card__body">';
-    h += '<div class="sd-card__top"><span class="sd-card__name" role="button" tabindex="0" data-action="open-offering-orders" data-pid="' + esc(p.id) + '" style="cursor:pointer;">' + esc(p.name) + '</span>' + offeringStatusBadge(p) + '</div>';
+    h += '<div class="sd-card__top"><span class="sd-card__name" role="button" tabindex="0" data-action="open-offering-orders" data-pid="' + esc(p.id) + '" style="cursor:pointer;">' + esc(p.name) + '</span><div class="sd-card__badges">' + catBadge + offeringStatusBadge(p) + '</div></div>';
     h += '<div class="sd-card__qty"><strong>' + (p.bookedQuantity || 0) + ' booked</strong> · '
         + (remaining != null ? '<strong>' + remaining + ' available</strong>' : 'No limit') + '</div>';
-    h += '<div class="sd-card__times">'
-        + '<span class="sd-card__time">🕐 Orders close <span class="sd-tv">' + esc(sellerOrdersCloseLabel(p)) + '</span></span>'
-        + '<span class="sd-card__tdiv">|</span>'
-        + '<span class="sd-card__time">🛵 Delivery <span class="sd-tv">' + esc(sellerDeliveryLabel(p)) + '</span></span>'
-        + '</div>';
+    if (isHm && (!p.orderWindowEnd && !p.cutoffTime)) {
+        h += '<div class="sd-card__times">'
+            + '<span class="sd-card__time">⏱ Availability <span class="sd-tv">' + esc(p.readyByTime || 'Always Available') + '</span></span>'
+            + '</div>';
+    } else {
+        h += '<div class="sd-card__times">'
+            + '<span class="sd-card__time">🕐 Orders close <span class="sd-tv">' + esc(sellerOrdersCloseLabel(p)) + '</span></span>'
+            + '<span class="sd-card__tdiv">|</span>'
+            + '<span class="sd-card__time">🛵 Delivery <span class="sd-tv">' + esc(sellerDeliveryLabel(p)) + '</span></span>'
+            + '</div>';
+    }
     // Price is real product data (price + unit), never a sample figure.
     if (p.price != null) {
         h += '<div class="sd-card__price">' + money(p.price)
@@ -810,7 +866,10 @@ async function sellerHomeView() {
             }
             h += '<div class="sd-section">'
                 + '<h2 class="sd-section__title">My Offerings<span class="sd-section__count">(' + shown.length + ')</span></h2>'
+                + '<div class="sd-section__actions">'
                 + sdOfferingFilterHtml(offerings)
+                + '<button class="sd-btn sd-btn--primary sd-section__add-btn" type="button" data-action="go-add"><span aria-hidden="true">＋</span> Add Offering</button>'
+                + '</div>'
                 + '</div>';
             if (!offerings.length) {
                 h += emptyHtml('🍽️', 'No Offerings yet',
@@ -820,12 +879,17 @@ async function sellerHomeView() {
                 if (!shown.length) {
                     h += emptyHtml('🍽️', 'Nothing in this filter', 'Choose "All" to see every offering.');
                 } else {
+                    h += '<div class="sd-offerings-grid">';
                     shown.forEach(function (p) {
                         h += sdOfferingCardHtml(p, orderCounts[p.id] != null ? orderCounts[p.id] : null);
                     });
+                    h += '<button class="sd-add-placeholder sd-add" type="button" data-action="go-add">'
+                        + '<div class="sd-add-placeholder__icon" aria-hidden="true">＋</div>'
+                        + '<div class="sd-add-placeholder__title">Add Offering</div>'
+                        + '<div class="sd-add-placeholder__sub">Create dish or product</div>'
+                        + '</button>';
+                    h += '</div>';
                 }
-                // Large orange CTA -> the EXISTING create-offering entry point when offerings exist.
-                h += '<button class="sd-add" type="button" data-action="go-add"><span aria-hidden="true">＋</span> Add Offering</button>';
             }
         }
         h += sdEarningsHtml(dash);
@@ -861,22 +925,35 @@ async function sellerHistoryView() {
     h += '<div class="date-tabs"><button class="date-tab' + (S.offeringsTab !== 'recurring' ? ' active' : '') + '" type="button" data-action="set-offerings-tab" data-tab="history">History</button>' +
         '<button class="date-tab' + (S.offeringsTab === 'recurring' ? ' active' : '') + '" type="button" data-action="set-offerings-tab" data-tab="recurring">Recurring</button></div>';
     if (S.offeringsTab === 'recurring') return h + await sellerRecurringHtml() + '</div>';
+    S.offeringsCategoryFilter = S.offeringsCategoryFilter || 'ALL';
+    h += '<div class="sd-filters offerings-category-filters mb-2" role="tablist">'
+        + '<button type="button" class="sd-chip' + (S.offeringsCategoryFilter === 'ALL' ? ' is-active' : '') + '" data-action="filter-offerings-cat" data-cat="ALL">All</button>'
+        + '<button type="button" class="sd-chip' + (S.offeringsCategoryFilter === 'KITCHEN' ? ' is-active' : '') + '" data-action="filter-offerings-cat" data-cat="KITCHEN">🍽️ Kitchen</button>'
+        + '<button type="button" class="sd-chip' + (S.offeringsCategoryFilter === 'HOMEMADE' ? ' is-active' : '') + '" data-action="filter-offerings-cat" data-cat="HOMEMADE">🍯 Homemade</button>'
+        + '</div>';
     h += '<div class="sd-section"><h2 class="sd-section__title">Offering History</h2></div>';
     h += '<p class="muted small mb-2">Previous offerings listed here...</p>';
     try {
         var items = await sellerApi('/api/seller-app/history');
         S.historyItems = items || [];
-        // Render the normalised list rather than the raw response: a null body would
-        // otherwise throw here and be reported as "could not load history".
-        if (S.historyItems.length === 0) {
+        var filteredItems = S.historyItems.filter(function (p) {
+            if (S.offeringsCategoryFilter === 'KITCHEN') return !isHomemadeProduct(p);
+            if (S.offeringsCategoryFilter === 'HOMEMADE') return isHomemadeProduct(p);
+            return true;
+        });
+        if (filteredItems.length === 0) {
             h += emptyHtml('🕘', 'No previous items', 'Expired offerings for your kitchen will appear here.');
         } else {
-            S.historyItems.forEach(function (p) {
+            filteredItems.forEach(function (p) {
                 var offeringDate = p.availableDate ? prettyDate(p.availableDate) : 'Previous offering';
-                h += '<div class="history-card"><span class="hc-body"><span class="hc-name">' + esc(p.name) + '</span>' +
+                var isHm = isHomemadeProduct(p);
+                var catBadge = '<span class="badge ' + (isHm ? 'badge-hm' : 'badge-kt') + '">' + (isHm ? 'Homemade' : 'Kitchen') + '</span>';
+                var isDraft = p.availableToday === false;
+                var statusBadge = isDraft ? '<span class="pill pill-amber">Draft</span>' : '';
+                h += '<div class="history-card"><span class="hc-body"><span class="hc-name">' + esc(p.name) + ' ' + catBadge + (statusBadge ? ' ' + statusBadge : '') + '</span>' +
                     '<span class="hc-meta">' + esc(offeringDate) + ' · ' + esc(p.category || 'Uncategorised') + '</span></span>' +
                     '<span class="hc-price">' + money(p.price) + '</span>' +
-                    '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="republish-history" data-pid="' + esc(p.id) + '">Republish</button></div>';
+                    '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="republish-history" data-pid="' + esc(p.id) + '">' + (isDraft ? 'Publish' : 'Republish') + '</button></div>';
             });
         }
     } catch (e) { h += emptyHtml('⚠️', 'Could not load history', e.message); }
@@ -1104,14 +1181,14 @@ function offeringTimingError(availableDate, openHhmm, closeHhmm, readyBy) {
         return 'Delivery / Ready By must be in the future';
     }
 
-    var orderingDate = availableDate;
-    if (availableDate > todayIso) {
-        var orderDate = new Date(availableDate + 'T00:00:00');
-        orderDate.setDate(orderDate.getDate() - 1);
-        orderingDate = localDateStr(orderDate);
-    }
-    if (closeHhmm && orderingDate + 'T' + closeHhmm >= readyBy.slice(0, 16)) {
-        return 'Orders Close must be before Delivery / Ready By';
+    var cutoffIso = availableDate + 'T' + (closeHhmm || '00:00');
+    if (closeHhmm && cutoffIso >= readyBy.slice(0, 16)) {
+        var prevDate = new Date(availableDate + 'T00:00:00');
+        prevDate.setDate(prevDate.getDate() - 1);
+        var prevIso = localDateStr(prevDate) + 'T' + closeHhmm;
+        if (prevIso >= readyBy.slice(0, 16)) {
+            return 'Orders Close must be before Delivery / Ready By';
+        }
     }
     return null;
 }
@@ -1610,14 +1687,14 @@ function autoClampOrderWindowEndIfInvalid(form) {
     var isPast = (availDate <= todayIso && closeVal && closeVal <= currentHhmm);
     var isAfterReady = false;
     if (closeVal && readyVal && readyVal.length >= 16) {
-        var orderingDate = availDate;
-        if (availDate > todayIso) {
-            var orderDate = new Date(availDate + 'T00:00:00');
-            orderDate.setDate(orderDate.getDate() - 1);
-            orderingDate = localDateStr(orderDate);
-        }
-        if (orderingDate + 'T' + closeVal >= readyVal.slice(0, 16)) {
-            isAfterReady = true;
+        var cutoffIso = availDate + 'T' + closeVal;
+        if (cutoffIso >= readyVal.slice(0, 16)) {
+            var prevDate = new Date(availDate + 'T00:00:00');
+            prevDate.setDate(prevDate.getDate() - 1);
+            var prevIso = localDateStr(prevDate) + 'T' + closeVal;
+            if (prevIso >= readyVal.slice(0, 16)) {
+                isAfterReady = true;
+            }
         }
     }
 
@@ -1767,7 +1844,9 @@ function applyWheelTimeToInput(container, targetName, slotIdx) {
     } else if (targetName === 'readyByTime') {
         var readyInput = form.querySelector('input[name="readyByTime"]');
         var availDateInput = form.querySelector('input[name="availableDate"]') || form.querySelector('input[name="chosenOfferingDate"]');
-        var dateVal = availDateInput ? availDateInput.value : sellerDate('today');
+        var dateVal = (readyInput && readyInput.value && readyInput.value.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(readyInput.value))
+            ? readyInput.value.slice(0, 10)
+            : (availDateInput ? availDateInput.value : sellerDate('today'));
         if (readyInput) readyInput.value = dateVal + 'T' + time24;
     }
     updateLiveTimingBadge(form);
@@ -1782,12 +1861,14 @@ function syncOfferingFormWheels(form) {
     var readyInput = form.querySelector('input[name="readyByTime"]');
     if (closeViewport && closeInput && closeInput.value) {
         var cp = parseTimeForWheel(closeInput.value);
+        closeViewport._programmaticScroll = true;
         closeViewport.scrollTop = cp.index * 44;
         updateActiveSlotInViewport(closeViewport, cp.index);
         updateAmpmButtons(form, 'orderWindowEnd', cp.ampm);
     }
     if (readyViewport && readyInput && readyInput.value) {
         var rp = parseTimeForWheel(readyInput.value);
+        readyViewport._programmaticScroll = true;
         readyViewport.scrollTop = rp.index * 44;
         updateActiveSlotInViewport(readyViewport, rp.index);
         updateAmpmButtons(form, 'readyByTime', rp.ampm);
@@ -1827,6 +1908,11 @@ function initOfferingFormWheels(view) {
             if (idx < 0) idx = 0;
             if (idx >= WHEEL_INTERVALS.length) idx = WHEEL_INTERVALS.length - 1;
             updateActiveSlotInViewport(viewport, idx);
+
+            if (viewport._programmaticScroll) {
+                viewport._programmaticScroll = false;
+                return;
+            }
 
             clearTimeout(scrollTimer);
             scrollTimer = setTimeout(function () {
@@ -1919,6 +2005,132 @@ function initOfferingFormWheels(view) {
 }
 
 /**
+ * Homemade Product Offering Form (Specification Section 8 & 22).
+ * Adapts fields for long-availability and made-on-request items.
+ */
+function homemadeOfferingFormHtml(t, opts, ctx) {
+    var isEdit = ctx.isEdit;
+    var locked = ctx.locked;
+    var lockAttr = ctx.lockAttr;
+    var todayIso = ctx.todayIso;
+    var chosenDate = ctx.chosenDate;
+    var selectedUnit = ctx.selectedUnit || 'Per Piece';
+    var categoryValues = ctx.categoryValues || [];
+    var availType = t.availType || S.hmAvailType || (t.isPreorder ? 'SPECIFIC_DATE' : (t.readyByTime && t.readyByTime.indexOf('Request') !== -1 ? 'MADE_ON_REQUEST' : 'ALWAYS_AVAILABLE'));
+    var stockMode = (t.maxQuantity != null || S.hmStockMode === 'limited') ? 'limited' : 'unlimited';
+
+    var h = '<form class="seller-form hm-offering-form" id="' + (opts.formId || 'createOfferingForm') + '">';
+    h += '<input type="hidden" name="isHomemade" value="true">';
+    h += '<input type="hidden" name="imageUrl" value="' + esc(t.imageUrl || '') + '">';
+    h += '<input type="hidden" name="availableDate" id="availDate" value="' + esc(chosenDate) + '">';
+    h += '<input type="hidden" name="hmAvailType" id="hmAvailType" value="' + esc(availType) + '">';
+    h += '<input type="hidden" name="hmStockMode" id="hmStockMode" value="' + esc(stockMode) + '">';
+    h += '<input type="hidden" name="availableToday" id="hmAvailToday" value="' + (t.availableToday !== false ? 'true' : 'false') + '">';
+
+    // Photos
+    h += '<div class="form-group"><label class="form-label">Photos <span class="req">*</span></label><div class="photo-upload-row"><div class="photo-tile" data-action="add-photo">' + (isEdit && sellerImg(t.imageUrl) ? '<img src="' + esc(sellerImg(t.imageUrl)) + '" alt="' + esc(t.name) + '" onerror="imgFallback(this)">' : '+') + '</div></div></div>';
+
+    // Product Name
+    h += '<div class="form-group"><label class="form-label">Product Name <span class="req">*</span></label><input class="form-input" name="name" value="' + esc(t.name || '') + '" placeholder="e.g. Chocolate Truffle Cake, Desi Cow Ghee" required' + lockAttr + '></div>';
+
+    // Description
+    h += '<div class="form-group"><label class="form-label">Short Description</label><textarea class="form-textarea" name="description" placeholder="Describe ingredients, shelf life, weight, packaging...">' + esc(t.description || '') + '</textarea></div>';
+
+    // Price & Unit
+    var hmUnits = ['Per Piece', 'Per Box', 'Per Pack', '250 g', '500 g', '1 kg', '250 ml', '500 ml', '1 litre', 'Other'];
+    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Price (Rs) <span class="req">*</span></label><input class="form-input" name="price" type="number" min="1" value="' + (t.price || '') + '" placeholder="150" required' + lockAttr + '></div>';
+    h += '<div class="form-group"><label class="form-label">Unit <span class="req">*</span></label><select class="form-select" name="priceUnit"' + lockAttr + '>';
+    hmUnits.forEach(function (u) {
+        h += '<option value="' + esc(u) + '"' + (selectedUnit === u ? ' selected' : '') + '>' + esc(u) + '</option>';
+    });
+    if (selectedUnit && hmUnits.indexOf(selectedUnit) === -1) {
+        h += '<option value="' + esc(selectedUnit) + '" selected>' + esc(selectedUnit) + '</option>';
+    }
+    h += '</select></div></div>';
+
+    // Product Category (Section 8.1 & 9)
+    var hmCategories = ['Cakes', 'Ghee', 'Achar', 'Papad', 'Sweets', 'Snacks', 'Masala', 'Other'];
+    h += '<div class="form-group"><label class="form-label">Product Category <span class="req">*</span></label><div class="checkbox-group">';
+    hmCategories.forEach(function (cat) {
+        var isChecked = categoryValues.indexOf(cat.toUpperCase()) !== -1 || (categoryValues.length === 0 && cat === 'Cakes');
+        h += '<label class="checkbox-option' + (isChecked ? ' selected' : '') + '" data-action="toggle-cat" data-cat="' + esc(cat.toUpperCase()) + '"><input type="checkbox" name="categories" value="' + esc(cat.toUpperCase()) + '"' + (isChecked ? ' checked' : '') + '> ' + esc(cat) + '</label>';
+    });
+    h += '</div><p class="muted small">Select at least one product category.</p></div>';
+
+    // Availability Type (Section 8.2)
+    h += '<div class="form-group"><label class="form-label">Availability Type <span class="req">*</span></label>';
+    h += '<div class="radio-cards-group">';
+    h += '<div class="radio-card' + (availType === 'ALWAYS_AVAILABLE' ? ' is-selected' : '') + '" data-action="set-hm-avail" data-avail="ALWAYS_AVAILABLE">'
+        + '<div class="rc-title">✨ Always Available</div>'
+        + '<div class="rc-desc">In stock and generally ready to fulfill. Stays live until paused or sold out.</div>'
+        + '</div>';
+    h += '<div class="radio-card' + (availType === 'MADE_ON_REQUEST' ? ' is-selected' : '') + '" data-action="set-hm-avail" data-avail="MADE_ON_REQUEST">'
+        + '<div class="rc-title">🥣 Made on Request</div>'
+        + '<div class="rc-desc">Made fresh after receiving order (e.g. customized cakes).</div>'
+        + '</div>';
+    h += '<div class="radio-card' + (availType === 'SPECIFIC_DATE' ? ' is-selected' : '') + '" data-action="set-hm-avail" data-avail="SPECIFIC_DATE">'
+        + '<div class="rc-title">📅 Specific Date Pre-Order</div>'
+        + '<div class="rc-desc">Scheduled for a festival, batch, or specific date with cutoff.</div>'
+        + '</div>';
+    h += '</div></div>';
+
+    // Subfields for ALWAYS_AVAILABLE
+    h += '<div id="hmAlwaysFields"' + (availType === 'ALWAYS_AVAILABLE' ? '' : ' style="display:none;"') + '>';
+    h += '<div class="form-group"><label class="form-label">Fulfillment Estimate</label>'
+        + '<select class="form-select" name="hmAlwaysPrepTime">'
+        + '<option value="Usually ready in 1 day"' + (!t.readyByTime || t.readyByTime === 'Usually ready in 1 day' ? ' selected' : '') + '>Usually ready in 1 day</option>'
+        + '<option value="Same day fulfillment"' + (t.readyByTime === 'Same day fulfillment' ? ' selected' : '') + '>Same day fulfillment</option>'
+        + '<option value="Usually ready in 2 days"' + (t.readyByTime === 'Usually ready in 2 days' ? ' selected' : '') + '>Usually ready in 2 days</option>'
+        + '<option value="Usually ready in 3 days"' + (t.readyByTime === 'Usually ready in 3 days' ? ' selected' : '') + '>Usually ready in 3 days</option>'
+        + '</select></div></div>';
+
+    // Subfields for MADE_ON_REQUEST
+    h += '<div id="hmRequestFields"' + (availType === 'MADE_ON_REQUEST' ? '' : ' style="display:none;"') + '>';
+    h += '<div class="form-group"><label class="form-label">Minimum Preparation Time <span class="req">*</span></label>'
+        + '<select class="form-select" name="hmRequestPrepTime">'
+        + '<option value="Same Day"' + (t.readyByTime && t.readyByTime.indexOf('Same Day') !== -1 ? ' selected' : '') + '>Same Day</option>'
+        + '<option value="1 Day"' + (!t.readyByTime || (t.readyByTime && t.readyByTime.indexOf('1 Day') !== -1) ? ' selected' : '') + '>1 Day (24 hours)</option>'
+        + '<option value="2 Days"' + (t.readyByTime && t.readyByTime.indexOf('2 Days') !== -1 ? ' selected' : '') + '>2 Days (48 hours)</option>'
+        + '<option value="3 Days"' + (t.readyByTime && t.readyByTime.indexOf('3 Days') !== -1 ? ' selected' : '') + '>3 Days (72 hours)</option>'
+        + '</select><p class="muted small">Buyers will see: "Made on Request - Order at least [prep time] in advance"</p></div></div>';
+
+    // Subfields for SPECIFIC_DATE
+    h += '<div id="hmDateFields"' + (availType === 'SPECIFIC_DATE' ? '' : ' style="display:none;"') + '>';
+    h += '<div class="form-row-2">'
+        + '<div class="form-group"><label class="form-label">Offering / Delivery Date <span class="req">*</span></label><input type="date" class="form-input" name="chosenOfferingDate" min="' + todayIso + '" value="' + esc(chosenDate) + '"></div>'
+        + '<div class="form-group"><label class="form-label">Orders Close (Order By)</label><input class="form-input" name="orderWindowEnd" type="time" value="' + esc(t.orderWindowEnd || t.cutoffTime || '20:00') + '"></div>'
+        + '</div>'
+        + '<div class="form-group"><label class="form-label">Delivery / Ready By Time</label><input class="form-input" name="readyByTime" type="time" value="' + esc(t.readyByTime && t.readyByTime.indexOf('T') !== -1 ? t.readyByTime.slice(11, 16) : '21:00') + '"></div>'
+        + '</div>';
+
+    // Stock Mode (Section 8.1 & 22)
+    h += '<div class="form-group"><label class="form-label">Stock Availability <span class="req">*</span></label>'
+        + '<div class="radio-group">'
+        + '<label class="radio-option' + (stockMode === 'unlimited' ? ' selected' : '') + '" data-action="set-hm-stock" data-stock="unlimited">No Limit (Unlimited)</label>'
+        + '<label class="radio-option' + (stockMode === 'limited' ? ' selected' : '') + '" data-action="set-hm-stock" data-stock="limited">Limited Quantity</label>'
+        + '</div></div>';
+    h += '<div class="form-group" id="hmStockQtyGroup"' + (stockMode === 'limited' ? '' : ' style="display:none;"') + '>'
+        + '<label class="form-label">Available Units / Quantity <span class="req">*</span></label>'
+        + '<input class="form-input" name="maxQuantity" type="number" min="1" step="1" value="' + (t.remainingQuantity != null ? t.remainingQuantity : (t.maxQuantity != null ? t.maxQuantity : '')) + '" placeholder="e.g. 10">'
+        + '<p class="muted small">System will prevent overselling once this quantity is booked.</p></div>';
+
+    // Action buttons (Section 22.2)
+    h += '<div id="timingInlineWarning" class="timing-inline-warning" style="display:none;"></div>';
+    h += '<div class="offering-form-actions-row">';
+    if (!isEdit) {
+        h += '<button class="btn btn-secondary" type="button" data-action="save-product-draft">Save Draft</button>';
+        h += '<button class="btn btn-secondary" type="button" data-action="preview-product">Preview</button>';
+        h += '<button class="btn btn-primary btn-flex-1" type="submit">Publish Product</button>';
+    } else {
+        h += '<button class="btn btn-secondary btn-cancel-offering" type="button" data-action="cancel-offering-form">Cancel</button>';
+        h += '<button class="btn btn-secondary" type="button" data-action="preview-product">Preview</button>';
+        h += '<button class="btn btn-primary btn-flex-1" type="submit">Save Changes</button>';
+    }
+    h += '</div></form>';
+    return h;
+}
+
+/**
  * The offering form markup, shared by Create Offering (opts.edit false) and Edit
  * Offering (Requirement 5). With `opts.locked` the fields customers already
  * agreed to stay visible but can no longer be changed.
@@ -1928,12 +2140,25 @@ function offeringFormHtml(t, opts) {
     t = t || {};
     var isEdit = !!opts.edit;
     var locked = !!opts.locked;
+    var isHomemade = !!opts.isHomemade || (S.offeringCategory === 'HOMEMADE') || isHomemadeProduct(t);
     var mode = opts.mode || S.offeringFor || 'today';
     var lockAttr = locked ? ' disabled' : '';
     var todayIso = sellerDate('today');
     var chosenDate = isEdit ? (t.availableDate || todayIso) : (mode === 'tomorrow' ? sellerDate('tomorrow') : (mode === 'choose' && t.availableDate ? t.availableDate : todayIso));
     var selectedUnit = t.priceUnit || 'Per Piece';
     var categoryValues = String(t.category || '').split(',').map(function (c) { return c.trim().toUpperCase(); }).filter(Boolean);
+
+    if (isHomemade) {
+        return homemadeOfferingFormHtml(t, opts, {
+            isEdit: isEdit,
+            locked: locked,
+            lockAttr: lockAttr,
+            todayIso: todayIso,
+            chosenDate: chosenDate,
+            selectedUnit: selectedUnit,
+            categoryValues: categoryValues
+        });
+    }
     var h = '<form class="seller-form" id="' + (opts.formId || 'createOfferingForm') + '">';
     if (!isEdit) {
         var isAfter8pm = (new Date()).getHours() >= 20;
@@ -2078,11 +2303,13 @@ async function sellerCreateView() {
         S.favTemplates = S.favTemplates || [];
     }
     var t = S.draftOffering || {};
+    var isHm = S.offeringCategory === 'HOMEMADE' || isHomemadeProduct(t);
     var h = '<div class="view-enter">';
-    h += '<div class="page-head"><h1>Create Offering</h1><p class="muted small">' +
-        (S.republishSourceId ? 'Review the previous offering details, then set fresh timing and quantity.' : 'Fill in the details for your new dish.') + '</p></div>';
+    h += '<div class="page-head"><h1>' + (isHm ? 'Add Homemade Product' : 'Create Offering') + '</h1><p class="muted small">' +
+        (isHm ? 'List your homemade treats, bakes, ghee, pickles or packaged specialties.' :
+        (S.republishSourceId ? 'Review the previous offering details, then set fresh timing and quantity.' : 'Fill in the details for your new dish.')) + '</p></div>';
     // Offering Mode toggle - blocking call handled by event delegation
-    h += offeringFormHtml(t, { formId: 'createOfferingForm', mode: S.offeringFor, edit: false, locked: false });
+    h += offeringFormHtml(t, { formId: 'createOfferingForm', mode: S.offeringFor, edit: false, locked: false, isHomemade: isHm });
     h += '</div>';
     return h;
 }
@@ -2093,11 +2320,12 @@ async function sellerEditOfferingView() {
     if (!o || !o.id) {
         return '<div class="view-enter">' + emptyHtml('🍽️', 'Offering not found', 'Open an offering from your dashboard and tap Edit again.') + '</div>';
     }
+    var isHm = isHomemadeProduct(o);
     var locked = !!o.hasOrders;
     // Pre-select the Offering For choice that matches the stored date.
     S.offeringFor = offeringForMode(o.availableDate);
     var h = '<div class="view-enter">';
-    h += '<div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button><h2 class="flex-1">Edit Offering</h2></div>';
+    h += '<div class="top-row"><button class="icon-btn" type="button" data-action="go-back" aria-label="Back">←</button><h2 class="flex-1">' + (isHm ? 'Edit Homemade Product' : 'Edit Offering') + '</h2></div>';
     if (locked) {
         h += '<div class="info-box">⚠️ This offering already has orders. Some details cannot be changed.</div>';
         h += '<p class="muted small">Name, price, unit, offering date, Orders Open and Delivery / Ready By are frozen so existing customers keep what they agreed to. Orders Close can only be extended.';
@@ -2111,7 +2339,7 @@ async function sellerEditOfferingView() {
         h += '<p class="muted small">No orders yet — every detail stays editable until the first order arrives.</p>';
     }
     if (o.soldOut) h += '<div class="info-box">🔴 Sold out. Raise the quantity available to restock it.</div>';
-    h += offeringFormHtml(o, { formId: 'editOfferingForm', edit: true, locked: locked, mode: S.offeringFor });
+    h += offeringFormHtml(o, { formId: 'editOfferingForm', edit: true, locked: locked, mode: S.offeringFor, isHomemade: isHm });
     h += '</div>';
     return h;
 }
@@ -2281,7 +2509,16 @@ async function sellerKitchenView() {
     var waVal = (kitchen && (kitchen.whatsappNumber || kitchen.sellerWhatsappNumber || kitchen.whatsappLink)) || '';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">WhatsApp Number</label><input class="form-input" name="whatsappNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" placeholder="10-digit WhatsApp number" value="' + esc(waVal) + '"><input type="hidden" name="whatsappLink" value="' + esc(waVal) + '"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" name="instagramLink" value="' + esc(kitchen && kitchen.instagramLink ? kitchen.instagramLink : '') + '"></div></div>';
     h += '<div class="form-group"><label class="form-label">UPI ID</label><input class="form-input" name="upiId" value="' + esc(kitchen && kitchen.upiId ? kitchen.upiId : '') + '"></div>';
-    h += '<div class="form-group"><label class="form-label">Store Type</label><div class="radio-group"><label class="radio-option' + (kitchen && kitchen.sellerType === 'HOMEMADE_PRODUCTS' ? '' : ' selected') + '" data-action="set-seller-type" data-val="KITCHEN">🍽️ Kitchen / Food Seller</label><label class="radio-option' + (kitchen && kitchen.sellerType === 'HOMEMADE_PRODUCTS' ? ' selected' : '') + '" data-action="set-seller-type" data-val="HOMEMADE_PRODUCTS">🍰 Homemade Products</label></div><input type="hidden" name="sellerType" id="sellerTypeInput" value="' + esc(kitchen && kitchen.sellerType ? kitchen.sellerType : 'KITCHEN') + '"></div>';
+    var curType = (kitchen && kitchen.sellerType) || 'KITCHEN';
+    h += '<div class="form-group"><label class="form-label">Store Type / Business Category</label>'
+        + '<div class="radio-group">'
+        + '<label class="radio-option' + (curType === 'KITCHEN' ? ' selected' : '') + '" data-action="set-seller-type" data-val="KITCHEN">🍽️ Kitchen / Food</label>'
+        + '<label class="radio-option' + (curType === 'HOMEMADE_PRODUCTS' ? ' selected' : '') + '" data-action="set-seller-type" data-val="HOMEMADE_PRODUCTS">🍯 Homemade Products</label>'
+        + '<label class="radio-option' + (curType === 'BOTH' ? ' selected' : '') + '" data-action="set-seller-type" data-val="BOTH">✨ Both (Kitchen & Homemade)</label>'
+        + '</div>'
+        + '<input type="hidden" name="sellerType" id="sellerTypeInput" value="' + esc(curType) + '">'
+        + '<p class="muted small mt-1">Sellers with Both can publish meal pre-orders and homemade packaged items with separate storefronts from one account.</p>'
+        + '</div>';
     h += '<div class="info-box">Your menu loads automatically from live offerings.</div>';
     h += '<button class="btn btn-primary btn-block" type="submit">SAVE CHANGES</button></form></div>';
     return h;
@@ -2884,6 +3121,155 @@ function normalizeReadyByTime(raw, availableDate) {
 
 
 /**
+ * Homemade Product Submission (Section 22 & 23).
+ * Handles Save Draft, Publish, and Edit for homemade items.
+ */
+async function submitHomemadeProduct(form, isDraft) {
+    var vals = formVals(form);
+    if (!vals.name || !vals.name.trim()) {
+        toast('Product Name is required', 'error');
+        return;
+    }
+    if (!vals.price || Number(vals.price) <= 0) {
+        toast('Price must be greater than 0', 'error');
+        return;
+    }
+    var cats = [];
+    form.querySelectorAll('input[name="categories"]:checked').forEach(function (cb) {
+        cats.push(cb.value);
+    });
+    if (cats.length === 0) {
+        toast('Please select at least one product category', 'error');
+        return;
+    }
+    var availType = vals.hmAvailType || 'ALWAYS_AVAILABLE';
+    var readyBy = 'Usually ready in 1 day';
+    var orderEnd = null;
+    var availDate = sellerDate('today');
+
+    if (availType === 'ALWAYS_AVAILABLE') {
+        readyBy = form.elements.hmAlwaysPrepTime ? form.elements.hmAlwaysPrepTime.value : 'Usually ready in 1 day';
+        availDate = sellerDate('today');
+    } else if (availType === 'MADE_ON_REQUEST') {
+        var prep = form.elements.hmRequestPrepTime ? form.elements.hmRequestPrepTime.value : '1 Day';
+        readyBy = 'Made on Request - Order at least ' + prep + ' in advance';
+        availDate = sellerDate('today');
+    } else if (availType === 'SPECIFIC_DATE') {
+        availDate = vals.chosenOfferingDate || vals.availableDate || sellerDate('today');
+        orderEnd = parseOptionalHhmm(vals.orderWindowEnd, 'Orders Close') || '20:00';
+        var rTime = vals.readyByTime || '21:00';
+        readyBy = availDate + 'T' + (rTime.indexOf(':') !== -1 ? rTime.slice(0, 5) : '21:00');
+    }
+
+    var maxQty = null;
+    var stockMode = vals.hmStockMode || 'unlimited';
+    if (stockMode === 'limited') {
+        var q = Number(vals.maxQuantity);
+        if (!Number.isInteger(q) || q < 1) {
+            toast('Quantity Available must be at least 1', 'error');
+            return;
+        }
+        maxQty = q;
+    }
+
+    var kid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id);
+    var payload = {
+        name: vals.name.trim(),
+        description: vals.description ? vals.description.trim() : '',
+        price: Number(vals.price),
+        priceUnit: vals.priceUnit || 'Per Piece',
+        unit: vals.priceUnit || 'Per Piece',
+        imageUrl: vals.imageUrl || '',
+        isHomemade: true,
+        availableToday: !isDraft,
+        isVeg: true,
+        availableDate: availDate,
+        orderWindowStart: null,
+        orderWindowEnd: orderEnd,
+        readyByTime: readyBy,
+        maxQuantity: maxQty,
+        categories: cats
+    };
+
+    var isEdit = form.id === 'editOfferingForm' && S.editOffering && S.editOffering.id;
+    var prodUrl = isEdit ? ('/api/seller/products/' + S.editOffering.id) : (kid ? ('/api/seller/products?kitchenId=' + kid) : '/api/seller/products');
+    var res = await sellerApi(prodUrl, { method: isEdit ? 'PUT' : 'POST', body: payload });
+    if (isDraft) {
+        toast('Draft saved successfully! You can publish it anytime from My Offerings.', 'success');
+        S.draftOffering = null;
+        S.offeringCategory = null;
+        sellerNavigate('#/my-offerings');
+    } else {
+        showPublishSuccessModal(res, S.myKitchen || S.kitchen);
+    }
+}
+
+function showPublishSuccessModal(product, kitchen) {
+    var slug = (kitchen && (kitchen.name || kitchen.slug)) || '';
+    var storeUrl = window.location.origin + '/index.html#/homemade-store/' + slug;
+    var existing = document.getElementById('publishSuccessModal');
+    if (existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'publishSuccessModal';
+    modal.innerHTML = '<div class="preview-modal-dialog" role="dialog" aria-modal="true">'
+        + '<div style="text-align:center;font-size:2.5rem;margin-bottom:8px;">🎉</div>'
+        + '<h3 style="text-align:center;margin:0 0 8px 0;font-size:1.3rem;font-weight:800;">Product Published Live!</h3>'
+        + '<p style="text-align:center;color:var(--text-muted, #6B7280);font-size:0.9rem;margin-bottom:16px;">'
+        + 'Your product <strong>' + esc((product && product.name) || 'Homemade Item') + '</strong> is now live on SocioMart Homemade Products.'
+        + '</p>'
+        + '<label style="font-weight:700;font-size:0.85rem;color:var(--text-color, #374151);">Your Public Storefront Link</label>'
+        + '<div class="store-link-box">'
+        + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;">' + esc(storeUrl) + '</span>'
+        + '<button class="btn btn-secondary btn-sm" type="button" data-action="copy-store-link" data-url="' + esc(storeUrl) + '">📋 Copy</button>'
+        + '</div>'
+        + '<div style="margin-top:20px;display:flex;gap:10px;">'
+        + '<button class="btn btn-primary btn-block" type="button" data-action="close-success-modal">Go to My Offerings</button>'
+        + '</div></div>';
+    document.body.appendChild(modal);
+}
+
+function openProductPreviewModal(vals) {
+    var name = (vals.name || 'Product Name').trim();
+    var price = vals.price || '0';
+    var unit = vals.priceUnit || 'Per Piece';
+    var desc = (vals.description || 'No description provided.').trim();
+    var availType = vals.hmAvailType || 'ALWAYS_AVAILABLE';
+    var timingText = '⏱ Always Available';
+    if (availType === 'ALWAYS_AVAILABLE') {
+        timingText = '⏱ ' + (vals.hmAlwaysPrepTime || 'Usually ready in 1 day');
+    } else if (availType === 'MADE_ON_REQUEST') {
+        timingText = '⏱ Made on Request · Order at least ' + (vals.hmRequestPrepTime || '1 Day') + ' in advance';
+    } else if (availType === 'SPECIFIC_DATE') {
+        var d = vals.chosenOfferingDate || vals.availableDate || 'Future date';
+        var c = vals.orderWindowEnd ? prettyTime(vals.orderWindowEnd) : '8:00 PM';
+        timingText = '⏱ Order by ' + prettyDate(d) + ', ' + c;
+    }
+    var existing = document.getElementById('productPreviewModal');
+    if (existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'productPreviewModal';
+    modal.innerHTML = '<div class="preview-modal-dialog" role="dialog" aria-modal="true">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'
+        + '<h3 style="margin:0;font-size:1.15rem;font-weight:800;">Buyer Storefront Preview</h3>'
+        + '<button class="icon-btn" type="button" data-action="close-modal" aria-label="Close">✕</button>'
+        + '</div>'
+        + '<div class="preview-card-wrap">'
+        + '<div style="font-size:2rem;text-align:center;margin-bottom:8px;">🍯</div>'
+        + '<div style="font-weight:800;font-size:1.1rem;color:var(--text-color, #111827);">' + esc(name) + '</div>'
+        + '<p style="color:var(--text-muted, #6B7280);font-size:0.85rem;margin:4px 0 8px 0;">' + esc(desc) + '</p>'
+        + '<div style="font-weight:800;font-size:1.05rem;color:var(--brand, #ea580c);margin-bottom:6px;">₹' + esc(price) + ' <span style="font-size:0.8rem;font-weight:500;color:var(--text-muted, #6B7280);">/ ' + esc(unit) + '</span></div>'
+        + '<div style="font-size:0.8rem;font-weight:600;color:var(--text-muted, #4B5563);margin-bottom:12px;">' + esc(timingText) + '</div>'
+        + '<button class="btn btn-primary btn-block" disabled style="opacity:0.6;cursor:not-allowed;">Order Now (Preview Mode)</button>'
+        + '</div>'
+        + '<p class="muted small" style="text-align:center;margin:0 0 16px 0;">This is exactly how buyers in your society will see this product.</p>'
+        + '<button class="btn btn-secondary btn-block" type="button" data-action="close-modal">Back to Editor</button>'
+        + '</div>';
+    document.body.appendChild(modal);
+}
+
+/**
  * Requirement 5 — saves the Edit Offering form.
  *
  * Only fields the seller may still change are sent, so frozen values are never
@@ -2892,6 +3278,10 @@ function normalizeReadyByTime(raw, availableDate) {
  * concurrent buyer order is never overwritten and the max/zero guards apply.
  */
 async function submitOfferingEdit(form) {
+    if (form.elements.isHomemade && form.elements.isHomemade.value === 'true') {
+        await submitHomemadeProduct(form, false);
+        return;
+    }
     var o = S.editOffering;
     if (!o || !o.id) { toast('This offering is no longer available', 'error'); return; }
     var locked = !!o.hasOrders;
@@ -3027,6 +3417,24 @@ document.addEventListener('submit', async function (e) {
     e.preventDefault();
     try {
         if (form.id === 'createOfferingForm') {
+            if (form.elements.isHomemade && form.elements.isHomemade.value === 'true') {
+                if (S.offeringSubmitting) return;
+                S.offeringSubmitting = true;
+                if (publishBtn) publishBtn.disabled = true;
+                try {
+                    await submitHomemadeProduct(form, false);
+                } catch (err) {
+                    var errData = (err && err.data) || {};
+                    var errDetail = (typeof errData === 'object' && (errData.message || errData.error || errData.detail))
+                        || (err && err.message)
+                        || 'An unexpected error occurred.';
+                    toast(errDetail, 'error');
+                } finally {
+                    S.offeringSubmitting = false;
+                    if (publishBtn && publishBtn.isConnected) publishBtn.disabled = false;
+                }
+                return;
+            }
             if (S.offeringSubmitting) return; // guard against double submit
             S.offeringSubmitting = true;
             if (publishBtn) publishBtn.disabled = true;
@@ -3383,6 +3791,87 @@ document.addEventListener('click', async function (e) {
                 history.back();
                 break;
             }
+            case 'filter-offerings-cat':
+                S.offeringsCategoryFilter = t.dataset.cat;
+                await sellerRender();
+                break;
+            case 'set-hm-avail': {
+                var avail = t.dataset.avail;
+                S.hmAvailType = avail;
+                var form = t.closest('form');
+                if (form) {
+                    var input = form.querySelector('#hmAvailType');
+                    if (input) input.value = avail;
+                    form.querySelectorAll('.radio-card').forEach(function (c) {
+                        c.classList.toggle('is-selected', c.dataset.avail === avail);
+                    });
+                    var alwaysF = form.querySelector('#hmAlwaysFields');
+                    var reqF = form.querySelector('#hmRequestFields');
+                    var dateF = form.querySelector('#hmDateFields');
+                    if (alwaysF) alwaysF.style.display = (avail === 'ALWAYS_AVAILABLE' ? 'block' : 'none');
+                    if (reqF) reqF.style.display = (avail === 'MADE_ON_REQUEST' ? 'block' : 'none');
+                    if (dateF) dateF.style.display = (avail === 'SPECIFIC_DATE' ? 'block' : 'none');
+                }
+                break;
+            }
+            case 'set-hm-stock': {
+                var stock = t.dataset.stock;
+                S.hmStockMode = stock;
+                var form = t.closest('form');
+                if (form) {
+                    var input = form.querySelector('#hmStockMode');
+                    if (input) input.value = stock;
+                    form.querySelectorAll('[data-action="set-hm-stock"]').forEach(function (c) {
+                        c.classList.toggle('selected', c.dataset.stock === stock);
+                    });
+                    var qtyGroup = form.querySelector('#hmStockQtyGroup');
+                    if (qtyGroup) qtyGroup.style.display = (stock === 'limited' ? 'block' : 'none');
+                }
+                break;
+            }
+            case 'preview-product': {
+                e.preventDefault();
+                var form = t.closest('form');
+                if (form) {
+                    var vals = formVals(form);
+                    openProductPreviewModal(vals);
+                }
+                break;
+            }
+            case 'save-product-draft': {
+                e.preventDefault();
+                var form = t.closest('form');
+                if (form) {
+                    await submitHomemadeProduct(form, true);
+                }
+                break;
+            }
+            case 'close-modal': {
+                var m = t.closest('.modal-overlay');
+                if (m) m.remove();
+                break;
+            }
+            case 'close-success-modal': {
+                var m = t.closest('.modal-overlay');
+                if (m) m.remove();
+                S.draftOffering = null;
+                S.offeringCategory = null;
+                sellerNavigate('#/my-offerings');
+                break;
+            }
+            case 'copy-store-link': {
+                var url = t.dataset.url;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).then(function () {
+                        toast('Storefront link copied to clipboard!', 'success');
+                    }).catch(function () {
+                        prompt('Copy your storefront link:', url);
+                    });
+                } else {
+                    prompt('Copy your storefront link:', url);
+                }
+                break;
+            }
             case 'go-back': history.back(); break;
             case 'noop': break;
             case 'seller-show-register':
@@ -3410,7 +3899,12 @@ document.addEventListener('click', async function (e) {
             case 'toggle-notifs': await toggleNotifications(t.dataset.panelId || 'sellerNotifPanel'); break;
             case 'read-notification': await readNotification(t.dataset.notificationId); break;
             case 'toggle-theme': toggleTheme(); break;
-            case 'go-add': sellerNavigate('#/add'); break;
+            case 'go-add': S.offeringCategory = null; sellerNavigate('#/add'); break;
+            case 'select-offering-type': {
+                S.offeringCategory = t.dataset.type;
+                await sellerRender();
+                break;
+            }
             case 'retry-favourites': await sellerRender(); break;
             // The saved favourites are already listed as pills inside this card, so a
             // click on the card body must tell the seller what to do next instead of
