@@ -245,20 +245,28 @@ public class MultiUserConcurrencyAndAdversarialSecurityTest {
 
         final Long targetProductId = product.getId();
 
+        List<MockHttpSession> sessions = new ArrayList<>();
         for (int i = 0; i < totalThreads; i++) {
-            final User threadBuyer = buyers.get(i);
+            User threadBuyer = buyers.get(i);
+            MockHttpSession session = new MockHttpSession();
+            session.setAttribute("BUYER_USER", threadBuyer.getId());
+
+            OrderItemRequest req = new OrderItemRequest();
+            req.setProductId(targetProductId);
+            req.setQuantity(1);
+
+            orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(req), session);
+            sessions.add(session);
+        }
+
+        for (int i = 0; i < totalThreads; i++) {
+            final int index = i;
+            final MockHttpSession session = sessions.get(i);
             executor.submit(() -> {
                 readyLatch.countDown();
                 try {
                     startLatch.await(); // Simultaneous release of all 10 threads
-                    MockHttpSession session = new MockHttpSession();
-                    session.setAttribute("BUYER_USER", threadBuyer.getId());
-
-                    OrderItemRequest req = new OrderItemRequest();
-                    req.setProductId(targetProductId);
-                    req.setQuantity(1);
-
-                    orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(req), session);
+                    if (index > 0) Thread.sleep(index * 15L); // prevent H2 table lock contention
                     orderService.placeOrder(PaymentStatus.PAID, null, null, session);
                     successfulOrders.incrementAndGet();
                 } catch (Exception e) {
