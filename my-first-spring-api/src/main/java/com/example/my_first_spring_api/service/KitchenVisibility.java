@@ -1,6 +1,7 @@
 package com.example.my_first_spring_api.service;
 
 import com.example.my_first_spring_api.model.Kitchen;
+import com.example.my_first_spring_api.model.Product;
 import com.example.my_first_spring_api.model.SellerType;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.model.UserRole;
@@ -50,6 +51,34 @@ public final class KitchenVisibility {
     public static boolean isHomemadeStore(Kitchen kitchen) {
         return kitchen != null && (kitchen.getSellerType() == SellerType.HOMEMADE_PRODUCTS
                 || kitchen.getSellerType() == SellerType.BOTH);
+    }
+
+    public static boolean isKitchenStore(Kitchen kitchen) {
+        return kitchen != null && (kitchen.getSellerType() == SellerType.KITCHEN
+                || kitchen.getSellerType() == SellerType.BOTH);
+    }
+
+    public static boolean isHomemadeProduct(Product product) {
+        if (product == null) return false;
+        Kitchen k = product.getKitchen();
+        if (k != null && k.getSellerType() == SellerType.HOMEMADE_PRODUCTS) {
+            return true;
+        }
+        String cat = product.getCategory();
+        if (cat == null) return false;
+        String upper = cat.toUpperCase(java.util.Locale.ROOT);
+        return upper.contains("CAKE") || upper.contains("GHEE") || upper.contains("ACHAR")
+                || upper.contains("PAPAD") || upper.contains("SWEET") || upper.contains("MASALA")
+                || upper.contains("HOMEMADE");
+    }
+
+    public static boolean isKitchenProduct(Product product) {
+        if (product == null) return false;
+        Kitchen k = product.getKitchen();
+        if (k != null && k.getSellerType() == SellerType.KITCHEN) {
+            return true;
+        }
+        return !isHomemadeProduct(product);
     }
 
     /**

@@ -20,6 +20,7 @@ import com.example.my_first_spring_api.model.OrderStatus;
 import com.example.my_first_spring_api.model.Product;
 import com.example.my_first_spring_api.model.SellerType;
 import com.example.my_first_spring_api.model.User;
+import com.example.my_first_spring_api.model.SellerApprovalStatus;
 import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.OrderItemRepository;
 import com.example.my_first_spring_api.repository.ProductRepository;
@@ -53,6 +54,12 @@ public class SellerService {
 
     @Autowired(required = false)
     private UserRepository userRepository;
+
+    @Autowired(required = false)
+    private AdminAuditService auditService;
+
+    @Autowired(required = false)
+    private AnalyticsService analyticsService;
 
     @Autowired
     public SellerService(KitchenRepository kitchenRepository,
@@ -107,7 +114,14 @@ public class SellerService {
         kitchen.setUpiId(dto.getUpiId());
         kitchen.setAvailableToday(dto.getAvailableToday() != null ? dto.getAvailableToday() : true);
         if (dto.getSellerType() != null && !dto.getSellerType().isBlank()) {
-            try { kitchen.setSellerType(com.example.my_first_spring_api.model.SellerType.valueOf(dto.getSellerType().toUpperCase())); }
+            try {
+                com.example.my_first_spring_api.model.SellerType st = com.example.my_first_spring_api.model.SellerType.valueOf(dto.getSellerType().toUpperCase());
+                kitchen.setSellerType(st);
+                seller.setSellerCategory(st.name());
+                if (userRepository != null) {
+                    userRepository.save(seller);
+                }
+            }
             catch (IllegalArgumentException ignored) {}
         }
         // Reserve the slug FIRST, race-safely, so the very first INSERT is the
@@ -174,7 +188,14 @@ public class SellerService {
         if (dto.getGalleryImages() != null) kitchen.setGalleryImages(dto.getGalleryImages());
         if (dto.getAvailableToday() != null) kitchen.setAvailableToday(dto.getAvailableToday());
         if (dto.getSellerType() != null && !dto.getSellerType().isBlank()) {
-            try { kitchen.setSellerType(com.example.my_first_spring_api.model.SellerType.valueOf(dto.getSellerType().toUpperCase())); }
+            try {
+                com.example.my_first_spring_api.model.SellerType st = com.example.my_first_spring_api.model.SellerType.valueOf(dto.getSellerType().toUpperCase());
+                kitchen.setSellerType(st);
+                seller.setSellerCategory(st.name());
+                if (userRepository != null) {
+                    userRepository.save(seller);
+                }
+            }
             catch (IllegalArgumentException ignored) {}
         }
         return toKitchenDto(kitchenRepository.save(kitchen));
@@ -535,6 +556,10 @@ public class SellerService {
         return orderService.updateOrderStatus(orderId, newStatus, seller);
     }
 
+    public OrderDto updateOrderStatus(Long orderId, OrderStatus newStatus, String reason, User seller) {
+        return orderService.updateOrderStatus(orderId, newStatus, reason, seller);
+    }
+
     public OrderDto markOrderAsPaid(Long orderId, User seller) {
         return orderService.markOrderAsPaid(orderId, seller);
     }
@@ -735,6 +760,7 @@ public class SellerService {
         dto.setRemainingQuantity(product.getRemainingQuantity());
         dto.setIsPreorder(product.getIsPreorder());
         dto.setKitchenSlug(kitchen != null ? kitchen.getName() : null);
+        dto.setSellerType(kitchen != null && kitchen.getSellerType() != null ? kitchen.getSellerType().name() : null);
         dto.setCategory(product.getCategory());
         dto.setCutoffTime(product.getCutoffTime());
         dto.setReadyByTime(product.getReadyByTime());
@@ -789,7 +815,110 @@ public class SellerService {
         if (dto.getBuilding() != null) {
             seller.setBuilding(dto.getBuilding().trim());
         }
+        if (dto.getSellerCategory() != null && !dto.getSellerCategory().isBlank()) {
+            try {
+                com.example.my_first_spring_api.model.SellerType st = com.example.my_first_spring_api.model.SellerType.valueOf(dto.getSellerCategory().trim().toUpperCase(java.util.Locale.ROOT));
+                seller.setSellerCategory(st.name());
+                kitchenRepository.findBySeller(seller).forEach(k -> {
+                    k.setSellerType(st);
+                    kitchenRepository.save(k);
+                });
+            } catch (IllegalArgumentException ignored) {}
+        }
         User saved = (userRepository != null) ? userRepository.save(seller) : seller;
         return getSellerProfile(saved);
+    }
+
+    @Transactional
+    public com.example.my_first_spring_api.dto.AuthResponseDto resubmitApplication(
+            User seller, java.util.Map<String, Object> body) {
+        if (seller == null) throw new IllegalArgumentException("Seller is required.");
+        SellerApprovalStatus from = seller.getSellerApprovalStatus();
+        if (from != SellerApprovalStatus.CHANGES_REQUESTED && from != SellerApprovalStatus.PENDING && from != SellerApprovalStatus.REJECTED) {
+            throw new IllegalArgumentException("Application is not in a resubmittable state.");
+        }
+        Kitchen kitchen = kitchenRepository.findBySeller(seller).stream().findFirst().orElse(null);
+        if (body != null) {
+            if (body.get("kitchenName") != null) {
+                String kn = String.valueOf(body.get("kitchenName")).trim();
+                if (!kn.isEmpty() && kitchen != null) {
+                    kitchen.setDisplayName(kn);
+                }
+            }
+            if (body.get("speciality") != null && kitchen != null) {
+                kitchen.setSpeciality(String.valueOf(body.get("speciality")).trim());
+            }
+            if (body.get("shortDescription") != null && kitchen != null) {
+                kitchen.setShortDescription(String.valueOf(body.get("shortDescription")).trim());
+                kitchen.setDescription(String.valueOf(body.get("shortDescription")).trim());
+            }
+            if (body.get("sellerCategory") != null) {
+                try {
+                    com.example.my_first_spring_api.model.SellerType st = com.example.my_first_spring_api.model.SellerType.valueOf(String.valueOf(body.get("sellerCategory")).trim().toUpperCase(java.util.Locale.ROOT));
+                    seller.setSellerCategory(st.name());
+                    if (kitchen != null) kitchen.setSellerType(st);
+                } catch (IllegalArgumentException ignored) {}
+            }
+            if (body.get("whatsappNumber") != null) {
+                String wa = String.valueOf(body.get("whatsappNumber")).trim();
+                seller.setSellerWhatsappNumber(wa.isEmpty() ? null : wa);
+            }
+            if (body.get("alternateContact") != null) {
+                String alt = String.valueOf(body.get("alternateContact")).trim();
+                seller.setSellerAlternateContact(alt.isEmpty() ? null : alt);
+            }
+        }
+        seller.setSellerApprovalStatus(SellerApprovalStatus.PENDING);
+        seller.setSellerStatusReason("Resubmitted with requested changes");
+        if (kitchen != null) {
+            kitchenRepository.save(kitchen);
+        }
+        User saved = (userRepository != null) ? userRepository.save(seller) : seller;
+        if (auditService != null) {
+            auditService.record(AdminAuditService.SELLER_RESUBMITTED, seller, "SELLER",
+                    seller.getId(), seller.getName(), String.valueOf(from), "PENDING", "Resubmitted with requested changes");
+        }
+        if (analyticsService != null) {
+            analyticsService.record(AnalyticsService.EV_USER_REGISTERED, seller.getId(), seller.getMobileNumber(), null, "Resubmitted application: " + seller.getName());
+        }
+        var authDto = new com.example.my_first_spring_api.dto.AuthResponseDto(
+                true, "Application resubmitted for Admin approval",
+                saved.getId(), saved.getName(), saved.getMobileNumber(), saved.getFlatHouseNumber(),
+                saved.getRole() != null ? saved.getRole().name() : null, saved.getSellerApprovalStatus());
+        authDto.setSellerApprovalStatus(saved.getSellerApprovalStatus());
+        authDto.setSellerStatusReason(saved.getSellerStatusReason());
+        if (kitchen != null) {
+            authDto.setKitchenSlug(kitchen.getSlug());
+            authDto.setKitchenUrl("/kitchen/" + kitchen.getSlug());
+        }
+        return authDto;
+    }
+
+    @Transactional
+    public com.example.my_first_spring_api.dto.AuthResponseDto cancelApplication(User seller) {
+        if (seller == null) throw new IllegalArgumentException("Seller is required.");
+        SellerApprovalStatus from = seller.getSellerApprovalStatus();
+        if (from != SellerApprovalStatus.PENDING && from != SellerApprovalStatus.CHANGES_REQUESTED) {
+            throw new IllegalArgumentException("Only pending or changes-requested applications can be cancelled.");
+        }
+        seller.setSellerApprovalStatus(SellerApprovalStatus.REJECTED);
+        seller.setSellerStatusReason("Application cancelled by applicant");
+        User saved = (userRepository != null) ? userRepository.save(seller) : seller;
+        if (auditService != null) {
+            auditService.record(AdminAuditService.SELLER_CANCELLED, seller, "SELLER",
+                    seller.getId(), seller.getName(), String.valueOf(from), "REJECTED", "Application cancelled by applicant");
+        }
+        Kitchen kitchen = kitchenRepository.findBySeller(seller).stream().findFirst().orElse(null);
+        var authDto = new com.example.my_first_spring_api.dto.AuthResponseDto(
+                true, "Application cancelled",
+                saved.getId(), saved.getName(), saved.getMobileNumber(), saved.getFlatHouseNumber(),
+                saved.getRole() != null ? saved.getRole().name() : null, saved.getSellerApprovalStatus());
+        authDto.setSellerApprovalStatus(saved.getSellerApprovalStatus());
+        authDto.setSellerStatusReason(saved.getSellerStatusReason());
+        if (kitchen != null) {
+            authDto.setKitchenSlug(kitchen.getSlug());
+            authDto.setKitchenUrl("/kitchen/" + kitchen.getSlug());
+        }
+        return authDto;
     }
 }

@@ -1,11 +1,14 @@
 package com.example.my_first_spring_api.dto;
 
 import com.example.my_first_spring_api.model.OrderStatus;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.example.my_first_spring_api.model.PaymentStatus;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class OrderDto {
     private Long id;
     private String orderNumber;
@@ -29,6 +32,10 @@ public class OrderDto {
     private String customInstructions;
     private LocalDateTime acknowledgedAt;
     private Long acknowledgedBySellerId;
+    @JsonProperty("displayStatus")
+    private String displayStatus;
+    @JsonProperty("paymentFollowUpRequired")
+    private Boolean paymentFollowUpRequired;
 
     public static class KitchenSummary {
         private Long id;
@@ -113,4 +120,35 @@ public class OrderDto {
     public void setAcknowledgedAt(LocalDateTime acknowledgedAt) { this.acknowledgedAt = acknowledgedAt; }
     public Long getAcknowledgedBySellerId() { return acknowledgedBySellerId; }
     public void setAcknowledgedBySellerId(Long acknowledgedBySellerId) { this.acknowledgedBySellerId = acknowledgedBySellerId; }
+
+    public String getDisplayStatus() {
+        if (displayStatus != null && !displayStatus.isBlank()) return displayStatus;
+        if (orderStatus == OrderStatus.CANCELLED) {
+            return "Cancelled";
+        }
+        boolean isDelivered = "DELIVERED".equalsIgnoreCase(deliveryStatus) || orderStatus == OrderStatus.DELIVERED;
+        if (isDelivered) {
+            return paymentStatus == PaymentStatus.PAID ? "Delivered · Paid" : "Delivered · Payment pending";
+        }
+        if (paymentStatus == PaymentStatus.PAID) {
+            return "Confirmed · Paid";
+        } else if (paymentStatus == PaymentStatus.WILL_PAY_LATER) {
+            return "Confirmed · Pay later";
+        } else {
+            return "Confirmed · Buyer says paid";
+        }
+    }
+
+    public void setDisplayStatus(String displayStatus) {
+        this.displayStatus = displayStatus;
+    }
+
+    public boolean isPaymentFollowUpRequired() {
+        if (paymentFollowUpRequired != null) return paymentFollowUpRequired;
+        return orderStatus == OrderStatus.CANCELLED && paymentStatus == PaymentStatus.PAID;
+    }
+
+    public void setPaymentFollowUpRequired(Boolean paymentFollowUpRequired) {
+        this.paymentFollowUpRequired = paymentFollowUpRequired;
+    }
 }

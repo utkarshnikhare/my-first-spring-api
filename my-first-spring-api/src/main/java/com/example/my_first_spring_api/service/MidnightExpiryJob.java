@@ -54,6 +54,13 @@ public class MidnightExpiryJob {
      * Equivalent to "0 0 0 * * ?" in Kolkata time; the JVM default zone is
      * pinned to Asia/Kolkata at startup by {@link AppTimeZone}.
      */
+    @Transactional
+    public void runForDate(LocalDate date) {
+        log.info("Midnight expiry job runForDate running for date {}", date);
+        expirePastOccurrences(date);
+        activateScheduledOccurrences(date);
+    }
+
     @Scheduled(cron = "0 0 0 * * ?", zone = "Asia/Kolkata")
     @Transactional
     public void expireAndActivateOccurrences() {

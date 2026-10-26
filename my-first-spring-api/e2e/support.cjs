@@ -68,20 +68,16 @@ function newIdentity(prefix) {
 
 async function apiJson(page, path, { method = 'GET', body } = {}) {
   return page.evaluate(async ({ path, method, body }) => {
-    let init = { method, credentials: 'same-origin' };
+    const init = { method, credentials: 'same-origin', headers: {} };
     if (body !== undefined) {
-      init.headers = { 'Content-Type': 'application/json' };
+      init.headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(body);
     }
-    if (!['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())) {
-      const match = document.cookie.match(/(?:^|;\\s*)XSRF-TOKEN=([^;]+)/);
-      if (match) {
-        init.headers = { ...(init.headers || {}), 'X-XSRF-TOKEN': decodeURIComponent(match[1]) };
-      }
+    const match = (document.cookie || '').match(/XSRF-TOKEN=([^;]+)/);
+    if (match) {
+      init.headers['X-XSRF-TOKEN'] = decodeURIComponent(match[1]);
     }
     const response = await fetch(path, init);
-
-
     const text = await response.text();
     let result = text;
     try {
@@ -127,10 +123,7 @@ async function registerBuyer(page) {
   const buyer = newIdentity('E2E Buyer');
   await openBuyerRegistration(page);
   await fillBuyerRegistration(page, buyer);
-  const registerResponse = page.waitForResponse(response =>
-    new URL(response.url()).pathname === '/api/auth/register/buyer' && response.request().method() === 'POST');
   await page.locator('#buyerRegistrationForm').getByRole('button', { name: 'Create account' }).click();
-  await registerResponse;
   await expect(page.locator('#modalRoot')).toBeHidden();
   await expect.poll(async () => (await readMe(page)).body).toMatchObject({
     authenticated: true,
@@ -178,10 +171,7 @@ async function registerSeller(page) {
   await page.locator('#sellerRegPrimarySociety').selectOption({ index: 0 });
   await page.locator('#sellerRegServiceArea').selectOption({ index: 0 });
   await page.locator('#sellerRegSocieties input[type="checkbox"]').first().check();
-  const registerResponse = page.waitForResponse(response =>
-    new URL(response.url()).pathname === '/api/auth/register/seller' && response.request().method() === 'POST');
   await form.getByRole('button', { name: 'Submit seller application' }).click();
-  await registerResponse;
   await expect(page.getByRole('heading', { name: 'Seller application pending' })).toBeVisible();
   await expect(page.getByText('Current status: PENDING')).toBeVisible();
   await expect(page.locator('body')).toContainText(seller.slug);

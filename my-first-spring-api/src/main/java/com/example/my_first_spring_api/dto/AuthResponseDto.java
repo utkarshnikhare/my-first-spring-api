@@ -29,6 +29,7 @@ public class AuthResponseDto {
     private String sellerStatusReason;
     private String kitchenSlug;
     private String kitchenUrl;
+    private String sellerCategory;
     /**
      * True when the user authenticated with a one-time temporary password issued
      * by a Super Admin (manual recovery flow). The client MUST route the user to
@@ -102,6 +103,8 @@ public class AuthResponseDto {
     public void setKitchenSlug(String kitchenSlug) { this.kitchenSlug = kitchenSlug; }
     public String getKitchenUrl() { return kitchenUrl; }
     public void setKitchenUrl(String kitchenUrl) { this.kitchenUrl = kitchenUrl; }
+    public String getSellerCategory() { return sellerCategory; }
+    public void setSellerCategory(String sellerCategory) { this.sellerCategory = sellerCategory; }
     public boolean isMustChangePassword() { return mustChangePassword; }
     public void setMustChangePassword(boolean mustChangePassword) { this.mustChangePassword = mustChangePassword; }
 }

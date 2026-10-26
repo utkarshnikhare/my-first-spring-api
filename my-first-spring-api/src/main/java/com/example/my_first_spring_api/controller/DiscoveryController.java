@@ -102,6 +102,17 @@ public class DiscoveryController {
         return ResponseEntity.ok(discoveryService.getHomemadeStores(buyer));
     }
 
+    @GetMapping("/homemade/{slug}")
+    public ResponseEntity<com.example.my_first_spring_api.dto.KitchenDetailDto> getHomemadeStoreDetail(
+            @PathVariable String slug, HttpSession session) {
+        User buyer = buyerService.getCurrentBuyer(session);
+        com.example.my_first_spring_api.dto.KitchenDetailDto detail = discoveryService.getHomemadeStoreDetail(slug, buyer);
+        if (detail == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(detail);
+    }
+
     /**
      * Parses a category request parameter.
      *

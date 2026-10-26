@@ -10,7 +10,6 @@ import com.example.my_first_spring_api.model.Category;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.OrderStatus;
 import com.example.my_first_spring_api.model.Product;
-import com.example.my_first_spring_api.model.SellerType;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.OrderRepository;
@@ -36,7 +35,7 @@ import java.util.stream.Collectors;
  *  - LIVE_NOW  : kitchen has >= 1 orderable-today item right now
  *  - TOMORROW  : kitchen has items specifically available tomorrow
  *  - PRE_ORDER : kitchen has open pre-order items for future dates
- *  - ALL       : every publicly visible community kitchen (incl. âšª closed)
+ *  - ALL       : every publicly visible community kitchen (incl. ⚪ closed)
  */
 @Service
 @Transactional(readOnly = true)
@@ -58,32 +57,22 @@ public class DiscoveryService {
 
     private List<Kitchen> visibleKitchens(User buyer) {
         return kitchenRepository.findAll().stream()
+                .filter(KitchenVisibility::isKitchenStore)
                 .filter(KitchenVisibility::isPubliclyVisible)
                 .filter(k -> KitchenVisibility.isServiceAreaVisible(k, buyer))
-                .filter(k -> k.getSellerType() != SellerType.HOMEMADE_PRODUCTS)
                 .collect(Collectors.toList());
     }
 
     private List<Product> visibleProducts(User buyer) {
         LocalDate today = LocalDate.now(AppTimeZone.ZONE);
         return productRepository.findAll().stream()
-                .filter(p -> p.getKitchen() != null && KitchenVisibility.isPubliclyVisible(p.getKitchen()) && KitchenVisibility.isServiceAreaVisible(p.getKitchen(), buyer))
-                .filter(p -> Boolean.TRUE.equals(p.getAvailableToday()))
-                .filter(p -> p.getKitchen().getSellerType() != SellerType.HOMEMADE_PRODUCTS)
-                .filter(p -> !isHomemadeProduct(p))
+                .filter(p -> p.getKitchen() != null && KitchenVisibility.isKitchenStore(p.getKitchen())
+                        && KitchenVisibility.isKitchenProduct(p)
+                        && KitchenVisibility.isPubliclyVisible(p.getKitchen())
+                        && KitchenVisibility.isServiceAreaVisible(p.getKitchen(), buyer))
                 .filter(p -> !p.isOrdersPaused())
                 .filter(p -> p.getAvailableDate() == null || !p.getAvailableDate().isBefore(today))
                 .collect(Collectors.toList());
-    }
-
-    public static boolean isHomemadeProduct(Product p) {
-        if (p == null || p.getKitchen() == null) return false;
-        if (p.getKitchen().getSellerType() == SellerType.HOMEMADE_PRODUCTS) return true;
-        if (p.getKitchen().getSellerType() == SellerType.KITCHEN) return false;
-        String cat = (p.getCategory() == null ? "" : p.getCategory()).toLowerCase();
-        return cat.contains("homemade") || cat.contains("ghee") || cat.contains("achar")
-                || cat.contains("papad") || cat.contains("cake") || cat.contains("sweet")
-                || cat.contains("masala");
     }
 
     private static boolean orderableToday(Product p) {
@@ -200,6 +189,7 @@ public class DiscoveryService {
         Map<Category, Long> counts = visibleProducts(buyer).stream()
                 .filter(p -> !p.isSoldOut())
                 .filter(p -> !p.isOrdersPaused())
+                .filter(p -> orderableToday(p) || openPreorder(p))
                 .flatMap(p -> {
                     String cats = p.getCategory();
                     if (cats == null || cats.isBlank()) return java.util.stream.Stream.of(Category.SPECIAL);
@@ -214,11 +204,11 @@ public class DiscoveryService {
                 })
                 .collect(Collectors.groupingBy(c -> c, Collectors.counting()));
         List<CategoryTile> tiles = new ArrayList<>();
-        tiles.add(new CategoryTile("BREAKFAST", "Breakfast", "ðŸŒ…", counts.getOrDefault(Category.BREAKFAST, 0L)));
-        tiles.add(new CategoryTile("LUNCH", "Lunch", "ðŸ›", counts.getOrDefault(Category.LUNCH, 0L)));
-        tiles.add(new CategoryTile("DINNER", "Dinner", "ðŸŒ™", counts.getOrDefault(Category.DINNER, 0L)));
-        tiles.add(new CategoryTile("SNACKS", "Snacks", "ðŸ¥Ÿ", counts.getOrDefault(Category.SNACKS, 0L)));
-        tiles.add(new CategoryTile("SPECIAL", "Special", "âœ¨", counts.getOrDefault(Category.SPECIAL, 0L)));
+        tiles.add(new CategoryTile("BREAKFAST", "Breakfast", "🌅", counts.getOrDefault(Category.BREAKFAST, 0L)));
+        tiles.add(new CategoryTile("LUNCH", "Lunch", "🍛", counts.getOrDefault(Category.LUNCH, 0L)));
+        tiles.add(new CategoryTile("DINNER", "Dinner", "🌙", counts.getOrDefault(Category.DINNER, 0L)));
+        tiles.add(new CategoryTile("SNACKS", "Snacks", "🥟", counts.getOrDefault(Category.SNACKS, 0L)));
+        tiles.add(new CategoryTile("SPECIAL", "Special", "✨", counts.getOrDefault(Category.SPECIAL, 0L)));
         return tiles;
     }
 
@@ -317,8 +307,8 @@ public class DiscoveryService {
                 .filter(k -> KitchenVisibility.isServiceAreaVisible(k, buyer))
                 .map(k -> {
                     List<Product> items = productRepository.findByKitchenAndAvailableTodayTrueOrderByCreatedAtDesc(k).stream()
+                            .filter(KitchenVisibility::isHomemadeProduct)
                             .filter(p -> !p.isOrdersPaused())
-                            .filter(DiscoveryService::isHomemadeProduct)
                             .filter(p -> p.getAvailableDate() == null || !p.getAvailableDate().isBefore(LocalDate.now(AppTimeZone.ZONE)))
                             .collect(Collectors.toList());
                     return toHomemadeCard(k, items);
@@ -330,22 +320,34 @@ public class DiscoveryService {
     @Transactional(readOnly = true)
     public KitchenDetailDto getHomemadeStoreDetail(String slug, User buyer) {
         Kitchen kitchen = kitchenRepository.findByName(slug).orElse(null);
+        if (kitchen == null) {
+            kitchen = kitchenRepository.findBySlug(slug).orElse(null);
+        }
         if (kitchen == null || !KitchenVisibility.isHomemadeStore(kitchen)) return null;
         if (!KitchenVisibility.isPubliclyVisible(kitchen)) return null;
         if (!KitchenVisibility.isServiceAreaVisible(kitchen, buyer)) return null;
-        KitchenDetailDto dto = kitchenService.getKitchenDetailById(kitchen.getId(), buyer);
-        if (dto != null && dto.getProducts() != null) {
-            dto.setProducts(dto.getProducts().stream()
-                    .filter(p -> {
-                        if (kitchen.getSellerType() == SellerType.HOMEMADE_PRODUCTS) return true;
-                        String cat = (p.getCategory() == null ? "" : p.getCategory()).toLowerCase();
-                        return cat.contains("homemade") || cat.contains("ghee") || cat.contains("achar")
-                                || cat.contains("papad") || cat.contains("cake") || cat.contains("sweet")
-                                || cat.contains("masala");
-                    })
-                    .collect(Collectors.toList()));
+        KitchenDetailDto detail = kitchenService.getKitchenDetailById(kitchen.getId(), buyer);
+        if (detail != null && kitchen.getSellerType() == com.example.my_first_spring_api.model.SellerType.BOTH) {
+            if (detail.getProducts() != null) {
+                detail.setProducts(detail.getProducts().stream()
+                        .filter(p -> p.getCategory() != null && isHomemadeCategoryName(p.getCategory()))
+                        .collect(Collectors.toList()));
+            }
+            if (detail.getPreorderProducts() != null) {
+                detail.setPreorderProducts(detail.getPreorderProducts().stream()
+                        .filter(p -> p.getCategory() != null && isHomemadeCategoryName(p.getCategory()))
+                        .collect(Collectors.toList()));
+            }
         }
-        return dto;
+        return detail;
+    }
+
+    private static boolean isHomemadeCategoryName(String cat) {
+        if (cat == null) return false;
+        String upper = cat.toUpperCase(java.util.Locale.ROOT);
+        return upper.contains("CAKE") || upper.contains("GHEE") || upper.contains("ACHAR")
+                || upper.contains("PAPAD") || upper.contains("SWEET") || upper.contains("MASALA")
+                || upper.contains("HOMEMADE") || upper.contains("SNACK");
     }
 
     private KitchenCard toHomemadeCard(Kitchen k, List<Product> items) {

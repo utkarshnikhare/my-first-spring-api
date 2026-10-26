@@ -71,9 +71,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
      * increments booked in ONE UPDATE so concurrent checkouts cannot oversell.
      * Returns 0 when there is not enough stock left.
      */
-    @Modifying(flushAutomatically = true)
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Product p SET p.remainingQuantity = p.remainingQuantity - :qty, " +
-            "p.bookedQuantity = COALESCE(p.bookedQuantity, 0) + :qty, " +
+            "p.bookedQuantity = COALESCE(p.bookedQuantity, 0) + :qty, "
+            + "p.availableToday = CASE WHEN p.remainingQuantity - :qty <= 0 THEN false ELSE p.availableToday END, " +
             "p.updatedAt = CURRENT_TIMESTAMP " +
             "WHERE p.id = :productId AND p.remainingQuantity IS NOT NULL " +
             "AND p.remainingQuantity >= :qty")
