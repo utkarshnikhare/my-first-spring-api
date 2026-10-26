@@ -949,6 +949,10 @@ public class OrderService {
     }
 
     public OrderDto updateOrderStatus(Long orderId, OrderStatus newStatus, User seller) {
+        return updateOrderStatus(orderId, newStatus, null, seller);
+    }
+
+    public OrderDto updateOrderStatus(Long orderId, OrderStatus newStatus, String reason, User seller) {
         Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
         if (order.getKitchen() == null || !order.getKitchen().getSeller().getId().equals(seller.getId())) {
