@@ -66,7 +66,9 @@ function sellerServiceSocietyHtml(areaId) {
 
 function sellerStatusHtml() {
     var status = (S.user && S.user.sellerApprovalStatus) || 'PENDING';
-    var title = status === 'REJECTED' ? 'Application needs attention' : 'Seller application pending';
+    var isChanges = status === 'CHANGES_REQUESTED';
+    var isPending = status === 'PENDING';
+    var title = isChanges ? 'Changes requested on your application' : (status === 'REJECTED' ? 'Application needs attention' : 'Seller application pending');
     var detail = (S.user && S.user.sellerStatusReason) ||
         'Your storefront is private until an Admin reviews and approves your application.';
     var kitchenUrl = (S.user && S.user.kitchenUrl) || S.kitchenUrl;
