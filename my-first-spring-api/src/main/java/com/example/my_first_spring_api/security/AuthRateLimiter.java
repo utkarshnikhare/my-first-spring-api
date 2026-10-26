@@ -129,6 +129,19 @@ public class AuthRateLimiter {
             }
         }
         if (maxRemainingSeconds > 0) {
+            boolean isRegistration = false;
+            for (String key : keys) {
+                if (key != null && key.startsWith("R:")) {
+                    isRegistration = true;
+                    break;
+                }
+            }
+            if (isRegistration) {
+                throw new com.example.my_first_spring_api.exception.TooManyRequestsException(
+                        "Too many registration requests. Please try again in " + maxRemainingSeconds
+                                + (maxRemainingSeconds == 1 ? " second." : " seconds."),
+                        maxRemainingSeconds);
+            }
             throw new com.example.my_first_spring_api.exception.TooManyRequestsException(maxRemainingSeconds);
         }
     }

@@ -12,9 +12,13 @@ public class TooManyRequestsException extends RuntimeException {
     }
 
     public TooManyRequestsException(long retryAfterSeconds) {
-        super("Too many failed attempts. Please try again in " + retryAfterSeconds
-                + (retryAfterSeconds == 1 ? " second." : " seconds."));
-        this.retryAfterSeconds = retryAfterSeconds;
+        this("Too many failed attempts. Please try again in " + retryAfterSeconds
+                + (retryAfterSeconds == 1 ? " second." : " seconds."), retryAfterSeconds);
+    }
+
+    public TooManyRequestsException(String message, long retryAfterSeconds) {
+        super(message);
+        this.retryAfterSeconds = Math.max(1, retryAfterSeconds);
     }
 
     public long getRetryAfterSeconds() {

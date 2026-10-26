@@ -429,14 +429,19 @@ test.describe('Visual QA & Responsive Viewport Audits', () => {
       expect(isAccessible, `Input #${inp.id || inp.name} should have accessible label or placeholder`).toBe(true);
     }
 
-    // Check touch target heights of navigation items (min 40px)
+    // Check touch target heights of navigation items (min 40px) on buyer storefront where bottom nav is active
+    await page.goto('/index.html');
     const navItems = await page.evaluate(() => {
-      const items = Array.from(document.querySelectorAll('.bottom-nav .nav-item'));
+      const items = Array.from(document.querySelectorAll('.bottom-nav .nav-item')).filter(el => {
+        const rect = el.getBoundingClientRect();
+        return rect.height > 0 || rect.width > 0;
+      });
       return items.map(el => {
         const rect = el.getBoundingClientRect();
         return { height: rect.height, width: rect.width };
       });
     });
+    expect(navItems.length).toBeGreaterThan(0);
     for (const item of navItems) {
       expect(item.height, 'Navigation touch target height should be >= 40px').toBeGreaterThanOrEqual(40);
     }

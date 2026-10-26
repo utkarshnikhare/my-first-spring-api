@@ -99,7 +99,7 @@ async function sellerAuthHtml() {
     var body = '<div class="login-wrap"><section class="admin-login seller-auth-card">' +
         '<div class="al-brand">🍲 SocioMart Seller</div>' +
         '<p class="muted small">Demo-only password sign-in. This is not production-ready authentication.</p>' +
-        '<form id="sellerLoginForm">' + login + '</form></section></div>';
+        '<form id="sellerLoginForm"><div id="sellerLoginAlert" class="seller-auth-alert" style="display:none;" role="alert"></div>' + login + '</form></section></div>';
     if (S.authMode !== 'register') return body;
     try {
         if (!S.authOptions) S.authOptions = await api('/api/auth/registration-options');
@@ -112,7 +112,7 @@ async function sellerAuthHtml() {
             '<p>No active areas and societies are configured.</p><button class="btn btn-secondary" type="button" data-action="seller-show-login">Back to login</button></section></div>';
     }
     var firstArea = S.authOptions[0];
-    var form = '<form id="sellerRegistrationForm">' +
+    var form = '<div id="sellerRegAlert" class="seller-auth-alert" style="display:none;" role="alert"></div><form id="sellerRegistrationForm">' +
         '<div class="form-group"><label for="sellerRegName">Seller / contact name</label><input class="form-input" id="sellerRegName" name="sellerName" maxlength="120" required></div>' +
         '<div class="form-group"><label for="sellerRegMobile">Mobile number</label><input class="form-input" id="sellerRegMobile" name="mobileNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" required></div>' +
         '<div class="form-group"><label for="sellerRegPassword">Create password</label><div class="password-input-wrapper"><input class="form-input" id="sellerRegPassword" name="password" type="password" minlength="10" maxlength="72" autocomplete="new-password" required></div></div>' +
@@ -192,6 +192,8 @@ async function sellerLoginSubmit(event) {
     var form = event.currentTarget;
     var button = form.querySelector('button[type="submit"]');
     if (button.disabled) return;
+    var alertBox = form.querySelector('#sellerLoginAlert');
+    if (alertBox) { alertBox.style.display = 'none'; alertBox.innerHTML = ''; }
     button.disabled = true;
     try {
         var session = await api('/api/auth/login', { method: 'POST', body: {
@@ -200,7 +202,13 @@ async function sellerLoginSubmit(event) {
         } });
         if (session.role !== 'SELLER') {
             S.user = session;
-            toast('This account is not registered as a seller.', 'error');
+            if (alertBox) {
+                alertBox.className = 'seller-auth-alert seller-auth-alert--error';
+                alertBox.style.display = 'flex';
+                alertBox.innerHTML = '<span class="alert-icon" aria-hidden="true">⚠️</span><div class="alert-content"><strong>Access restricted</strong><p>This account is not registered as a seller.</p></div>';
+            } else {
+                toast('This account is not registered as a seller.', 'error');
+            }
             await sellerRender();
             return;
         }
@@ -209,7 +217,13 @@ async function sellerLoginSubmit(event) {
         location.hash = '#/home';
         await sellerRender();
     } catch (err) {
-        toast('Sign in failed: ' + err.message, 'error');
+        if (alertBox) {
+            alertBox.className = 'seller-auth-alert seller-auth-alert--error';
+            alertBox.style.display = 'flex';
+            alertBox.innerHTML = '<span class="alert-icon" aria-hidden="true">⚠️</span><div class="alert-content"><strong>Sign in failed</strong><p>' + esc(err.message) + '</p></div>';
+        } else {
+            toast('Sign in failed: ' + err.message, 'error');
+        }
     } finally {
         if (button.isConnected) button.disabled = false;
     }
@@ -227,18 +241,38 @@ function buildWhatsAppChatLink(num) {
     return 'https://wa.me/' + digits;
 }
 
+function formatAuthCountdown(s) {
+    if (s <= 0) return '0s';
+    var m = Math.floor(s / 60);
+    var rem = s % 60;
+    if (m > 0) return m + 'm ' + (rem < 10 ? '0' : '') + rem + 's';
+    return s + 's';
+}
+
 async function sellerRegistrationSubmit(event) {
     event.preventDefault();
     var form = event.currentTarget;
     var button = form.querySelector('button[type="submit"]');
-    if (button.disabled) return;
+    if (S.regSubmitting || button.disabled) return;
+    var alertBox = form.parentElement.querySelector('#sellerRegAlert') || form.querySelector('#sellerRegAlert');
     var serviceIds = Array.from(form.querySelectorAll('input[name="serviceSocietyIds"]:checked'))
         .map(function (input) { return Number(input.value); });
     if (!serviceIds.length) {
-        toast('Select at least one society you will serve.', 'error');
+        if (alertBox) {
+            alertBox.className = 'seller-auth-alert seller-auth-alert--error';
+            alertBox.style.display = 'flex';
+            alertBox.innerHTML = '<span class="alert-icon" aria-hidden="true">⚠️</span><div class="alert-content"><strong>Selection required</strong><p>Select at least one society you will serve.</p></div>';
+            alertBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            toast('Select at least one society you will serve.', 'error');
+        }
         return;
     }
+    S.regSubmitting = true;
+    var originalBtnText = button.innerHTML;
     button.disabled = true;
+    button.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span> Submitting application...';
+    if (alertBox) { alertBox.style.display = 'none'; alertBox.innerHTML = ''; }
     try {
         var session = await api('/api/auth/register/seller', { method: 'POST', body: {
             sellerName: form.elements.sellerName.value.trim(),
@@ -258,14 +292,70 @@ async function sellerRegistrationSubmit(event) {
             serviceAreaId: Number(form.elements.serviceAreaId.value),
             serviceSocietyIds: serviceIds
         } });
+        S.regSubmitting = false;
+        if (S.regCountdownInterval) { clearInterval(S.regCountdownInterval); S.regCountdownInterval = null; }
         S.user = session;
         S.kitchenUrl = session.kitchenUrl || null;
         S.authMode = 'login';
         S.authSlugTouched = false;
         await sellerRender();
     } catch (err) {
-        toast('Registration failed: ' + err.message, 'error');
-        if (button.isConnected) button.disabled = false;
+        var isRateLimit = err.status === 429 || (err.message && (err.message.toLowerCase().includes('too many') || err.message.toLowerCase().includes('rate limit')));
+        var match = err.message ? err.message.match(/(\d+)\s+seconds?/) : null;
+        var seconds = match ? parseInt(match[1], 10) : (isRateLimit ? 60 : 0);
+
+        if (isRateLimit && seconds > 0) {
+            if (alertBox) {
+                alertBox.className = 'seller-auth-alert seller-auth-alert--rate-limit';
+                alertBox.style.display = 'flex';
+                alertBox.innerHTML = '<span class="alert-icon" aria-hidden="true">⏳</span>' +
+                    '<div class="alert-content">' +
+                    '<strong>Registration rate limit active</strong>' +
+                    '<p>Too many requests from this network. Please wait <span id="sellerRegTimer" class="countdown-highlight">' + formatAuthCountdown(seconds) + '</span> before submitting again.</p>' +
+                    '</div>';
+                alertBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } else {
+                toast(err.message, 'error');
+            }
+            if (S.regCountdownInterval) clearInterval(S.regCountdownInterval);
+            var rem = seconds;
+            button.disabled = true;
+            button.textContent = 'Please wait ' + formatAuthCountdown(rem);
+            S.regCountdownInterval = setInterval(function () {
+                rem--;
+                var tEl = document.getElementById('sellerRegTimer');
+                if (tEl) tEl.textContent = formatAuthCountdown(rem);
+                if (button.isConnected) button.textContent = 'Please wait ' + formatAuthCountdown(rem);
+                if (rem <= 0) {
+                    clearInterval(S.regCountdownInterval);
+                    S.regCountdownInterval = null;
+                    if (alertBox) alertBox.style.display = 'none';
+                    if (button.isConnected) {
+                        button.disabled = false;
+                        button.innerHTML = originalBtnText;
+                    }
+                    S.regSubmitting = false;
+                }
+            }, 1000);
+        } else {
+            S.regSubmitting = false;
+            if (alertBox) {
+                alertBox.className = 'seller-auth-alert seller-auth-alert--error';
+                alertBox.style.display = 'flex';
+                alertBox.innerHTML = '<span class="alert-icon" aria-hidden="true">⚠️</span>' +
+                    '<div class="alert-content">' +
+                    '<strong>Registration failed</strong>' +
+                    '<p>' + esc(err.message) + '</p>' +
+                    '</div>';
+                alertBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } else {
+                toast('Registration failed: ' + err.message, 'error');
+            }
+            if (button.isConnected) {
+                button.disabled = false;
+                button.innerHTML = originalBtnText;
+            }
+        }
     }
 }
 
@@ -280,10 +370,14 @@ async function sellerRender() {
     // Verify the server session before calling any owner-scoped endpoint, so a
     // Buyer login elsewhere cannot leave this screen stuck on an auth error.
     if (!(await ensureSellerSession())) {
+        var bNav = document.getElementById('bottomNav');
+        if (bNav) bNav.style.display = 'none';
         view.innerHTML = await sellerAuthHtml();
         bindSellerAuth(view);
         return;
     }
+    var bNav = document.getElementById('bottomNav');
+    if (bNav) bNav.style.display = '';
     try { view.innerHTML = await route.fn(route.arg) || ''; sellerUpdateNav(hash); await loadUnreadNotifications(); if (typeof applyThemeUiState === 'function') applyThemeUiState(); window.scrollTo(0, 0); var saInput = $('#coverageSocietyIdsInput'); if (saInput) renderCoverageSocieties(); initOfferingFormWheels(view); }
     catch (err) { view.innerHTML = '<div class="view-enter">' + emptyHtml('⚠️', 'Something went wrong', err.message) + '</div>'; }
 }
