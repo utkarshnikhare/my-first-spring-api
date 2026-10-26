@@ -287,7 +287,7 @@ public class SocioMartV1Flow1SmokeTest {
         dto1.setMaxQuantity(10);
         dto1.setOrderWindowStart("06:00");
         dto1.setOrderWindowEnd("23:59");
-        dto1.setReadyByTime(today.atTime(13, 0).toString());
+        dto1.setReadyByTime(today.atTime(23, 30).toString());
         ProductDto p1_lunch = sellerService.createProduct(kitchen1.getId(), dto1, seller1);
 
         // Seller 1 Offering 2: Today's Dinner Biryani (Kitchen)
