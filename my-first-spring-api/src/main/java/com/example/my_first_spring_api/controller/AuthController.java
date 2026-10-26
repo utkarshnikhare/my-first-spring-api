@@ -89,9 +89,11 @@ public class AuthController {
         String ip = clientIp(servletRequest);
         if (rateLimiter != null) {
             rateLimiter.assertRegistrationAllowed(ip);
-            rateLimiter.recordRegistration(ip);
         }
         User buyer = authService.registerBuyer(request);
+        if (rateLimiter != null) {
+            rateLimiter.recordRegistration(ip);
+        }
         return ResponseEntity.status(HttpStatus.CREATED).body(authenticate(buyer, "Registration successful",
                 servletRequest, response));
     }
@@ -103,9 +105,11 @@ public class AuthController {
         String ip = clientIp(servletRequest);
         if (rateLimiter != null) {
             rateLimiter.assertRegistrationAllowed(ip);
-            rateLimiter.recordRegistration(ip);
         }
         AuthService.SellerRegistration registration = authService.registerSeller(request);
+        if (rateLimiter != null) {
+            rateLimiter.recordRegistration(ip);
+        }
         AuthResponseDto result = authenticate(registration.user(), "Registration submitted for Admin approval",
                 servletRequest, response);
         result.setKitchenSlug(registration.kitchenSlug());
@@ -276,6 +280,17 @@ public class AuthController {
      * own proxy; entries further right are client-controlled and spoofable.
      */
     private static String clientIp(HttpServletRequest request) {
+        if (request == null) {
+            return "unknown";
+        }
+        String cfConnectingIp = request.getHeader("CF-Connecting-IP");
+        if (StringUtils.hasText(cfConnectingIp)) {
+            return cfConnectingIp.trim();
+        }
+        String xRealIp = request.getHeader("X-Real-IP");
+        if (StringUtils.hasText(xRealIp)) {
+            return xRealIp.trim();
+        }
         String forwarded = request.getHeader("X-Forwarded-For");
         if (StringUtils.hasText(forwarded)) {
             int comma = forwarded.indexOf(',');

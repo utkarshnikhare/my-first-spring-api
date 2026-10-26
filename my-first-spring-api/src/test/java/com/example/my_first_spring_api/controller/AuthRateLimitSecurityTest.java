@@ -150,6 +150,63 @@ class AuthRateLimitSecurityTest {
     }
 
     @Test
+    void validationErrorsDoNotConsumeRegistrationQuotaOrCausePrematureLockout() throws Exception {
+        String testIp = uniqueIp("val");
+        // 1. Submit 6 registration attempts with invalid payload (e.g. invalid password / missing fields / invalid mobile)
+        for (int i = 0; i < 6; i++) {
+            mvc.perform(post("/api/auth/register/buyer")
+                    .with(csrf())
+                    .header("X-Forwarded-For", testIp)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(Map.of(
+                            "name", "Bad Buyer",
+                            "mobileNumber", "123",
+                            "password", "short",
+                            "areaId", areaId,
+                            "societyId", societyId))))
+                    .andExpect(status().isBadRequest());
+        }
+
+        // 2. Now submit a valid registration from the SAME IP: it must SUCCEED with 201 Created, NOT 429
+        registerBuyer(testIp, uniqueMobile()).andExpect(status().isCreated());
+    }
+
+    @Test
+    void duplicateRegistrationAttemptDoesNotLockOutSubsequentValidRegistration() throws Exception {
+        String testIp = uniqueIp("dup");
+        String existingMobile = uniqueMobile();
+        // Register buyer successfully
+        registerBuyer(testIp, existingMobile).andExpect(status().isCreated());
+
+        // Repeatedly attempt to register with the duplicate mobile number
+        for (int i = 0; i < 6; i++) {
+            registerBuyer(testIp, existingMobile)
+                    .andExpect(status().isConflict());
+        }
+
+        // Valid registration with a new unique mobile number must still succeed
+        registerBuyer(testIp, uniqueMobile()).andExpect(status().isCreated());
+    }
+
+    @Test
+    void cfConnectingIpHeaderIsHonoredForClientIpExtraction() throws Exception {
+        String cfIp = uniqueIp("cf");
+        mvc.perform(post("/api/auth/register/buyer")
+                .with(csrf())
+                .header("CF-Connecting-IP", cfIp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(Map.of(
+                        "name", "CF Buyer",
+                        "mobileNumber", uniqueMobile(),
+                        "password", BUYER_PASSWORD,
+                        "flatHouseNumber", "CF-1",
+                        "building", "CF Wing",
+                        "areaId", areaId,
+                        "societyId", societyId))))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
     void adminLoginEndpointsPermitGenerousAttempts() throws Exception {
         String adminIp = uniqueIp("admin");
         // /admin/login endpoint is open and allows past normal 20-attempt threshold
