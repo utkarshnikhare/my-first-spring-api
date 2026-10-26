@@ -400,6 +400,7 @@ async function categoryView(hash) {
 // Helper to identify Homemade products
 function isHomemadeProduct(p) {
     if (!p) return false;
+    if (typeof p.isHomemade === 'boolean') return p.isHomemade;
     var c = String(p.category || '').toLowerCase();
     return /homemade|ghee|achar|papad|cake|sweet|jar|pack|masala/.test(c);
 }
@@ -407,10 +408,14 @@ function isHomemadeProduct(p) {
 // ==================== Screen 4: Homemade storefront ====================
 
 async function homemadeStoreView(hash) {
-    var id = hash.split('/')[2];
+    var bySlug = typeof hash === 'string' && hash.indexOf('slug:') === 0;
+    var id = bySlug ? decodeURIComponent(hash.slice(5)) : decodeURIComponent(hash.split('/')[2] || '');
     var h = '<div class="view-enter">';
     try {
-        var detail = await api('/api/kitchens/id/' + id);
+        var detailPath = bySlug
+            ? '/api/kitchens/by-slug/' + encodeURIComponent(id)
+            : (/^\d+$/.test(id) ? '/api/kitchens/id/' + id : '/api/kitchens/by-slug/' + encodeURIComponent(id));
+        var detail = await api(detailPath);
         var k = detail.kitchen;
         if (!k || (k.sellerType !== 'HOMEMADE_PRODUCTS' && k.sellerType !== 'BOTH')) {
             h += emptyHtml('🏪', 'Store not found', 'This store may not be available in your area.', '<a class="btn btn-primary" href="#/homemade">Back to Homemade</a>');

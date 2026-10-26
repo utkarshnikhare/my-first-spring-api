@@ -49,5 +49,24 @@ public class BuyerPublicController {
         }
         return "forward:/index.html";
     }
-}
 
+    /**
+     * Shareable direct URL for Buyer Homemade Products hub.
+     */
+    @GetMapping({"/homemade", "/homemade/"})
+    public String homemade() {
+        return "forward:/index.html";
+    }
+
+    /**
+     * Clean public Homemade Store URL. Serves the SPA; the client router resolves the slug.
+     */
+    @GetMapping("/homemade-store/{slug}")
+    public String homemadeStore(@PathVariable String slug, HttpServletRequest request) {
+        String canonical = slugService.canonicalSlugForPublic(slug, request);
+        if (canonical != null && !canonical.equals(slug)) {
+            return "redirect:/homemade-store/" + canonical;
+        }
+        return "forward:/index.html";
+    }
+}
