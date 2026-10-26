@@ -52,6 +52,9 @@ public class ProductCreateDto {
     private Integer remainingQuantity;
     private Boolean isPreorder;
 
+    @JsonAlias({"is_homemade", "isHomemade"})
+    private Boolean isHomemade;
+
     @JsonAlias({"category"})
     @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY)
     private List<String> categories;
@@ -99,6 +102,8 @@ public class ProductCreateDto {
     public void setRemainingQuantity(Integer remainingQuantity) { this.remainingQuantity = remainingQuantity; }
     public Boolean getIsPreorder() { return isPreorder; }
     public void setIsPreorder(Boolean isPreorder) { this.isPreorder = isPreorder; }
+    public Boolean getIsHomemade() { return isHomemade; }
+    public void setIsHomemade(Boolean isHomemade) { this.isHomemade = isHomemade; }
     public List<String> getCategories() { return categories; }
     public void setCategories(List<String> categories) {
         if (categories == null) {

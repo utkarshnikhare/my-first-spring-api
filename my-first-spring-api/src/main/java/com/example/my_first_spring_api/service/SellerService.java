@@ -18,6 +18,7 @@ import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.OrderItem;
 import com.example.my_first_spring_api.model.OrderStatus;
 import com.example.my_first_spring_api.model.Product;
+import com.example.my_first_spring_api.model.SellerType;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.model.SellerApprovalStatus;
 import com.example.my_first_spring_api.repository.KitchenRepository;
@@ -237,7 +238,7 @@ public class SellerService {
 
     /**
      * Existing societies the seller can select for "Who can order from me?"
-     * in Manage Kitchen. Derived from existing platform data — V1 references
+     * in Manage Kitchen. Derived from existing platform data â€” V1 references
      * society IDs only (no GPS/maps/radius).
      */
     @Transactional(readOnly = true)
@@ -293,10 +294,23 @@ public class SellerService {
         // Server-side enforcement of the Create Offering timing rules so
         // impossible combinations are never persisted, even if the client
         // validation is bypassed.
+        boolean isHomemade = isHomemadeProductDto(dto, kitchen);
+        if (kitchen.getSellerType() == SellerType.KITCHEN && isHomemade) {
+            throw new IllegalArgumentException("Seller is only approved for Kitchen offerings.");
+        }
+        if (kitchen.getSellerType() == SellerType.HOMEMADE_PRODUCTS && !isHomemade) {
+            throw new IllegalArgumentException("Seller is only approved for Homemade products.");
+        }
+
         if (recurringRequest) {
             OfferingTiming.validateWindowPair(orderWindowStart, orderWindowEnd);
             if (readyByTime == null || readyByTime.isBlank()) {
                 throw new IllegalArgumentException("Default Delivery / Ready By is required.");
+            }
+        } else if (isHomemade && !Boolean.TRUE.equals(preorder) && (orderWindowEnd == null || orderWindowEnd.isBlank())) {
+            // Section 8.3 & 8.4: Always Available & Made on Request do not require Orders Close.
+            if (readyByTime == null || readyByTime.isBlank()) {
+                readyByTime = "Usually ready in 1 day";
             }
         } else {
             // Cross-day tolerance: a client-computed readyBy can land a day (or
@@ -333,7 +347,10 @@ public class SellerService {
             }
         }
         if (category == null || category.isBlank()) {
-            category = "DINNER";
+            category = isHomemade ? "HOMEMADE" : "DINNER";
+        }
+        if (isHomemade && !category.toUpperCase().contains("HOMEMADE")) {
+            category = "HOMEMADE," + category;
         }
         product.setCategory(category);
 
@@ -470,7 +487,7 @@ public class SellerService {
     }
 
     /**
-     * Requirement 5 — authoritative read model for the Seller "Edit Offering"
+     * Requirement 5 â€” authoritative read model for the Seller "Edit Offering"
      * screen. Ownership is enforced exactly like updateProduct(), and the
      * "has orders" flag is derived from the same persisted-order query (draft
      * carts excluded) so the UI and the server can never disagree about which
@@ -643,6 +660,26 @@ public class SellerService {
             if (part.trim().equals(upper)) return true;
         }
         return false;
+    }
+
+    private boolean isHomemadeProductDto(ProductCreateDto dto, Kitchen kitchen) {
+        if (dto != null && Boolean.TRUE.equals(dto.getIsHomemade())) return true;
+        if (dto != null && Boolean.FALSE.equals(dto.getIsHomemade())) return false;
+        if (dto != null && dto.getCategories() != null) {
+            for (String c : dto.getCategories()) {
+                if (c == null) continue;
+                String lower = c.toLowerCase();
+                if (lower.contains("homemade") || lower.contains("ghee") || lower.contains("achar")
+                        || lower.contains("papad") || lower.contains("cake") || lower.contains("sweet")
+                        || lower.contains("masala")) {
+                    return true;
+                }
+                if (lower.contains("breakfast") || lower.contains("lunch") || lower.contains("dinner")) {
+                    return false;
+                }
+            }
+        }
+        return kitchen != null && kitchen.getSellerType() == SellerType.HOMEMADE_PRODUCTS;
     }
 
     /**

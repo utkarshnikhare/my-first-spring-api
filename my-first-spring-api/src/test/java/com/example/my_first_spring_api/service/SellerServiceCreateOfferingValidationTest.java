@@ -349,11 +349,13 @@ class SellerServiceCreateOfferingValidationTest {
     void pastOrdersCloseWithFutureDeliveryIsAutoCorrectedAndAccepted() {
         allowFutureMenus();
         ProductCreateDto dto = validDto();
-        LocalDate tomorrow = LocalDate.now().plusDays(1);
-        dto.setAvailableDate(tomorrow);
-        // Pre-order offering: orderingDate is today.
+        LocalDate offeringDate = LocalDate.now();
+        dto.setAvailableDate(offeringDate);
+        dto.setIsPreorder(false);
+        dto.setAvailableToday(true);
+        // Same-day offering: orderingDate is today.
         // User accidentally inputs an AM time in past instead of PM.
-        // Delivery is tomorrow at 23:59.
+        // Delivery is today at 23:59.
         LocalTime now = LocalTime.now(AppTimeZone.ZONE);
         String amInput;
         String expectedPm;
@@ -370,7 +372,7 @@ class SellerServiceCreateOfferingValidationTest {
             expectedPm = "23:59";
         }
         dto.setOrderWindowEnd(amInput);
-        dto.setReadyByTime(tomorrow + "T23:59");
+        dto.setReadyByTime(offeringDate + "T23:59");
 
         var result = sellerService.createProduct(1L, dto, approvedSeller());
         assertThat(result).isNotNull();
@@ -430,5 +432,57 @@ class SellerServiceCreateOfferingValidationTest {
         assertThat(product.getDescription()).isEqualTo("");
         assertThat(product.getCategory()).isEqualTo("DINNER");
         assertThat(product.getUnit()).isEqualTo("portion");
+    }
+
+    @Test
+    void kitchenOnlySellerCannotCreateHomemadeOffering() {
+        Kitchen k = approvedKitchen();
+        k.setSellerType(com.example.my_first_spring_api.model.SellerType.KITCHEN);
+        when(kitchenRepository.findById(1L)).thenReturn(Optional.of(k));
+
+        ProductCreateDto dto = validDto();
+        dto.setIsHomemade(true);
+        dto.setCategories(List.of("CAKES"));
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () ->
+                sellerService.createProduct(1L, dto, approvedSeller()),
+                "Seller is only approved for Kitchen offerings.");
+    }
+
+    @Test
+    void homemadeOnlySellerCannotCreateKitchenOffering() {
+        Kitchen k = approvedKitchen();
+        k.setSellerType(com.example.my_first_spring_api.model.SellerType.HOMEMADE_PRODUCTS);
+        when(kitchenRepository.findById(1L)).thenReturn(Optional.of(k));
+
+        ProductCreateDto dto = validDto();
+        dto.setIsHomemade(false);
+        dto.setCategories(List.of("LUNCH"));
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () ->
+                sellerService.createProduct(1L, dto, approvedSeller()),
+                "Seller is only approved for Homemade products.");
+    }
+
+    @Test
+    void bothSellerCanCreateHomemadeOfferingWithoutCloseTime() {
+        Kitchen k = approvedKitchen();
+        k.setSellerType(com.example.my_first_spring_api.model.SellerType.BOTH);
+        when(kitchenRepository.findById(1L)).thenReturn(Optional.of(k));
+
+        ProductCreateDto dto = new ProductCreateDto();
+        dto.setName("Chocolate Truffle Cake");
+        dto.setPrice(BigDecimal.valueOf(450));
+        dto.setIsHomemade(true);
+        dto.setCategories(List.of("CAKES"));
+        dto.setAvailableDate(LocalDate.now());
+        dto.setOrderWindowEnd(null);
+        dto.setReadyByTime(null);
+
+        var result = sellerService.createProduct(1L, dto, approvedSeller());
+        assertThat(result).isNotNull();
+        assertThat(result.getName()).isEqualTo("Chocolate Truffle Cake");
+        assertThat(result.getCategory()).contains("HOMEMADE");
+        assertThat(result.getReadyByTime()).isEqualTo("Usually ready in 1 day");
     }
 }

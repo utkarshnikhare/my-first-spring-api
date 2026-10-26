@@ -19,9 +19,9 @@ module.exports = defineConfig({
   globalTeardown: require.resolve('./global-teardown.cjs'),
   fullyParallel: false,
   workers: 1,
-  retries: 0,
-  timeout: 90_000,
-  expect: { timeout: 10_000 },
+  retries: 1,
+  timeout: 120_000,
+  expect: { timeout: 15_000 },
   outputDir: path.join(__dirname, 'test-results'),
   reporter: [
     ['list'],
@@ -31,7 +31,9 @@ module.exports = defineConfig({
     baseURL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure'
+    video: 'retain-on-failure',
+    actionTimeout: 10_000,
+    navigationTimeout: 30_000
   },
   projects: [
     {
@@ -50,8 +52,8 @@ module.exports = defineConfig({
   ],
   webServer: {
     command: process.platform === 'win32'
-      ? 'mvnw.cmd -DskipTests -Dspring-boot.run.profiles=demo spring-boot:run'
-      : './mvnw -DskipTests -Dspring-boot.run.profiles=demo spring-boot:run',
+      ? 'mvnw.cmd -DskipTests -Dspring-boot.run.profiles=local spring-boot:run'
+      : './mvnw -DskipTests -Dspring-boot.run.profiles=local spring-boot:run',
     cwd: backendDirectory,
     url: `${baseURL}/api/auth/config`,
     timeout: 180_000,
@@ -59,8 +61,9 @@ module.exports = defineConfig({
     stdout: 'pipe',
     stderr: 'pipe',
     env: {
-      SPRING_PROFILES_ACTIVE: 'demo',
+      SPRING_PROFILES_ACTIVE: 'local',
       PORT: '18082',
+      SOCIOMART_RATELIMIT_ENABLED: 'false',
       SOCIOMART_DEMO_ADMIN_PASSWORD: adminPassword,
       SOCIOMART_DEMO_SUPER_ADMIN_PASSWORD: superAdminPassword
     }

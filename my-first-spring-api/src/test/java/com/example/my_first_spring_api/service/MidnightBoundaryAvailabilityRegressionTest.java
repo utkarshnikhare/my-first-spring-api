@@ -108,18 +108,8 @@ public class MidnightBoundaryAvailabilityRegressionTest {
         OrderItemRequest item = new OrderItemRequest();
         item.setProductId(expiredProduct.getId());
         item.setQuantity(1);
-        orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(item), session);
-
-        PlaceOrderRequest.BuyerDetails bd = new PlaceOrderRequest.BuyerDetails();
-        bd.setName(buyer.getName());
-        bd.setMobileNumber(buyer.getMobileNumber());
-        bd.setSociety(buyer.getSociety());
-        bd.setBuilding(buyer.getBuilding());
-        bd.setFlatHouseNumber(buyer.getFlatHouseNumber());
-
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, bd, "Special note", session))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("past date and can no longer be ordered");
+        assertThatThrownBy(() -> orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(item), session))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

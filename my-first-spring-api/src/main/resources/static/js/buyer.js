@@ -11,8 +11,8 @@ var FAV_CACHE = null; // Set of favourited kitchen ids; null = not loaded yet
 var FAV_FULL_CACHE = null; // Full FavouriteDto list from last /api/favourites call; null = not loaded/failed
 
 function todayDate() {
-    // Asia/Kolkata is UTC+5:30 regardless of the browser's local zone.
-    return new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+    // Use Intl.DateTimeFormat with Asia/Kolkata timezone for reliable date-only values.
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
 
 function favSet() {
@@ -397,20 +397,20 @@ async function categoryView(hash) {
     return h;
 }
 
+// Helper to identify Homemade products
+function isHomemadeProduct(p) {
+    if (!p) return false;
+    var c = String(p.category || '').toLowerCase();
+    return /homemade|ghee|achar|papad|cake|sweet|jar|pack|masala/.test(c);
+}
+
 // ==================== Screen 4: Homemade storefront ====================
 
 async function homemadeStoreView(hash) {
     var id = hash.split('/')[2];
     var h = '<div class="view-enter">';
     try {
-        var detail;
-        try {
-            detail = /^\d+$/.test(id)
-                ? await api('/api/kitchens/id/' + id)
-                : await api('/api/discovery/homemade/' + encodeURIComponent(id));
-        } catch (err) {
-            detail = await api('/api/kitchens/' + encodeURIComponent(id));
-        }
+        var detail = await api('/api/kitchens/id/' + id);
         var k = detail.kitchen;
         if (!k || (k.sellerType !== 'HOMEMADE_PRODUCTS' && k.sellerType !== 'BOTH')) {
             h += emptyHtml('🏪', 'Store not found', 'This store may not be available in your area.', '<a class="btn btn-primary" href="#/homemade">Back to Homemade</a>');
@@ -433,23 +433,17 @@ async function homemadeStoreView(hash) {
             var areas = k.serviceAreas.split(',').map(function (a) { return a.trim(); }).filter(Boolean);
             h += '<div class="mb-2"><span class="muted small">Serves: ' + esc(areas.join(', ')) + '</span></div>';
         }
-        var isMixed = k && k.sellerType === 'BOTH';
-        function isHomemadeProd(p) {
-            var c = (p.category || '').toLowerCase();
-            return /homemade|ghee|achar|papad|cake|sweet|jar|pack|snack|masala/.test(c);
+        var allProds = detail.products || [];
+        if (k.sellerType === 'BOTH') {
+            allProds = allProds.filter(isHomemadeProduct);
         }
-        var today = (detail.products || []).filter(function (p) {
-            if (isMixed && !isHomemadeProd(p)) return false;
+        var today = allProds.filter(function (p) {
             return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate()) && p.availableToday && (!p.availableDate || p.availableDate >= todayDate());
         });
         today = sortByClosingTime(today);
-        var preorder = (detail.preorderProducts && detail.preorderProducts.length) ? detail.preorderProducts.filter(function (p) {
-            if (isMixed && !isHomemadeProd(p)) return false;
-            return true;
-        }) : (detail.products || []).filter(function (p) {
-            if (isMixed && !isHomemadeProd(p)) return false;
-            return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate());
-        });
+        var preorder = (detail.preorderProducts && detail.preorderProducts.length)
+            ? (k.sellerType === 'BOTH' ? detail.preorderProducts.filter(isHomemadeProduct) : detail.preorderProducts)
+            : allProds.filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
         preorder = sortByClosingTime(preorder);
         if (today.length) {
             h += '<h3 class="mb-2">Available Now</h3><div class="products-grid">';
@@ -515,11 +509,12 @@ async function kitchenPageView(hash) {
     var h = '<div class="view-enter">';
     await loadFavSet();
     try {
-        var detail = bySlug
-            ? await api('/api/kitchens/by-slug/' + encodeURIComponent(id))
+        var detailPath = bySlug
+            ? '/api/kitchens/by-slug/' + encodeURIComponent(id)
             : (/^\d+$/.test(id)
-                ? await api('/api/kitchens/id/' + id)
-                : await api('/api/kitchens/' + encodeURIComponent(id)));
+                ? '/api/kitchens/id/' + encodeURIComponent(id)
+                : '/api/kitchens/' + encodeURIComponent(id));
+        var detail = await api(detailPath);
         var k = detail.kitchen;
         if (k && k.paused) {
             // SELLER_PAUSED: temporarily closed, no new orders, but the buyer can
@@ -530,35 +525,21 @@ async function kitchenPageView(hash) {
                 exploreOtherKitchensHtml());
             return h;
         }
-        if (k && k.sellerType === 'HOMEMADE_PRODUCTS') {
-            h += emptyHtml('🍰', esc(k.displayName) + ' is a Homemade Store',
-                'Discover all cakes, ghee, achar, sweets & more from this seller.',
-                '<a class="btn btn-primary" href="#/homemade-store/' + esc(k.slug || k.name || k.id) + '">View Homemade Store</a>');
-            return h;
-        }
         // Handover 6/18 storefront_view. Fire-and-forget AFTER the storefront is
         // confirmed viewable, so a kitchen the buyer is not allowed to open never
         // counts as traffic. Analytics must never block or fail the page.
-        recordAnalyticsView('HOMEMADE_STOREFRONT_VIEW', k && k.id);
-        var isMixed = k && k.sellerType === 'BOTH';
-        function isHomemadeProd(p) {
-            var c = (p.category || '').toLowerCase();
-            return /homemade|ghee|achar|papad|cake|sweet|jar|pack|snack|masala/.test(c);
+        recordAnalyticsView(k && k.sellerType === 'HOMEMADE_PRODUCTS' ? 'HOMEMADE_STOREFRONT_VIEW' : 'MENU_VIEW', k && k.id);
+        var allProds = detail.products || [];
+        if (k && k.sellerType === 'BOTH') {
+            allProds = allProds.filter(function (p) { return !isHomemadeProduct(p); });
         }
-        var today = (detail.products || []).filter(function (p) {
-            if (isMixed && isHomemadeProd(p)) return false;
+        var today = allProds.filter(function (p) {
             return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate()) && (!p.availableDate || p.availableDate >= todayDate());
         });
         today = sortByClosingTime(today);
         var preorder = (detail.preorderProducts && detail.preorderProducts.length)
-            ? detail.preorderProducts.filter(function (p) {
-                if (isMixed && isHomemadeProd(p)) return false;
-                return true;
-            })
-            : (detail.products || []).filter(function (p) {
-                if (isMixed && isHomemadeProd(p)) return false;
-                return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate());
-            });
+            ? (k && k.sellerType === 'BOTH' ? detail.preorderProducts.filter(function (p) { return !isHomemadeProduct(p); }) : detail.preorderProducts)
+            : allProds.filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
         preorder = sortByClosingTime(preorder);
 
         // Explore Other Kitchens near the top navigation.
@@ -1552,7 +1533,7 @@ function paymentSuccessView() {
     h += '<div class="receipt-line font-800 border-top mt-2 pt-2">' +
         '<span>Total</span><span>' + money(o.totalAmount) + '</span></div>' +
         '<div class="flex gap-2 card-mt">' +
-        (paid ? '<span class="pill pill-green">Payment: PAID (Demo)</span>' : (o.paymentStatus === 'WILL_PAY_LATER' ? '<span class="pill pill-amber">Payment: Pay later</span>' : '<span class="pill pill-amber">Payment: Awaiting seller verification</span>')) +
+        (paid ? '<span class="pill pill-green">Payment: PAID (Demo)</span>' : '<span class="pill pill-amber">Payment: Due on delivery</span>') +
         (ORDER_BADGES[o.orderStatus] || '') + '</div></div>';
     h += '<div class="flex gap-3 card-mt">' +
         '<a class="btn btn-primary flex-1" href="#/orders">View My Orders</a>' +
@@ -1705,9 +1686,7 @@ async function ordersView() {
                         var orderBadge = ORDER_BADGES[o.orderStatus] || '<span class="pill pill-grey">' + esc(o.orderStatus || 'ORDERED') + '</span>';
                         var paymentBadge = payStatus === 'PAID'
                             ? '<span class="pill pill-green">Payment: PAID</span>'
-                            : (payStatus === 'WILL_PAY_LATER'
-                                ? '<span class="pill pill-amber">Payment: Pay later</span>'
-                                : '<span class="pill pill-amber">Payment: Awaiting verification</span>');
+                            : '<span class="pill pill-amber">Payment: ' + esc(payStatus || 'PENDING') + '</span>';
                         // Seller-recorded delivery completion, read from the SAME order
                         // row the seller wrote. It is a separate axis from payment and
                         // from order status, so all combinations are legal.

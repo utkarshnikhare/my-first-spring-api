@@ -32,6 +32,14 @@ jobs:
           if ! ls target/*.jar >/dev/null 2>&1; then echo "Packaging produced no jar" && exit 1; fi
           echo "Build OK: classes compiled, tests passed, jar packaged"
 
+      - name: Validate Render deployment safety (autoDeploy must be false)
+        run: |
+          if grep -q 'autoDeploy: true' render.yaml; then
+            echo "UNSAFE: render.yaml contains 'autoDeploy: true' - failing tests could auto-deploy to production"
+            exit 1
+          fi
+          echo "Render deployment safety: autoDeploy is false (manual deployment only)"
+
   e2e:
     runs-on: ubuntu-latest
     steps:

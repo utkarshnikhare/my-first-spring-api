@@ -34,6 +34,8 @@ public class AnalyticsController {
             case AnalyticsService.EV_ENQUIRY_CLICK:
             case AnalyticsService.EV_PRODUCT_VIEW:
             case AnalyticsService.EV_HOMEMADE_STOREFRONT_VIEW:
+            case AnalyticsService.EV_MENU_VIEW:
+            case AnalyticsService.EV_MARKETPLACE_VIEW:
                 analyticsService.record(type, null, null, body.get("kitchenId") != null ? Long.valueOf(body.get("kitchenId")) : null,
                         body.get("detail"));
                 break;

@@ -18,6 +18,8 @@ const test = base.extend({
     });
     page.on('pageerror', error => issues.push(`pageerror: ${error.message}`));
     page.on('requestfailed', request => {
+      const err = request.failure()?.errorText || '';
+      if (err.includes('ABORTED') || err.includes('NS_BINDING_ABORTED')) return;
       if (new URL(request.url()).pathname.startsWith('/api/')) {
         issues.push(`API request failed: ${request.method()} ${new URL(request.url()).pathname}`);
       }

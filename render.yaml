@@ -24,7 +24,7 @@ services:
     #
     # NOTE: changing this file does not alter the currently running
     # deployment; it only governs future deploys.
-    autoDeploy: true
+    autoDeploy: false
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         # prod is the only supported deploy profile since PR-B removed
