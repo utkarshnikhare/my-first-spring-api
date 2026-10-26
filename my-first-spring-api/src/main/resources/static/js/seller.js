@@ -3302,7 +3302,7 @@ async function submitHomemadeProduct(form, isDraft) {
 
 function showPublishSuccessModal(product, kitchen) {
     var slug = (kitchen && (kitchen.name || kitchen.slug)) || '';
-    var storeUrl = window.location.origin + '/index.html#/homemade-store/' + slug;
+    var storeUrl = window.location.origin + '/homemade-store/' + slug;
     var existing = document.getElementById('publishSuccessModal');
     if (existing) existing.remove();
     var modal = document.createElement('div');

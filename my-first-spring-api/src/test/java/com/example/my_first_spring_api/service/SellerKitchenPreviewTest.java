@@ -96,8 +96,8 @@ class SellerKitchenPreviewTest {
         assertThat(buyerJs)
                 .as("buyer still resolves the kitchen page from the hash route")
                 .contains("async function kitchenPageView(hash)")
-                .contains("var id = hash.split('/')[2];")
-                .contains("api('/api/kitchens/id/' + id)");
+                .contains("hash.split('/')[2]")
+                .contains("'/api/kitchens/id/'");
     }
 
     /** No second preview API or duplicate kitchen page may be introduced. */

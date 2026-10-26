@@ -57,6 +57,7 @@ public class ProductDto {
      */
     private Long occurrenceId;
     private String sellerType;
+    private Boolean isHomemade;
 
     public ProductDto() {}
 
@@ -153,4 +154,9 @@ public class ProductDto {
     public void setOccurrenceId(Long occurrenceId) { this.occurrenceId = occurrenceId; }
     public String getSellerType() { return sellerType; }
     public void setSellerType(String sellerType) { this.sellerType = sellerType; }
+    public Boolean getIsHomemade() {
+        if (isHomemade != null) return isHomemade;
+        return category != null && category.toUpperCase().contains("HOMEMADE");
+    }
+    public void setIsHomemade(Boolean isHomemade) { this.isHomemade = isHomemade; }
 }

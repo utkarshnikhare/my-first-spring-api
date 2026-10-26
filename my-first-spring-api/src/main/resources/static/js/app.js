@@ -52,6 +52,9 @@ function resolveRoute(hash) {
  */
 function resolvePathRoute(path) {
     if (!path) return null;
+    var hm = path.match(/^\/homemade-store\/(.+)$/);
+    if (hm) return { fn: homemadeStoreView, arg: 'slug:' + decodeURIComponent(hm[1]) };
+    if (path === '/homemade' || path === '/homemade/') return { fn: homemadeView, arg: '#/homemade' };
     var km = path.match(/^\/kitchen\/(.+)$/);
     if (km) return { fn: kitchenPageView, arg: 'slug:' + decodeURIComponent(km[1]) };
     if (path === '/kitchens' || path === '/kitchens/') return { fn: kitchensView, arg: '#/kitchens' };

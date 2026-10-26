@@ -89,6 +89,8 @@ public class SecurityConfig {
                                 "/admin.html",
                                 "/kitchens",
                                 "/kitchen/**",
+                                "/homemade-store/**",
+                                "/homemade",
                                 "/css/**",
                                 "/js/**",
                                 "/favicon.ico"
