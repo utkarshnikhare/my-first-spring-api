@@ -181,9 +181,8 @@ class RevenueReconciliationTest {
         var cancelledCount = ((Number) dashboard.get("ordersCancelled")).longValue();
 
         assertThat(cancelledCount).isEqualTo(1);
-        // Current implementation: paidValue includes cancelled PAID orders (implementation gap)
-        // totalOrderValue correctly excludes CANCELLED orders
-        assertThat(paidValue).isEqualTo(150.00); // Current behavior: includes cancelled PAID orders
+        // Cancelled orders are excluded from paid revenue regardless of payment status (SM-028)
+        assertThat(paidValue).isEqualTo(0.0);
         assertThat(totalOrderValue).isEqualTo(0.0);
     }
 
@@ -231,13 +230,9 @@ class RevenueReconciliationTest {
         var pendingPaymentCount = ((Number) dashboard.get("pendingPaymentCount")).longValue();
         var pendingPaymentValue = ((Number) dashboard.get("pendingPaymentValue")).doubleValue();
 
-        // Actual behavior:
-        // order1: PAID (300) - counted
-        // order2: PENDING (200) - pending
-        // order3: WILL_PAY_LATER -> PENDING (150) - pending
-        // order4: PAID then CANCELLED (200) - still counted in paid* (implementation gap)
-        assertThat(paidCount).isEqualTo(2); // order1 + order4 (cancelled but still PAID)
-        assertThat(paidValue).isEqualTo(500.00); // 300 + 200
+        // order4: PAID then CANCELLED (200) - excluded from paid* after SM-028 fix
+        assertThat(paidCount).isEqualTo(1); // order1 only
+        assertThat(paidValue).isEqualTo(300.00); // 300
         assertThat(willPayLaterCount).isEqualTo(0); // WILL_PAY_LATER becomes PENDING
         assertThat(willPayLaterValue).isEqualTo(0.0);
         assertThat(pendingPaymentCount).isEqualTo(2); // order2 + order3

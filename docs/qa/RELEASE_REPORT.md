@@ -41,3 +41,12 @@ NO-GO — code/tests pass in CI; production deployment unverified (autoDeploy fa
 
 - Deployed commit SHA: NOT exposed by any endpoint; UNVERIFIED.
 - Render deploy: NOT performed (no Render API key / CLI in environment). Manual deploy required.
+## 7. Deployment verification endpoint (2026-10-27)
+
+- Added read-only `GET /api/version` reporting application version, build commit SHA, short commit, and build time using build-time metadata (git-commit-id + spring-boot build-info plugins).
+- `/api/version` is public and does not expose secrets, environment values, database details, or infrastructure details.
+- Tests: `VersionControllerTest` (metadata unavailable fallback) and `PublicVersionEndpointSecurityTest` (public endpoint) added.
+- Local verification: both tests PASS.
+- Deployed commit SHA remains UNVERIFIED until the approved commit is deployed and `/api/version` is checked in production.
+- Final status remains NO-GO until intended commit confirmed live and smoke checks pass.
+
