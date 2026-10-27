@@ -76,6 +76,7 @@ public class SecurityConfig {
                                 "/api/auth/**",
                                 "/admin/login",
                                 "/api/health",
+                                "/api/version",
                                 "/api/marketplace",
                                 "/api/items",
                                 "/api/search",
