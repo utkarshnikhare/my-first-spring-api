@@ -14,9 +14,8 @@
 
 ---
 
-## 2. Master Defect Ledger (SM-001 through SM-027)
 
-| Defect ID | Severity | Title & Summary | Root Cause | Implemented Fix | Regression Test & Verification Evidence | Status |
+## 2. Master Defect Ledger (SM-001 through SM-027)
 |---|---|---|---|---|---|---|
 | **SM-001** | **P0** | **Buyer order missing from seller dashboard (UK Kitchen flow)** | Disconnected query filters between seller order items and offering occurrences. | Aligned JPQL query and seller isolation checks in `OrderService.java` and `SellerAppService.java`. | `UKKitchenBuyerToSellerOrderWorkflowIntegrationTest.java` (PASS). Order persisted, amount 300.00, isolated by seller. | **PASS** |
 | **SM-002** | **P2** | **Category filter missing or incomplete** | Some categories did not match case-insensitively in discovery filter. | Standardized uppercase category matching across SQL and JavaScript. | `SellerFilterScriptStructureTest.java` (PASS). | **PASS** |
@@ -44,6 +43,38 @@
 | **SM-024** | **P0** | **Public Clean URLs `/homemade-store/**` & `/homemade` Threw HTTP 401 for Logged-Out Buyers** | `SecurityConfig.java` protected all paths except `/kitchen/**`. Logged-out buyers opening a shared link to a Homemade storefront or navigating to `/homemade` were rejected with HTTP 401 Unauthorized instead of loading the public SPA. | Added `"/homemade-store/**"` and `"/homemade"` to `SecurityConfig.java` `permitAll()`, added route mappings in `BuyerPublicController.java` forwarding to `/index.html`, and added path resolver in `app.js`. | `PublicHomemadeRoutingSecurityTest.java` (PASS), `homemade-storefront.spec.cjs` (PASS). | **PASS** |
 | **SM-025** | **P0** | **`homemadeStoreView` in `buyer.js` Crashed with HTTP 400 Bad Request on Store Slug** | In `buyer.js`, `homemadeStoreView` called `/api/kitchens/id/` + `id`. When opened from discovery (`#/homemade-store/meena-cakes`) or shared URL, non-numeric slug caused Spring Boot type mismatch (`MethodArgumentTypeMismatchException: Long`), crashing the page with HTTP 400. | Updated `homemadeStoreView` in `buyer.js` to detect whether identifier is numeric id or slug, calling `/api/kitchens/by-slug/` for slugs matching `kitchenPageView`. | `homemade-storefront.spec.cjs` (PASS). Page renders smoothly without 400 errors. | **PASS** |
 | **SM-026** | **P1** | **Mixed Seller Homemade Products with Generic Categories Leaked into Kitchen Storefront** | In `buyer.js`, `isHomemadeProduct` used a fragile keyword regex `/homemade|ghee|achar|papad|cake|sweet|jar|pack|masala/`. Homemade products from mixed sellers (`SellerType.BOTH`) categorized as "Snacks" or "Other" failed the regex, leaking into the Kitchen storefront and disappearing from Homemade storefront. | Exposed explicit `isHomemade` boolean on `ProductDto.java` derived from `product.getCategory()`, and updated `buyer.js` `isHomemadeProduct` to prioritize `p.isHomemade === true`. | `PublicHomemadeRoutingSecurityTest.java` (PASS), `HomemadeProductsTest.java` (5/5 PASS). | **PASS** |
-| **SM-027** | **P1** | **Premature Deployment Reporting While Render `autoDeploy: false` Kept Stale Commit** | Previous QA report claimed changes were deployed live on Render even though service configured with `autoDeploy: false`. | Established audit rule that commit SHAs and live endpoint telemetry must be cross-verified before declaring live deployment complete. Full limitations documented in release report. | Render live telemetry audit: health endpoint returns only {"status":"UP"}; no commit SHA exposed. Deployed version UNVERIFIED. Render API key unavailable. Manual deploy + SHA verification required. | **DOCUMENTED — NOT VERIFIED** |
+| **SM-027** | **P1** | **Premature Deployment Reporting While Render `autoDeploy: false` Kept Stale Commit** | Previous QA report claimed changes were deployed live on Render even though service configured with `autoDeploy: false`. | Established audit rule that commit SHAs and live endpoint telemetry must be cross-verified before declaring live deployment complete. Full limitations documented in release report. | Render live telemetry audit: health endpoint returns only {"status":"UP"}; no commit SHA exposed. Deployed version UNVERIFIED. Render API key unavailable. Manual deploy + SHA verification required. | **DOCUMENTED ï¿½ NOT VERIFIED** |
 
 | **SM-028** | **P1** | **Cancelled orders still counted in admin payment/revenue buckets** | Admin dashboard payment aggregates filtered only by `PaymentStatus`, so a cancelled order retained its PAID/PENDING payment status and was still counted as revenue or outstanding payment. | Added `OrderStatus.CANCELLED` exclusion to every payment-status aggregate in `AdminService.dashboard()`. | `RevenueReconciliationTest` (9/9 PASS) | **PASS** |
+
+---
+
+## 3. Adversarial Audit Note (2026-10-27)
+
+- Existing defect IDs `SM-001` through `SM-028` are preserved; no renumbering was performed.
+- No new confirmed defect was added during this documentation/adversarial pass.
+- `SM-028` status remains **PASS** after the full Maven suite run on 2026-10-27 (776 tests, 0 failures, 5 skipped).
+- Remaining risks are environmental/operational, not newly discovered code defects: PostgreSQL/Testcontainers blocked locally, Render deployed commit SHA unverified, and Playwright not rerun in this session.
+
+## 4. Final Verification Sprint Evidence (2026-10-27)
+
+- Independent SM-028 verification: AdminService.dashboard() excludes OrderStatus.CANCELLED from paidCount, paidValue, willPayLaterCount, willPayLaterValue, pendingPaymentCount, pendingPaymentValue, totalOrderValue, todayOrderValue, and monthOrderValue. Cancelled PAID, PENDING, and WILL_PAY_LATER orders are excluded. markOrderAsPaid rejects cancelled orders. cancelOrder is idempotent.
+- RevenueReconciliationTest: 9/9 PASS locally on H2.
+- Full Maven suite: 776 tests, 0 failures, 0 errors, 5 skipped (PostgreSQL/Testcontainers).
+- Playwright E2E rerun: 13 passed, 0 failed (desktop + mobile).
+- GitHub: local HEAD b69be61 on feat/deployment-verification-version-endpoint, 1 commit ahead of origin. PR #90 is OPEN at 2e13f43. b69be61 is NOT merged into main (main = 4c2ca53). Latest CI run on the branch at 2e13f43 succeeded. No CI run exists for b69be61 because it has not been pushed.
+- PostgreSQL: 5 tests skipped locally because the Docker executable is not installed and no PostgreSQL service or port 5432 is reachable. Skipped tests: PostgresNativeMigrationTest (1), PostgresRuntimeSmokeTest (1), UserEmailMigrationRegressionTest (3). CI evidence on ubuntu-latest reports these tests pass.
+- Render: https://sociomart-demo.onrender.com/api/health timed out during this session (service sleeping or unreachable). /api/version was not verified. autoDeploy remains false. No Render API key or CLI is available. Deployed commit SHA remains unverified.
+- No new defect IDs were added.
+
+## 5. Final Release Blocker Closure (2026-10-27)
+
+- GitHub: PR #90 merged into main as merge commit 07f4def8352afff7c7a1c05b113f04017f18bf7f. Approved code commit b69be619cbed34cfee2a1c5101df7b1fbd6285bd is an ancestor of main.
+- CI run 40494866078 on b69be619cbed34cfee2a1c5101df7b1fbd6285bd: conclusion success. Required checks build and e2e both passed.
+- PostgreSQL-sensitive tests executed in CI: PostgresNativeMigrationTest 1/1 PASS, PostgresRuntimeSmokeTest 1/1 PASS, UserEmailMigrationRegressionTest 3/3 PASS. No skips in CI.
+- Local Maven: 776 tests total, 5 skipped (PostgreSQL/Testcontainers unavailable), 0 failures, 0 errors.
+- CI Maven: 776 tests total, 0 skipped, 0 failures, 0 errors.
+- Playwright: local rerun 13/13 PASS; CI e2e job PASS.
+- Render: service is reachable after cold start. /api/health returned 200 {"status":"UP"} after approximately 120 seconds. Homepage returned 200. /api/version returned 401, indicating the currently deployed service is an older deployment that does not expose the public version endpoint. No Render API key, CLI, or deploy credentials are available in this environment.
+- No production code changes were made in this closure pass. No new defect IDs were added.
+- Final status: PARTIALLY VERIFIED. Remaining action: manually deploy approved main commit 07f4def8352afff7c7a1c05b113f04017f18bf7f through Render, then verify /api/health, /api/version, homepage, and non-destructive smoke tests.

@@ -38,7 +38,40 @@
 
 ---
 
-## 4. Release Gates (Gates A through H)
+
+---
+
+## 14. Adversarial Quality Rules (Addendum 2026-10-27)
+
+The following rules are mandatory for all future SocioMart quality work and supplement, but do not replace, the rules above.
+
+1. Never claim a test passed unless it actually ran and its result was inspected.
+2. Never hide failures by weakening assertions, deleting tests, suppressing exceptions, or marking tests skipped.
+3. Never treat a successful compilation as proof of functional correctness.
+4. Never treat an HTTP 200 response as proof that a business workflow is correct.
+5. Never trust client-side validation without verifying server-side enforcement.
+6. Never trust a UI restriction without testing the underlying API.
+7. Never trust a single-user test for stock, order, payment, or concurrent-update correctness.
+8. Never claim PostgreSQL correctness based only on H2 tests.
+9. Never mark a defect fixed without a regression test or documented, reproducible verification evidence.
+10. Never modify production data or perform destructive security testing against production.
+11. Never introduce a new product feature as part of defect repair.
+12. Preserve user changes, existing requirements, test evidence, and repository history.
+13. Distinguish confirmed defects, suspected defects, environmental limitations, and untested behavior.
+14. After each significant repair, actively attempt to reproduce the original defect and discover related failures.
+15. After the repair phase, perform an independent adversarial pass as if another engineer's work is being reviewed.
+
+### Evidence requirements for "Verified Fixed"
+
+A defect may be marked **Verified Fixed** only when:
+- the original failure was reproduced or otherwise established with credible evidence;
+- the root cause was addressed;
+- a regression test or documented verification exists;
+- the test passed after the repair;
+- relevant adversarial retesting did not reproduce the defect;
+- related existing workflows were checked.
+
+Otherwise use **Fixed-Unverified**, **Blocked**, or **Open**.
 
 - **Gate A — Functional Correctness:** All critical user journeys (Buyer, Kitchen Seller, Homemade Seller, Mixed Seller, Admin) work end-to-end.
 - **Gate B — Security & Authorisation:** Zero unauthorized privilege escalations, IDOR vulnerabilities, or cross-tenant data leaks.
