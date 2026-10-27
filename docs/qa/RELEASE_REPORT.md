@@ -10,6 +10,8 @@
 - Working tree: clean for source code; docs/qa/*.md updated in this pass
 - Remote: origin https://github.com/utkarshnikhare/my-first-spring-api.git
 - Local main == origin/main == 07f4def
+- QA docs branch: `chore/qa-docs-release-report-20261027` pushed to origin at commit `970dbfa` (docs/qa: DEFECT_REGISTER.md, PROJECT_QUALITY_RULES.md, RELEASE_REPORT.md, REQUIREMENTS_TRACEABILITY.md, TEST_EXECUTION_REPORT.md + new ADVERSARIAL_TEST_CHECKLIST.md)
+- PR required: create pull request from `chore/qa-docs-release-report-20261027` into `main` via GitHub web UI at https://github.com/utkarshnikhare/my-first-spring-api/pull/new/chore/qa-docs-release-report-20261027 — no GitHub API access available to create/merge PR programmatically.
 
 ## 2. CI
 
