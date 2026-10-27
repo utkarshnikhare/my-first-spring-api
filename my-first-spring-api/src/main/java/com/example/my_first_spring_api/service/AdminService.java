@@ -164,20 +164,32 @@ public class AdminService {
                 .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        long paidCount = allOrders.stream().filter(o -> o.getPaymentStatus() == PaymentStatus.PAID).count();
+        // Cancelled orders are excluded from every payment bucket, regardless of
+        // their recorded payment status: a cancelled order is no longer revenue,
+        // nor an outstanding payment (SM-028).
+        long paidCount = allOrders.stream()
+                .filter(o -> o.getOrderStatus() != OrderStatus.CANCELLED)
+                .filter(o -> o.getPaymentStatus() == PaymentStatus.PAID).count();
         BigDecimal paidValue = allOrders.stream()
+                .filter(o -> o.getOrderStatus() != OrderStatus.CANCELLED)
                 .filter(o -> o.getPaymentStatus() == PaymentStatus.PAID)
                 .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        long willPayLaterCount = allOrders.stream().filter(o -> o.getPaymentStatus() == PaymentStatus.WILL_PAY_LATER).count();
+        long willPayLaterCount = allOrders.stream()
+                .filter(o -> o.getOrderStatus() != OrderStatus.CANCELLED)
+                .filter(o -> o.getPaymentStatus() == PaymentStatus.WILL_PAY_LATER).count();
         BigDecimal willPayLaterValue = allOrders.stream()
+                .filter(o -> o.getOrderStatus() != OrderStatus.CANCELLED)
                 .filter(o -> o.getPaymentStatus() == PaymentStatus.WILL_PAY_LATER)
                 .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        long pendingPaymentCount = allOrders.stream().filter(o -> o.getPaymentStatus() == PaymentStatus.PENDING).count();
+        long pendingPaymentCount = allOrders.stream()
+                .filter(o -> o.getOrderStatus() != OrderStatus.CANCELLED)
+                .filter(o -> o.getPaymentStatus() == PaymentStatus.PENDING).count();
         BigDecimal pendingPaymentValue = allOrders.stream()
+                .filter(o -> o.getOrderStatus() != OrderStatus.CANCELLED)
                 .filter(o -> o.getPaymentStatus() == PaymentStatus.PENDING)
                 .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
