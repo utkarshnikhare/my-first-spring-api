@@ -189,3 +189,22 @@
   - UI/UX & Responsive: 10 criteria — verified by Playwright in CI.
   - Limitations: 5 Postgres tests pass only in CI (Docker); not run locally. Deployed commit SHA unverified. No physical-device or lint checks run.
   - Failed Requirements: 0 (in CI). Unverified locally: Postgres (environment), deployment SHA.
+
+## 11. Final Verification Sprint Evidence (2026-10-27)
+
+- SM-028 revenue/payment aggregate exclusion verified in AdminService.dashboard(); cancelled orders are excluded from all payment-status buckets and order-value totals.
+- RevenueReconciliationTest: 9/9 PASS locally.
+- Full Maven suite: 776 tests, 0 failures, 0 errors, 5 skipped.
+- Playwright E2E: 13/13 PASS on rerun.
+- GitHub: local HEAD b69be61 on feat/deployment-verification-version-endpoint; PR #90 OPEN at 2e13f43; b69be61 not merged into main. Latest branch CI succeeded.
+- PostgreSQL/Testcontainers: 5 skipped locally; Docker/PostgreSQL unavailable. CI evidence reports pass.
+- Render: health endpoint timed out; deployed commit SHA unverified; autoDeploy false; no Render API key.
+- Final status: PARTIALLY VERIFIED.
+
+## 12. Final Release Blocker Closure (2026-10-27)
+
+- PR #90 merged into main: 07f4def8352afff7c7a1c05b113f04017f18bf7f. Approved code commit b69be619cbed34cfee2a1c5101df7b1fbd6285bd is an ancestor of main.
+- CI run 40494866078: success (build and e2e).
+- PostgreSQL-sensitive tests: 5/5 PASS in CI.
+- Render: /api/health 200 after cold start; homepage 200; /api/version 401 on current deployment. Deployed commit SHA remains unverified. No Render credentials available.
+- Final status: PARTIALLY VERIFIED. Remaining action: manual Render deployment of 07f4def8352afff7c7a1c05b113f04017f18bf7f and verification of /api/health, /api/version, homepage, and smoke tests.
