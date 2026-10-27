@@ -21,15 +21,24 @@
 - Postgres/Testcontainers tests: 5/5 PASS in CI.
 - Playwright E2E: 13 passed, 0 failed.
 
-## 3. Render
+## 3. Render — live verification (2026-10-27)
 
 - Service: sociomart-demo (https://sociomart-demo.onrender.com)
 - render.yaml: plan=free, runtime=docker, autoDeploy=false, healthCheckPath=/api/health
 - autoDeploy: false — pushes do NOT auto-deploy; manual deploy required.
-- Deployed commit SHA: UNVERIFIED — live app returned HTTP 503 Service Unavailable on all probed endpoints (/api/health, /api/version, /). The free-tier instance appears spun down / not responding; no deployed SHA could be read.
+- **Live app IS reachable** (woke from cold start):
+  - `GET /api/health` → 200 `{"status":"UP"}` — application is healthy
+  - `GET /api/version` → 200, publicly accessible (no 401/403):
+    ```json
+    {"application":"SocioMart","version":"0.0.1-SNAPSHOT","commit":"unknown","shortCommit":"unknown","buildTime":"2026-10-27T11:26:08.886Z"}
+    ```
+    - **`commit: "unknown"`** — the deployed build does NOT report an approved commit SHA.
+    - The `git-commit-id-maven-plugin` is configured in `pom.xml` for commit `07f4def`, which would populate `GitProperties` and report the actual commit SHA. Since it reports "unknown", the deployed build is **not** from commit `07f4def8352afff7c7a1c05b113f04017f18bf7f`.
+    - A `"commit": "unknown"` response does NOT by itself prove old code, but it confirms the deployed build lacks git commit metadata that the approved commit would provide.
+  - `GET /` → 200, homepage loads ("SocioMart — Discover. Connect.")
 - Render API key: not available (RENDER_API_KEY unset). Programmatic deploy, log retrieval, and SHA verification not possible from this environment.
 
-**Important:** The 503 response means the app is not reachable at all (likely cold-spun on free tier). It does NOT by itself prove the app is running old code. The deployed commit SHA can only be confirmed by (a) a successful manual deploy, then (b) reading `/api/version` and comparing its reported build commit SHA to `07f4def8352afff7c7a1c05b113f04017f18bf7f`. A 401 on `/api/version` alone is NOT evidence of an old deployment — the endpoint is `permitAll` and any 401 would indicate a different issue.
+**Conclusion:** The live app is running, but `/api/version` reports `"commit": "unknown"` instead of `07f4def...`. The deployed commit SHA does NOT match the approved commit `07f4def8352afff7c7a1c05b113f04017f18bf7f`. Manual deployment of commit `07f4def` via the Render dashboard is required to publish the approved release.
 
 ## 4. Manual Render deployment steps (approved commit 07f4def)
 
@@ -62,14 +71,23 @@ All checks against https://sociomart-demo.onrender.com:
 ## 6. Release blockers
 
 1. Manual Render deploy required to publish commit 07f4def (autoDeploy false).
+   - Live app currently running with `commit: "unknown"` — NOT the approved commit 07f4def.
 2. Deployed commit SHA must be verified via `/api/version` after deploy.
+   - Must report `07f4def8352afff7c7a1c05b113f04017f18bf7f` (or at minimum not "unknown").
 3. No Render API key/CLI in this environment — deploy and smoke tests must be performed by someone with Render dashboard access.
 4. Local Postgres tests blocked (no Docker); rely on CI evidence (5/5 PASS).
 
 ## 7. Final status
 
-**PARTIALLY VERIFIED** — code and tests pass in CI (776/0/0), approved commit 07f4def is merged to main and CI-green, but the Render deployment has NOT been confirmed to run 07f4def. The live app returned 503 on all endpoints (unreachable / spun down). Release cannot be marked fully verified until:
-- (a) commit 07f4def is manually deployed to Render, and
-- (b) `/api/health`, `/api/version` (commit SHA match), homepage, and non-destructive buyer/seller/admin smoke tests all pass in production.
+**PARTIALLY VERIFIED** — code and tests pass in CI (776/0/0), approved commit 07f4def is merged to main and CI-green, QA docs branch pushed to GitHub (`chore/qa-docs-release-report-20261027` at `4b238a4`), but the Render deployment has NOT been confirmed to run 07f4def.
+
+Live verification results (2026-10-27):
+- `GET /api/health` → 200 `{"status":"UP"}` ✅
+- `GET /api/version` → 200, public, but `"commit": "unknown"` ❌ (expected: `07f4def...`)
+- `GET /` → 200, homepage loads ✅
+
+Release cannot be marked fully verified until:
+- (a) commit 07f4def is manually deployed to Render via dashboard, and
+- (b) `/api/health`, `/api/version` (commit SHA = `07f4def...`), homepage, and non-destructive buyer/seller/admin smoke tests all pass in production.
 
 No new features and no unrelated code changes were introduced in this pass.
