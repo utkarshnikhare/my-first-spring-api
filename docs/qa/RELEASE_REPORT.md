@@ -33,3 +33,11 @@
 ## 5. Final status
 
 NO-GO — code/tests pass in CI; production deployment unverified (autoDeploy false, no Render API key, no commit SHA exposed by health endpoint). Manual deploy + SHA verification required.
+
+## 6. Live smoke tests (2026-10-27)
+
+- GET /api/health -> 200 {"status":"UP"}
+- GET / -> 200 (3037 bytes)
+
+- Deployed commit SHA: NOT exposed by any endpoint; UNVERIFIED.
+- Render deploy: NOT performed (no Render API key / CLI in environment). Manual deploy required.
