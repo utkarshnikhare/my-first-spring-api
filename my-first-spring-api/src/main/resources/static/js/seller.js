@@ -1210,7 +1210,7 @@ async function sellerQuickPostView() {
         '<input class="form-input" name="price" type="number" min="0.01" step="0.01" placeholder="100" required></div>' +
         '<div class="form-group"><label class="form-label">Unit <span class="req">*</span></label>' +
         '<select class="form-select" name="priceUnit"><option value="Per Piece">Per Piece</option>' +
-        '<option value="Per Plate">Per Plate</option><option value="Per Box">Per Box</option></select></div></div>';
+        '<option value="Per Plate" selected>Per Plate</option><option value="Per Box">Per Box</option></select></div></div>';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open — Optional</label>' +
         '<input class="form-input" name="orderWindowStart" type="time">' +
         '<p class="muted small">Leave blank to start accepting orders immediately.</p></div>' +
