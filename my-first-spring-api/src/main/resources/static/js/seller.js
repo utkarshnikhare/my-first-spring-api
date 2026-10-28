@@ -917,6 +917,8 @@ async function sellerHomeView() {
         + '<button class="sd-header__avatar" type="button" data-action="toggle-theme"'
         + ' aria-label="Switch between light and dark theme" title="Switch theme">'
         + esc(avatarLetter) + '</button>'
+        + '<button class="sd-header__logout" type="button" data-action="seller-logout"'
+        + ' aria-label="Log out of seller account" title="Log out">Log out</button>'
         + '</div></header>';
     try {
         // Both requests hit endpoints that already exist and are already used
@@ -1723,6 +1725,63 @@ function applyMealPreset(form, presetType) {
 }
 
 /**
+ * Clears the active Quick Start preset selection and resets only the
+ * template-derived fields (Offering For, Delivery/Ready By, Orders Close,
+ * category) back to empty/custom defaults. Manually entered seller values
+ * (name, description, price, unit, photo) are preserved.
+ */
+function clearMealPreset(form) {
+    if (!form) return;
+    var todayIso = sellerDate('today');
+    var tomorrowIso = sellerDate('tomorrow');
+
+    // Reset Offering For to 'today' with today's date
+    S.offeringFor = 'today';
+    var availDateInput = form.querySelector('input[name="availableDate"]') || form.querySelector('#availDate');
+    if (availDateInput) availDateInput.value = todayIso;
+    var chooseDateRow = form.querySelector('#chooseDateRow');
+    if (chooseDateRow) chooseDateRow.hidden = true;
+    var radioGroup = form.querySelector('#offeringForGroup');
+    if (radioGroup) {
+        var radios = radioGroup.querySelectorAll('.radio-option');
+        radios.forEach(function (r) {
+            if (r.getAttribute('data-value') === 'today') {
+                r.classList.add('selected');
+            } else {
+                r.classList.remove('selected');
+            }
+        });
+    }
+
+    // Clear Delivery / Ready By
+    var readyInput = form.querySelector('input[name="readyByTime"]');
+    if (readyInput) readyInput.value = '';
+
+    // Clear Orders Close
+    var closeInput = form.querySelector('input[name="orderWindowEnd"]');
+    if (closeInput) closeInput.value = '';
+    var offsetSelect = form.querySelector('#orderCloseOffsetSelect');
+    if (offsetSelect) offsetSelect.value = '';
+    var customRow = form.querySelector('#customCloseTimeRow');
+    if (customRow) customRow.style.display = 'none';
+
+    // Clear category checkboxes (no preset category)
+    var catBoxes = form.querySelectorAll('input[name="categories"]');
+    catBoxes.forEach(function (cb) { cb.checked = false; });
+
+    // Clear preset button active states
+    var presetBtns = form.querySelectorAll('.btn-meal-preset');
+    presetBtns.forEach(function (btn) { btn.classList.remove('active'); });
+
+    // Re-run timing validation
+    syncOfferingFormWheels(form);
+    updateLiveTimingBadge(form);
+    validateFormTiming(form);
+    S.offeringFormDirty = true;
+    toast('Quick Start cleared — custom offering', 'info');
+}
+
+/**
  * Automatically calculates and returns Orders Close (HH:mm) exactly 60 minutes before readyByTime.
  * Example: Delivery 16:47 -> Orders Close 15:47.
  */
@@ -2241,7 +2300,7 @@ function offeringFormHtml(t, opts) {
     var lockAttr = locked ? ' disabled' : '';
     var todayIso = sellerDate('today');
     var chosenDate = isEdit ? (t.availableDate || todayIso) : (mode === 'tomorrow' ? sellerDate('tomorrow') : (mode === 'choose' && t.availableDate ? t.availableDate : todayIso));
-    var selectedUnit = t.priceUnit || 'Per Piece';
+    var selectedUnit = t.priceUnit || 'Per Plate';
     var categoryValues = String(t.category || '').split(',').map(function (c) { return c.trim().toUpperCase(); }).filter(Boolean);
 
     if (isHomemade) {
@@ -2271,6 +2330,9 @@ function offeringFormHtml(t, opts) {
         h += '</button>';
         h += '<button type="button" class="btn-meal-preset" data-action="apply-preset" data-preset="breakfast">';
         h += '<span class="preset-icon">🌅</span><div class="preset-info"><span class="preset-name">Breakfast</span><span class="preset-time">Tomorrow 9:00 AM</span></div>';
+        h += '</button>';
+        h += '<button type="button" class="btn-meal-preset btn-meal-preset--clear" data-action="clear-preset">';
+        h += '<span class="preset-icon">✕</span><div class="preset-info"><span class="preset-name">Clear</span><span class="preset-time">Custom offering</span></div>';
         h += '</button>';
         h += '</div></div>';
     }
@@ -3859,6 +3921,11 @@ document.addEventListener('click', async function (e) {
                 var presetForm = t.closest('form');
                 var presetType = t.getAttribute('data-preset');
                 applyMealPreset(presetForm, presetType);
+                break;
+            case 'clear-preset':
+                e.preventDefault();
+                var clearForm = t.closest('form');
+                clearMealPreset(clearForm);
                 break;
             case 'cancel-offering-form': {
                 e.preventDefault();

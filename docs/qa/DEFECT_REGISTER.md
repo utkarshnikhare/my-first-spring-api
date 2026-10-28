@@ -49,7 +49,15 @@
 
 ---
 
-## 3. Adversarial Audit Note (2026-10-27)
+## 3. New Defects: DEF-01, DEF-02, DEF-03 (Batch 1 Fix)
+
+| **DEF-01** | **P2** | **Quick Start option cannot be deselected** | On Seller → Add Offering, selecting a Quick Start tile populates the offering form, but the seller cannot clear the selection and return to a custom offering. | Added a `Clear` Quick Start button (`data-action="clear-preset"`) alongside the preset tiles. Added `clearMealPreset()` function that resets only template-derived fields (Offering For, Delivery/Ready By, Orders Close, category) while preserving manually entered seller values (name, description, price, unit, photo). Added `clear-preset` case in the global click handler. | `SellerQuickStartClearTest.java` (NEW) | **PENDING** |
+| **DEF-02** | **P2** | **Incorrect default selling unit for new kitchen/food offerings** | A new kitchen/food offering defaults to `Per Piece`, whereas the requirement specifies `Per Plate`. | Changed `offeringFormHtml()` default unit from `'Per Piece'` to `'Per Plate'` at `seller.js:2303`. Only applies when `t.priceUnit` is undefined/falsy (new offerings). Existing offerings with a saved unit, drafts, and homemade products are unaffected. | `SellerDefaultUnitTest.java` (NEW) | **PENDING** |
+| **DEF-03** | **P2** | **Seller logout action is missing** | A logged-in seller cannot find a dedicated logout action in the seller dashboard/app. | Added a `Log out` button (`data-action="seller-logout"`) to the seller dashboard header (`sd-header__right`). The existing `seller-logout` handler at `seller.js:3988+` already calls `POST /api/auth/logout` and clears `S.user`, `S.kitchenUrl`, and re-renders the auth screen. | `SellerLogoutTest.java` (NEW) | **PENDING** |
+
+---
+
+## 4. Adversarial Audit Note (2026-10-27)
 
 - Existing defect IDs `SM-001` through `SM-028` are preserved; no renumbering was performed.
 - No new confirmed defect was added during this documentation/adversarial pass.
