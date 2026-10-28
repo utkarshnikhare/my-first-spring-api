@@ -365,7 +365,7 @@ public class OrderService {
         }
     }
 
-    public OrderDto placeOrder(PaymentStatus paymentStatus, PlaceOrderRequest.BuyerDetails buyerDetails,
+    public OrderDto placeOrder(PaymentStatus paymentStatus, String paymentMethod, PlaceOrderRequest.BuyerDetails buyerDetails,
                                String customInstructions, HttpSession session) {
         Long draftId = (Long) session.getAttribute(DRAFT_ORDER_SESSION_KEY);
         if (draftId == null) {
@@ -410,6 +410,14 @@ public class OrderService {
         if (order.getItems() == null || order.getItems().isEmpty()) {
             throw new IllegalArgumentException("Your order is empty. Please add items before placing it.");
         }
+        // Validate payment method against supported types
+        if (paymentMethod != null && !paymentMethod.isBlank()) {
+            String normalized = paymentMethod.toLowerCase();
+            if (!java.util.Arrays.asList("upi", "card", "cod").contains(normalized)) {
+                throw new IllegalArgumentException("Unsupported payment method: " + paymentMethod);
+            }
+        }
+        order.setPaymentMethod(paymentMethod);
         order.setBuyer(buyer);
         if (buyerDetails != null) updateBuyerDetails(buyer, buyerDetails);
         if (customInstructions != null && !customInstructions.isBlank()) {

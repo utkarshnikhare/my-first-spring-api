@@ -180,7 +180,7 @@ document.addEventListener('click', async function (e) {
                 await render(); break;
             case 'place-order':
                 try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
-                await placeOrderWithStatus(state.payPreference || 'PAID'); break;
+                await placeOrderWithStatus(state.payPreference || 'PAID', state.payMethod || 'upi'); break;
             case 'confirm-payment': await confirmPayment(t); break;
             case 'logout': {
                 try { await api('/api/auth/logout', { method: 'POST' }); } catch (e5) {}

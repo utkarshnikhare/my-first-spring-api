@@ -31,6 +31,9 @@ public class PlaceOrderRequest {
     @JsonAlias({"buyer_id", "buyerId"})
     private Long buyerId;
 
+    @JsonAlias({"payment_method", "paymentMethod"})
+    private String paymentMethod;
+
     @JsonAlias({"kitchen_id", "kitchenId"})
     private Long kitchenId;
 
