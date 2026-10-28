@@ -152,7 +152,7 @@ await logout(page);
   expect(incomingOrder.status).toBe(200);
   expect(incomingOrder.body.buyer.name).toBe(buyer.name);
   expect(incomingOrder.body.customInstructions).toBe('Less spicy, please call on arrival.');
-  await expect(page.locator('.od-list')).toContainText('1 Per Piece');
+  await expect(page.locator('.od-list')).toContainText('1 Per Plate');
   await expect(page.locator('#deliveryBlock')).toContainText('0 of 1 delivered');
   const remarkButton = page.getByRole('button', { name: 'View customer remark', exact: true });
   await expect(remarkButton).toBeVisible();
