@@ -159,6 +159,7 @@ public class UKKitchenBuyerToSellerOrderWorkflowIntegrationTest {
 
         OrderDto placedOrder = orderService.placeOrder(
                 PaymentStatus.PAID,
+                null,
                 buyerDetails,
                 "Extra spicy please",
                 buyerSession

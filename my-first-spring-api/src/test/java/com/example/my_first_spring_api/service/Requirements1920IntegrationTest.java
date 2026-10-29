@@ -104,7 +104,7 @@ class Requirements1920IntegrationTest {
         req.setProductId(product.getId());
         req.setQuantity(qty);
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(req), session);
-        OrderDto dto = orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+        OrderDto dto = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
         return orders.findById(dto.getId()).orElseThrow();
     }
 
@@ -133,7 +133,7 @@ class Requirements1920IntegrationTest {
 
         // Replaying place on the same session must not duplicate the event.
         MockHttpSession replay = sessionFor(buyerIn);
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, null, null, replay))
+        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, null, null, null, replay))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(notifications(seller.getId(), T_NEW_ORDER)).isEqualTo(1);
     }
@@ -150,7 +150,7 @@ class Requirements1920IntegrationTest {
         p.setRemainingQuantity(0);
         products.saveAndFlush(p);
 
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, null, null, session))
+        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session))
                 .isInstanceOf(IllegalArgumentException.class);
 
         assertThat(notifications(seller.getId(), T_NEW_ORDER)).isZero();

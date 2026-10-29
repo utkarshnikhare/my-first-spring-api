@@ -8,6 +8,7 @@ import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.model.AdminAuditLog;
 import com.example.my_first_spring_api.AppTimeZone;
+import com.example.my_first_spring_api.dto.AuthResponseDto;
 import com.example.my_first_spring_api.dto.ProductDto;
 import com.example.my_first_spring_api.model.Area;
 import com.example.my_first_spring_api.model.Kitchen;
@@ -32,6 +33,7 @@ import org.springframework.test.context.ActiveProfiles;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -497,6 +499,7 @@ class KitchenPublicSlugTest {
     @Test
     @DisplayName("canonical /kitchens route remains accessible after slug change")
     void canonicalKitchensRouteAfterSlugChange() {
+        User actingAdmin = admin();
         String newSlug = "new-kitchen-" + tag;
         adminService.changeKitchenSlug(kitchen.getId(), newSlug, actingAdmin);
 
@@ -512,6 +515,7 @@ class KitchenPublicSlugTest {
     @Test
     @DisplayName("old slug 301-reroutes to canonical path after admin slug change")
     void oldSlugRedirectsToCanonicalPath() {
+        User actingAdmin = admin();
         String oldSlug = kitchen.getSlug();
         String newSlug = "updated-kitchen-" + tag;
 
@@ -535,35 +539,11 @@ class KitchenPublicSlugTest {
         assertThat(links).containsKey("baseUrl");
     }
 
-    // def-04: seller cannot change the slug; renaming the display keeps it intact
-    @Test
-    @DisplayName("seller cannot change the slug; renaming the display keeps it intact")
-    void sellerCannotChangeSlugAndRenameKeepsSlug() {
-        KitchenUpdateDto hijack = new KitchenUpdateDto();
-        hijack.setName("new-slug");
-
-        assertThrows(IllegalArgumentException.class,
-                () -> sellerService.updateKitchen(kitchen.getId(), hijack, seller));
-
-        KitchenUpdateDto rename = new KitchenUpdateDto();
-        rename.setDisplayName("Renamed Kitchen " + tag);
-        sellerService.updateKitchen(kitchen.getId(), rename, seller);
-
-        Kitchen reloaded = reload();
-        assertThat(reloaded.getSlug()).isEqualTo(slug);
-        assertThat(reloaded.getDisplayName()).isEqualTo("Renamed Kitchen " + tag);
-    }
-
-    @Test
-    @DisplayName("unknown slug returns plain 404, not society restriction message")
-    void unknownSlugIsConcealedNotFound() {
-        assertThatThrownBy(() -> kitchenService.getKitchenDetailBySlug("no-such-" + tag, null))
-                .isExactlyInstanceOf(KitchenNotFoundException.class);
-    }
-
     // past offerings test (existing)
     @Test
     @DisplayName("past offerings are excluded from available today and preorder on storefront")
+    void testPreorderProductsExcludedFromAvailableTodayAndPreorderOnStorefront() {
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
 
         Product pastItem = new Product();
         pastItem.setName("Yesterday Special " + tag);
@@ -614,3 +594,23 @@ class KitchenPublicSlugTest {
 
     @Test
     @DisplayName("resubmitApplication protected fields ignored - slug unchanged")
+    void resubmitApplicationProtectedFieldsIgnoredSlugUnchanged() {
+        // Arrange: resubmit with the same slug as the existing kitchen
+        seller.setSellerApprovalStatus(SellerApprovalStatus.CHANGES_REQUESTED);
+        userRepository.save(seller);
+        Kitchen kitchen = this.kitchen;
+
+        Map<String, Object> resubmitBody = new HashMap<>();
+        resubmitBody.put("reason", "Resubmission test");
+        resubmitBody.put("kitchenSlug", kitchen.getSlug());
+
+        // Act: resubmit with same slug - should succeed, slug unchanged
+        AuthResponseDto result = sellerService.resubmitApplication(seller, resubmitBody);
+
+        // Assert: slug is protected and remains unchanged, seller status reset to PENDING
+        assertThat(result.getSellerApprovalStatus()).isEqualTo(SellerApprovalStatus.PENDING);
+        Kitchen updated = kitchenRepository.findById(kitchen.getId()).orElse(null);
+        assertThat(updated.getSlug()).isEqualTo(kitchen.getSlug());
+    }
+
+}

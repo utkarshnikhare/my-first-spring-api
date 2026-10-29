@@ -105,7 +105,7 @@ class Requirement19NotificationTest {
         Order draft = draftWith(p, 1);
         startDraftSession(draft);
 
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, null, null, httpSession))
+        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, null, null, null, httpSession))
                 .isInstanceOf(IllegalArgumentException.class);
 
         verifyNoInteractions(notificationService);
@@ -122,7 +122,7 @@ class Requirement19NotificationTest {
         Order draft = draftWith(p, 2); // same product listed twice in one draft
         startDraftSession(draft);
 
-        orderService.placeOrder(PaymentStatus.PENDING, null, null, httpSession);
+        orderService.placeOrder(PaymentStatus.PENDING, null, null, null, httpSession);
 
         verify(notificationService, times(1)).sendSoldOutNotification(eq(seller), eq("Poha"));
         verify(notificationService, times(1)).sendNewOrderNotification(eq(seller), any(), any());

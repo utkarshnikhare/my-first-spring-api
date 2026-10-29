@@ -10,6 +10,7 @@ import com.example.my_first_spring_api.dto.ProductDto;
 import com.example.my_first_spring_api.dto.RecurringScheduleDto;
 import com.example.my_first_spring_api.dto.ProductUpdateDto;
 import com.example.my_first_spring_api.dto.SellerOfferingEditDto;
+import com.example.my_first_spring_api.dto.AuthResponseDto;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
@@ -833,26 +834,24 @@ public class SellerService {
     public com.example.my_first_spring_api.dto.AuthResponseDto resubmitApplication(
             User seller, java.util.Map<String, Object> body) {
         if (seller == null) throw new IllegalArgumentException("Seller is required.");
+        if (body == null) body = new java.util.HashMap<>();
         // Requirement ONB-13: Seller request-changes/resubmission
         // Seller can resubmit their application after admin requested changes
         // The body may contain updated application details
         // Verify slug is NOT changed during resubmission (slug reservation guarantee)
         String reason = (String) body.getOrDefault("reason", "");
-        String submittedSlug = (String) body.getOrDefault("kitchenSlug", kitchen.getSlug());
-        if (!submittedSlug.equals(kitchen.getSlug())) {
+        Kitchen kitchen = kitchenRepository.findBySeller(seller).stream().findFirst().orElse(null);
+        String submittedSlug = (String) body.getOrDefault("kitchenSlug", kitchen != null ? kitchen.getSlug() : null);
+        if (kitchen != null && submittedSlug != null && !submittedSlug.equals(kitchen.getSlug())) {
             throw new IllegalArgumentException("Slug cannot be changed during resubmission. The kitchen slug is reserved and immutable.");
         }
-        seller.setSellerStatusReason(reason != null && !reason.isBlank() ? reason : seller.getSellerStatusReason());
-        seller.setSellerApprovalStatus("PENDING"); // Reset to pending until admin reviews
-        seller = userRepository.save(seller);
-        return new com.example.my_first_spring_api.dto.AuthResponseDto(
-                seller.getId(), seller.getName(), seller.getMobileNumber(),
-                seller.getSellerApprovalStatus(), seller.getSellerStatusReason());
         SellerApprovalStatus from = seller.getSellerApprovalStatus();
         if (from != SellerApprovalStatus.CHANGES_REQUESTED && from != SellerApprovalStatus.PENDING && from != SellerApprovalStatus.REJECTED) {
             throw new IllegalArgumentException("Application is not in a resubmittable state.");
         }
-        Kitchen kitchen = kitchenRepository.findBySeller(seller).stream().findFirst().orElse(null);
+        seller.setSellerStatusReason(reason != null && !reason.isBlank() ? reason : seller.getSellerStatusReason());
+        seller.setSellerApprovalStatus(SellerApprovalStatus.PENDING); // Reset to pending until admin reviews
+        seller = userRepository.save(seller);
         if (body != null) {
             if (body.get("kitchenName") != null) {
                 String kn = String.valueOf(body.get("kitchenName")).trim();
@@ -884,7 +883,7 @@ public class SellerService {
             }
         }
         seller.setSellerApprovalStatus(SellerApprovalStatus.PENDING);
-        seller.setSellerStatusReason("Resubmitted with requested changes");
+        seller.setSellerStatusReason(reason != null && !reason.isBlank() ? reason : "Resubmitted with requested changes");
         if (kitchen != null) {
             kitchenRepository.save(kitchen);
         }
@@ -901,7 +900,7 @@ public class SellerService {
                 saved.getId(), saved.getName(), saved.getMobileNumber(), saved.getFlatHouseNumber(),
                 saved.getRole() != null ? saved.getRole().name() : null, saved.getSellerApprovalStatus());
         authDto.setSellerApprovalStatus(saved.getSellerApprovalStatus());
-        authDto.setSellerStatusReason(saved.getSellerStatusReason());
+        authDto.setSellerStatusReason(reason != null && !reason.isBlank() ? reason : saved.getSellerStatusReason());
         if (kitchen != null) {
             authDto.setKitchenSlug(kitchen.getSlug());
             authDto.setKitchenUrl("/kitchen/" + kitchen.getSlug());

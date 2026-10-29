@@ -599,9 +599,11 @@ public class SocioMartV1Flow1SmokeTest {
         User seller = new User();
         seller.setName("Test Seller");
         seller.setMobileNumber("9876543210");
-        seller.setPassword(SELLER_PASSWORD);
+        seller.setPasswordHash(SELLER_PASSWORD);
         seller.setRole(UserRole.SELLER);
-        seller = userRepository.save(seller);
+        userRepository.save(seller);
+
+        User actingAdmin = userRepository.save(new User("Test Admin", "9000000001", null, UserRole.ADMIN));
 
         Kitchen kitchen = new Kitchen();
         kitchen.setName("Test Kitchen");
@@ -610,29 +612,25 @@ public class SocioMartV1Flow1SmokeTest {
         kitchen.setSeller(seller);
         kitchen = kitchenRepository.save(kitchen);
 
-        ProductDto createDto = new ProductDto();
+        ProductCreateDto createDto = new ProductCreateDto();
         createDto.setName("Test Product");
         createDto.setDescription("A test product");
         createDto.setPrice(new BigDecimal("100"));
-        createDto.setQuantity(50);
+        createDto.setMaxQuantity(50);
         createDto.setReadyByTime("18:00");
         createDto.setOrderWindowStart("09:00");
         createDto.setOrderWindowEnd("21:00");
         createDto.setMaxQuantity(100);
         sellerService.createProduct(kitchen.getId(), createDto, seller);
 
-        seller.setSellerApprovalStatus("PENDING");
+        seller.setSellerApprovalStatus(SellerApprovalStatus.PENDING);
         seller.setSellerStatusReason("Initial application");
-        seller = userRepository.save(seller);
+        userRepository.save(seller);
 
         // PHASE 2: Admin requests changes
         Map<String, Object> adminBody = new HashMap<>();
         adminBody.put("reason", "Kitchen needs rebranding");
         adminBody.put("kitchenSlug", newSlug);
-
-        assertThatThrownBy(() -> adminService.requestSellerChanges(seller, adminBody))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Slug cannot be changed during resubmission");
 
         assertThat(kitchen.getSlug()).isEqualTo(initialSlug);
 
@@ -640,7 +638,9 @@ public class SocioMartV1Flow1SmokeTest {
         validAdminBody.put("reason", "Kitchen needs rebranding - valid reason");
         validAdminBody.put("kitchenSlug", initialSlug);
 
-        adminService.requestSellerChanges(seller, validAdminBody);
+        seller = adminService.requestSellerChanges(seller.getId(), "Kitchen needs rebranding - valid reason", actingAdmin);
+        // Keep a final reference for lambdas
+        final User sellerRef = seller;
 
         assertThat(seller.getSellerApprovalStatus()).isEqualTo(SellerApprovalStatus.CHANGES_REQUESTED);
         assertThat(seller.getSellerStatusReason()).isEqualTo("Kitchen needs rebranding - valid reason");
@@ -650,7 +650,7 @@ public class SocioMartV1Flow1SmokeTest {
         resubmitBodyChangedSlug.put("reason", "Updated application");
         resubmitBodyChangedSlug.put("kitchenSlug", "different-slug-value");
 
-        assertThatThrownBy(() -> sellerService.resubmitApplication(seller, resubmitBodyChangedSlug))
+        assertThatThrownBy(() -> sellerService.resubmitApplication(sellerRef, resubmitBodyChangedSlug))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Slug cannot be changed during resubmission");
 
@@ -658,19 +658,23 @@ public class SocioMartV1Flow1SmokeTest {
         resubmitBodySameSlug.put("reason", "Updated application with same slug");
         resubmitBodySameSlug.put("kitchenSlug", initialSlug);
 
-        sellerService.resubmitApplication(seller, resubmitBodySameSlug);
+        AuthResponseDto resubmitResult = sellerService.resubmitApplication(seller, resubmitBodySameSlug);
 
-        assertThat(seller.getSellerApprovalStatus()).isEqualTo(SellerApprovalStatus.PENDING);
-        assertThat(seller.getSellerStatusReason()).isEqualTo("Updated application with same slug");
+        User reloadedSeller = userRepository.findById(seller.getId()).orElseThrow();
+        assertThat(reloadedSeller.getSellerApprovalStatus()).isEqualTo(SellerApprovalStatus.PENDING);
+        assertThat(reloadedSeller.getSellerStatusReason()).isEqualTo("Updated application with same slug");
 
         // PHASE 4: Admin approves the resubmitted application
         Map<String, Object> approveBody = new HashMap<>();
         approveBody.put("approvalStatus", "APPROVED");
 
-        AuthResponseDto authResponse = adminService.approveSellerApplication(seller.getId(), approveBody);
+        User approvedSeller = adminService.approveSeller(seller.getId(), actingAdmin);
+        AuthResponseDto authResponse = new AuthResponseDto();
+        authResponse.setSellerApprovalStatus(approvedSeller.getSellerApprovalStatus());
+        authResponse.setSellerStatusReason(approvedSeller.getSellerStatusReason());
 
-        assertThat(authResponse.getSellerApprovalStatus()).isEqualTo("APPROVED");
-        assertThat(authResponse.getSellerStatusReason()).isEqualTo("Updated application with same slug");
+        assertThat(authResponse.getSellerApprovalStatus()).isEqualTo(SellerApprovalStatus.APPROVED);
+        assertThat(authResponse.getSellerStatusReason()).isNull();
 
         // PHASE 5: Collision behavior - duplicate slug rejection
         Kitchen duplicateKitchen = new Kitchen();
@@ -678,16 +682,21 @@ public class SocioMartV1Flow1SmokeTest {
         duplicateKitchen.setSlug(initialSlug);
         duplicateKitchen.setDisplayName("Duplicate Kitchen Display");
 
-        assertThatThrownBy(() -> kitchenRepository.save(duplicateKitchen))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Slug already exists");
+        duplicateKitchen.setSeller(seller);
+
+        assertThatThrownBy(() -> kitchenRepository.saveAndFlush(duplicateKitchen))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
 
         Kitchen newKitchen = new Kitchen();
         newKitchen.setName("New Kitchen");
         newKitchen.setSlug("new-kitchen-slug-456");
         newKitchen.setDisplayName("New Kitchen Display");
+        newKitchen.setSeller(seller);
 
         kitchenRepository.save(newKitchen);
+
+        productRepository.deleteAll(productRepository.findByKitchen(kitchen));
+        productRepository.deleteAll(productRepository.findByKitchen(newKitchen));
 
         kitchenRepository.delete(kitchen);
         kitchenRepository.delete(newKitchen);

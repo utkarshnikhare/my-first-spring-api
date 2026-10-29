@@ -99,7 +99,7 @@ public class OrderPlacementProductionSimulationTest {
         buyerDetails.setFlatHouseNumber("A-402");
 
         txTemplate.execute(status -> {
-            var placed = orderService.placeOrder(PaymentStatus.PENDING, buyerDetails, "spicy", session);
+            var placed = orderService.placeOrder(PaymentStatus.PENDING, null, buyerDetails, "spicy", session);
             assertThat(placed).isNotNull();
             assertThat(placed.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
             return null;
@@ -145,6 +145,19 @@ public class OrderPlacementProductionSimulationTest {
         MockHttpSession session = new MockHttpSession();
         session.setAttribute(BuyerService.BUYER_SESSION_KEY, buyer.getId());
 
+        OrderItemRequest req = new OrderItemRequest();
+        req.setProductId(product.getId());
+        req.setQuantity(1);
+
+        Long kId = kitchen.getId();
+        // Transaction 1: create draft
+        txTemplate.execute(status -> {
+            orderService.createOrUpdateDraftOrder(kId, List.of(req), session);
+            return null;
+        });
+
+        em.clear();
+
         PlaceOrderRequest.BuyerDetails buyerDetails = new PlaceOrderRequest.BuyerDetails();
         buyerDetails.setName("Buyer" + suffix);
         buyerDetails.setMobileNumber(buyer.getMobileNumber());
@@ -160,5 +173,4 @@ public class OrderPlacementProductionSimulationTest {
             return null;
         });
     }
-}
 }

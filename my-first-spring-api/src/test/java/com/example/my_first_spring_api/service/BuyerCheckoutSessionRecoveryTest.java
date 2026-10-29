@@ -135,7 +135,7 @@ class BuyerCheckoutSessionRecoveryTest {
         MockHttpSession session = buyerSession();
         draft(session);
 
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, null, null, session);
+        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, null, null, null, session);
 
         assertThat(placed.getId()).isNotNull();
         assertThat(placed.getOrderNumber()).isNotBlank();
@@ -165,7 +165,7 @@ class BuyerCheckoutSessionRecoveryTest {
 
         // Must be refused - and refused as an AUTH failure, so the frontend has a
         // recovery path, instead of a 404 that dead-ends the checkout.
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, session))
+        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, null, session))
                 .isInstanceOf(BuyerNotAuthenticatedException.class);
 
         // Nothing was created and no stock was consumed.

@@ -134,7 +134,7 @@ class Requirements1718IntegrationTest {
         product.setCutoffTime(close);
         products.saveAndFlush(product);
 
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, null, null, session))
+        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("orders for checkout are closed");
         assertThat(orders.findById(draft.getId()).orElseThrow().getOrderStatus()).isEqualTo(OrderStatus.DRAFT);

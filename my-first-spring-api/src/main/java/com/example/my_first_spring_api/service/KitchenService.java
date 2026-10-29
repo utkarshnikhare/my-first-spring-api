@@ -253,6 +253,7 @@ public class KitchenService {
                 kitchen.getAvailableToday(), kitchen.getSeller() != null ? kitchen.getSeller().getId() : null);
         dto.setShortDescription(kitchen.getShortDescription());
         dto.setSpeciality(kitchen.getSpeciality());
+        dto.setSlug(kitchen.publicSlug());
         dto.setSociety(kitchen.getSociety());
         dto.setServiceAreas(kitchen.getServiceAreas());
         dto.setBuilding(kitchen.getBuilding());

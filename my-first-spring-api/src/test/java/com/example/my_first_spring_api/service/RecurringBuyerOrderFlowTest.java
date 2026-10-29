@@ -190,7 +190,7 @@ class RecurringBuyerOrderFlowTest {
         MockHttpSession session = buyerSession();
 
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request(product.getId(), 3)), session);
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
 
         assertThat(placed.getItems()).hasSize(1);
         assertThat(placed.getItems().get(0).getScheduledDate()).isEqualTo(LocalDate.now());
@@ -210,7 +210,7 @@ class RecurringBuyerOrderFlowTest {
 
         // ...and separate orders may not add up past them either.
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request(product.getId(), 4)), first);
-        orderService.placeOrder(PaymentStatus.PENDING, null, null, first);
+orderService.placeOrder(PaymentStatus.PENDING, null, null, null, first);
 
         assertThatThrownBy(() -> orderService.createOrUpdateDraftOrder(
                 kitchen.getId(), List.of(request(product.getId(), 2)), buyerSession()))
@@ -246,7 +246,7 @@ class RecurringBuyerOrderFlowTest {
         // Ordering ahead succeeds and carries the fulfilment date.
         MockHttpSession session = buyerSession();
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request(product.getId(), 2)), session);
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
         assertThat(placed.getItems().get(0).getScheduledDate()).isEqualTo(tomorrow);
         assertThat(placed.getItems().get(0).getOccurrenceId()).isEqualTo(tomorrowOccurrence.getId());
         assertThatThrownBy(() -> scheduleService.updateOccurrenceOverride(
@@ -300,7 +300,7 @@ class RecurringBuyerOrderFlowTest {
 
         MockHttpSession session = buyerSession();
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request(product.getId(), 6)), session);
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
 
         assertThat(placed.getItems().get(0).getQuantity()).isEqualTo(6);
         assertThat(products.findById(product.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(2);

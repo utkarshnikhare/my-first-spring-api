@@ -170,7 +170,7 @@ abstract class AbstractRuntimeSmokeFlow {
         item.setProductId(product.getId());
         item.setQuantity(2);
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(item), buyerSession);
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, buyerSession);
+        OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, buyerSession);
         assertThat(placed.getItems()).hasSize(1);
         assertThat(placed.getItems().get(0).getOccurrenceId()).isEqualTo(occurrence.getId());
         assertThat(occurrences.findById(occurrence.getId())).isPresent();

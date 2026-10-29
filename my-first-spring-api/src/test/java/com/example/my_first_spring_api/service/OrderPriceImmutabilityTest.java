@@ -113,7 +113,7 @@ class OrderPriceImmutabilityTest {
 
         sessionMap.put("BUYER_USER", buyer.getId());
 
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, null, null, httpSession);
+        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, null, null, null, httpSession);
         assertThat(placed.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(2000));
         assertThat(placed.getItems()).hasSize(1);
         assertThat(placed.getItems().get(0).getPrice()).isEqualByComparingTo(BigDecimal.valueOf(20));
