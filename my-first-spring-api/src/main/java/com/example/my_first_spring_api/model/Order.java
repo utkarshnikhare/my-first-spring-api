@@ -306,6 +306,10 @@ public class Order {
     public void setDeliveryAddress(String deliveryAddress) {
         this.deliveryAddress = deliveryAddress != null ? deliveryAddress : "";
     }
+    public void setPaymentMethod(String paymentMethod) {
+        this.paymentMethod = paymentMethod != null ? paymentMethod : "";
+    }
+
     @Transient
     public String getSociety() {
         return buyer != null ? buyer.getSociety() : null;

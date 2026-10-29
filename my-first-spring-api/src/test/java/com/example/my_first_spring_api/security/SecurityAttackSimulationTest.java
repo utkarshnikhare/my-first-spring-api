@@ -151,7 +151,7 @@ public class SecurityAttackSimulationTest {
         bd.setSociety("Society A " + suffix);
         bd.setBuilding("Tower A");
         bd.setFlatHouseNumber("A-101");
-        var placedOrder = orderService.placeOrder(PaymentStatus.PENDING, bd, "Special test", sessionA);
+        var placedOrder = orderService.placeOrder(PaymentStatus.PENDING, null, bd, "Special test", sessionA);
 
         // Buyer B registers
         String buyerBMobile = uniqueMobile();
@@ -188,7 +188,7 @@ public class SecurityAttackSimulationTest {
         bd.setSociety("Society A " + suffix);
         bd.setBuilding("Tower A");
         bd.setFlatHouseNumber("A-202");
-        var placedOrder = orderService.placeOrder(PaymentStatus.PENDING, bd, "Test", sessionA);
+        var placedOrder = orderService.placeOrder(PaymentStatus.PENDING, null, bd, "Test", sessionA);
 
         String buyerBMobile = uniqueMobile();
         MockHttpSession sessionB = registerBuyer(buyerBMobile, societyAId, areaAId);
@@ -220,7 +220,7 @@ public class SecurityAttackSimulationTest {
         bd.setSociety("Society A " + suffix);
         bd.setBuilding("Tower C");
         bd.setFlatHouseNumber("C-303");
-        var placedOrder = orderService.placeOrder(PaymentStatus.PENDING, bd, "Test", session);
+        var placedOrder = orderService.placeOrder(PaymentStatus.PENDING, null, bd, "Test", session);
 
         // Buyer attempts to update payment status to PAID directly via PATCH
         mvc.perform(patch("/api/buyer/orders/" + placedOrder.getId() + "/payment-status")
@@ -260,7 +260,7 @@ public class SecurityAttackSimulationTest {
         bd.setSociety("Society A " + suffix);
         bd.setBuilding("Tower X");
         bd.setFlatHouseNumber("X-101");
-        var placedOrder = orderService.placeOrder(PaymentStatus.PENDING, bd, "Test", sessionBuyer);
+        var placedOrder = orderService.placeOrder(PaymentStatus.PENDING, null, bd, "Test", sessionBuyer);
 
         // Seller Y maliciously attempts to mark Seller X's order as paid
         mvc.perform(patch("/api/seller/orders/" + placedOrder.getId() + "/payment-status")

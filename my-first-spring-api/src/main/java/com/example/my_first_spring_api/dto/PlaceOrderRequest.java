@@ -85,6 +85,8 @@ public class PlaceOrderRequest {
 
     public PaymentStatus getPaymentStatus() { return paymentStatus; }
     public void setPaymentStatus(PaymentStatus paymentStatus) { this.paymentStatus = paymentStatus; }
+    public String getPaymentMethod() { return paymentMethod; }
+    public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
     public BuyerDetails getBuyerDetails() { return buyerDetails; }
     public void setBuyerDetails(BuyerDetails buyerDetails) { this.buyerDetails = buyerDetails; }
     public String getCustomInstructions() { return customInstructions; }

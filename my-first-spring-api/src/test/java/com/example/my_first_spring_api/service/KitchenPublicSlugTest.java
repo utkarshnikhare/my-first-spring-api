@@ -456,7 +456,7 @@ class KitchenPublicSlugTest {
         hijack.setName("hijacked-" + tag);
         assertThatThrownBy(() -> sellerService.updateKitchen(kitchen.getId(), hijack, seller))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Kitchen URL name is a protected field and cannot be changed");
+                .hasMessage("Name is a protected field and cannot be changed");
 
         KitchenUpdateDto rename = new KitchenUpdateDto();
         rename.setDisplayName("Renamed Kitchen " + tag);
@@ -493,10 +493,77 @@ class KitchenPublicSlugTest {
         assertThat(links).containsKey("baseUrl");
     }
 
+    // ONB-18: canonical /kitchens route verification
     @Test
-    @DisplayName("offerings from past dates are excluded from available today and preorder on storefront")
-    void pastOfferingsAreExcludedFromAvailableTodayOnStorefront() {
-        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+    @DisplayName("canonical /kitchens route remains accessible after slug change")
+    void canonicalKitchensRouteAfterSlugChange() {
+        String newSlug = "new-kitchen-" + tag;
+        adminService.changeKitchenSlug(kitchen.getId(), newSlug, actingAdmin);
+
+        KitchenDetailDto detail = kitchenService.getKitchenDetailBySlug(slug, null);
+        assertThat(detail).isNotNull();
+        assertThat(detail.getKitchen().getSlug()).isEqualTo(newSlug);
+
+        Kitchen reloaded = reload();
+        assertThat(reloaded.getSlug()).isEqualTo(newSlug);
+    }
+
+    // ONB-19: old-slug alias redirect behavior
+    @Test
+    @DisplayName("old slug 301-reroutes to canonical path after admin slug change")
+    void oldSlugRedirectsToCanonicalPath() {
+        String oldSlug = kitchen.getSlug();
+        String newSlug = "updated-kitchen-" + tag;
+
+        adminService.changeKitchenSlug(kitchen.getId(), newSlug, actingAdmin);
+
+        String canonical = slugService.canonicalSlugForPublic(oldSlug, null);
+        assertThat(canonical).isEqualTo("/kitchen/" + newSlug);
+
+        String newCanonical = slugService.canonicalSlugForPublic(newSlug, null);
+        assertThat(newCanonical).isNull();
+    }
+
+    // ONB-19: admin marketplace links canonical path
+    @Test
+    @DisplayName("admin marketplace links always point to canonical /kitchens route")
+    void adminMarketplaceLinksCanonicalPath() {
+        Map<String, Object> links = adminService.marketplaceLinks();
+
+        assertThat(links.get("marketplacePath")).isEqualTo("/kitchens");
+        assertThat(String.valueOf(links.get("marketplaceUrl"))).endsWith("/kitchens");
+        assertThat(links).containsKey("baseUrl");
+    }
+
+    // def-04: seller cannot change the slug; renaming the display keeps it intact
+    @Test
+    @DisplayName("seller cannot change the slug; renaming the display keeps it intact")
+    void sellerCannotChangeSlugAndRenameKeepsSlug() {
+        KitchenUpdateDto hijack = new KitchenUpdateDto();
+        hijack.setName("new-slug");
+
+        assertThrows(IllegalArgumentException.class,
+                () -> sellerService.updateKitchen(kitchen.getId(), hijack, seller));
+
+        KitchenUpdateDto rename = new KitchenUpdateDto();
+        rename.setDisplayName("Renamed Kitchen " + tag);
+        sellerService.updateKitchen(kitchen.getId(), rename, seller);
+
+        Kitchen reloaded = reload();
+        assertThat(reloaded.getSlug()).isEqualTo(slug);
+        assertThat(reloaded.getDisplayName()).isEqualTo("Renamed Kitchen " + tag);
+    }
+
+    @Test
+    @DisplayName("unknown slug returns plain 404, not society restriction message")
+    void unknownSlugIsConcealedNotFound() {
+        assertThatThrownBy(() -> kitchenService.getKitchenDetailBySlug("no-such-" + tag, null))
+                .isExactlyInstanceOf(KitchenNotFoundException.class);
+    }
+
+    // past offerings test (existing)
+    @Test
+    @DisplayName("past offerings are excluded from available today and preorder on storefront")
 
         Product pastItem = new Product();
         pastItem.setName("Yesterday Special " + tag);
@@ -544,4 +611,6 @@ class KitchenPublicSlugTest {
                 .contains("Tomorrow Feast " + tag)
                 .doesNotContain("Past Preorder " + tag);
     }
-}
+
+    @Test
+    @DisplayName("resubmitApplication protected fields ignored - slug unchanged")

@@ -753,6 +753,9 @@ public class OrderService {
      * {@code seller}. That is what stops a tampered orderId from reaching
      * another seller's order.</p>
      *
+
+
+    // ==================== DELIVERY COMPLETION (V1) ====================
      * <p>Payment status, order status, quantities and totals are never touched,
      * so marking an unpaid order Delivered (and vice versa) stays legal.</p>
      *

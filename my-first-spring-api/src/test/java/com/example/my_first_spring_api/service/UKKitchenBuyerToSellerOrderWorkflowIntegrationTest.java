@@ -246,6 +246,7 @@ public class UKKitchenBuyerToSellerOrderWorkflowIntegrationTest {
         // 6. Verify duplicate submission prevention
         assertThatThrownBy(() -> orderService.placeOrder(
                 PaymentStatus.PAID,
+                null,
                 buyerDetails,
                 "Duplicate attempt",
                 buyerSession

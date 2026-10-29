@@ -287,7 +287,7 @@ public class SocioMartV1Flow1SmokeTest {
         dto1.setMaxQuantity(10);
         dto1.setOrderWindowStart("06:00");
         dto1.setOrderWindowEnd("23:59");
-        dto1.setReadyByTime(today.atTime(23, 30).toString());
+        dto1.setReadyByTime(tomorrow.atTime(23, 30).toString());
         ProductDto p1_lunch = sellerService.createProduct(kitchen1.getId(), dto1, seller1);
 
         // Seller 1 Offering 2: Today's Dinner Biryani (Kitchen)
@@ -300,7 +300,7 @@ public class SocioMartV1Flow1SmokeTest {
         dto2.setMaxQuantity(10);
         dto2.setOrderWindowStart("06:00");
         dto2.setOrderWindowEnd("23:59");
-        dto2.setReadyByTime(today.atTime(20, 0).toString());
+        dto2.setReadyByTime(tomorrow.atTime(20, 0).toString());
         ProductDto p1_dinner = sellerService.createProduct(kitchen1.getId(), dto2, seller1);
 
         // Seller 1 Offering 3: Tomorrow's Pre-order Rajma Chawal (Kitchen)
@@ -326,7 +326,7 @@ public class SocioMartV1Flow1SmokeTest {
         dto4.setMaxQuantity(20);
         dto4.setOrderWindowStart("06:00");
         dto4.setOrderWindowEnd("23:59");
-        dto4.setReadyByTime(today.atTime(18, 0).toString());
+        dto4.setReadyByTime(tomorrow.atTime(18, 0).toString());
         ProductDto p2_pickle = sellerService.createProduct(kitchen2.getId(), dto4, seller2);
 
         // Seller 2 Offering 5: Today's Spice Mix (Homemade Product)
@@ -339,7 +339,7 @@ public class SocioMartV1Flow1SmokeTest {
         dto5.setMaxQuantity(15);
         dto5.setOrderWindowStart("06:00");
         dto5.setOrderWindowEnd("23:59");
-        dto5.setReadyByTime(today.atTime(18, 0).toString());
+        dto5.setReadyByTime(tomorrow.atTime(18, 0).toString());
         ProductDto p2_spices = sellerService.createProduct(kitchen2.getId(), dto5, seller2);
 
         // Seller 2 Offering 6: Tomorrow's Pre-order Amla Murabba (Homemade Product)
@@ -405,7 +405,7 @@ public class SocioMartV1Flow1SmokeTest {
         bd1.setBuilding("Tower A");
         bd1.setFlatHouseNumber("101");
 
-        OrderDto order1 = orderService.placeOrder(PaymentStatus.PENDING, bd1, "Please pack separately", buyer1Session);
+        OrderDto order1 = orderService.placeOrder(PaymentStatus.PENDING, null, bd1, "Please pack separately", buyer1Session);
         assertThat(order1.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
         assertThat(order1.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(order1.getDisplayStatus()).isEqualTo("Confirmed · Buyer says paid");
@@ -444,7 +444,7 @@ public class SocioMartV1Flow1SmokeTest {
         bd2.setBuilding("Tower B");
         bd2.setFlatHouseNumber("202");
 
-        OrderDto order2 = orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, bd2, "Less spicy", buyer2Session);
+        OrderDto order2 = orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, null, bd2, "Less spicy", buyer2Session);
         assertThat(order2.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
         assertThat(order2.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(order2.getDisplayStatus()).isEqualTo("Confirmed · Buyer says paid");
@@ -479,7 +479,7 @@ public class SocioMartV1Flow1SmokeTest {
         bd3.setBuilding("Tower C");
         bd3.setFlatHouseNumber("303");
 
-        OrderDto order3 = orderService.placeOrder(PaymentStatus.PENDING, bd3, "Handle with care glass jar", buyer3Session);
+        OrderDto order3 = orderService.placeOrder(PaymentStatus.PENDING, null, bd3, "Handle with care glass jar", buyer3Session);
         assertThat(order3.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
         assertThat(order3.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
         assertThat(order3.getDisplayStatus()).isEqualTo("Confirmed · Buyer says paid");
@@ -588,5 +588,109 @@ public class SocioMartV1Flow1SmokeTest {
         // Idempotency check: Running midnight expiry again does not corrupt state or crash
         midnightExpiryJob.runForDate(tomorrow);
         assertThat(orderRepository.findById(order1.getId()).orElseThrow().getOrderStatus()).isEqualTo(OrderStatus.DELIVERED);
+    }
+@Test
+    @DisplayName("ONB-26-28: E2E seller resubmission flow with slug immutability guarantee")
+    void givenSellerApplication_whenAdminRequestsChanges_thenSellerResubmitsWithSameSlug_thenAdminApproves() throws Exception {
+        // PHASE 1: Seller registers and submits application
+        String initialSlug = "test-kitchen-123";
+        String newSlug = "test-kitchen-123-modified";
+
+        User seller = new User();
+        seller.setName("Test Seller");
+        seller.setMobileNumber("9876543210");
+        seller.setPassword(SELLER_PASSWORD);
+        seller.setRole(UserRole.SELLER);
+        seller = userRepository.save(seller);
+
+        Kitchen kitchen = new Kitchen();
+        kitchen.setName("Test Kitchen");
+        kitchen.setSlug(initialSlug);
+        kitchen.setDisplayName("Test Kitchen Display");
+        kitchen.setSeller(seller);
+        kitchen = kitchenRepository.save(kitchen);
+
+        ProductDto createDto = new ProductDto();
+        createDto.setName("Test Product");
+        createDto.setDescription("A test product");
+        createDto.setPrice(new BigDecimal("100"));
+        createDto.setQuantity(50);
+        createDto.setReadyByTime("18:00");
+        createDto.setOrderWindowStart("09:00");
+        createDto.setOrderWindowEnd("21:00");
+        createDto.setMaxQuantity(100);
+        sellerService.createProduct(kitchen.getId(), createDto, seller);
+
+        seller.setSellerApprovalStatus("PENDING");
+        seller.setSellerStatusReason("Initial application");
+        seller = userRepository.save(seller);
+
+        // PHASE 2: Admin requests changes
+        Map<String, Object> adminBody = new HashMap<>();
+        adminBody.put("reason", "Kitchen needs rebranding");
+        adminBody.put("kitchenSlug", newSlug);
+
+        assertThatThrownBy(() -> adminService.requestSellerChanges(seller, adminBody))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Slug cannot be changed during resubmission");
+
+        assertThat(kitchen.getSlug()).isEqualTo(initialSlug);
+
+        Map<String, Object> validAdminBody = new HashMap<>();
+        validAdminBody.put("reason", "Kitchen needs rebranding - valid reason");
+        validAdminBody.put("kitchenSlug", initialSlug);
+
+        adminService.requestSellerChanges(seller, validAdminBody);
+
+        assertThat(seller.getSellerApprovalStatus()).isEqualTo(SellerApprovalStatus.CHANGES_REQUESTED);
+        assertThat(seller.getSellerStatusReason()).isEqualTo("Kitchen needs rebranding - valid reason");
+
+        // PHASE 3: Seller resubmits with same slug
+        Map<String, Object> resubmitBodyChangedSlug = new HashMap<>();
+        resubmitBodyChangedSlug.put("reason", "Updated application");
+        resubmitBodyChangedSlug.put("kitchenSlug", "different-slug-value");
+
+        assertThatThrownBy(() -> sellerService.resubmitApplication(seller, resubmitBodyChangedSlug))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Slug cannot be changed during resubmission");
+
+        Map<String, Object> resubmitBodySameSlug = new HashMap<>();
+        resubmitBodySameSlug.put("reason", "Updated application with same slug");
+        resubmitBodySameSlug.put("kitchenSlug", initialSlug);
+
+        sellerService.resubmitApplication(seller, resubmitBodySameSlug);
+
+        assertThat(seller.getSellerApprovalStatus()).isEqualTo(SellerApprovalStatus.PENDING);
+        assertThat(seller.getSellerStatusReason()).isEqualTo("Updated application with same slug");
+
+        // PHASE 4: Admin approves the resubmitted application
+        Map<String, Object> approveBody = new HashMap<>();
+        approveBody.put("approvalStatus", "APPROVED");
+
+        AuthResponseDto authResponse = adminService.approveSellerApplication(seller.getId(), approveBody);
+
+        assertThat(authResponse.getSellerApprovalStatus()).isEqualTo("APPROVED");
+        assertThat(authResponse.getSellerStatusReason()).isEqualTo("Updated application with same slug");
+
+        // PHASE 5: Collision behavior - duplicate slug rejection
+        Kitchen duplicateKitchen = new Kitchen();
+        duplicateKitchen.setName("Duplicate Kitchen");
+        duplicateKitchen.setSlug(initialSlug);
+        duplicateKitchen.setDisplayName("Duplicate Kitchen Display");
+
+        assertThatThrownBy(() -> kitchenRepository.save(duplicateKitchen))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Slug already exists");
+
+        Kitchen newKitchen = new Kitchen();
+        newKitchen.setName("New Kitchen");
+        newKitchen.setSlug("new-kitchen-slug-456");
+        newKitchen.setDisplayName("New Kitchen Display");
+
+        kitchenRepository.save(newKitchen);
+
+        kitchenRepository.delete(kitchen);
+        kitchenRepository.delete(newKitchen);
+        userRepository.delete(seller);
     }
 }

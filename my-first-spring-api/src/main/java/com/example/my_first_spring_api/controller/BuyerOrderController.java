@@ -65,8 +65,8 @@ public class BuyerOrderController {
             }
         }
         return ResponseEntity.ok(orderService.placeOrder(
-                request.getPaymentStatus(), request.getBuyerDetails(),
-                request.getCustomInstructions(), session));
+                request.getPaymentStatus(), request.getPaymentMethod(),
+                request.getBuyerDetails(), request.getCustomInstructions(), session));
     }
 
     @GetMapping({"/my", ""})
