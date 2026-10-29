@@ -203,7 +203,7 @@ public class MultiUserConcurrencyAndAdversarialSecurityTest {
         // Assert total calculated from server price (2 * 250 = 500), ignoring client manipulation
         assertThat(draft.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(500));
 
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, null, null, buyerSession);
+        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, null, null, null, buyerSession);
         assertThat(placed.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(500));
 
         // Verify persisted order
@@ -267,7 +267,7 @@ public class MultiUserConcurrencyAndAdversarialSecurityTest {
                 try {
                     startLatch.await(); // Simultaneous release of all 10 threads
                     if (index > 0) Thread.sleep(index * 15L); // prevent H2 table lock contention
-                    orderService.placeOrder(PaymentStatus.PAID, null, null, session);
+                    orderService.placeOrder(PaymentStatus.PAID, null, null, null, session);
                     successfulOrders.incrementAndGet();
                 } catch (Exception e) {
                     System.err.println("Thread failure: " + e.getClass().getSimpleName() + " - " + e.getMessage());
@@ -336,7 +336,7 @@ public class MultiUserConcurrencyAndAdversarialSecurityTest {
                         req.setQuantity(1);
 
                         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(req), session);
-                        orderService.placeOrder(PaymentStatus.PAID, null, null, session);
+                        orderService.placeOrder(PaymentStatus.PAID, null, null, null, session);
                         successes.incrementAndGet();
                     } catch (Exception ignored) {
                     } finally {
@@ -382,7 +382,7 @@ public class MultiUserConcurrencyAndAdversarialSecurityTest {
         req.setQuantity(3);
 
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(req), buyerSession);
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, null, null, buyerSession);
+        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, null, null, null, buyerSession);
 
         Product afterOrder = productRepository.findById(product.getId()).orElseThrow();
         assertThat(afterOrder.getRemainingQuantity()).isEqualTo(7);

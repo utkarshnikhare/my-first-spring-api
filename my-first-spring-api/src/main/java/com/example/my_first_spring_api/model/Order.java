@@ -31,6 +31,9 @@ public class Order {
     @Column(name = "payment_status", nullable = false)
     private PaymentStatus paymentStatus = PaymentStatus.PENDING;
 
+    @Column(name = "payment_method", length = 20)
+    private String paymentMethod;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "order_status", nullable = false)
     private OrderStatus orderStatus = OrderStatus.DRAFT;
@@ -303,6 +306,10 @@ public class Order {
     public void setDeliveryAddress(String deliveryAddress) {
         this.deliveryAddress = deliveryAddress != null ? deliveryAddress : "";
     }
+    public void setPaymentMethod(String paymentMethod) {
+        this.paymentMethod = paymentMethod != null ? paymentMethod : "";
+    }
+
     @Transient
     public String getSociety() {
         return buyer != null ? buyer.getSociety() : null;

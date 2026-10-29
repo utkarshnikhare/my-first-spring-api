@@ -94,7 +94,7 @@ class OrderNumberUniquenessTest {
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("BUYER_USER", buyerId);
         orders.createOrUpdateDraftOrder(kitchenId, List.of(item()), session);
-        return orders.placeOrder(PaymentStatus.WILL_PAY_LATER, null, null, session).getOrderNumber();
+        return orders.placeOrder(PaymentStatus.WILL_PAY_LATER, null, null, null, session).getOrderNumber();
     }
 
     private OrderItemRequest item() {

@@ -1103,16 +1103,17 @@ function isRecoverableOrderSessionError(err) {
 }
 
 /** Place the draft order directly with the selected payment status. */
-async function placeOrderWithStatus(paymentStatus) {
+async function placeOrderWithStatus(paymentStatus, paymentMethod) {
     if (state.placingOrder) return;
     if (!state.user || !state.user.authenticated || !isBuyer(state.user)) {
-        return requireAuth(function () { return placeOrderWithStatus(paymentStatus); });
+        return requireAuth(function () { return placeOrderWithStatus(paymentStatus, paymentMethod); });
     }
     var note = (state.pendingCheckout && state.pendingCheckout.note) || '';
     state.placingOrder = true;
     try {
         await withAuthGate(async function () {
             var submittedPaymentStatus = paymentStatus === 'WILL_PAY_LATER' ? 'PENDING' : paymentStatus;
+            var submittedPaymentMethod = paymentMethod || 'upi';
             var buyerDetails = null;
             if (state.user) {
                 var flatInput = document.getElementById('checkoutFlat');
@@ -1143,6 +1144,7 @@ async function placeOrderWithStatus(paymentStatus) {
                     return { productId: i.productId, quantity: i.qty, scheduledDate: i.scheduledDate || null, scheduledSlot: i.scheduledSlot || null };
                 }) : null,
                 paymentStatus: submittedPaymentStatus,
+                paymentMethod: submittedPaymentMethod,
                 customInstructions: note,
                 specialInstructions: note,
                 deliveryAddress: buyerDetails ? buyerDetails.deliveryAddress : '',
@@ -1171,10 +1173,36 @@ async function placeOrderWithStatus(paymentStatus) {
                 // attempt created nothing. Sign back in as this buyer, rebuild
                 // the order from the cart and place once more.
                 // Bounded: a single recovery, never a loop.
-                if (!isRecoverableOrderSessionError(err)) throw err;
-                if (!(await restoreBuyerSession())) throw err;
-                if (!(await rebuildDraftFromCart())) throw err;
-                placed = await api('/api/buyer/orders/place', { method: 'POST', body: placeBody });
+                if (!isRecoverableOrderSessionError(err)) {
+                    toast(err.message, 'error');
+                    state.placingOrder = false;
+                    throw err;
+                }
+                if (!(await restoreBuyerSession())) {
+                    toast(err.message, 'error');
+                    state.placingOrder = false;
+                    throw err;
+                }
+                if (!(await rebuildDraftFromCart())) {
+                    toast(err.message, 'error');
+                    state.placingOrder = false;
+                    throw err;
+                }
+                // Retry the placement after recovery
+                try {
+                    placed = await api('/api/buyer/orders/place', { method: 'POST', body: placeBody });
+                    // Server confirmed the order - show success feedback
+                    toast('Order placed successfully', 'success');
+                    clearCart();
+                    state.pendingCheckout = null;
+                    state.lastOrder = placed;
+                    navigate('#/payment-success');
+                } catch (retryErr) {
+                    toast(retryErr.message, 'error');
+                    state.placingOrder = false;
+                    // Restore UI safely after failure so a legitimate retry is possible
+                    throw retryErr;
+                }
             }
             // Only now, with the backend's own response, is the order real.
             clearCart();

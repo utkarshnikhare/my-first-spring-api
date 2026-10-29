@@ -8,6 +8,7 @@ import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.model.AdminAuditLog;
 import com.example.my_first_spring_api.AppTimeZone;
+import com.example.my_first_spring_api.dto.AuthResponseDto;
 import com.example.my_first_spring_api.dto.ProductDto;
 import com.example.my_first_spring_api.model.Area;
 import com.example.my_first_spring_api.model.Kitchen;
@@ -32,6 +33,7 @@ import org.springframework.test.context.ActiveProfiles;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -456,7 +458,7 @@ class KitchenPublicSlugTest {
         hijack.setName("hijacked-" + tag);
         assertThatThrownBy(() -> sellerService.updateKitchen(kitchen.getId(), hijack, seller))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Kitchen URL name is a protected field and cannot be changed");
+                .hasMessage("Name is a protected field and cannot be changed");
 
         KitchenUpdateDto rename = new KitchenUpdateDto();
         rename.setDisplayName("Renamed Kitchen " + tag);
@@ -493,9 +495,54 @@ class KitchenPublicSlugTest {
         assertThat(links).containsKey("baseUrl");
     }
 
+    // ONB-18: canonical /kitchens route verification
     @Test
-    @DisplayName("offerings from past dates are excluded from available today and preorder on storefront")
-    void pastOfferingsAreExcludedFromAvailableTodayOnStorefront() {
+    @DisplayName("canonical /kitchens route remains accessible after slug change")
+    void canonicalKitchensRouteAfterSlugChange() {
+        User actingAdmin = admin();
+        String newSlug = "new-kitchen-" + tag;
+        adminService.changeKitchenSlug(kitchen.getId(), newSlug, actingAdmin);
+
+        KitchenDetailDto detail = kitchenService.getKitchenDetailBySlug(slug, null);
+        assertThat(detail).isNotNull();
+        assertThat(detail.getKitchen().getSlug()).isEqualTo(newSlug);
+
+        Kitchen reloaded = reload();
+        assertThat(reloaded.getSlug()).isEqualTo(newSlug);
+    }
+
+    // ONB-19: old-slug alias redirect behavior
+    @Test
+    @DisplayName("old slug 301-reroutes to canonical path after admin slug change")
+    void oldSlugRedirectsToCanonicalPath() {
+        User actingAdmin = admin();
+        String oldSlug = kitchen.getSlug();
+        String newSlug = "updated-kitchen-" + tag;
+
+        adminService.changeKitchenSlug(kitchen.getId(), newSlug, actingAdmin);
+
+        String canonical = slugService.canonicalSlugForPublic(oldSlug, null);
+        assertThat(canonical).isEqualTo("/kitchen/" + newSlug);
+
+        String newCanonical = slugService.canonicalSlugForPublic(newSlug, null);
+        assertThat(newCanonical).isNull();
+    }
+
+    // ONB-19: admin marketplace links canonical path
+    @Test
+    @DisplayName("admin marketplace links always point to canonical /kitchens route")
+    void adminMarketplaceLinksCanonicalPath() {
+        Map<String, Object> links = adminService.marketplaceLinks();
+
+        assertThat(links.get("marketplacePath")).isEqualTo("/kitchens");
+        assertThat(String.valueOf(links.get("marketplaceUrl"))).endsWith("/kitchens");
+        assertThat(links).containsKey("baseUrl");
+    }
+
+    // past offerings test (existing)
+    @Test
+    @DisplayName("past offerings are excluded from available today and preorder on storefront")
+    void testPreorderProductsExcludedFromAvailableTodayAndPreorderOnStorefront() {
         LocalDate today = LocalDate.now(AppTimeZone.ZONE);
 
         Product pastItem = new Product();
@@ -544,4 +591,26 @@ class KitchenPublicSlugTest {
                 .contains("Tomorrow Feast " + tag)
                 .doesNotContain("Past Preorder " + tag);
     }
+
+    @Test
+    @DisplayName("resubmitApplication protected fields ignored - slug unchanged")
+    void resubmitApplicationProtectedFieldsIgnoredSlugUnchanged() {
+        // Arrange: resubmit with the same slug as the existing kitchen
+        seller.setSellerApprovalStatus(SellerApprovalStatus.CHANGES_REQUESTED);
+        userRepository.save(seller);
+        Kitchen kitchen = this.kitchen;
+
+        Map<String, Object> resubmitBody = new HashMap<>();
+        resubmitBody.put("reason", "Resubmission test");
+        resubmitBody.put("kitchenSlug", kitchen.getSlug());
+
+        // Act: resubmit with same slug - should succeed, slug unchanged
+        AuthResponseDto result = sellerService.resubmitApplication(seller, resubmitBody);
+
+        // Assert: slug is protected and remains unchanged, seller status reset to PENDING
+        assertThat(result.getSellerApprovalStatus()).isEqualTo(SellerApprovalStatus.PENDING);
+        Kitchen updated = kitchenRepository.findById(kitchen.getId()).orElse(null);
+        assertThat(updated.getSlug()).isEqualTo(kitchen.getSlug());
+    }
+
 }

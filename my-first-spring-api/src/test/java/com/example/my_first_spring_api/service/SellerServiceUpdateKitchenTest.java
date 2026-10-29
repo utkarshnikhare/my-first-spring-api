@@ -179,4 +179,18 @@ class SellerServiceUpdateKitchenTest {
         assertThrows(SellerNotAuthorizedException.class,
                 () -> sellerService.updateKitchen(1L, validDto(), otherUser()));
     }
+
+    @Test
+    void updateKitchenRejectsAllProtectedFields() {
+        Kitchen kitchen = ownedKitchen();
+        when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
+
+        KitchenUpdateDto dto = validDto();
+        dto.setSociety("Different Society");
+        dto.setBuilding("Different Building");
+        dto.setName("new-name");
+
+        assertThrows(IllegalArgumentException.class,
+                () -> sellerService.updateKitchen(1L, dto, seller()));
+    }
 }

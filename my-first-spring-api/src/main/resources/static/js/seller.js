@@ -2299,7 +2299,7 @@ function offeringFormHtml(t, opts) {
     var mode = opts.mode || S.offeringFor || 'today';
     var lockAttr = locked ? ' disabled' : '';
     var todayIso = sellerDate('today');
-    var chosenDate = isEdit ? (t.availableDate || todayIso) : (mode === 'tomorrow' ? sellerDate('tomorrow') : (mode === 'choose' && t.availableDate ? t.availableDate : todayIso));
+    var chosenDate = isEdit ? (t.availableDate || todayIso) : (mode === 'tomorrow' ? sellerDate('tomorrow') : (mode === 'choose' ? (t.availableDate || todayIso) : todayIso));
     var selectedUnit = t.priceUnit || 'Per Plate';
     var categoryValues = String(t.category || '').split(',').map(function (c) { return c.trim().toUpperCase(); }).filter(Boolean);
 

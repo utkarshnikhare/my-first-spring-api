@@ -135,7 +135,7 @@ class BuyerCheckoutSessionRecoveryTest {
         MockHttpSession session = buyerSession();
         draft(session);
 
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, null, null, session);
+        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, null, null, null, session);
 
         assertThat(placed.getId()).isNotNull();
         assertThat(placed.getOrderNumber()).isNotBlank();
@@ -165,7 +165,7 @@ class BuyerCheckoutSessionRecoveryTest {
 
         // Must be refused - and refused as an AUTH failure, so the frontend has a
         // recovery path, instead of a 404 that dead-ends the checkout.
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, session))
+        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, null, session))
                 .isInstanceOf(BuyerNotAuthenticatedException.class);
 
         // Nothing was created and no stock was consumed.
@@ -214,7 +214,7 @@ class BuyerCheckoutSessionRecoveryTest {
         draft(session);
         session.setAttribute(BuyerService.BUYER_SESSION_KEY, seller.getId());
 
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, session))
+        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, null, session))
                 .isInstanceOf(BuyerNotAuthenticatedException.class)
                 .isNotInstanceOf(OrderNotFoundException.class);
 
@@ -232,12 +232,12 @@ class BuyerCheckoutSessionRecoveryTest {
         OrderDto abandoned = draft(session);
 
         session.setAttribute(BuyerService.BUYER_SESSION_KEY, seller.getId());
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, session))
+        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, null, session))
                 .isInstanceOf(BuyerNotAuthenticatedException.class);
 
         session.setAttribute(BuyerService.BUYER_SESSION_KEY, buyer.getId());
         OrderDto rebuilt = draft(session);
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, null, null, session);
+        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, null, null, null, session);
 
         assertThat(placed.getId()).isNotNull();
         assertThat(placed.getBuyer().getMobileNumber()).isEqualTo(buyer.getMobileNumber());
@@ -259,7 +259,7 @@ class BuyerCheckoutSessionRecoveryTest {
 
         assertThatThrownBy(() -> draft(session))
                 .isInstanceOf(BuyerNotAuthenticatedException.class);
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, session))
+        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, null, session))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(ordersInThisTest()).isZero();
         assertThat(products.findById(product.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(12);
@@ -270,11 +270,11 @@ class BuyerCheckoutSessionRecoveryTest {
         MockHttpSession session = buyerSession();
         draft(session);
 
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, null, null, session);
+        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, null, null, null, session);
         assertThat(placed.getId()).isNotNull();
 
         // Second click on the consumed draft session.
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, session))
+        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, null, session))
                 .isInstanceOf(IllegalArgumentException.class);
 
         assertThat(nonDraftOrderCount()).isEqualTo(1);

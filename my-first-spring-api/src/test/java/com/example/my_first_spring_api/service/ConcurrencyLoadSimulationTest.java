@@ -134,7 +134,7 @@ public class ConcurrencyLoadSimulationTest {
                     bd.setBuilding(b.getBuilding());
                     bd.setFlatHouseNumber(b.getFlatHouseNumber());
 
-                    OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, bd, "concurrency test " + buyerCount, s);
+                    OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, bd, "concurrency test " + buyerCount, s);
                     if (placed != null && placed.getOrderStatus() == OrderStatus.ORDERED) {
                         successCount.incrementAndGet();
                     }
@@ -226,7 +226,7 @@ public class ConcurrencyLoadSimulationTest {
                     bd.setBuilding(buyer.getBuilding());
                     bd.setFlatHouseNumber(buyer.getFlatHouseNumber());
 
-                    OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, bd, "duplicate test", sharedSession);
+                    OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, bd, "duplicate test", sharedSession);
                     if (placed != null) successCount.incrementAndGet();
                 } catch (Exception ex) {
                     rejectedCount.incrementAndGet();
@@ -300,7 +300,7 @@ public class ConcurrencyLoadSimulationTest {
         bd.setBuilding(buyer.getBuilding());
         bd.setFlatHouseNumber(buyer.getFlatHouseNumber());
 
-        final OrderDto placedOrder = orderService.placeOrder(PaymentStatus.PENDING, bd, "cancel test", session);
+        final OrderDto placedOrder = orderService.placeOrder(PaymentStatus.PENDING, null, bd, "cancel test", session);
         assertThat(placedOrder).isNotNull();
 
         // Stock was 10, consumed 3 -> remaining is 7

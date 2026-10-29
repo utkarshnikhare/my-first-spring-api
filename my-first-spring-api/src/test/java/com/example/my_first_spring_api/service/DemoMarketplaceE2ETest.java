@@ -124,7 +124,7 @@ class DemoMarketplaceE2ETest {
     /** Draft then place, exactly as the buyer app does. */
     private OrderDto order(MockHttpSession session, Long kitchenId, List<OrderItemRequest> items) {
         orderService.createOrUpdateDraftOrder(kitchenId, items, session);
-        return orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+        return orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
     }
 
     private static OrderItemRequest item(Long productId, int qty) {
@@ -368,7 +368,7 @@ class DemoMarketplaceE2ETest {
         if (!start.await(10, TimeUnit.SECONDS)) {
             throw new IllegalStateException("Timed out waiting for concurrent checkout start.");
         }
-        return orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+        return orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
     }
 
     @Test

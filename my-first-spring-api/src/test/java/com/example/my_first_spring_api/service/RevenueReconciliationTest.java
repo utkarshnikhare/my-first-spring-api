@@ -123,7 +123,7 @@ class RevenueReconciliationTest {
     void verifiedPaidOrderContributesToRealizedRevenue() {
         var session = buyerSession();
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(itemRequest(product1.getId(), 2)), session);
-        var placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+        var placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
 
         var updated = orderService.markOrderAsPaid(placed.getId(), seller);
 
@@ -139,7 +139,7 @@ class RevenueReconciliationTest {
     void buyerClaimedPaymentDoesNotCountAsVerifiedRevenue() {
         var session = buyerSession();
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(itemRequest(product1.getId(), 1)), session);
-        var placed = orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, null, null, session);
+        var placed = orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, null, null, null, session);
 
         var dashboard = adminService.dashboard();
         var paidValue = ((Number) dashboard.get("paidValue")).doubleValue();
@@ -156,7 +156,7 @@ class RevenueReconciliationTest {
     void unpaidPendingOrderContributesZeroToVerifiedRevenue() {
         var session = buyerSession();
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(itemRequest(product1.getId(), 1)), session);
-        orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+        orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
 
         var dashboard = adminService.dashboard();
         var paidValue = ((Number) dashboard.get("paidValue")).doubleValue();
@@ -170,7 +170,7 @@ class RevenueReconciliationTest {
     void cancelledOrderExcludedFromRevenueRegardlessOfPaymentStatus() {
         var session = buyerSession();
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(itemRequest(product1.getId(), 1)), session);
-        var placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+        var placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
 
         orderService.markOrderAsPaid(placed.getId(), seller);
         orderService.cancelOrder(placed.getId(), buyer);
@@ -190,7 +190,7 @@ class RevenueReconciliationTest {
     void deliveryStatusDoesNotChangePaymentVerification() {
         var session = buyerSession();
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(itemRequest(product1.getId(), 1)), session);
-        var placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+        var placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
 
         orderService.updateDeliveryStatus(placed.getId(), DeliveryStatus.DELIVERED, seller);
 
@@ -207,17 +207,17 @@ class RevenueReconciliationTest {
         var session = buyerSession();
 
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(itemRequest(product1.getId(), 2)), session);
-        var order1 = orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+        var order1 = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
         orderService.markOrderAsPaid(order1.getId(), seller);
 
         orderService.createOrUpdateDraftOrder(kitchen2.getId(), List.of(itemRequest(product2.getId(), 1)), session);
-        var order2 = orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+        var order2 = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
 
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(itemRequest(product1.getId(), 1)), session);
-        var order3 = orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, null, null, session);
+        var order3 = orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, null, null, null, session);
 
         orderService.createOrUpdateDraftOrder(kitchen2.getId(), List.of(itemRequest(product2.getId(), 1)), session);
-        var order4 = orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+        var order4 = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
         orderService.markOrderAsPaid(order4.getId(), seller2);
         orderService.cancelOrder(order4.getId(), buyer);
 
@@ -251,7 +251,7 @@ class RevenueReconciliationTest {
 
         var session = buyerSession();
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(itemRequest(preciseProduct.getId(), 3)), session);
-        var placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+        var placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
         orderService.markOrderAsPaid(placed.getId(), seller);
 
         var dashboard = adminService.dashboard();
@@ -264,7 +264,7 @@ class RevenueReconciliationTest {
     void analyticsEventsMatchDashboardRevenue() {
         var session = buyerSession();
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(itemRequest(product1.getId(), 1)), session);
-        var placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+        var placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
         orderService.markOrderAsPaid(placed.getId(), seller);
 
         List<AnalyticsEvent> events = analyticsEventRepository.findAll();
@@ -302,7 +302,7 @@ class RevenueReconciliationTest {
 
         var session = buyerSession();
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(itemRequest(product1.getId(), 1)), session);
-        var placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+        var placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
         orderService.markOrderAsPaid(placed.getId(), seller);
 
         var dashboard = adminService.dashboard();

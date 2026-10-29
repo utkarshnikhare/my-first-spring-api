@@ -131,7 +131,7 @@ class BuyerOrderBlockerRegressionTest {
         MockHttpSession session = buyerSession();
         assertThat(draft(session).getId()).isNotNull();
 
-        var placed = orderService.placeOrder(PaymentStatus.PAID, null, "note", session);
+        var placed = orderService.placeOrder(PaymentStatus.PAID, null, null, "note", session);
 
         assertThat(placed.getId()).isNotNull();
         assertThat(placed.getOrderNumber()).isNotBlank();
@@ -154,12 +154,12 @@ class BuyerOrderBlockerRegressionTest {
         draft(session);
 
         long ordersBefore = orders.count();
-        orderService.placeOrder(PaymentStatus.PAID, null, null, session);
+orderService.placeOrder(PaymentStatus.PAID, null, null, null, session);
         // The draft row is reused as the placed order - no extra row.
         assertThat(orders.count()).isEqualTo(ordersBefore);
 
         // Second click on the same (already consumed) draft session.
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, session))
+assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, null, session))
                 .isInstanceOf(IllegalArgumentException.class);
 
         assertThat(orders.count()).isEqualTo(ordersBefore);
@@ -195,7 +195,7 @@ class BuyerOrderBlockerRegressionTest {
         buyer.setSociety("Green Valley");
         buyer = users.saveAndFlush(buyer);
 
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, session))
+assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, null, session))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("does not serve your selected area");
 
@@ -215,7 +215,7 @@ class BuyerOrderBlockerRegressionTest {
         MockHttpSession session = buyerSession();
         draft(session);
 
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, session))
+assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, null, session))
                 .isInstanceOf(BuyerProfileIncompleteException.class);
 
         assertThat(products.findById(product.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(10);

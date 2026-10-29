@@ -248,7 +248,7 @@ class OrderServiceValidationTest {
         when(httpSession.getAttribute(OrderService.DRAFT_ORDER_SESSION_KEY)).thenReturn(46L);
         when(orderRepository.findByIdForUpdate(46L)).thenReturn(Optional.of(foreignDraft));
 
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, null, null, httpSession))
+        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, null, null, null, httpSession))
                 .isInstanceOf(OrderNotFoundException.class);
         verify(orderRepository, never()).delete(any());
     }
@@ -305,7 +305,7 @@ class OrderServiceValidationTest {
         when(orderRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(mockOrder));
 
         assertThrows(BuyerProfileIncompleteException.class, () -> {
-            orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, null, null, httpSession);
+            orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, null, null, null, httpSession);
         });
     }
 
@@ -371,7 +371,7 @@ class OrderServiceValidationTest {
         details.setFlatHouseNumber("A-101");
         details.setDeliveryAddress("A-101, Tower 1, Sunshine Society");
 
-        OrderDto placedDto = orderService.placeOrder(PaymentStatus.PENDING, details, "Leave at door", httpSession);
+        OrderDto placedDto = orderService.placeOrder(PaymentStatus.PENDING, "COD", details, "Leave at door", httpSession);
 
         assertThat(placedDto).isNotNull();
         assertThat(placedDto.getId()).isEqualTo(100L);
