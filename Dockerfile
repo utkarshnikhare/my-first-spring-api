@@ -5,7 +5,7 @@ ENV MAVEN_OPTS="-Xmx512m -XX:MaxMetaspaceSize=128m"
 
 # Cache dependencies: copy pom first, download, then add sources
 COPY my-first-spring-api/pom.xml .
-RUN mvn -B -q dependency:go-offline
+RUN mvn -B -e dependency:go-offline
 
 COPY my-first-spring-api/src ./src
 RUN mvn -B -q -DskipTests package
