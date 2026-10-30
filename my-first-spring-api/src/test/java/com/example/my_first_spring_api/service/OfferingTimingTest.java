@@ -5,9 +5,11 @@ import com.example.my_first_spring_api.model.Product;
 import com.example.my_first_spring_api.model.SellerApprovalStatus;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.model.UserRole;
+import com.example.my_first_spring_api.dto.ProductDto;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,6 +35,39 @@ class OfferingTimingTest {
     void chosenFutureDateIsAccepted() {
         OfferingTiming.validateNewOffering(TODAY.plusDays(3), true, "18:00", "23:58",
                 "2026-09-27T23:59", TODAY, LocalTime.of(12, 0));
+    }
+
+    @Test
+    void openingTodayWithNoTimeUsesAuthoritativePublicationTime() {
+        assertThat(OfferingTiming.validateOrdersOpenFrom(TODAY, null, TODAY.plusDays(1),
+                "17:00", "2026-09-25T18:00", TODAY, LocalTime.of(12, 34, 56)))
+                .isEqualTo(LocalDateTime.of(TODAY, LocalTime.of(12, 34, 56)));
+    }
+
+    @Test
+    void futureOpeningRequiresTimeAndMustPrecedeCutoffAndDelivery() {
+        assertThat(OfferingTiming.validateOrdersOpenFrom(TODAY.plusDays(1), "09:00",
+                TODAY.plusDays(1), "17:00", "2026-09-25T18:00", TODAY, LocalTime.NOON))
+                .isEqualTo(LocalDateTime.of(TODAY.plusDays(1), LocalTime.of(9, 0)));
+        assertThatThrownBy(() -> OfferingTiming.validateOrdersOpenFrom(TODAY.plusDays(1), null,
+                TODAY.plusDays(1), "17:00", "2026-09-25T18:00", TODAY, LocalTime.NOON))
+                .hasMessageContaining("opening time");
+        assertThatThrownBy(() -> OfferingTiming.validateOrdersOpenFrom(TODAY.plusDays(1), "17:00",
+                TODAY.plusDays(1), "17:00", "2026-09-25T18:00", TODAY, LocalTime.NOON))
+                .hasMessageContaining("before Orders Close");
+        assertThatThrownBy(() -> OfferingTiming.validateOrdersOpenFrom(TODAY.plusDays(1), "18:00",
+                TODAY.plusDays(1), "23:00", "2026-09-25T18:00", TODAY, LocalTime.NOON))
+                .hasMessageContaining("before Delivery");
+    }
+
+    @Test
+    void pastOpeningDateAndPastTodayTimeAreRejected() {
+        assertThatThrownBy(() -> OfferingTiming.validateOrdersOpenFrom(TODAY.minusDays(1), "09:00",
+                TODAY, "17:00", "2026-09-24T18:00", TODAY, LocalTime.NOON))
+                .hasMessageContaining("cannot be in the past");
+        assertThatThrownBy(() -> OfferingTiming.validateOrdersOpenFrom(TODAY, "11:59",
+                TODAY, "17:00", "2026-09-24T18:00", TODAY, LocalTime.NOON))
+                .hasMessageContaining("has passed");
     }
 
     @Test
@@ -80,6 +115,24 @@ class OfferingTimingTest {
         assertThatThrownBy(() -> OfferingTiming.enforceOrderWindow(product,
                 TODAY.plusDays(1), "today", TODAY, LocalTime.of(12, 0)))
                 .hasMessageContaining("have not opened yet");
+    }
+
+    @Test
+    void futureOpeningTimestampBlocksOrderingAndReportsScheduledState() {
+        Product product = product(TODAY.plusDays(1), true, null, "23:58", 10);
+        product.setOrdersOpenFrom(LocalDateTime.of(TODAY.plusDays(1), LocalTime.of(9, 0)));
+        assertThat(OfferingTiming.isWindowOpenNow(product, TODAY.plusDays(1), LocalTime.of(8, 59))).isFalse();
+        assertThat(OfferingTiming.lifecycleState(product, TODAY.plusDays(1), LocalTime.of(8, 59)))
+                .isEqualTo("SCHEDULED_TO_OPEN");
+        assertThat(OfferingTiming.isWindowOpenNow(product, TODAY.plusDays(1), LocalTime.of(9, 0))).isTrue();
+    }
+
+    @Test
+    void openingTimestampTakesPrecedenceOverLegacyTimeOnlyStart() {
+        Product product = product(TODAY, false, "09:00", "23:58", 10);
+        product.setOrdersOpenFrom(LocalDateTime.of(TODAY, LocalTime.of(10, 0)));
+        assertThat(OfferingTiming.isWindowOpenNow(product, TODAY, LocalTime.of(9, 30))).isFalse();
+        assertThat(OfferingTiming.isWindowOpenNow(product, TODAY, LocalTime.of(10, 0))).isTrue();
     }
 
     @Test
@@ -145,6 +198,32 @@ class OfferingTimingTest {
         assertThat(OfferingTiming.lifecycleState(live, TODAY, LocalTime.of(11, 59))).isEqualTo("LIVE");
         assertThat(OfferingTiming.lifecycleState(live, TODAY, LocalTime.of(12, 0))).isEqualTo("LIVE");
         assertThat(OfferingTiming.lifecycleState(live, TODAY, LocalTime.of(12, 1))).isEqualTo("ORDERS_CLOSED");
+    }
+
+    @Test
+    void buyerSectionFollowsOrderableDeliveryDateInsteadOfStoredPreorderFlag() {
+        Product todayProduct = product(TODAY, true, null, "23:58", 10);
+        todayProduct.setAvailableToday(true);
+        ProductDto todayDto = buyerDto(todayProduct, "PRE_ORDER", false);
+        assertThat(OfferingTiming.buyerSection(todayDto, todayProduct, TODAY)).isEqualTo("ORDER");
+
+        Product futureProduct = product(TODAY.plusDays(1), true, null, "23:58", 10);
+        ProductDto futureDto = buyerDto(futureProduct, "PRE_ORDER", false);
+        assertThat(futureDto.getAvailableToday()).isFalse();
+        assertThat(OfferingTiming.buyerSection(futureDto, futureProduct, TODAY)).isEqualTo("PRE_ORDER");
+
+        futureDto.setLifecycleState("SCHEDULED_TO_OPEN");
+        futureDto.setOrdersClosed(true);
+        assertThat(OfferingTiming.buyerSection(futureDto, futureProduct, TODAY)).isEqualTo("PRE_ORDER");
+        assertThat(OfferingTiming.isBuyerOrderableNow(futureDto, futureProduct, TODAY)).isFalse();
+    }
+
+    @Test
+    void closedCurrentOfferingRemainsInOrderSectionButIsNotOrderable() {
+        Product product = product(TODAY, false, null, "12:00", 10);
+        ProductDto dto = buyerDto(product, "ORDER", true);
+        assertThat(OfferingTiming.buyerSection(dto, product, TODAY)).isEqualTo("ORDER");
+        assertThat(OfferingTiming.isBuyerOrderableNow(dto, product, TODAY)).isFalse();
     }
 
     @Test
@@ -242,5 +321,16 @@ class OfferingTimingTest {
         product.setMaxQuantity(remaining == 0 ? 1 : remaining);
         product.setRemainingQuantity(remaining);
         return product;
+    }
+
+    private ProductDto buyerDto(Product product, String lifecycle, boolean ordersClosed) {
+        ProductDto dto = new ProductDto();
+        dto.setAvailableToday(product.getAvailableToday());
+        dto.setOrdersPaused(product.isOrdersPaused());
+        dto.setSoldOut(product.isSoldOut());
+        dto.setOrdersClosed(ordersClosed);
+        dto.setLifecycleState(lifecycle);
+        dto.setRecurring(false);
+        return dto;
     }
 }

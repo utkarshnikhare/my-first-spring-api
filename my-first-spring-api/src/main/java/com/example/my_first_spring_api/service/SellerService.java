@@ -32,6 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Objects;
@@ -262,6 +263,17 @@ public class SellerService {
         LocalDate today = LocalDate.now(AppTimeZone.ZONE);
         LocalDate offeringDate = dto.getAvailableDate() != null ? dto.getAvailableDate() : today;
         boolean recurringRequest = dto.getRecurringSchedule() != null;
+        boolean quickPost = Boolean.TRUE.equals(dto.getQuickPost());
+        if (quickPost && (recurringRequest || !offeringDate.equals(today)
+                || Boolean.TRUE.equals(dto.getIsPreorder()))) {
+            throw new IllegalArgumentException("Quick Posts must be one-time offerings for today.");
+        }
+        String quickPostImageData = quickPost
+                ? validateQuickPostImageData(dto.getQuickPostImageData()) : null;
+        if (recurringRequest && (dto.getOrderOpenDate() != null
+                || (dto.getOrderOpenTime() != null && !dto.getOrderOpenTime().isBlank()))) {
+            throw new IllegalArgumentException("Orders Open From date/time is available for one-time offerings only.");
+        }
         boolean preorder = !recurringRequest && (dto.getIsPreorder() != null
                 ? dto.getIsPreorder() : offeringDate.isAfter(today));
         if (!recurringRequest && offeringDate.isAfter(today) && !preorder) {
@@ -322,9 +334,15 @@ public class SellerService {
             orderWindowEnd = OfferingTiming.validateNewOffering(offeringDate, preorder,
                     orderWindowStart, orderWindowEnd, readyByTime);
         }
+        LocalDateTime ordersOpenFrom = !recurringRequest && dto.getOrderOpenDate() != null
+                ? OfferingTiming.validateOrdersOpenFrom(dto.getOrderOpenDate(), dto.getOrderOpenTime(),
+                        offeringDate, orderWindowEnd, readyByTime, today, LocalTime.now(AppTimeZone.ZONE))
+                : null;
         assertFeatureCompliance(seller, preorder, offeringDate, dto.getName());
         String description = dto.getDescription() != null ? dto.getDescription() : "";
         Product product = new Product(kitchen, dto.getName(), description, dto.getPrice(), dto.getImageUrl());
+        product.setQuickPost(quickPost);
+        product.setQuickPostImageData(quickPostImageData);
         product.setDescription(description);
         product.setPriceUnit(dto.getPriceUnit() != null ? dto.getPriceUnit() : "portion");
         product.setUnit(dto.getUnit() != null ? dto.getUnit() : "portion");
@@ -332,6 +350,7 @@ public class SellerService {
         product.setIsVeg(dto.getIsVeg() != null ? dto.getIsVeg() : Boolean.TRUE);
         product.setAvailableDate(offeringDate);
         product.setOrderWindowStart(orderWindowStart);
+        product.setOrdersOpenFrom(ordersOpenFrom);
         product.setOrderWindowEnd(orderWindowEnd);
         // Keep the legacy column aligned for old clients/seeded records. Buyer
         // orderability uses orderWindowEnd first and this value only as fallback.
@@ -405,6 +424,14 @@ public class SellerService {
         String effectiveOpen = dto.getOrderWindowStart() != null
                 ? OfferingTiming.normalizeHhmm(dto.getOrderWindowStart(), "Orders Open")
                 : product.getOrderWindowStart();
+        LocalDate effectiveOpenDate = dto.getOrderOpenDate() != null
+                ? dto.getOrderOpenDate()
+                : (product.getOrdersOpenFrom() != null
+                    ? product.getOrdersOpenFrom().toLocalDate() : LocalDate.now(AppTimeZone.ZONE));
+        String effectiveOpenTime = dto.getOrderOpenTime() != null
+                ? dto.getOrderOpenTime()
+                : (product.getOrdersOpenFrom() != null
+                    ? product.getOrdersOpenFrom().toLocalTime().toString().substring(0, 5) : null);
         String effectiveCloseInput = dto.getOrderWindowEnd() != null
                 ? dto.getOrderWindowEnd()
                 : (dto.getCutoffTime() != null ? dto.getCutoffTime() : product.getOrderWindowEnd());
@@ -428,7 +455,9 @@ public class SellerService {
         }
         boolean timingChanged = dto.getAvailableDate() != null || dto.getOrderWindowStart() != null
                 || dto.getOrderWindowEnd() != null || dto.getCutoffTime() != null
-                || dto.getReadyByTime() != null || dto.getIsPreorder() != null;
+                || dto.getReadyByTime() != null || dto.getIsPreorder() != null
+                || dto.getOrderOpenDate() != null || dto.getOrderOpenTime() != null;
+        LocalDateTime effectiveOrdersOpenFrom = product.getOrdersOpenFrom();
         if (timingChanged) {
             // Same cross-day tolerance as createProduct: rebase an early
             // client-computed readyBy onto the effective offering date so a
@@ -436,6 +465,11 @@ public class SellerService {
             effectiveReady = OfferingTiming.rebaseReadyByTimeForOffering(effectiveReady, effectiveDate);
             effectiveClose = OfferingTiming.validateNewOffering(effectiveDate, effectivePreorder,
                     effectiveOpen, effectiveClose, effectiveReady);
+            if (dto.getOrderOpenDate() != null || dto.getOrderOpenTime() != null) {
+                effectiveOrdersOpenFrom = OfferingTiming.validateOrdersOpenFrom(
+                        effectiveOpenDate, effectiveOpenTime, effectiveDate, effectiveClose,
+                        effectiveReady, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
+            }
         }
 
         if (hasOrders) {
@@ -449,6 +483,10 @@ public class SellerService {
                 throw new IllegalArgumentException("Cannot change availability date after orders exist.");
             if (dto.getOrderWindowStart() != null && !java.util.Objects.equals(effectiveOpen, product.getOrderWindowStart()))
                 throw new IllegalArgumentException("Cannot change order window start after orders exist.");
+            if ((dto.getOrderOpenDate() != null || dto.getOrderOpenTime() != null)
+                    && !java.util.Objects.equals(effectiveOrdersOpenFrom, product.getOrdersOpenFrom())) {
+                throw new IllegalArgumentException("Cannot change Orders Open From after orders exist.");
+            }
             // Orders Close is the one field that stays editable after the first
             // order, but it may only be EXTENDED (Requirement 5) so that every
             // already-accepted customer order keeps its original cutoff.
@@ -475,6 +513,9 @@ public class SellerService {
             product.setAvailableToday(dto.getAvailableDate().equals(LocalDate.now(AppTimeZone.ZONE)) && !effectivePreorder);
         }
         if (dto.getOrderWindowStart() != null) product.setOrderWindowStart(effectiveOpen);
+        if (dto.getOrderOpenDate() != null || dto.getOrderOpenTime() != null) {
+            product.setOrdersOpenFrom(effectiveOrdersOpenFrom);
+        }
         if (dto.getOrderWindowEnd() != null || dto.getCutoffTime() != null) {
             product.setOrderWindowEnd(effectiveClose);
             product.setCutoffTime(effectiveClose);
@@ -516,6 +557,7 @@ public class SellerService {
         dto.setCategory(product.getCategory());
         dto.setAvailableDate(product.getAvailableDate());
         dto.setOrderWindowStart(product.getOrderWindowStart());
+        dto.setOrdersOpenFrom(product.getOrdersOpenFrom());
         // Effective cutoff: orderWindowEnd first, legacy cutoffTime as fallback.
         dto.setOrderWindowEnd(OfferingTiming.resolveOrdersClose(product));
         dto.setReadyByTime(product.getReadyByTime());
@@ -683,6 +725,49 @@ public class SellerService {
         return kitchen != null && kitchen.getSellerType() == SellerType.HOMEMADE_PRODUCTS;
     }
 
+    private String validateQuickPostImageData(String imageData) {
+        if (imageData == null || imageData.isBlank()) return null;
+        String normalized = imageData.trim();
+        if (!normalized.matches("(?i)^data:image/(png|jpe?g|gif|webp);base64,[a-z0-9+/=\\s]+$")) {
+            throw new IllegalArgumentException("Quick Post image must be a valid PNG, JPEG, GIF, or WebP image.");
+        }
+        try {
+            byte[] decoded = java.util.Base64.getMimeDecoder()
+                    .decode(normalized.substring(normalized.indexOf(',') + 1));
+            if (decoded.length > 2 * 1024 * 1024) {
+                throw new IllegalArgumentException("Quick Post image must be 2 MB or smaller.");
+            }
+            String mediaType = normalized.substring("data:image/".length(), normalized.indexOf(';'))
+                    .toLowerCase(java.util.Locale.ROOT);
+            if (!matchesImageSignature(mediaType, decoded)) {
+                throw new IllegalArgumentException("Quick Post image content does not match its image type.");
+            }
+        } catch (IllegalArgumentException ex) {
+            if (ex.getMessage() != null && ex.getMessage().startsWith("Quick Post image")) throw ex;
+            throw new IllegalArgumentException("Quick Post image must be valid base64 image data.");
+        }
+        return normalized;
+    }
+
+    private boolean matchesImageSignature(String mediaType, byte[] bytes) {
+        if ("png".equals(mediaType)) {
+            return bytes.length >= 8 && (bytes[0] & 0xff) == 0x89 && bytes[1] == 0x50
+                    && bytes[2] == 0x4e && bytes[3] == 0x47 && bytes[4] == 0x0d
+                    && bytes[5] == 0x0a && bytes[6] == 0x1a && bytes[7] == 0x0a;
+        }
+        if ("jpeg".equals(mediaType) || "jpg".equals(mediaType)) {
+            return bytes.length >= 3 && (bytes[0] & 0xff) == 0xff
+                    && (bytes[1] & 0xff) == 0xd8 && (bytes[2] & 0xff) == 0xff;
+        }
+        if ("gif".equals(mediaType)) {
+            return bytes.length >= 6 && bytes[0] == 'G' && bytes[1] == 'I' && bytes[2] == 'F'
+                    && bytes[3] == '8' && (bytes[4] == '7' || bytes[4] == '9') && bytes[5] == 'a';
+        }
+        return "webp".equals(mediaType) && bytes.length >= 12
+                && bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F'
+                && bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P';
+    }
+
     /**
      * Enforces the platform's configurable feature rules for seller offerings:
      *  - preorders: marking a product as pre-order requires the seller to have
@@ -756,6 +841,9 @@ public class SellerService {
         dto.setIsVeg(product.getIsVeg());
         dto.setAvailableDate(product.getAvailableDate());
         dto.setOrderWindowStart(product.getOrderWindowStart());
+        dto.setOrdersOpenFrom(product.getOrdersOpenFrom());
+        dto.setQuickPost(product.isQuickPost());
+        dto.setQuickPostImageData(product.getQuickPostImageData());
         dto.setOrderWindowEnd(product.getOrderWindowEnd());
         dto.setMaxQuantity(product.getMaxQuantity());
         dto.setRemainingQuantity(product.getRemainingQuantity());
@@ -772,7 +860,8 @@ public class SellerService {
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
         String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
-        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle));
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle)
+                || "SCHEDULED_TO_OPEN".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
         dto.setCreatedAt(product.getCreatedAt());
         return dto;

@@ -15,6 +15,19 @@ function todayDate() {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
 
+function buyerOfferingSection(product) {
+    if (!product) return 'UNAVAILABLE';
+    if (product.buyerSection) return product.buyerSection;
+    if (product.ordersPaused || product.soldOut || product.ordersClosed ||
+        product.lifecycleState === 'SCHEDULED_TO_OPEN' ||
+        product.lifecycleState === 'ORDERS_CLOSED' || product.lifecycleState === 'HISTORY') return 'UNAVAILABLE';
+    var date = product.recurring ? product.nextOccurrenceDate : product.availableDate;
+    if (!date) date = todayDate();
+    if (date < todayDate()) return 'UNAVAILABLE';
+    if (date === todayDate() && product.availableToday === false) return 'UNAVAILABLE';
+    return date > todayDate() ? 'PRE_ORDER' : 'ORDER';
+}
+
 function favSet() {
     return FAV_CACHE && FAV_CACHE.size ? FAV_CACHE : new Set();
 }
@@ -438,17 +451,18 @@ async function homemadeStoreView(hash) {
             var areas = k.serviceAreas.split(',').map(function (a) { return a.trim(); }).filter(Boolean);
             h += '<div class="mb-2"><span class="muted small">Serves: ' + esc(areas.join(', ')) + '</span></div>';
         }
-        var allProds = detail.products || [];
+        var allProds = (detail.products || []).concat(detail.preorderProducts || []);
+        var orderableQuickPosts = detail.quickPostProducts || allProds.filter(function (p) { return p.quickPost; });
+        allProds = allProds.filter(function (p) { return !p.quickPost; });
         if (k.sellerType === 'BOTH') {
             allProds = allProds.filter(isHomemadeProduct);
+            orderableQuickPosts = orderableQuickPosts.filter(isHomemadeProduct);
         }
         var today = allProds.filter(function (p) {
-            return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate()) && p.availableToday && (!p.availableDate || p.availableDate >= todayDate());
+            return buyerOfferingSection(p) === 'ORDER';
         });
         today = sortByClosingTime(today);
-        var preorder = (detail.preorderProducts && detail.preorderProducts.length)
-            ? (k.sellerType === 'BOTH' ? detail.preorderProducts.filter(isHomemadeProduct) : detail.preorderProducts)
-            : allProds.filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
+        var preorder = allProds.filter(function (p) { return buyerOfferingSection(p) === 'PRE_ORDER'; });
         preorder = sortByClosingTime(preorder);
         if (today.length) {
             h += '<h3 class="mb-2">Available Now</h3><div class="products-grid">';
@@ -464,10 +478,10 @@ async function homemadeStoreView(hash) {
             });
             h += '</div>';
         }
-        if (!today.length && !preorder.length) {
+        if (!today.length && !preorder.length && !orderableQuickPosts.length) {
             h += emptyHtml('📦', 'No products listed', 'This store has not listed any products yet.', '<a class="btn btn-primary" href="#/homemade">Back to Homemade</a>');
         }
-        h += quickPostsHtml(detail.quickPosts);
+        h += quickPostsHtml(detail.quickPosts, orderableQuickPosts, k);
         h += '</div>';
         h += '<div class="section-gap"><button class="btn btn-secondary btn-block" data-action="open-enquiry" data-kid="' + k.id + '" data-kname="' + esc(k.displayName) + '">📩 Send Enquiry</button></div>';
     } catch (err) {
@@ -534,17 +548,18 @@ async function kitchenPageView(hash) {
         // confirmed viewable, so a kitchen the buyer is not allowed to open never
         // counts as traffic. Analytics must never block or fail the page.
         recordAnalyticsView(k && k.sellerType === 'HOMEMADE_PRODUCTS' ? 'HOMEMADE_STOREFRONT_VIEW' : 'MENU_VIEW', k && k.id);
-        var allProds = detail.products || [];
+        var allProds = (detail.products || []).concat(detail.preorderProducts || []);
+        var orderableQuickPosts = detail.quickPostProducts || allProds.filter(function (p) { return p.quickPost; });
+        allProds = allProds.filter(function (p) { return !p.quickPost; });
         if (k && k.sellerType === 'BOTH') {
             allProds = allProds.filter(function (p) { return !isHomemadeProduct(p); });
+            orderableQuickPosts = orderableQuickPosts.filter(function (p) { return !isHomemadeProduct(p); });
         }
         var today = allProds.filter(function (p) {
-            return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate()) && (!p.availableDate || p.availableDate >= todayDate());
+            return buyerOfferingSection(p) === 'ORDER';
         });
         today = sortByClosingTime(today);
-        var preorder = (detail.preorderProducts && detail.preorderProducts.length)
-            ? (k && k.sellerType === 'BOTH' ? detail.preorderProducts.filter(function (p) { return !isHomemadeProduct(p); }) : detail.preorderProducts)
-            : allProds.filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
+        var preorder = allProds.filter(function (p) { return buyerOfferingSection(p) === 'PRE_ORDER'; });
         preorder = sortByClosingTime(preorder);
 
         // Explore Other Kitchens near the top navigation.
@@ -597,8 +612,10 @@ async function kitchenPageView(hash) {
         // Section 1: Available Today
         h += '<h3 class="section-gap mb-2">🍽️ Available Today</h3>';
         h += today.length ? today.map(function (p) { return offeringCardHtml(p, k, false); }).join('')
-            : emptyHtml('🍽️', 'Nothing available today', 'This kitchen has no offerings for today — check pre-orders below.');
-        h += quickPostsHtml(detail.quickPosts);
+            : emptyHtml('🍽️', 'Nothing available today', orderableQuickPosts.length
+                ? 'This kitchen has no regular menu offerings for today — see Quick Posts below.'
+                : 'This kitchen has no offerings for today — check pre-orders below.');
+        h += quickPostsHtml(detail.quickPosts, orderableQuickPosts, k);
 
         // Section 2: Pre-order
         h += '<h3 class="section-gap mb-2">🔮 Pre-order</h3>';
@@ -677,12 +694,15 @@ function exploreOtherKitchensHtml() {
     return '<a class="btn btn-secondary btn-block btn-sm" href="#/kitchens" data-action="explore-kitchens">🧭 Explore Other Kitchens</a>';
 }
 
-function quickPostsHtml(posts) {
-    if (!posts || !posts.length) return '';
+function quickPostsHtml(posts, orderablePosts, kitchen) {
+    if ((!posts || !posts.length) && (!orderablePosts || !orderablePosts.length)) return '';
     var h = '<h3 class="section-gap mb-2">📢 Today\'s Quick Posts</h3><div class="quick-posts">';
-    posts.forEach(function (p) {
+    (posts || []).forEach(function (p) {
         h += '<div class="card pad card-mb"><div>' + esc(p.message) + '</div>' +
             (p.imageData ? '<img class="mt-2" style="max-width:100%;border-radius:8px" src="' + esc(p.imageData) + '" alt="Kitchen quick post" onerror="imgFallback(this)">' : '') + '</div>';
+    });
+    (orderablePosts || []).forEach(function (p) {
+        h += offeringCardHtml(p, kitchen, false);
     });
     return h + '</div>';
 }
@@ -711,17 +731,19 @@ function buyerScarcityLabel(p) {
 function offeringCardHtml(p, kitchen, isPreorderSection) {
     var soldOut = p.soldOut || (p.remainingQuantity != null && p.remainingQuantity <= 0);
     var paused = !!p.ordersPaused;
-    var isPre = !!p.isPreorder || !!isPreorderSection;
-    var nowD = new Date();
-    var todayIso = nowD.getFullYear() + '-' + String(nowD.getMonth() + 1).padStart(2, '0') + '-' + String(nowD.getDate()).padStart(2, '0');
-    var isNextOcc = !isPre && !!p.recurring && !!p.nextOccurrenceDate && p.nextOccurrenceDate !== todayIso;
+    var section = buyerOfferingSection(p);
+    var isPre = section === 'PRE_ORDER' || !!isPreorderSection;
+    var todayIso = todayDate();
+    var isNextOcc = isPre && !!p.recurring && !!p.nextOccurrenceDate && p.nextOccurrenceDate !== todayIso;
     var isPreOrNext = isPre || isNextOcc;
-    var isPast = p.lifecycleState === 'HISTORY' || (!isPreOrNext && p.availableDate && p.availableDate < todayIso);
+    var deliveryDate = p.recurring ? p.nextOccurrenceDate : p.availableDate;
+    var isPast = p.lifecycleState === 'HISTORY' || (deliveryDate && deliveryDate < todayIso);
     var ordersClosed = !!p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED' || isPast;
     var kitchenJson = encodeURIComponent(JSON.stringify({ id: kitchen.id, displayName: kitchen.displayName }));
+    var imageUrl = p.quickPostImageData || (usableImageUrl(p.imageUrl) ? p.imageUrl : '');
     var timingHtml;
     if (isPreOrNext) {
-        var timingDate = isPre ? p.availableDate : p.nextOccurrenceDate;
+        var timingDate = p.recurring ? p.nextOccurrenceDate : p.availableDate;
         var orderBy = timingDate ? prettyDate(timingDate) : '';
         if (p.cutoffTime) orderBy = (orderBy ? orderBy + ', ' : '') + prettyTime(p.cutoffTime);
         var deliverBy = timingDate ? prettyDate(timingDate) : '';
@@ -734,7 +756,7 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
         timingHtml = '<p class="oc-timing">⏰ ' + esc(t1 + t2) + '</p>';
     }
     return '<div class="offering-card' + (soldOut ? ' sold-out' : '') + (paused ? ' paused' : '') + (isPreOrNext ? ' is-preorder' : '') + '">' +
-        dishImg('oc-photo', emojiFor(p.name), usableImageUrl(p.imageUrl) ? p.imageUrl : '', p.name) +
+        dishImg('oc-photo', emojiFor(p.name), imageUrl, p.name) +
         '<div class="oc-body">' +
         '<div class="oc-name-row"><span class="oc-name">' + esc(p.name) + '</span>' +
         (isPreOrNext ? '<span class="oc-preorder-badge">🔮 Pre-order</span>' : '') + '</div>' +

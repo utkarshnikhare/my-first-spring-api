@@ -76,7 +76,8 @@ conversion rate with no recorded views), the UI says so rather than inventing a 
 - **Location-first discovery** - buyers see only storefronts serving their society
 - **Three apps** - buyer, seller, admin
 - **Storefronts** - a seller may run a Kitchen and/or a Homemade storefront, and serves multiple societies
-- **Offerings** - today's items and pre-orders, with quantity limits and cut-offs
+- **Offerings** - dynamic Order / Pre-order sections based on the live service date, with quantity limits, cut-offs, and IST opening dates/times
+- **Orderable Quick Posts** - same Product, checkout, inventory, and order lifecycle as regular offerings; optional validated photos, seller close/pause, and today-only availability
 - **Recurring offerings** - repeat schedules with independent per-date occurrences and overrides
 - **Seller Dashboard V3** - LIVE and RECURRING views with schedule-aware actions
 - **Orders** - real order lifecycle, totals, and stock reservation
@@ -111,7 +112,8 @@ requires `SUPER_ADMIN`. Hiding a menu item is never the protection.
 - **Location setup** - the buyer sets their society (and Area), which drives everything they can see
 - **Discovery** - only storefronts serving that society, with their offerings
 - **Storefront detail** - identity, service area, social links, and offerings split into
-  *Available Today* and *Pre-order*
+  *Available Today* and *Pre-order* from the current orderable service date (including recurring occurrences)
+- **Quick Posts** - orderable today-only cards that use the normal cart and checkout flow
 - **Offering detail** - price per unit, quantity limits, cut-off times, pre-order date and slot
 - **Cart and draft order** - items held as a draft, resumable
 - **Checkout** - buyer details, payment-status selection, then confirm
@@ -143,6 +145,8 @@ requires `SUPER_ADMIN`. Hiding a menu item is never the protection.
   `/#/kitchen/{id}` page, which can be shared directly
 - **Offerings / items** - create, edit, price, quantity limits, sold-out, pause/resume, and republish from
   history
+- **Opening schedule** - one-time offerings can begin accepting orders immediately or at a chosen IST date/time
+- **Quick Posts** - publish a message with an item price, optional validated photo, and quantity through the normal Product workflow; close early from the seller dashboard, or let the post expire at the end of its publication day
 - **Saved templates and quick posts** - publish a repeat offering quickly; WhatsApp quick-post parsing
 - **Orders** - grouped **offering → customer orders**, with a per-customer drill-down
 - **Payment visibility** - record whether an order is paid; independent of delivery

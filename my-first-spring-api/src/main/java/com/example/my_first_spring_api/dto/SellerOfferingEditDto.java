@@ -21,6 +21,7 @@ public class SellerOfferingEditDto {
     private String category;
     private LocalDate availableDate;
     private String orderWindowStart;
+    private java.time.LocalDateTime ordersOpenFrom;
     private String orderWindowEnd;
     private String readyByTime;
     private Integer maxQuantity;
@@ -51,6 +52,8 @@ public class SellerOfferingEditDto {
     public void setAvailableDate(LocalDate availableDate) { this.availableDate = availableDate; }
     public String getOrderWindowStart() { return orderWindowStart; }
     public void setOrderWindowStart(String orderWindowStart) { this.orderWindowStart = orderWindowStart; }
+    public java.time.LocalDateTime getOrdersOpenFrom() { return ordersOpenFrom; }
+    public void setOrdersOpenFrom(java.time.LocalDateTime ordersOpenFrom) { this.ordersOpenFrom = ordersOpenFrom; }
     public String getOrderWindowEnd() { return orderWindowEnd; }
     public void setOrderWindowEnd(String orderWindowEnd) { this.orderWindowEnd = orderWindowEnd; }
     public String getReadyByTime() { return readyByTime; }

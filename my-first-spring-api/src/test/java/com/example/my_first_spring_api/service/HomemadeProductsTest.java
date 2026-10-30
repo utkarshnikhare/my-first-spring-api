@@ -140,7 +140,7 @@ class HomemadeProductsTest {
         cake.setAvailableToday(true);
 
         when(kitchenRepository.findAll()).thenReturn(List.of(bothKitchen));
-        when(productRepository.findByKitchenAndAvailableTodayTrueOrderByCreatedAtDesc(bothKitchen)).thenReturn(List.of(poha, cake));
+        when(productRepository.findByKitchen(bothKitchen)).thenReturn(List.of(poha, cake));
 
         User buyer = new User("Buyer", "9876543210", "Lohegaon", UserRole.BUYER);
         buyer.setId(20L);

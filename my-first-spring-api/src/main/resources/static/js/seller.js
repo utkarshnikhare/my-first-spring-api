@@ -446,6 +446,7 @@ function greeting() { var h = new Date().getHours(); return h < 12 ? 'Good morni
 function offeringStatusBadge(p) {
     if (p.soldOut) return '<span class="oc-badge soldout">SOLD OUT</span>';
     if (p.ordersPaused) return '<span class="oc-badge paused">PAUSED</span>';
+    if (p.lifecycleState === 'SCHEDULED_TO_OPEN') return '<span class="oc-badge closed">SCHEDULED TO OPEN · ' + esc(prettyDateTime(p.ordersOpenFrom)) + '</span>';
     if (p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED') return '<span class="oc-badge closed">ORDERS CLOSED</span>';
     if (p.isPreorder || p.lifecycleState === 'PRE_ORDER') return '<span class="oc-badge live">PRE-ORDER • LIVE</span>';
     // V2 §7.1 / V3 §6.1: Recurring is a badge on the card, never a tab.
@@ -514,10 +515,68 @@ function sellerDate(dateKey) {
     if (dateKey && dateKey !== 'today' && dateKey !== 'pick') return dateKey;
     return istToday;
 }
+function sellerTimeNow() {
+    var parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).formatToParts(new Date());
+    var hour = parts.find(function (p) { return p.type === 'hour'; });
+    var minute = parts.find(function (p) { return p.type === 'minute'; });
+    return (hour ? hour.value : '00') + ':' + (minute ? minute.value : '00');
+}
+function updateOrdersOpenFromSummary(form) {
+    if (!form) return;
+    var mode = form.querySelector('[name="orderOpenDateMode"]');
+    var dateInput = form.querySelector('[name="chosenOrderOpenDate"]');
+    var timeInput = form.querySelector('[name="orderOpenTime"]');
+    var date = mode && mode.value === 'tomorrow' ? sellerDate('tomorrow')
+        : (mode && mode.value === 'choose' ? (dateInput && dateInput.value || '') : sellerDate('today'));
+    var summary = form.querySelector('#ordersOpenFromSummary');
+    if (!summary) return;
+    if (!date) {
+        summary.textContent = 'Choose the date orders should begin.';
+    } else if (date === sellerDate('today') && !(timeInput && timeInput.value)) {
+        summary.textContent = 'Orders open immediately after publishing.';
+    } else {
+        summary.textContent = 'Orders open ' + (date === sellerDate('today') ? 'today' : date === sellerDate('tomorrow') ? 'tomorrow' : 'on ' + date)
+            + (timeInput && timeInput.value ? ' at ' + formatFriendlyTime12h(timeInput.value) : ' — choose a time.');
+    }
+}
+function ordersOpenFromError(openDate, openTime, offeringDate, orderWindowEnd, readyBy) {
+    var today = sellerDate('today');
+    if (openDate < today) return 'Orders Open From date cannot be in the past.';
+    if (openDate > offeringDate) return 'Orders Open From cannot be after the delivery date.';
+    if (openDate > today && !openTime) return 'Choose an opening time for tomorrow or a future date.';
+    if (openDate === today && openTime && openTime <= sellerTimeNow()) {
+        return 'Orders Open From time has passed. Leave it blank for immediate opening or choose a future time.';
+    }
+    var selectedTime = openTime || (openDate === today ? sellerTimeNow() : null);
+    if (!selectedTime) return null;
+    var readyDate = readyBy && readyBy.length >= 16 ? readyBy.slice(0, 10) : offeringDate;
+    var readyTime = readyBy && readyBy.length >= 16 ? readyBy.slice(11, 16) : null;
+    if (readyTime && (openDate > readyDate || (openDate === readyDate && selectedTime >= readyTime))) {
+        return 'Orders Open From must be before Delivery / Ready By.';
+    }
+    if (orderWindowEnd) {
+        var closeDate = offeringDate;
+        if (readyTime && orderWindowEnd >= readyTime) {
+            var dateParts = offeringDate.split('-').map(Number);
+            closeDate = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2] - 1)).toISOString().slice(0, 10);
+        }
+        if (openDate > closeDate || (openDate === closeDate && selectedTime >= orderWindowEnd)) {
+            return 'Orders Open From must be before Orders Close.';
+        }
+    }
+    return null;
+}
 function prettyDateTime(iso) {
     if (!iso) return '';
-    var d = new Date(iso);
-    return prettyDate(localDateStr(d)) + ' ' + prettyTime(d.toTimeString().slice(0,5));
+    var value = String(iso);
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) value += ':00';
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value)) value += '+05:30';
+    return new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short',
+        hour: 'numeric', minute: '2-digit', hour12: true
+    }).format(new Date(value));
 }
 function sellerImg(url) {
     if (!url) return '';
@@ -769,7 +828,7 @@ function sdOfferingFilterHtml(offerings) {
  *                   app has no figure to show (never a made-up number)
  */
 function sdOfferingCardHtml(p, orderCount) {
-    var img = sellerImg(p.imageUrl);
+    var img = sellerImg(p.quickPostImageData || p.imageUrl);
     var remaining = p.remainingQuantity;
     var maxQty = p.maxQuantity;
     var isHm = isHomemadeProduct(p);
@@ -827,8 +886,8 @@ function sdOfferingCardHtml(p, orderCount) {
             + esc(p.occurrenceId) + '">' + occSoldLabel + '</button>';
     } else if (!p.recurring) {
         h += '<button class="sd-btn sd-btn--edit" type="button" data-action="edit-offering" data-pid="' + p.id + '">Edit</button>';
-        if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--pause" type="button" data-action="pause-orders" data-pid="' + p.id + '">Pause</button>';
-        if (p.ordersPaused && !p.soldOut) h += '<button class="sd-btn sd-btn--resume" type="button" data-action="resume-orders" data-pid="' + p.id + '">Resume</button>';
+        if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--pause" type="button" data-action="pause-orders" data-pid="' + p.id + '">' + (p.quickPost ? 'Close Post' : 'Pause') + '</button>';
+        if (p.ordersPaused && !p.soldOut) h += '<button class="sd-btn sd-btn--resume" type="button" data-action="resume-orders" data-pid="' + p.id + '">' + (p.quickPost ? 'Reopen Post' : 'Resume') + '</button>';
         if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Sold Out</button>';
     }
     h += '</div></div></div>';
@@ -1206,6 +1265,9 @@ async function sellerQuickPostView() {
     // two screens stay consistent instead of inventing a parallel form.
     h += '<div class="form-group"><label class="form-label">Item Name <span class="req">*</span></label>' +
         '<input class="form-input" name="name" placeholder="e.g. Paneer Butter Masala" required></div>';
+    h += '<div class="form-group"><label class="form-label" for="qpImage">Photo — Optional</label>' +
+        '<input class="form-input" id="qpImage" name="quickPostImage" type="file" accept="image/png,image/jpeg,image/gif,image/webp">' +
+        '<p class="muted small">PNG, JPEG, GIF, or WebP; maximum 2 MB.</p></div>';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Price (Rs) <span class="req">*</span></label>' +
         '<input class="form-input" name="price" type="number" min="0.01" step="0.01" placeholder="100" required></div>' +
         '<div class="form-group"><label class="form-label">Unit <span class="req">*</span></label>' +
@@ -2396,6 +2458,11 @@ function offeringFormHtml(t, opts) {
     var closeValue = isEdit ? (t.orderWindowEnd || '') : (t.orderWindowEnd || smartDefaults.orderWindowEnd);
     var initialReady = isEdit ? (t.readyByTime || '') : (t.readyByTime || smartDefaults.readyByTime);
     var readyIso = !!(initialReady && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(initialReady));
+    var storedOpenDate = t.ordersOpenFrom ? String(t.ordersOpenFrom).slice(0, 10) : todayIso;
+    if (storedOpenDate < todayIso) storedOpenDate = todayIso;
+    var openDateMode = storedOpenDate === todayIso ? 'today'
+        : (storedOpenDate === sellerDate('tomorrow') ? 'tomorrow' : 'choose');
+    var openingTime = t.ordersOpenFrom ? String(t.ordersOpenFrom).slice(11, 16) : '';
 
     var now = new Date();
     var currentLocalTime = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
@@ -2403,7 +2470,24 @@ function offeringFormHtml(t, opts) {
     var closeMinAttr = (!isEdit && chosenDate <= todayIso) ? ' min="' + currentLocalTime + '"' : '';
     var readyMinAttr = (!locked) ? ' min="' + currentLocalIso + '"' : '';
 
-    h += '<div class="form-group"><label class="form-label">Orders Open — Optional</label><input class="form-input" name="orderWindowStart" type="time" value="' + esc(openValue) + '"' + lockAttr + '><p class="muted small">Leave blank to start accepting orders immediately.</p></div>';
+    h += '<div id="ordersOpenFromFields"' + (S.offeringMode === 'recurring' && !isEdit ? ' hidden' : '') + '>';
+    h += '<div class="form-group"><label class="form-label">Orders Open From date</label><select class="form-select" name="orderOpenDateMode" data-action="set-order-open-date-mode"' + lockAttr + '>' +
+        '<option value="today"' + (openDateMode === 'today' ? ' selected' : '') + '>Today</option>' +
+        '<option value="tomorrow"' + (openDateMode === 'tomorrow' ? ' selected' : '') + '>Tomorrow</option>' +
+        '<option value="choose"' + (openDateMode === 'choose' ? ' selected' : '') + '>Choose Date</option></select></div>';
+    h += '<div class="form-group" id="ordersOpenChooseDate"' + (openDateMode === 'choose' ? '' : ' hidden') + '>' +
+        '<label class="form-label">Opening Date</label><input class="form-input" name="chosenOrderOpenDate" type="date" min="' + todayIso + '" value="' + esc(storedOpenDate) + '"' + lockAttr + '></div>';
+    h += '<div class="form-group"><label class="form-label">Orders Open From time — Optional for Today</label>' +
+        '<input class="form-input" name="orderOpenTime" type="time" value="' + esc(openingTime) + '"' + lockAttr + '>' +
+        '<p class="muted small" id="ordersOpenFromSummary">Leave blank for today to open immediately after publishing. Tomorrow and future dates require a time.</p></div></div>';
+    h += '<input type="hidden" name="initialOrderOpenDate" value="' + esc(storedOpenDate) + '">' +
+        '<input type="hidden" name="initialOrderOpenTime" value="' + esc(openingTime) + '">';
+    if (!isEdit) {
+        h += '<div id="recurringOrderOpenTimeField"' + (S.offeringMode === 'recurring' ? '' : ' hidden') + ' class="form-group">' +
+            '<label class="form-label">Orders Open (time of day)</label><input class="form-input" name="orderWindowStart" type="time" value="' + esc(openValue) + '"' + lockAttr + '></div>';
+    } else {
+        h += '<input type="hidden" name="orderWindowStart" value="' + esc(openValue) + '">';
+    }
 
     h += scrollingWheelPickerHtml(closeValue, initialReady, locked);
 
@@ -3506,6 +3590,16 @@ async function submitOfferingEdit(form) {
         // Nothing has been ordered yet, so every timing and price field is free.
         var openVal = parseOptionalHhmm(ev.orderWindowStart, 'Orders Open');
         if ((openVal || '') !== (o.orderWindowStart || '')) payload.orderWindowStart = openVal || '';
+        var openDateMode = ev.orderOpenDateMode || 'today';
+        var openDate = openDateMode === 'tomorrow' ? sellerDate('tomorrow')
+            : (openDateMode === 'choose' ? (ev.chosenOrderOpenDate || '') : sellerDate('today'));
+        if (!openDate) { toast('Choose an Orders Open From date', 'error'); return; }
+        var openTime = parseOptionalHhmm(ev.orderOpenTime, 'Orders Open From');
+        if (openDate !== (ev.initialOrderOpenDate || sellerDate('today'))
+                || (openTime || '') !== (ev.initialOrderOpenTime || '')) {
+            payload.orderOpenDate = openDate;
+            payload.orderOpenTime = openTime;
+        }
         var offeringDate = S.offeringFor === 'choose' ? (ev.chosenOfferingDate || '') : sellerDate(S.offeringFor);
         if (!offeringDate) { toast('Choose an offering date', 'error'); return; }
         if (offeringDate !== (o.availableDate || '')) payload.availableDate = offeringDate;
@@ -3533,6 +3627,13 @@ async function submitOfferingEdit(form) {
             var timingProblem = offeringTimingError(payload.availableDate || o.availableDate,
                 effectiveOpen, closeVal, payload.readyByTime);
             if (timingProblem) { toast(timingProblem, 'error'); return; }
+        }
+        if (payload.orderOpenDate) {
+            var readyForOpeningCheck = payload.readyByTime || normalizeReadyByTime(
+                o.readyByTime, payload.availableDate || o.availableDate);
+            var openFromProblem = ordersOpenFromError(payload.orderOpenDate, payload.orderOpenTime,
+                payload.availableDate || o.availableDate, closeVal, readyForOpeningCheck);
+            if (openFromProblem) { toast(openFromProblem, 'error'); return; }
         }
     }
 
@@ -3615,18 +3716,38 @@ document.addEventListener('submit', async function (e) {
                 recurringConfig = buildRecurringSchedule(vals, form);
                 if (!recurringConfig) return; // buildRecurringSchedule toasted
                 vals.availableDate = recurringConfig.startDate;
+                vals.orderWindowStart = parseOptionalHhmm(vals.orderWindowStart, 'Orders Open');
+                delete vals.orderOpenDate;
+                delete vals.orderOpenTime;
             } else if (S.offeringFor === 'choose') {
                 vals.availableDate = vals.chosenOfferingDate || '';
                 if (!vals.availableDate) { toast('Choose an offering date', 'error'); return; }
+                vals.orderOpenDate = vals.orderOpenDateMode === 'choose'
+                    ? (vals.chosenOrderOpenDate || '') : (vals.orderOpenDateMode === 'tomorrow' ? sellerDate('tomorrow') : sellerDate('today'));
             } else {
                 vals.availableDate = sellerDate(S.offeringFor);
+                vals.orderOpenDate = vals.orderOpenDateMode === 'choose'
+                    ? (vals.chosenOrderOpenDate || '') : (vals.orderOpenDateMode === 'tomorrow' ? sellerDate('tomorrow') : sellerDate('today'));
+            }
+            if (S.offeringMode !== 'recurring') {
+                if (!vals.orderOpenDate) { toast('Choose an Orders Open From date', 'error'); return; }
+                vals.orderOpenTime = parseOptionalHhmm(vals.orderOpenTime, 'Orders Open From');
             }
             // Finalise the ready-by time. The form field is `datetime-local`, so it
             // normally already carries a full ISO datetime and is passed through
             // unchanged. Only a bare HH:mm time is combined with the offering date
             // (legacy/manual input path).
             vals.readyByTime = normalizeReadyByTime(readyByRaw, vals.availableDate);
+            if (S.offeringMode !== 'recurring') {
+                var openFromError = ordersOpenFromError(vals.orderOpenDate, vals.orderOpenTime,
+                    vals.availableDate, vals.orderWindowEnd, vals.readyByTime);
+                if (openFromError) { toast(openFromError, 'error'); return; }
+            }
             delete vals.chosenOfferingDate;
+            delete vals.orderOpenDateMode;
+            delete vals.chosenOrderOpenDate;
+            delete vals.initialOrderOpenDate;
+            delete vals.initialOrderOpenTime;
             if (vals.maxQuantity !== '' && vals.maxQuantity !== null && vals.maxQuantity !== undefined) {
                 var mq = Number(vals.maxQuantity);
                 if (!Number.isInteger(mq) || mq < 1) {
@@ -3768,6 +3889,22 @@ document.addEventListener('submit', async function (e) {
             // with the normal Order button.
             autoClampOrderWindowEndIfInvalid(form);
             var vals = formVals(form);
+            var qpImageFile = form.querySelector('[name="quickPostImage"]').files[0];
+            if (qpImageFile && qpImageFile.size > 2 * 1024 * 1024) {
+                toast('Quick Post image must be 2 MB or smaller', 'error');
+                if (submitButton) submitButton.disabled = false;
+                return;
+            }
+            if (qpImageFile) {
+                vals.quickPostImageData = await new Promise(function (resolve, reject) {
+                    var reader = new FileReader();
+                    reader.onload = function () { resolve(String(reader.result || '')); };
+                    reader.onerror = function () { reject(new Error('Could not read the selected Quick Post image')); };
+                    reader.readAsDataURL(qpImageFile);
+                });
+            }
+            delete vals.quickPostImage;
+            vals.quickPost = true;
             // The seller's post text is the offering's primary content.
             vals.description = message;
             delete vals.message;
@@ -4642,6 +4779,10 @@ document.addEventListener('click', async function (e) {
                  t.classList.add('selected');
                  var schedFields = $('#recurringScheduleFields');
                  if (schedFields) schedFields.hidden = S.offeringMode !== 'recurring';
+                 var openFromFields = $('#ordersOpenFromFields');
+                 if (openFromFields) openFromFields.hidden = S.offeringMode === 'recurring';
+                 var recurringOpenTime = $('#recurringOrderOpenTimeField');
+                 if (recurringOpenTime) recurringOpenTime.hidden = S.offeringMode !== 'recurring';
                  // In recurring mode the schedule start date IS the offering date,
                  // so the single-date "Offering For" chooser steps aside; in ONE
                  // TIME mode it comes back with its previous choice intact.
@@ -4675,6 +4816,19 @@ document.addEventListener('click', async function (e) {
 });
 
 document.addEventListener('change', function (e) {
+    if (e.target && e.target.name === 'orderOpenDateMode') {
+        var openForm = e.target.closest('form');
+        var openDateRow = openForm && openForm.querySelector('#ordersOpenChooseDate');
+        var chosenOpenDate = openForm && openForm.querySelector('[name="chosenOrderOpenDate"]');
+        if (openDateRow) openDateRow.hidden = e.target.value !== 'choose';
+        if (chosenOpenDate && e.target.value !== 'choose') {
+            chosenOpenDate.value = e.target.value === 'tomorrow' ? sellerDate('tomorrow') : sellerDate('today');
+        }
+        updateOrdersOpenFromSummary(openForm);
+    }
+    if (e.target && (e.target.name === 'orderOpenTime' || e.target.name === 'chosenOrderOpenDate')) {
+        updateOrdersOpenFromSummary(e.target.closest('form'));
+    }
     var picker = e.target.closest('[data-action="set-availability-date"]');
     if (picker) { applyOfferingDatePicker(picker); return; }
     // REPEATING SCHEDULE: keep the aggregated weekday list and the computed
