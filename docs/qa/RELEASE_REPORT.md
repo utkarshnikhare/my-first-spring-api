@@ -162,7 +162,9 @@ authenticated Render dashboard and public endpoints. No secrets or database cred
 | Complete current Flyway history/schema | **NOT VERIFIED** | The prior live deployment logged schema version 13 and validation of 14 migrations. That is not a complete current history dump. V14–V17 have not been independently checked against the live database. `SPRING_FLYWAY_BASELINE_ON_MIGRATE=true` remains configured and unchanged. |
 | Backup availability and isolated restore | **BLOCKED** | The Supabase project console requires sign-in; no provider backup artifact/policy or approved isolated restore target was accessible. No backup or restore was attempted. |
 | Existing record counts/data integrity | **NOT VERIFIED** | No before/after counts or read-only integrity queries were available. Do not claim production records remained unchanged based on deployment status alone. |
-| Current health and public endpoints | **NOT VERIFIED** | A prior wake-up returned 200 for `/api/health`, `/`, `/api/marketplace`, `/api/discovery/counts`, `/api/kitchens`, and `/api/auth/config`; the health body was only `{"status":"UP"}`. The latest health and version requests again timed out while the free instance displayed its sleep/wake screen, so current health is not confirmed. |
+| Current HTTP health and public endpoints | **PASS** | After the Render free instance woke, `/api/health`, `/`, `/api/version`, `/api/marketplace`, `/api/discovery/counts`, `/api/kitchens`, and `/api/auth/config` all returned HTTP 200. Health body was only `{"status":"UP"}`; it does not prove database readiness. Public discovery returned `live=0`, `tomorrow=0`, `preorder=0`, `all=5`. |
+| Current deployed version endpoint | **FAIL** | `/api/version` returned `commit=unknown`, `shortCommit=unknown`, build time `2026-10-27T11:26:08.886Z`; Render metadata identifies the running deployment as SHA `76c11a45f7ac37c552fd570519608fd96840f084`. |
+| Database readiness, authenticated workflows, and production data integrity | **NOT VERIFIED** | The old live health endpoint only returns `status=UP`; database identity/history/record counts and authenticated buyer/seller/order/payment workflows remain unverified. No authenticated write or payment operation was attempted. |
 | Authenticated buyer/seller/order/payment workflows | **NOT TESTED** | No test account or safe authenticated production smoke-test authorization was available. No writes or payment attempts were made. |
 | Exact release SHA deployed and verified | **BLOCKED** | GitHub main and CI verify `fee5592fe8f8f6cd0dfc608e6be986027a0cbc3c`; Render still reports the selected live SHA as `76c11a45f7ac37c552fd570519608fd96840f084`. The `fee5592` attempt is canceled, not deployed. |
 
@@ -194,9 +196,11 @@ Until then, do not retry deployment or claim a verified production release.
   `SOCIOMART_DB_JDBC_URL`, username, or password variables. No database credentials were exposed or
   queried. The user was asked to provide approved secure read-only database/backup access; no access
   response was available in this run.
-- A new read-only request to `/api/health` and `/api/version` timed out while Render showed its free
-  instance waking. Current public health and version therefore remain **NOT VERIFIED**; earlier
-  successful responses are historical only.
+- The initial requests timed out during Render free-instance wake. After the service woke, a subsequent
+  read-only pass returned HTTP 200 for `/`, `/api/health`, `/api/version`, `/api/marketplace`,
+  `/api/discovery/counts`, `/api/kitchens`, and `/api/auth/config`. `/api/health` returned only
+  `{"status":"UP"}`; database readiness is not thereby verified. `/api/version` still returned
+  `unknown` despite Render metadata identifying live SHA `76c11a45f7ac37c552fd570519608fd96840f084`.
 - Evidence update PR [#100](https://github.com/utkarshnikhare/my-first-spring-api/pull/100), head
   `42ba704528caee44effe6b6a5309e01288fbf4ae`, passed both GitHub Actions jobs. It remains an open
   documentation PR; production remains NO-GO.
