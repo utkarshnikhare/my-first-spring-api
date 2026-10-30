@@ -49,7 +49,8 @@ class PostgresSchemaMigrationTest {
         // V11 syncs legacy orders.status column and sets default PENDING;
         // V12 syncs legacy order_items.unit_price column;
         // V14 syncs payment_method column on orders.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("14");
+        // V15 is a forward-only safety net for production databases missing V14.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("15");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
