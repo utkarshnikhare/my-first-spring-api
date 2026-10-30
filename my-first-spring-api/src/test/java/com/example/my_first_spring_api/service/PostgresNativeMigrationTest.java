@@ -58,7 +58,8 @@ class PostgresNativeMigrationTest {
         // V12 syncs legacy order_items.unit_price column;
         // V13 syncs legacy order_items.subtotal column.
         // V14 adds payment_method column to orders.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("14");
+        // V15 is a forward-only safety net for production databases missing V14.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("15");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
