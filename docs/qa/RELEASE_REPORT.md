@@ -157,12 +157,12 @@ authenticated Render dashboard and public endpoints. No secrets or database cred
 | `/api/version` commit discrepancy | **PASS** | Cause identified: endpoint returns `unknown` because live SHA `76c11a4` predates the `RENDER_GIT_COMMIT` fallback and its Docker build did not expose Git metadata. Current `main` has the validated runtime fallback, but that fix is not live. Render deployment metadata is authoritative for the old deployment. |
 | Failed deployment root cause | **FAIL** | Deployment `dep-dbi4qu5g1s2s73e0h7i0` for `dd0807eecdefe1e8acc63300dcf6ddb522aecfe3` failed Hibernate schema validation: `orders.payment_method` was missing. |
 | Current main deployment | **BLOCKED** | Manual attempt `dep-dbi8k8psrm7s73dic5f0` for `fee5592fe8f8f6cd0dfc608e6be986027a0cbc3c` was canceled before it became live because database-history and backup gates were not met. Build completed and startup logs show a PostgreSQL connection was opened; no app-ready or Flyway migration result appears in the available log window. Whether startup performed any schema action is separately **NOT VERIFIED**; read-only history/status comparison is required before proceeding. |
-| Production database identity | **BLOCKED** | A prior successful deployment log identifies Supabase PostgreSQL 17.11, database `postgres`, schema `public`. This is historical runtime evidence, not a current read-only confirmation of the target identity/configuration. Render masks the connection values and no separate read-only DB connection was available. |
+| Production database identity | **BLOCKED** | A prior successful deployment log identifies Supabase PostgreSQL 17.11, database `postgres`, schema `public`. This is historical runtime evidence, not a current read-only confirmation of the target identity/configuration. The Supabase project console redirected to sign-in; no authenticated provider session or separate read-only DB connection was available. No database connection environment variables are present in the audit environment. |
 | Schema at failed deployment | **FAIL** | Hibernate reported missing `orders.payment_method`. |
 | Complete current Flyway history/schema | **NOT VERIFIED** | The prior live deployment logged schema version 13 and validation of 14 migrations. That is not a complete current history dump. V14–V17 have not been independently checked against the live database. `SPRING_FLYWAY_BASELINE_ON_MIGRATE=true` remains configured and unchanged. |
-| Backup availability and isolated restore | **BLOCKED** | No provider backup artifact/policy or restore target was accessible; no backup or restore was attempted. |
+| Backup availability and isolated restore | **BLOCKED** | The Supabase project console requires sign-in; no provider backup artifact/policy or approved isolated restore target was accessible. No backup or restore was attempted. |
 | Existing record counts/data integrity | **NOT VERIFIED** | No before/after counts or read-only integrity queries were available. Do not claim production records remained unchanged based on deployment status alone. |
-| Current health and public endpoints | **NOT VERIFIED** | A prior wake-up returned 200 for `/api/health`, `/`, `/api/marketplace`, `/api/discovery/counts`, `/api/kitchens`, and `/api/auth/config`; the health body was only `{"status":"UP"}`. Subsequent requests after the canceled attempt timed out, so current health is not confirmed. |
+| Current health and public endpoints | **NOT VERIFIED** | A prior wake-up returned 200 for `/api/health`, `/`, `/api/marketplace`, `/api/discovery/counts`, `/api/kitchens`, and `/api/auth/config`; the health body was only `{"status":"UP"}`. The latest health and version requests again timed out while the free instance displayed its sleep/wake screen, so current health is not confirmed. |
 | Authenticated buyer/seller/order/payment workflows | **NOT TESTED** | No test account or safe authenticated production smoke-test authorization was available. No writes or payment attempts were made. |
 | Exact release SHA deployed and verified | **BLOCKED** | GitHub main and CI verify `fee5592fe8f8f6cd0dfc608e6be986027a0cbc3c`; Render still reports the selected live SHA as `76c11a45f7ac37c552fd570519608fd96840f084`. The `fee5592` attempt is canceled, not deployed. |
 
@@ -181,3 +181,22 @@ authenticated Render dashboard and public endpoints. No secrets or database cred
    non-destructive smoke tests. Verify existing-record counts remain unchanged.
 
 Until then, do not retry deployment or claim a verified production release.
+
+### Access and follow-up evidence (2026-10-30 17:57–18:02 +05:30)
+
+- Render dashboard access is available and confirms service `srv-dad5lfajnfac73ei06s0` remains linked to
+  `main`; the live deployment still points to `76c11a45f7ac37c552fd570519608fd96840f084`. Settings
+  continue to show Auto-Deploy Off.
+- The attempted `fee5592` deployment is **Canceled**, not live. Its logs show a PostgreSQL connection
+  was established during startup, but the available log window ends before any Flyway validation,
+  migration result, or application-ready message. Do not infer that the database was untouched.
+- The Supabase project URL resolves to a sign-in page. The audit environment has no Render API key or
+  `SOCIOMART_DB_JDBC_URL`, username, or password variables. No database credentials were exposed or
+  queried. The user was asked to provide approved secure read-only database/backup access; no access
+  response was available in this run.
+- A new read-only request to `/api/health` and `/api/version` timed out while Render showed its free
+  instance waking. Current public health and version therefore remain **NOT VERIFIED**; earlier
+  successful responses are historical only.
+- Evidence update PR [#100](https://github.com/utkarshnikhare/my-first-spring-api/pull/100), head
+  `42ba704528caee44effe6b6a5309e01288fbf4ae`, passed both GitHub Actions jobs. It remains an open
+  documentation PR; production remains NO-GO.
