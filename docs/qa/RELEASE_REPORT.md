@@ -164,6 +164,7 @@ authenticated Render dashboard and public endpoints. No secrets or database cred
 | Existing record counts/data integrity | **NOT VERIFIED** | No before/after counts or read-only integrity queries were available. Do not claim production records remained unchanged based on deployment status alone. |
 | Current HTTP health and public endpoints | **PASS** | After the Render free instance woke, `/api/health`, `/`, `/api/version`, `/api/marketplace`, `/api/discovery/counts`, `/api/kitchens`, and `/api/auth/config` all returned HTTP 200. Health body was only `{"status":"UP"}`; it does not prove database readiness. Public discovery returned `live=0`, `tomorrow=0`, `preorder=0`, `all=5`. |
 | Current deployed version endpoint | **FAIL** | `/api/version` returned `commit=unknown`, `shortCommit=unknown`, build time `2026-10-27T11:26:08.886Z`; Render metadata identifies the running deployment as SHA `76c11a45f7ac37c552fd570519608fd96840f084`. |
+| Anonymous access to protected read APIs | **PASS** | Unauthenticated `GET` requests to `/api/seller-app/dashboard`, `/api/seller/products`, `/api/buyer/orders/my`, `/api/admin/dashboard`, and `/api/admin/system-health` all returned HTTP 401. This verifies anonymous denial only; it does not verify valid buyer/seller/admin sessions. |
 | Database readiness, authenticated workflows, and production data integrity | **NOT VERIFIED** | The old live health endpoint only returns `status=UP`; database identity/history/record counts and authenticated buyer/seller/order/payment workflows remain unverified. No authenticated write or payment operation was attempted. |
 | Authenticated buyer/seller/order/payment workflows | **NOT TESTED** | No test account or safe authenticated production smoke-test authorization was available. No writes or payment attempts were made. |
 | Exact release SHA deployed and verified | **BLOCKED** | GitHub main and CI verify `fee5592fe8f8f6cd0dfc608e6be986027a0cbc3c`; Render still reports the selected live SHA as `76c11a45f7ac37c552fd570519608fd96840f084`. The `fee5592` attempt is canceled, not deployed. |
@@ -201,6 +202,9 @@ Until then, do not retry deployment or claim a verified production release.
   `/api/discovery/counts`, `/api/kitchens`, and `/api/auth/config`. `/api/health` returned only
   `{"status":"UP"}`; database readiness is not thereby verified. `/api/version` still returned
   `unknown` despite Render metadata identifying live SHA `76c11a45f7ac37c552fd570519608fd96840f084`.
+- Anonymous GETs to the seller dashboard, seller products, buyer orders, admin dashboard, and admin
+  system-health routes each returned 401. No authenticated workflow, write operation, order, or payment
+  was attempted.
 - Evidence update PR [#100](https://github.com/utkarshnikhare/my-first-spring-api/pull/100), head
   `42ba704528caee44effe6b6a5309e01288fbf4ae`, passed both GitHub Actions jobs. It remains an open
   documentation PR; production remains NO-GO.
