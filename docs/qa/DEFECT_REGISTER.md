@@ -91,9 +91,8 @@ Entries dated before 2026-10-30 are historical snapshots. Section 6 is the curre
 
 ## 6. Current Independent Audit (2026-10-30)
 
-Nine additional actionable findings were identified. AUD-001 through AUD-008 are fixed in merged code;
-AUD-009 is fixed in this maintenance branch and awaits CI verification. Production remains blocked for
-the schema repair until the database and backup gates are satisfied.
+Nine additional actionable findings were identified. AUD-001 through AUD-009 are fixed in merged code.
+Production remains blocked for the schema repair until the database and backup gates are satisfied.
 
 | ID | Severity | Finding and root cause | Fix and evidence | Current status |
 |---|---|---|---|---|
@@ -105,6 +104,6 @@ the schema repair until the database and backup gates are satisfied.
 | AUD-006 | P2 | Render Docker builds omit `.git`, causing `/api/version` to report an unknown commit. | Prefer Render's validated 40-character `RENDER_GIT_COMMIT` at runtime; `VersionControllerTest` covers valid and malformed metadata. | **CODE FIXED; PROD NOT DEPLOYED** |
 | AUD-007 | P1 | New recurring schedules remained creatable despite the specification; removing the UI alone would permit API bypass. | Removed seller creation UI, reject recurring product creation, return HTTP 410 on schedule creation, and restrict the service method; existing schedules/history remain. Covered by service/API tests and 13 passing Playwright tests. | **FIXED** |
 | AUD-008 | P2 | Editing Orders Close after the stored opening time had elapsed failed because timing edits reused the future-only validator intended for new/changed opening timestamps. | Existing timestamps now retain their original value and are checked only against revised delivery/cutoff bounds; unchanged submitted values use the same path. `Requirement5LiveOfferingEditTest.ordersCloseCanBeExtendedAfterTheStoredOpeningTimeHasPassed` covers the regression. | **FIXED** |
-| AUD-009 | P3 | CI used deprecated `checkout@v4`, `setup-java@v4`, and `setup-node@v4` actions plus a floating `ubuntu-latest` runner, producing GitHub deprecation/migration warnings. | Pinned the runner to `ubuntu-24.04` and upgraded checkout/setup-java to v5 and setup-node to v7; CI validation is required on the maintenance PR. | **FIX IN REVIEW** |
+| AUD-009 | P3 | CI used deprecated `checkout@v4`, `setup-java@v4`, and `setup-node@v4` actions plus a floating `ubuntu-latest` runner, producing GitHub deprecation/migration warnings. | Pinned the runner to `ubuntu-24.04` and upgraded checkout/setup-java to v5 and setup-node to v7; PR #98 CI passed with no matching deprecation warnings. | **FIXED** |
 
 Local release evidence is recorded in `TEST_EXECUTION_REPORT.md`. PostgreSQL Testcontainers, Render deployment, production health, backups/restoration, and production data integrity remain unverified.
