@@ -19,4 +19,22 @@ class VersionControllerTest {
         assertEquals(null, result.get("buildTime"));
         assertEquals("SocioMart", result.get("application"));
     }
+
+    @org.junit.jupiter.api.Test
+    void prefersRenderCommitMetadataWhenGitDirectoryWasNotPackaged() {
+        String renderCommit = "9b188544a50cdfe78c1014a125bb99d75975b834";
+        VersionController controller = new VersionController(null, null, renderCommit);
+
+        Map<String, Object> result = controller.version();
+
+        assertEquals(renderCommit, result.get("commit"));
+        assertEquals(renderCommit.substring(0, 7), result.get("shortCommit"));
+    }
+
+    @org.junit.jupiter.api.Test
+    void ignoresMalformedRenderCommitMetadata() {
+        VersionController controller = new VersionController(null, null, "not-a-commit");
+
+        assertEquals("unknown", controller.version().get("commit"));
+    }
 }

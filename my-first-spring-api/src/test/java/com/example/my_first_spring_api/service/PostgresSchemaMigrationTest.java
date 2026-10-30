@@ -1,15 +1,17 @@
 package com.example.my_first_spring_api.service;
 
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
-import com.example.my_first_spring_api.SecurityConfig;
+import org.h2.jdbcx.JdbcDataSource;
+
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,9 +38,6 @@ class PostgresSchemaMigrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    @Autowired
-    private Environment environment;
-
     @Test
     void migrationsCreateSchemaThatMatchesAllJpaEntities() {
         // V4 adds the Spring Session tables; V5 adds hot-path indexes only;
@@ -48,9 +47,9 @@ class PostgresSchemaMigrationTest {
         // V10 hardens product is_available and order status defaults;
         // V11 syncs legacy orders.status column and sets default PENDING;
         // V12 syncs legacy order_items.unit_price column;
-        // V14 syncs payment_method column on orders; V15 adds scheduled opening
-        // timestamps; V16 adds orderable Quick Post metadata and optional images.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("16");
+        // V14 adds payment_method; V15 adds scheduled opening timestamps;
+        // V16 adds Quick Post metadata; V17 repairs missing payment_method.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("17");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
@@ -68,6 +67,13 @@ class PostgresSchemaMigrationTest {
                 Integer.class);
         Assertions.assertNotNull(emailColumnCount);
         assertThat(emailColumnCount).isEqualTo(1);
+
+        Integer paymentMethodColumnCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'PUBLIC' "
+                        + "AND table_name = 'ORDERS' AND column_name = 'PAYMENT_METHOD'",
+                Integer.class);
+        Assertions.assertNotNull(paymentMethodColumnCount);
+        assertThat(paymentMethodColumnCount).isEqualTo(1);
 
         Integer sessionTableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
@@ -100,5 +106,38 @@ class PostgresSchemaMigrationTest {
                 Integer.class);
         Assertions.assertNotNull(productFeatureColumnCount);
         assertThat(productFeatureColumnCount).isEqualTo(3);
+    }
+
+    @Test
+    void v17RepairsPaymentMethodWhenV14IsAlreadyRecorded() {
+        String databaseName = "payment_method_repair_" + UUID.randomUUID().toString().replace("-", "");
+        JdbcDataSource isolatedDataSource = new JdbcDataSource();
+        isolatedDataSource.setURL("jdbc:h2:mem:" + databaseName + ";MODE=PostgreSQL;DB_CLOSE_DELAY=-1");
+        isolatedDataSource.setUser("sa");
+        Flyway beforeRepair = Flyway.configure()
+                .dataSource(isolatedDataSource)
+                .locations("classpath:db/migration")
+                .target(MigrationVersion.fromVersion("16"))
+                .load();
+        beforeRepair.migrate();
+
+        JdbcTemplate isolatedJdbc = new JdbcTemplate(isolatedDataSource);
+        isolatedJdbc.execute("ALTER TABLE orders DROP COLUMN payment_method");
+
+        Flyway repair = Flyway.configure()
+                .dataSource(isolatedDataSource)
+                .locations("classpath:db/migration")
+                .load();
+        repair.migrate();
+
+        Integer paymentMethodColumnCount = isolatedJdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                        + "WHERE table_schema = 'PUBLIC' "
+                        + "AND table_name = 'ORDERS' "
+                        + "AND UPPER(column_name) = 'PAYMENT_METHOD'",
+                Integer.class);
+        Assertions.assertNotNull(paymentMethodColumnCount);
+        assertThat(paymentMethodColumnCount).isEqualTo(1);
+        assertThat(repair.info().current().getVersion().getVersion()).isEqualTo("17");
     }
 }

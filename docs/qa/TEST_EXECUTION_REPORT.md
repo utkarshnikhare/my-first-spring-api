@@ -1,7 +1,9 @@
-# SocioMart Test Execution Report (refreshed 2026-10-27)
+# SocioMart Test Execution Report (current audit: 2026-10-30)
 
-**Report Date:** 2026-10-27
+**Report Date:** 2026-10-30
 **Auditor:** Principal Engineer / QA Lead (fresh audit)
+
+Historical entries below retain their original evidence; section 10 is the latest local execution.
 
 ## 1. Build & compilation
 
@@ -62,6 +64,16 @@ PostgreSQL integration and migration behavior is NOT verified in this environmen
 - GitHub: local HEAD b69be61; PR #90 OPEN at 2e13f43; b69be61 not merged into main; latest branch CI succeeded.
 - Render: health endpoint timed out; /api/version not verified; deployed commit SHA unverified.
 - Final status: PARTIALLY VERIFIED.
+
+## 10. Current Audit Verification (2026-10-30)
+
+- `.\mvnw.cmd -B clean verify`: **BUILD SUCCESS**; 812 tests, 0 failures, 0 errors, 5 skipped.
+- The 5 skipped tests require Docker/PostgreSQL Testcontainers: `PostgresNativeMigrationTest` (1), `PostgresRuntimeSmokeTest` (1), and `UserEmailMigrationRegressionTest` (3). Docker is unavailable locally; PostgreSQL behavior is therefore not verified here.
+- `PostgresSchemaMigrationTest` passed, including an isolated H2 PostgreSQL-mode simulation that starts at Flyway V16 with the payment column absent and verifies V17 restores it.
+- `npm test` (`e2e/`): **13/13 passed** across desktop and Pixel 7 emulation, including responsive viewport audits and buyer/seller/admin workflows.
+- `npm audit --audit-level=high`: **0 vulnerabilities** in the E2E dependency tree. `node --check` passed for `seller.js` and `buyer.js`.
+- Render dashboard: auto-deploy Off; last live commit `76c11a4`; latest manual attempt `dd0807e` failed because `orders.payment_method` was missing. Read-only `/api/health` and `/api/version` requests timed out at 30 seconds.
+- Production migrations, database records, backup/restore, production workflows, and deployed commit SHA: **NOT VERIFIED**. No production migration or deployment was attempted.
 
 ## 9. Final Release Blocker Closure (2026-10-27)
 

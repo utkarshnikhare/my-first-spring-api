@@ -13,8 +13,10 @@ import com.example.my_first_spring_api.service.BuyerService;
 import com.example.my_first_spring_api.service.RecurringScheduleService;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -84,11 +86,10 @@ public class RecurringScheduleController {
     }
 
     @PostMapping("/{productId}")
-    public ResponseEntity<RecurringSchedule> createSchedule(@PathVariable Long productId,
-                                                           @RequestBody RecurringScheduleDto dto,
-                                                           HttpSession session) {
-        User seller = requireSeller(session);
-        return ResponseEntity.ok(scheduleService.createOwnedSchedule(productId, dto, seller.getId()));
+    public ResponseEntity<RecurringSchedule> createSchedule(HttpSession session) {
+        requireSeller(session);
+        throw new ResponseStatusException(HttpStatus.GONE,
+                "Creating new recurring schedules is no longer supported.");
     }
 
     @PostMapping("/{scheduleId}/end")

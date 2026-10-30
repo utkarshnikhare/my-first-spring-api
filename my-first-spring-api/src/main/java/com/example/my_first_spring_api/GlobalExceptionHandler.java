@@ -40,6 +40,7 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private static final String INTERNAL_ERROR_MESSAGE = "An unexpected error occurred. Please try again.";
 
     /**
      * Bean-validation failures.
@@ -211,7 +212,7 @@ public class GlobalExceptionHandler {
             } else if (rootMsg.contains("order_status")) {
                 message = "Invalid or missing order status.";
             } else if (rootMsg.contains("not-null") || rootMsg.contains("null value")) {
-                message = "Missing required information: " + ex.getRootCause().getMessage();
+                message = "Please provide all required information.";
             }
         }
         return new ResponseEntity<>(new ApiErrorDto("DATA_INTEGRITY_VIOLATION", message, 400), HttpStatus.BAD_REQUEST);
@@ -220,20 +221,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(org.springframework.transaction.UnexpectedRollbackException.class)
     public ResponseEntity<ApiErrorDto> handleUnexpectedRollback(org.springframework.transaction.UnexpectedRollbackException ex) {
         logger.error("Unexpected rollback exception: ", ex);
-        Throwable root = org.springframework.core.NestedExceptionUtils.getMostSpecificCause(ex);
-        String msg = root != null && root.getMessage() != null ? root.getMessage() : ex.getMessage();
-        return new ResponseEntity<>(new ApiErrorDto("INTERNAL_ERROR", msg, 500), HttpStatus.INTERNAL_SERVER_ERROR);
+        return new ResponseEntity<>(new ApiErrorDto("INTERNAL_ERROR", INTERNAL_ERROR_MESSAGE, 500),
+                HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorDto> handleGenericException(Exception ex) {
         logger.error("Unhandled exception: ", ex);
-        Throwable root = org.springframework.core.NestedExceptionUtils.getMostSpecificCause(ex);
-        String details = root != null && root.getMessage() != null && !root.getMessage().isBlank()
-                ? root.getMessage()
-                : (ex.getMessage() != null && !ex.getMessage().isBlank()
-                    ? ex.getMessage()
-                    : "An unexpected error occurred. Please try again.");
-        return new ResponseEntity<>(new ApiErrorDto("INTERNAL_ERROR", details, 500), HttpStatus.INTERNAL_SERVER_ERROR);
+        return new ResponseEntity<>(new ApiErrorDto("INTERNAL_ERROR", INTERNAL_ERROR_MESSAGE, 500),
+                HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

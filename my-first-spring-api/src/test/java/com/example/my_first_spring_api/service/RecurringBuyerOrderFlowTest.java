@@ -6,7 +6,6 @@ import com.example.my_first_spring_api.dto.OrderItemDetailDto;
 import com.example.my_first_spring_api.dto.OrderItemRequest;
 import com.example.my_first_spring_api.dto.ProductCreateDto;
 import com.example.my_first_spring_api.dto.ProductDto;
-import com.example.my_first_spring_api.dto.RecurringScheduleDto;
 import com.example.my_first_spring_api.dto.SellerDashboardDto;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Occurrence;
@@ -107,21 +106,16 @@ class RecurringBuyerOrderFlowTest {
         dto.setName(name);
         dto.setPrice(BigDecimal.valueOf(25));
         dto.setCategories(List.of("BREAKFAST"));
-        dto.setAvailableDate(start);
+        dto.setAvailableDate(LocalDate.now());
         dto.setMaxQuantity(productMax);
         dto.setOrderWindowEnd("23:58");
         dto.setReadyByTime(start.atTime(23, 59).toString());
 
-        RecurringScheduleDto recurring = new RecurringScheduleDto();
-        recurring.setStartDate(start);
-        recurring.setEndDate(start.plusDays(14));
-        recurring.setRecurrenceWeekdays(EnumSet.of(start.getDayOfWeek()));
-        recurring.setDefaultQuantity(dayQty);
-        recurring.setDefaultOrderCloseTime("23:58");
-        recurring.setDefaultReadyByTime(start.atTime(18, 0).toString());
-        dto.setRecurringSchedule(recurring);
-
-        return sellerService.createProduct(kitchen.getId(), dto, seller);
+        ProductDto productDto = sellerService.createProduct(kitchen.getId(), dto, seller);
+        Product product = products.findById(productDto.getId()).orElseThrow();
+        scheduleService.createSchedule(product, start, start.plusDays(14),
+                EnumSet.of(start.getDayOfWeek()), dayQty, "23:58", start.atTime(18, 0).toString());
+        return productDto;
     }
 
     private MockHttpSession buyerSession() {

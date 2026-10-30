@@ -1,7 +1,7 @@
 /**
  * SocioMart Seller App v1.0 - 6-tab SPA
  */
-var S = { user: null, kitchen: null, kitchenUrl: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFilterDelivery: '', offeringProductId: '', deliverySaving: {}, deliveryBlockRequestId: 0, bulkDelivering: false, offeringFor: 'today', quickPostRequestId: null, editOffering: null, dashFilter: 'ALL', offeringsTab: 'history', recurringSchedules: [], recurringDetail: null, offeringMode: 'today', recurringDuration: 'thisweek', dashTab: 'live', offeringSubmitting: false, editOccurrenceId: null, authMode: 'login', authOptions: null, authError: null, authServiceAreaId: '', authSlugTouched: false };
+var S = { user: null, kitchen: null, kitchenUrl: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFilterDelivery: '', offeringProductId: '', deliverySaving: {}, deliveryBlockRequestId: 0, bulkDelivering: false, offeringFor: 'today', quickPostRequestId: null, editOffering: null, dashFilter: 'ALL', offeringsTab: 'history', recurringSchedules: [], recurringDetail: null, recurringDuration: 'thisweek', dashTab: 'live', offeringSubmitting: false, editOccurrenceId: null, authMode: 'login', authOptions: null, authError: null, authServiceAreaId: '', authSlugTouched: false };
 var sellerRoutes = {
     '#/home': sellerHomeView, '#/add': sellerAddView, '#/create': sellerCreateView,
     '#/edit-offering': sellerEditOfferingView,
@@ -2408,51 +2408,6 @@ function offeringFormHtml(t, opts) {
     h += '<input type="hidden" name="availableDate" id="availDate" value="' + esc(chosenDate) + '">';
     h += '<div class="form-group" id="chooseDateRow"' + (mode === 'choose' ? '' : ' hidden') + '><label class="form-label">Offering Date <span class="req">*</span></label><input type="date" class="form-input" name="chosenOfferingDate" min="' + todayIso + '" data-action="set-availability-date" value="' + esc(chosenDate) + '"' + lockAttr + '></div>';
 
-    // REPEATING SCHEDULE section (Requirement 3.2). Create Offering only:
-    // Edit Offering never edits the repeating rule (Manage Schedule does that),
-    // so the whole block is skipped in edit mode.
-    if (!isEdit) {
-        var recurMode = S.offeringMode === 'recurring' ? 'recurring' : 'today';
-        var dur = S.recurringDuration || 'thisweek';
-        h += '<div class="form-group" id="recurringScheduleSection">';
-        h += '<div class="font-700 mt-2 mb-1">AVAILABILITY <span class="small muted">(One time, or a repeating schedule)</span></div>';
-        h += '<div class="muted small mb-2">Choose <strong>ONE TIME</strong> to keep a single offering date, or <strong>REPEATING SCHEDULE</strong> to sell this item on selected days.</div>';
-        h += '<div class="row-actions">';
-        h += '<label class="radio-option ' + (recurMode === 'recurring' ? 'selected' : '') + '" data-action="set-offering-mode" data-mode="recurring">REPEATING SCHEDULE</label>';
-        h += '<label class="radio-option ' + (recurMode !== 'recurring' ? 'selected' : '') + '" data-action="set-offering-mode" data-mode="today">ONE TIME</label>';
-        h += '</div>';
-        // No native `required` on anything inside this container: a required input
-        // in a hidden container still blocks form submission with an invisible
-        // browser error. Validation happens in buildRecurringSchedule() on submit.
-        h += '<div class="mt-2" id="recurringScheduleFields"' + (recurMode === 'recurring' ? '' : ' hidden') + '>';
-        h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Start Date <span class="req">*</span></label><input class="form-input" id="recurringStartDate" name="recurringStartDate" type="date" min="' + todayIso + '"></div>';
-        h += '<div class="form-group"><label class="form-label">End Date <span class="req">*</span></label><input class="form-input" id="recurringEndDateMain" name="recurringEndDate" type="date" min="' + todayIso + '"' + (dur === 'dated' ? '' : ' readonly') + '></div></div>';
-
-        h += '<div class="form-group"><label class="form-label">Repeat On <span class="req">*</span></label><div class="weekday-checkbox-group">' +
-            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="1"> M</label>' +
-            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="2"> T</label>' +
-            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="3"> W</label>' +
-            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="4"> T</label>' +
-            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="5"> F</label>' +
-            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="6"> S</label>' +
-            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="7"> S</label></div></div>';
-
-        h += '<div class="form-group"><label class="form-label">Repeat Duration <span class="req">*</span></label><div class="radio-group">' +
-            '<label class="radio-option' + (dur === 'thisweek' ? ' selected' : '') + '" data-action="set-recurring-duration" data-duration="thisweek">This week</label>' +
-            '<label class="radio-option' + (dur === 'onemonth' ? ' selected' : '') + '" data-action="set-recurring-duration" data-duration="onemonth">1 month</label>' +
-            '<label class="radio-option' + (dur === 'dated' ? ' selected' : '') + '" data-action="set-recurring-duration" data-duration="dated">Until a date</label>' +
-            '<label class="radio-option' + (dur === 'ongoing' ? ' selected' : '') + '" data-action="set-recurring-duration" data-duration="ongoing">Ongoing (90 days)</label></div>' +
-            '<p class="muted small">Ongoing is internally capped at 90 days and can be extended later from Manage Schedule.</p></div>';
-        h += '<input type="hidden" name="recurringWeekdays" id="recurringWeekdays" value="">';
-        h += '<input type="hidden" name="recurringDuration" id="recurringDuration" value="' + esc(dur) + '">';
-        h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Default Quantity per Occurrence (blank for No limit)</label><input class="form-input" name="recurringDefaultQuantity" type="number" min="1" step="1" placeholder="Blank for unlimited"></div>';
-        h += '<div class="form-group"><label class="form-label">Default Orders Close (HH:mm)</label><input class="form-input" name="recurringDefaultOrderCloseTime" type="time"></div></div>';
-        h += '<div class="form-group"><label class="form-label">Default Delivery / Ready By</label><input class="form-input" name="recurringDefaultReadyByTime" type="text" placeholder="e.g. 1:00 PM"></div>';
-        h += '</div>';  // recurringScheduleFields
-        h += '</div>';  // recurringScheduleSection
-    }
-    h += '<input type="hidden" name="recurringSchedule" id="recurringScheduleHidden" value="">';
-
     var smartDefaults = computeSmartTimingDefaults(mode === 'tomorrow', chosenDate);
     var openValue = isEdit ? (t.orderWindowStart || '') : (t.orderWindowStart || '');
     var closeValue = isEdit ? (t.orderWindowEnd || '') : (t.orderWindowEnd || smartDefaults.orderWindowEnd);
@@ -2470,7 +2425,7 @@ function offeringFormHtml(t, opts) {
     var closeMinAttr = (!isEdit && chosenDate <= todayIso) ? ' min="' + currentLocalTime + '"' : '';
     var readyMinAttr = (!locked) ? ' min="' + currentLocalIso + '"' : '';
 
-    h += '<div id="ordersOpenFromFields"' + (S.offeringMode === 'recurring' && !isEdit ? ' hidden' : '') + '>';
+    h += '<div id="ordersOpenFromFields">';
     h += '<div class="form-group"><label class="form-label">Orders Open From date</label><select class="form-select" name="orderOpenDateMode" data-action="set-order-open-date-mode"' + lockAttr + '>' +
         '<option value="today"' + (openDateMode === 'today' ? ' selected' : '') + '>Today</option>' +
         '<option value="tomorrow"' + (openDateMode === 'tomorrow' ? ' selected' : '') + '>Tomorrow</option>' +
@@ -2482,10 +2437,7 @@ function offeringFormHtml(t, opts) {
         '<p class="muted small" id="ordersOpenFromSummary">Leave blank for today to open immediately after publishing. Tomorrow and future dates require a time.</p></div></div>';
     h += '<input type="hidden" name="initialOrderOpenDate" value="' + esc(storedOpenDate) + '">' +
         '<input type="hidden" name="initialOrderOpenTime" value="' + esc(openingTime) + '">';
-    if (!isEdit) {
-        h += '<div id="recurringOrderOpenTimeField"' + (S.offeringMode === 'recurring' ? '' : ' hidden') + ' class="form-group">' +
-            '<label class="form-label">Orders Open (time of day)</label><input class="form-input" name="orderWindowStart" type="time" value="' + esc(openValue) + '"' + lockAttr + '></div>';
-    } else {
+    if (isEdit) {
         h += '<input type="hidden" name="orderWindowStart" value="' + esc(openValue) + '">';
     }
 
@@ -2536,7 +2488,6 @@ async function sellerCreateView() {
     var isLateNight = now.getHours() >= 21;
     // If the current time is past 21:00 (9:00 PM), default the offering date to tomorrow.
     S.offeringFor = isLateNight ? 'tomorrow' : 'today';
-    S.offeringMode = 'today';
     S.recurringDuration = 'thisweek';
     S.recurringScheduleConfig = null;
     try {
@@ -3708,18 +3659,7 @@ document.addEventListener('submit', async function (e) {
             // datetime after the offering date is known (see below).
             var readyByRaw = (vals.readyByTime || '').trim();
             if (!readyByRaw) { toast('Delivery / Ready By is required', 'error'); return; }
-            // Availability: ONE TIME keeps the existing Today/Tomorrow/Choose Date
-            // rules; REPEATING SCHEDULE replaces the single date with the schedule
-            // window (the product's date is its first occurrence). Requirement 3.
-            var recurringConfig = null;
-            if (S.offeringMode === 'recurring') {
-                recurringConfig = buildRecurringSchedule(vals, form);
-                if (!recurringConfig) return; // buildRecurringSchedule toasted
-                vals.availableDate = recurringConfig.startDate;
-                vals.orderWindowStart = parseOptionalHhmm(vals.orderWindowStart, 'Orders Open');
-                delete vals.orderOpenDate;
-                delete vals.orderOpenTime;
-            } else if (S.offeringFor === 'choose') {
+            if (S.offeringFor === 'choose') {
                 vals.availableDate = vals.chosenOfferingDate || '';
                 if (!vals.availableDate) { toast('Choose an offering date', 'error'); return; }
                 vals.orderOpenDate = vals.orderOpenDateMode === 'choose'
@@ -3729,20 +3669,16 @@ document.addEventListener('submit', async function (e) {
                 vals.orderOpenDate = vals.orderOpenDateMode === 'choose'
                     ? (vals.chosenOrderOpenDate || '') : (vals.orderOpenDateMode === 'tomorrow' ? sellerDate('tomorrow') : sellerDate('today'));
             }
-            if (S.offeringMode !== 'recurring') {
-                if (!vals.orderOpenDate) { toast('Choose an Orders Open From date', 'error'); return; }
-                vals.orderOpenTime = parseOptionalHhmm(vals.orderOpenTime, 'Orders Open From');
-            }
+            if (!vals.orderOpenDate) { toast('Choose an Orders Open From date', 'error'); return; }
+            vals.orderOpenTime = parseOptionalHhmm(vals.orderOpenTime, 'Orders Open From');
             // Finalise the ready-by time. The form field is `datetime-local`, so it
             // normally already carries a full ISO datetime and is passed through
             // unchanged. Only a bare HH:mm time is combined with the offering date
             // (legacy/manual input path).
             vals.readyByTime = normalizeReadyByTime(readyByRaw, vals.availableDate);
-            if (S.offeringMode !== 'recurring') {
-                var openFromError = ordersOpenFromError(vals.orderOpenDate, vals.orderOpenTime,
-                    vals.availableDate, vals.orderWindowEnd, vals.readyByTime);
-                if (openFromError) { toast(openFromError, 'error'); return; }
-            }
+            var openFromError = ordersOpenFromError(vals.orderOpenDate, vals.orderOpenTime,
+                vals.availableDate, vals.orderWindowEnd, vals.readyByTime);
+            if (openFromError) { toast(openFromError, 'error'); return; }
             delete vals.chosenOfferingDate;
             delete vals.orderOpenDateMode;
             delete vals.chosenOrderOpenDate;
@@ -3782,19 +3718,6 @@ document.addEventListener('submit', async function (e) {
                 return;
             }
             vals.categories = categories;
-            // Raw schedule inputs never travel to the API; only the structured
-            // recurringSchedule object does (and only in recurring mode -- an
-            // empty string would fail Jackson's object deserialisation).
-            delete vals.recurringStartDate;
-            delete vals.recurringEndDate;
-            delete vals.recurringWeekdays;
-            delete vals.recurringDuration;
-            delete vals.recurringWeekday;
-            delete vals.recurringDefaultQuantity;
-            delete vals.recurringDefaultOrderCloseTime;
-            delete vals.recurringDefaultReadyByTime;
-            if (recurringConfig) vals.recurringSchedule = recurringConfig;
-            else delete vals.recurringSchedule;
             var saveFav = $('#favToggle') && $('#favToggle').classList.contains('on');
             if (saveFav) {
                 try {
@@ -4768,38 +4691,6 @@ document.addEventListener('click', async function (e) {
              }
              case 'set-availability-date': {
                  applyOfferingDatePicker(t);
-                 break;
-             }
-             case 'set-offering-mode': {
-                 // Availability toggle: ONE TIME vs REPEATING SCHEDULE (Req 3).
-                 // Selection is scoped to this pair so it can never clear the
-                 // Today/Tomorrow/Choose or Repeat Duration radios.
-                 S.offeringMode = t.dataset.mode === 'recurring' ? 'recurring' : 'today';
-                 $all('[data-action="set-offering-mode"]').forEach(function (el) { el.classList.remove('selected'); });
-                 t.classList.add('selected');
-                 var schedFields = $('#recurringScheduleFields');
-                 if (schedFields) schedFields.hidden = S.offeringMode !== 'recurring';
-                 var openFromFields = $('#ordersOpenFromFields');
-                 if (openFromFields) openFromFields.hidden = S.offeringMode === 'recurring';
-                 var recurringOpenTime = $('#recurringOrderOpenTimeField');
-                 if (recurringOpenTime) recurringOpenTime.hidden = S.offeringMode !== 'recurring';
-                 // In recurring mode the schedule start date IS the offering date,
-                 // so the single-date "Offering For" chooser steps aside; in ONE
-                 // TIME mode it comes back with its previous choice intact.
-                 var forGroup = $('#offeringForGroup');
-                 if (forGroup) {
-                     forGroup.hidden = S.offeringMode === 'recurring';
-                     // Resync the single-date radios to the stored choice: the DOM
-                     // was rendered once, so a mode round-trip must not leave a
-                     // stale highlight over a different stored selection.
-                     $all('#offeringForGroup .radio-option').forEach(function (el) {
-                         el.classList.toggle('selected', (el.dataset.val || 'today') === S.offeringFor);
-                     });
-                 }
-                 var chooseRow2 = $('#chooseDateRow');
-                 if (chooseRow2 && S.offeringMode === 'recurring') chooseRow2.hidden = true;
-                 else if (chooseRow2) chooseRow2.hidden = S.offeringFor !== 'choose';
-                 if (S.offeringMode === 'recurring') syncRecurringEndDate();
                  break;
              }
              case 'set-recurring-duration': {
