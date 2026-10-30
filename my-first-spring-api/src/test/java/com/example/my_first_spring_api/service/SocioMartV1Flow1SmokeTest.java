@@ -617,7 +617,9 @@ public class SocioMartV1Flow1SmokeTest {
         createDto.setDescription("A test product");
         createDto.setPrice(new BigDecimal("100"));
         createDto.setMaxQuantity(50);
-        createDto.setReadyByTime("18:00");
+        LocalDate offeringDate = LocalDate.now(AppTimeZone.ZONE).plusDays(1);
+        createDto.setAvailableDate(offeringDate);
+        createDto.setReadyByTime(offeringDate.atTime(18, 0).toString());
         createDto.setOrderWindowStart("09:00");
         createDto.setOrderWindowEnd("21:00");
         createDto.setMaxQuantity(100);
