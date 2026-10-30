@@ -3,8 +3,8 @@
 **Report Date:** 2026-10-30
 **Auditor:** Principal Engineer / QA Lead (release and reliability audit)
 
-> Sections 1–7 are a historical snapshot from 2026-10-27. Section 8 is the authoritative current
-> disposition; do not use the historical branch, commit, CI, or Render status as current evidence.
+> Sections 1–8 are historical snapshots. Section 9 is the latest production-gate evidence; do not
+> use older branch, commit, CI, or Render observations as current evidence.
 
 ## 1. Git state
 
@@ -167,7 +167,7 @@ authenticated Render dashboard and public endpoints. No secrets or database cred
 | Anonymous access to protected read APIs | **PASS** | Unauthenticated `GET` requests to `/api/seller-app/dashboard`, `/api/seller/products`, `/api/buyer/orders/my`, `/api/admin/dashboard`, and `/api/admin/system-health` all returned HTTP 401. This verifies anonymous denial only; it does not verify valid buyer/seller/admin sessions. |
 | Database readiness, authenticated workflows, and production data integrity | **NOT VERIFIED** | The old live health endpoint only returns `status=UP`; database identity/history/record counts and authenticated buyer/seller/order/payment workflows remain unverified. No authenticated write or payment operation was attempted. |
 | Authenticated buyer/seller/order/payment workflows | **NOT TESTED** | No test account or safe authenticated production smoke-test authorization was available. No writes or payment attempts were made. |
-| Exact release SHA deployed and verified | **BLOCKED** | GitHub main and CI verify `fee5592fe8f8f6cd0dfc608e6be986027a0cbc3c`; Render still reports the selected live SHA as `76c11a45f7ac37c552fd570519608fd96840f084`. The `fee5592` attempt is canceled, not deployed. |
+| Exact release SHA deployed and verified | **BLOCKED** | Current `main` is `a044a1af583545837074630aa4cd6886c65dc7d5`; its GitHub Actions run `41057868693` passed both build and E2E jobs. The verified application release commit `fee5592fe8f8f6cd0dfc608e6be986027a0cbc3c` is an ancestor; current `main` also includes the release-report evidence and a deterministic test-fixture correction. Render still reports live SHA `76c11a45f7ac37c552fd570519608fd96840f084`; the prior attempt for `fee5592` was canceled, not deployed. |
 
 ### Remaining actions required to clear NO-GO
 
@@ -205,6 +205,14 @@ Until then, do not retry deployment or claim a verified production release.
 - Anonymous GETs to the seller dashboard, seller products, buyer orders, admin dashboard, and admin
   system-health routes each returned 401. No authenticated workflow, write operation, order, or payment
   was attempted.
+- PR [#100](https://github.com/utkarshnikhare/my-first-spring-api/pull/100) was merged after its
+  current head `68a70e313f4e153969345fa85e72d5456c7dbd74` passed CI run `41057447029` (build and E2E).
+  The merged `main` commit is `a044a1af583545837074630aa4cd6886c65dc7d5`; main CI run
+  `41057868693` passed both jobs. CI had exposed one clock-dependent test fixture using a fixed
+  same-day 18:00 Ready By value. The fixture now uses tomorrow's offering date and 18:00 delivery;
+  the previously failing test passed locally (`mvnw.cmd -B -Dtest=SocioMartV1Flow1SmokeTest#givenSellerApplication_whenAdminRequestsChanges_thenSellerResubmitsWithSameSlug_thenAdminApproves test`)
+  and the full merged-main CI passed. This was a test-only adjustment; it does not change application
+  or production data.
 - Evidence update PR [#100](https://github.com/utkarshnikhare/my-first-spring-api/pull/100), head
   `42ba704528caee44effe6b6a5309e01288fbf4ae`, passed both GitHub Actions jobs. It remains an open
   documentation PR; production remains NO-GO.
