@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
                 "spring.datasource.password=",
                 "spring.jpa.hibernate.ddl-auto=validate",
                 "spring.jpa.defer-datasource-initialization=false",
+                "spring.main.lazy-initialization=true",
                 "spring.flyway.enabled=true"
         })
 @ActiveProfiles("test")
@@ -140,4 +141,5 @@ class PostgresSchemaMigrationTest {
         assertThat(paymentMethodColumnCount).isEqualTo(1);
         assertThat(repair.info().current().getVersion().getVersion()).isEqualTo("17");
     }
+
 }

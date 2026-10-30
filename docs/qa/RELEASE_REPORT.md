@@ -238,3 +238,46 @@ The last verified application release remains `fee5592fe8f8f6cd0dfc608e6be986027
 ancestor of current `main`. The later main changes are the test fixture correction and report updates.
 Do not manually deploy until an authorized operator completes read-only database/schema/history checks
 and verifies an owner-approved backup with an isolated restore. Keep Auto-Deploy Off.
+
+## 11. Render Startup / Port Incident (2026-10-30 21:23–21:32 +05:30)
+
+**Disposition: code-side startup ordering fix verified locally; production remains NO-GO.** No
+production database query or mutation and no Render deployment was performed during this investigation.
+
+| Area | Status | Evidence |
+|---|---|---|
+| Port configuration | **PASS (configuration)** | `application.properties` sets `server.address=0.0.0.0` and `server.port=${PORT:8081}`. Render's reported Tomcat port was `10000`, consistent with its injected `PORT`; the Docker entrypoint runs the packaged jar and no custom connector or app-level start command was found. |
+| Local HTTP reachability on assigned port | **PASS (test)** | New `ProductionStartupPortBindingTest` starts with `PORT=0`, binds `0.0.0.0`, and successfully GETs `/api/health` over loopback. Tomcat reported a dynamically assigned port and health returned 200. This is not a Docker/network-edge reproduction. |
+| Render port scan | **FAIL (production attempt)** | User-provided later logs report port scan timeout after startup took `115.502s`. Since the logs show Tomcat using assigned port 10000, a wrong configured port is not evidenced; startup timing remains close to the scan deadline. Docker is not installed/available here, so container-level reachability could not be reproduced. |
+| Lazy startup / Flyway ordering | **FIXED IN BRANCH; LOCAL TEST PASS** | Production enables lazy initialization. Previously the lazy exclusion covered `Flyway` but not Boot's `FlywayMigrationInitializer`, allowing migration to be deferred relative to JPA initialization. The exclusion now covers both; production explicitly sets `spring.jpa.defer-datasource-initialization=false` and retains `ddl-auto=validate`. Lazy-start tests show all 17 migrations apply before `Initialized JPA EntityManagerFactory`. |
+| Current source migration inventory | **PASS (artifact check)** | Current source and packaged jar contain 17 migrations: V1 `initial_schema`; V2 `direct_demo_auth_and_seller_onboarding`; V3 `kitchen_public_url_slug`; V4 `spring_session_tables`; V5 `hot_path_indexes`; V6 `password_reset_tokens`; V7 `add_email_to_users`; V8 `password_reset_requests`; V9 `add_email_to_users_if_missing`; V10 `harden_product_and_order_defaults`; V11 `sync_order_status_column`; V12 `sync_order_items_unit_price`; V13 `sync_order_items_subtotal`; V14 `add_payment_method_to_orders`; V15 `add_orders_open_from`; V16 `add_orderable_quick_posts`; V17 `repair_missing_payment_method_column`. |
+| Reported production Flyway result | **NOT VERIFIED / DISCREPANCY OPEN** | Supplied log excerpt says 14 migrations validated, current version 13, and no migration necessary. That aggregate cannot identify the 14 resource filenames or explain why V14 was not pending. Current source has no Flyway target/ignore override; the effective Render environment and exact SHA for this later attempt are unavailable, and Render now redirects the dashboard to sign-in. Do not infer the production history from local tests. |
+| Production database schema / orders | **NOT VERIFIED** | Production `public.orders.payment_method`, actual Flyway history, database identity, and preservation of the previously reported 30 orders were not read or altered. |
+| Docker/container test | **BLOCKED** | Docker CLI/engine are unavailable in this environment. |
+
+### Changes and local verification
+
+- `StartupLazyInitConfig` now keeps `FlywayMigrationInitializer` eager along with `Flyway`.
+- Production profile explicitly disables deferred datasource initialization without changing
+  `ddl-auto=validate`, Flyway locations, or Render auto-deploy settings.
+- Added an HTTP port/health regression test under lazy initialization; migration and PostgreSQL test
+  contexts also run with lazy initialization enabled.
+- `mvnw.cmd -B -Dtest=PostgresSchemaMigrationTest,ProductionStartupPortBindingTest test` passed:
+  three tests, zero failures/errors/skips. It logged 17 successful H2 migrations before Hibernate
+  initialization; the assigned-port health GET returned HTTP 200.
+- `mvnw.cmd -B clean verify` passed: 813 tests, zero failures/errors, five Docker-dependent skips.
+  PostgreSQL Testcontainers execution and Docker build/reachability remain unverified locally because
+  Docker is unavailable.
+- Packaged-jar inspection confirmed all 17 migration SQL resources, including V14, V15, and V17, are
+  under `BOOT-INF/classes/db/migration`.
+
+### Release gate
+
+The latest Render attempt with a directly observed deployment ID was
+`dep-dbib8gp42hec73cvaifg` for `e0412e787346a6ca086fa17207a4ce54efb04b26`; its dashboard logs show
+Hibernate failed on missing `orders.payment_method`. The later log excerpt in this section did not
+include a deployment ID or commit SHA, so it cannot be tied to that attempt or treated as a successful
+deployment. Do not retry until an authorized read-only check confirms the target database/schema,
+complete Flyway history, `payment_method` definition, and existing order count, and an approved backup
+has been restored in isolation. After CI and those safety gates pass, deploy manually with
+Auto-Deploy Off and verify the exact deployment, runtime logs, port, health, and version.
