@@ -1042,6 +1042,7 @@ public class SellerAppService {
         dto.setPriceUnit(product.getPriceUnit());
         dto.setAvailableDate(product.getAvailableDate());
         dto.setOrderWindowStart(product.getOrderWindowStart());
+        dto.setOrdersOpenFrom(product.getOrdersOpenFrom());
         dto.setOrderWindowEnd(product.getOrderWindowEnd());
         dto.setMaxQuantity(product.getMaxQuantity());
         dto.setRemainingQuantity(product.getRemainingQuantity());
@@ -1056,8 +1057,11 @@ public class SellerAppService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
+        dto.setQuickPost(product.isQuickPost());
+        dto.setQuickPostImageData(product.getQuickPostImageData());
         String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
-        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle));
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle)
+                || "SCHEDULED_TO_OPEN".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
         dto.setCreatedAt(product.getCreatedAt());
         return dto;

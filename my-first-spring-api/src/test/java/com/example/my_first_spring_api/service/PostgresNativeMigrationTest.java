@@ -56,9 +56,10 @@ class PostgresNativeMigrationTest {
         // V10 hardens product is_available and order status defaults;
         // V11 syncs legacy orders.status column and sets default PENDING;
         // V12 syncs legacy order_items.unit_price column;
-        // V13 syncs legacy order_items.subtotal column.
-        // V14 adds payment_method column to orders.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("14");
+        // V13 syncs legacy order_items.subtotal column; V14 adds payment_method
+        // to orders; V15 adds scheduled opening timestamps; V16 adds orderable
+        // Quick Post metadata and optional images.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("16");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
@@ -95,5 +96,12 @@ class PostgresNativeMigrationTest {
                         + "OR (table_name = 'kitchens' AND column_name = 'speciality'))",
                 Integer.class);
         assertThat(onboardingColumnCount).isEqualTo(5);
+
+        Integer productFeatureColumnCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'public' "
+                        + "AND table_name = 'products' "
+                        + "AND column_name IN ('orders_open_from', 'quick_post', 'quick_post_image_data')",
+                Integer.class);
+        assertThat(productFeatureColumnCount).isEqualTo(3);
     }
 }

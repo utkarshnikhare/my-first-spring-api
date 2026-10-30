@@ -64,14 +64,22 @@ public class KitchenService {
                 kitchen.getId(), kitchen.getDisplayName());
         KitchenDto kitchenDto = toKitchenDto(kitchen);
         List<ProductDto> products = productRepository
-                .findByKitchenAndAvailableTodayTrueOrderByCreatedAtDesc(kitchen).stream()
+                .findByKitchen(kitchen).stream()
                 .map(this::toProductDto).collect(Collectors.toList());
         List<ProductDto> preorderProducts = products.stream()
-                .filter(p -> Boolean.TRUE.equals(p.getIsPreorder())).collect(Collectors.toList());
+                .filter(p -> "PRE_ORDER".equals(p.getBuyerSection())).collect(Collectors.toList());
         List<ProductDto> regularProducts = products.stream()
-                .filter(p -> !Boolean.TRUE.equals(p.getIsPreorder())).collect(Collectors.toList());
+                .filter(p -> "ORDER".equals(p.getBuyerSection())).collect(Collectors.toList());
         KitchenDetailDto detailDto = new KitchenDetailDto(kitchenDto, regularProducts);
         detailDto.setPreorderProducts(preorderProducts);
+        detailDto.setQuickPostProducts(products.stream()
+                .filter(p -> Boolean.TRUE.equals(p.getQuickPost())
+                        && "ORDER".equals(p.getBuyerSection())
+                        && Boolean.TRUE.equals(p.getAvailableToday())
+                        && !Boolean.TRUE.equals(p.getOrdersClosed())
+                        && !Boolean.TRUE.equals(p.getOrdersPaused())
+                        && !Boolean.TRUE.equals(p.getSoldOut()))
+                .collect(Collectors.toList()));
         detailDto.setQuickPosts(toQuickPostDtos(quickPostRepository.findByKitchenAndPostedDateOrderByCreatedAtDesc(kitchen, LocalDate.now())));
         return detailDto;
     }
@@ -103,46 +111,21 @@ public class KitchenService {
                 .map(this::toProductDto).collect(Collectors.toList());
         LocalDate todayDate = LocalDate.now(AppTimeZone.ZONE);
         List<ProductDto> preorder = all.stream()
-                .filter(p -> {
-                    if (Boolean.TRUE.equals(p.getRecurring())) {
-                        return p.getNextOccurrenceDate() != null
-                                && p.getNextOccurrenceDate().isAfter(todayDate);
-                    }
-                    if (Boolean.TRUE.equals(p.getIsPreorder())) {
-                        if (p.getAvailableDate() != null && p.getAvailableDate().isBefore(todayDate)) {
-                            return false;
-                        }
-                        if ("HISTORY".equalsIgnoreCase(p.getLifecycleState())) {
-                            return false;
-                        }
-                        return true;
-                    }
-                    return false;
-                })
+                .filter(p -> "PRE_ORDER".equals(p.getBuyerSection()))
                 .collect(Collectors.toList());
         List<ProductDto> today = all.stream()
-                .filter(p -> {
-                    if (Boolean.TRUE.equals(p.getIsPreorder())) {
-                        return false;
-                    }
-                    if (Boolean.TRUE.equals(p.getRecurring())) {
-                        return p.getNextOccurrenceDate() != null
-                                && !p.getNextOccurrenceDate().isAfter(todayDate);
-                    }
-                    if (!Boolean.TRUE.equals(p.getAvailableToday())) {
-                        return false;
-                    }
-                    if (p.getAvailableDate() != null && p.getAvailableDate().isBefore(todayDate)) {
-                        return false;
-                    }
-                    if ("HISTORY".equalsIgnoreCase(p.getLifecycleState())) {
-                        return false;
-                    }
-                    return true;
-                })
+                .filter(p -> "ORDER".equals(p.getBuyerSection()))
                 .collect(Collectors.toList());
         KitchenDetailDto dto = new KitchenDetailDto(kitchenDto, today);
         dto.setPreorderProducts(preorder);
+        dto.setQuickPostProducts(all.stream()
+                .filter(p -> Boolean.TRUE.equals(p.getQuickPost())
+                        && "ORDER".equals(p.getBuyerSection())
+                        && Boolean.TRUE.equals(p.getAvailableToday())
+                        && !Boolean.TRUE.equals(p.getOrdersClosed())
+                        && !Boolean.TRUE.equals(p.getOrdersPaused())
+                        && !Boolean.TRUE.equals(p.getSoldOut()))
+                .collect(Collectors.toList()));
         dto.setQuickPosts(toQuickPostDtos(quickPostRepository.findByKitchenAndPostedDateOrderByCreatedAtDesc(kitchen, todayDate)));
         return dto;
     }
@@ -216,7 +199,7 @@ public class KitchenService {
         if (!KitchenVisibility.isPubliclyVisible(kitchen) || !KitchenVisibility.isServiceAreaVisible(kitchen, buyer)) {
             throw new KitchenNotFoundException(kitchenName);
         }
-        return productRepository.findByKitchenAndAvailableTodayTrueOrderByCreatedAtDesc(kitchen).stream()
+        return productRepository.findByKitchen(kitchen).stream()
                 .map(this::toProductDto).collect(Collectors.toList());
     }
 
@@ -274,6 +257,7 @@ public class KitchenService {
     private KitchenDetailDto closedDetail(Kitchen kitchen) {
         KitchenDetailDto detail = new KitchenDetailDto(toKitchenDto(kitchen), List.of());
         detail.setPreorderProducts(List.of());
+        detail.setQuickPostProducts(List.of());
         return detail;
     }
 
@@ -286,6 +270,7 @@ public class KitchenService {
         dto.setPriceUnit(product.getPriceUnit());
         dto.setAvailableDate(product.getAvailableDate());
         dto.setOrderWindowStart(product.getOrderWindowStart());
+        dto.setOrdersOpenFrom(product.getOrdersOpenFrom());
         dto.setOrderWindowEnd(product.getOrderWindowEnd());
         dto.setMaxQuantity(product.getMaxQuantity());
         dto.setRemainingQuantity(product.getRemainingQuantity());
@@ -301,8 +286,11 @@ public class KitchenService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
+        dto.setQuickPost(product.isQuickPost());
+        dto.setQuickPostImageData(product.getQuickPostImageData());
         String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
-        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle));
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle)
+                || "SCHEDULED_TO_OPEN".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
         // Recurring: project today's resolved occurrence (or the next
         // occurrence's date) so the buyer sees the real per-day values and
@@ -311,6 +299,13 @@ public class KitchenService {
         // recurring bean, in which case decoration is skipped (one-time only
         // paths).
         if (recurringScheduleService != null) recurringScheduleService.decorateProductDto(product, dto);
+        if (!Boolean.TRUE.equals(dto.getRecurring())
+                && !Boolean.TRUE.equals(dto.getAvailableToday())
+                && (product.getAvailableDate() == null
+                    || !product.getAvailableDate().isAfter(LocalDate.now(AppTimeZone.ZONE)))) {
+            dto.setOrdersClosed(true);
+        }
+        dto.setBuyerSection(OfferingTiming.buyerSection(dto, product, LocalDate.now(AppTimeZone.ZONE)));
         return dto;
     }
 }

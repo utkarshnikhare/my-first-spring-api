@@ -49,6 +49,15 @@ public class Product {
     @Column(name = "order_window_start")
     private String orderWindowStart;
 
+    @Column(name = "orders_open_from")
+    private LocalDateTime ordersOpenFrom;
+
+    @Column(name = "quick_post", nullable = false)
+    private boolean quickPost = false;
+
+    @Column(name = "quick_post_image_data", columnDefinition = "TEXT")
+    private String quickPostImageData;
+
     @Column(name = "order_window_end")
     private String orderWindowEnd;
 
@@ -175,6 +184,12 @@ public class Product {
     public void setAvailableDate(LocalDate availableDate) { this.availableDate = availableDate; }
     public String getOrderWindowStart() { return orderWindowStart; }
     public void setOrderWindowStart(String orderWindowStart) { this.orderWindowStart = orderWindowStart; }
+    public LocalDateTime getOrdersOpenFrom() { return ordersOpenFrom; }
+    public void setOrdersOpenFrom(LocalDateTime ordersOpenFrom) { this.ordersOpenFrom = ordersOpenFrom; }
+    public boolean isQuickPost() { return quickPost; }
+    public void setQuickPost(boolean quickPost) { this.quickPost = quickPost; }
+    public String getQuickPostImageData() { return quickPostImageData; }
+    public void setQuickPostImageData(String quickPostImageData) { this.quickPostImageData = quickPostImageData; }
     public String getOrderWindowEnd() { return orderWindowEnd; }
     public void setOrderWindowEnd(String orderWindowEnd) { this.orderWindowEnd = orderWindowEnd; }
     public Integer getMaxQuantity() { return maxQuantity; }

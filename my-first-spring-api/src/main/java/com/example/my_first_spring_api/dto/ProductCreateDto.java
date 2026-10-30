@@ -27,6 +27,8 @@ public class ProductCreateDto {
     private String unit = "portion";
 
     private String imageUrl;
+    private Boolean quickPost;
+    private String quickPostImageData;
 
     @JsonAlias({"is_available", "isAvailable"})
     private Boolean availableToday = Boolean.TRUE;
@@ -39,6 +41,10 @@ public class ProductCreateDto {
 
     @JsonAlias({"ordersOpenTime", "openTime"})
     private String orderWindowStart;
+
+    private LocalDate orderOpenDate;
+
+    private String orderOpenTime;
 
     @JsonAlias({"ordersCloseTime", "closeTime", "cutoffTime"})
     private String orderWindowEnd;
@@ -82,6 +88,10 @@ public class ProductCreateDto {
     }
     public String getImageUrl() { return imageUrl; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+    public Boolean getQuickPost() { return quickPost; }
+    public void setQuickPost(Boolean quickPost) { this.quickPost = quickPost; }
+    public String getQuickPostImageData() { return quickPostImageData; }
+    public void setQuickPostImageData(String quickPostImageData) { this.quickPostImageData = quickPostImageData; }
     public Boolean getAvailableToday() { return availableToday != null ? availableToday : Boolean.TRUE; }
     public void setAvailableToday(Boolean availableToday) { this.availableToday = (availableToday != null) ? availableToday : Boolean.TRUE; }
     public Boolean getIsAvailable() { return getAvailableToday(); }
@@ -92,6 +102,10 @@ public class ProductCreateDto {
     public void setAvailableDate(LocalDate availableDate) { this.availableDate = availableDate; }
     public String getOrderWindowStart() { return orderWindowStart; }
     public void setOrderWindowStart(String orderWindowStart) { this.orderWindowStart = orderWindowStart; }
+    public LocalDate getOrderOpenDate() { return orderOpenDate; }
+    public void setOrderOpenDate(LocalDate orderOpenDate) { this.orderOpenDate = orderOpenDate; }
+    public String getOrderOpenTime() { return orderOpenTime; }
+    public void setOrderOpenTime(String orderOpenTime) { this.orderOpenTime = orderOpenTime; }
     public String getOrderWindowEnd() { return orderWindowEnd; }
     public void setOrderWindowEnd(String orderWindowEnd) { this.orderWindowEnd = orderWindowEnd; }
     public String getReadyByTime() { return readyByTime; }

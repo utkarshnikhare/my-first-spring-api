@@ -22,6 +22,8 @@ public class ProductUpdateDto {
     private LocalDate availableDate;
     @JsonAlias({"ordersOpenTime", "openTime"})
     private String orderWindowStart;
+    private LocalDate orderOpenDate;
+    private String orderOpenTime;
     @JsonAlias({"ordersCloseTime", "closeTime", "cutoffTime"})
     private String orderWindowEnd;
     private String cutoffTime;
@@ -50,6 +52,10 @@ public class ProductUpdateDto {
     public void setAvailableDate(LocalDate availableDate) { this.availableDate = availableDate; }
     public String getOrderWindowStart() { return orderWindowStart; }
     public void setOrderWindowStart(String orderWindowStart) { this.orderWindowStart = orderWindowStart; }
+    public LocalDate getOrderOpenDate() { return orderOpenDate; }
+    public void setOrderOpenDate(LocalDate orderOpenDate) { this.orderOpenDate = orderOpenDate; }
+    public String getOrderOpenTime() { return orderOpenTime; }
+    public void setOrderOpenTime(String orderOpenTime) { this.orderOpenTime = orderOpenTime; }
     public String getOrderWindowEnd() { return orderWindowEnd; }
     public void setOrderWindowEnd(String orderWindowEnd) { this.orderWindowEnd = orderWindowEnd; }
     public String getCutoffTime() { return cutoffTime; }

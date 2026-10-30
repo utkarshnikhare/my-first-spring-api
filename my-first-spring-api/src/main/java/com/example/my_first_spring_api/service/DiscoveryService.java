@@ -6,6 +6,7 @@ import com.example.my_first_spring_api.dto.DiscoveryDtos.ItemGroup;
 import com.example.my_first_spring_api.dto.DiscoveryDtos.KitchenCard;
 import com.example.my_first_spring_api.dto.DiscoveryDtos.KitchenCounts;
 import com.example.my_first_spring_api.dto.KitchenDetailDto;
+import com.example.my_first_spring_api.dto.ProductDto;
 import com.example.my_first_spring_api.model.Category;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.OrderStatus;
@@ -45,6 +46,8 @@ public class DiscoveryService {
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
     private final KitchenService kitchenService;
+    @Autowired(required = false)
+    private RecurringScheduleService recurringScheduleService;
 
     @Autowired
     public DiscoveryService(KitchenRepository kitchenRepository, ProductRepository productRepository,
@@ -75,29 +78,59 @@ public class DiscoveryService {
                 .collect(Collectors.toList());
     }
 
-    private static boolean orderableToday(Product p) {
-        if (p == null) return false;
-        if (!Boolean.TRUE.equals(p.getAvailableToday())) return false;
-        if (Boolean.TRUE.equals(p.getIsPreorder())) return false;
+    private ProductDto buyerDto(Product product) {
+        if (product == null) return null;
         LocalDate today = LocalDate.now(AppTimeZone.ZONE);
-        if (p.getAvailableDate() != null && p.getAvailableDate().isBefore(today)) return false;
-        return OfferingTiming.isWindowOpenNow(p);
+        ProductDto dto = new ProductDto();
+        dto.setAvailableToday(product.getAvailableToday());
+        dto.setOrdersPaused(product.isOrdersPaused());
+        dto.setSoldOut(product.isSoldOut());
+        String lifecycle = OfferingTiming.lifecycleState(
+                product, today, java.time.LocalTime.now(AppTimeZone.ZONE));
+        dto.setLifecycleState(lifecycle);
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle)
+                || "SCHEDULED_TO_OPEN".equals(lifecycle));
+        if (recurringScheduleService != null) recurringScheduleService.decorateProductDto(product, dto);
+        dto.setBuyerSection(OfferingTiming.buyerSection(dto, product, today));
+        return dto;
     }
 
-    private static boolean availableTomorrow(Product p) {
-        if (p == null) return false;
-        LocalDate tomorrow = LocalDate.now(AppTimeZone.ZONE).plusDays(1);
-        return tomorrow.equals(p.getAvailableDate())
-                && Boolean.TRUE.equals(p.getIsPreorder()) && OfferingTiming.isWindowOpenNow(p);
+    private String buyerSection(Product product) {
+        return buyerDto(product).getBuyerSection();
     }
 
-    private static boolean openPreorder(Product p) {
-        return Boolean.TRUE.equals(p.getIsPreorder()) && OfferingTiming.isWindowOpenNow(p);
+    private boolean orderableNow(Product product) {
+        if (product == null) return false;
+        ProductDto dto = buyerDto(product);
+        return OfferingTiming.isBuyerOrderableNow(dto, product, LocalDate.now(AppTimeZone.ZONE));
     }
 
-    private boolean hasToday(List<Product> items) { return items.stream().anyMatch(DiscoveryService::orderableToday); }
-    private boolean hasTomorrow(List<Product> items) { return items.stream().anyMatch(DiscoveryService::availableTomorrow); }
-    private boolean hasPreorder(List<Product> items) { return items.stream().anyMatch(DiscoveryService::openPreorder); }
+    private boolean orderableToday(Product product) {
+        return "ORDER".equals(buyerSection(product)) && orderableNow(product);
+    }
+
+    private boolean availableTomorrow(Product product) {
+        LocalDate deliveryDate = buyerDeliveryDate(product);
+        return "PRE_ORDER".equals(buyerSection(product)) && orderableNow(product)
+                && LocalDate.now(AppTimeZone.ZONE).plusDays(1).equals(deliveryDate);
+    }
+
+    private boolean openPreorder(Product product) {
+        return "PRE_ORDER".equals(buyerSection(product)) && orderableNow(product);
+    }
+
+    private LocalDate buyerDeliveryDate(Product product) {
+        if (product == null) return null;
+        if (recurringScheduleService == null || !recurringScheduleService.hasSchedule(product.getId())) {
+            return product.getAvailableDate();
+        }
+        ProductDto dto = buyerDto(product);
+        return Boolean.TRUE.equals(dto.getRecurring()) ? dto.getNextOccurrenceDate() : product.getAvailableDate();
+    }
+
+    private boolean hasToday(List<Product> items) { return items.stream().anyMatch(this::orderableToday); }
+    private boolean hasTomorrow(List<Product> items) { return items.stream().anyMatch(this::availableTomorrow); }
+    private boolean hasPreorder(List<Product> items) { return items.stream().anyMatch(this::openPreorder); }
 
     private String statusOf(List<Product> items) {
         if (hasToday(items)) return "LIVE_NOW";
@@ -160,7 +193,7 @@ public class DiscoveryService {
         card.setImageUrl(k.getImageUrl());
         card.setShortDescription(k.getShortDescription());
         card.setStatus(statusOf(items));
-        card.setOrderableItemCount((int) items.stream().filter(DiscoveryService::orderableToday).count());
+        card.setOrderableItemCount((int) items.stream().filter(this::orderableToday).count());
         card.setItemNames(items.stream()
                 .filter(p -> orderableToday(p) || openPreorder(p))
                 .map(p -> p.getName())
@@ -306,10 +339,10 @@ public class DiscoveryService {
                 .filter(KitchenVisibility::isPubliclyVisible)
                 .filter(k -> KitchenVisibility.isServiceAreaVisible(k, buyer))
                 .map(k -> {
-                    List<Product> items = productRepository.findByKitchenAndAvailableTodayTrueOrderByCreatedAtDesc(k).stream()
+                    List<Product> items = productRepository.findByKitchen(k).stream()
                             .filter(KitchenVisibility::isHomemadeProduct)
                             .filter(p -> !p.isOrdersPaused())
-                            .filter(p -> p.getAvailableDate() == null || !p.getAvailableDate().isBefore(LocalDate.now(AppTimeZone.ZONE)))
+                            .filter(p -> !"UNAVAILABLE".equals(buyerSection(p)))
                             .collect(Collectors.toList());
                     return toHomemadeCard(k, items);
                 })
@@ -335,6 +368,11 @@ public class DiscoveryService {
             }
             if (detail.getPreorderProducts() != null) {
                 detail.setPreorderProducts(detail.getPreorderProducts().stream()
+                        .filter(p -> p.getCategory() != null && isHomemadeCategoryName(p.getCategory()))
+                        .collect(Collectors.toList()));
+            }
+            if (detail.getQuickPostProducts() != null) {
+                detail.setQuickPostProducts(detail.getQuickPostProducts().stream()
                         .filter(p -> p.getCategory() != null && isHomemadeCategoryName(p.getCategory()))
                         .collect(Collectors.toList()));
             }

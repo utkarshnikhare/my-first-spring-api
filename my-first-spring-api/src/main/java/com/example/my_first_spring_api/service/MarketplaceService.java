@@ -96,6 +96,7 @@ public class MarketplaceService {
         dto.setPriceUnit(product.getPriceUnit());
         dto.setAvailableDate(product.getAvailableDate());
         dto.setOrderWindowStart(product.getOrderWindowStart());
+        dto.setOrdersOpenFrom(product.getOrdersOpenFrom());
         dto.setOrderWindowEnd(product.getOrderWindowEnd());
         dto.setMaxQuantity(product.getMaxQuantity());
         dto.setRemainingQuantity(product.getRemainingQuantity());
@@ -111,31 +112,30 @@ public class MarketplaceService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
+        dto.setQuickPost(product.isQuickPost());
+        dto.setQuickPostImageData(product.getQuickPostImageData());
         String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
-        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle));
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle)
+                || "SCHEDULED_TO_OPEN".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
         // Recurring projection (V2 §14): today's resolved occurrence values,
         // or the next occurrence date for the buyer pre-order badge.
         // Guarded: some tests construct this service manually without a
         // recurring bean, in which case decoration is skipped.
         if (recurringScheduleService != null) recurringScheduleService.decorateProductDto(product, dto);
+        dto.setBuyerSection(OfferingTiming.buyerSection(dto, product, LocalDate.now(AppTimeZone.ZONE)));
         return dto;
     }
 
     private boolean isCurrentlyOrderable(ProductDto product) {
-        if ("HISTORY".equalsIgnoreCase(product.getLifecycleState())) {
-            return false;
-        }
-        if (product.getAvailableDate() != null
-                && product.getAvailableDate().isBefore(LocalDate.now(AppTimeZone.ZONE))
-                && !Boolean.TRUE.equals(product.getRecurring())) {
-            return false;
-        }
-        return !Boolean.TRUE.equals(product.getOrdersClosed())
-                && !Boolean.TRUE.equals(product.getOrdersPaused())
-                && !Boolean.TRUE.equals(product.getSoldOut())
-                && (Boolean.TRUE.equals(product.getAvailableToday())
-                    || Boolean.TRUE.equals(product.getIsPreorder())
-                    || Boolean.TRUE.equals(product.getRecurring()));
+        return "ORDER".equals(product.getBuyerSection())
+                ? Boolean.TRUE.equals(product.getAvailableToday())
+                    && !Boolean.TRUE.equals(product.getOrdersClosed())
+                    && !Boolean.TRUE.equals(product.getOrdersPaused())
+                    && !Boolean.TRUE.equals(product.getSoldOut())
+                : "PRE_ORDER".equals(product.getBuyerSection())
+                    && !Boolean.TRUE.equals(product.getOrdersClosed())
+                    && !Boolean.TRUE.equals(product.getOrdersPaused())
+                    && !Boolean.TRUE.equals(product.getSoldOut());
     }
 }

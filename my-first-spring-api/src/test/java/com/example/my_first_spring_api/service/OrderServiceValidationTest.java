@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import com.example.my_first_spring_api.dto.OrderDto;
 import com.example.my_first_spring_api.dto.OrderItemRequest;
 import com.example.my_first_spring_api.dto.PlaceOrderRequest;
@@ -17,6 +18,8 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -81,6 +84,31 @@ class OrderServiceValidationTest {
             req.setQuantity(0);
             orderService.createOrUpdateDraftOrder(1L, List.of(req), httpSession);
         });
+    }
+
+    @Test
+    void scheduledOfferingCannotEnterDraftBeforeOrdersOpenFrom() {
+        Kitchen kitchen = approvedKitchen();
+        when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
+
+        Product product = new Product(kitchen, "Scheduled Poha", "desc", BigDecimal.valueOf(40), null);
+        product.setId(1L);
+        product.setAvailableDate(LocalDate.now(AppTimeZone.ZONE));
+        product.setAvailableToday(true);
+        product.setIsPreorder(false);
+        product.setOrdersOpenFrom(LocalDateTime.now(AppTimeZone.ZONE).plusHours(1));
+        product.setOrderWindowEnd("23:59");
+        product.setRemainingQuantity(10);
+        product.setMaxQuantity(10);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+
+        OrderItemRequest request = new OrderItemRequest();
+        request.setProductId(1L);
+        request.setQuantity(1);
+        assertThatThrownBy(() -> orderService.createOrUpdateDraftOrder(1L, List.of(request), httpSession))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("open on");
+        verify(orderRepository, never()).save(any(Order.class));
     }
 
     @Test

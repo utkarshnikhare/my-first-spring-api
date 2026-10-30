@@ -1,6 +1,8 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import com.example.my_first_spring_api.dto.KitchenDetailDto;
+import com.example.my_first_spring_api.dto.ProductCreateDto;
 import com.example.my_first_spring_api.dto.QuickPostDto;
 import com.example.my_first_spring_api.dto.SellerTemplateDto;
 import com.example.my_first_spring_api.model.*;
@@ -27,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @ActiveProfiles("test")
 class SellerFavouriteQuickPostIntegrationTest {
     @Autowired SellerAppService sellerApp;
+    @Autowired SellerService sellerService;
     @Autowired KitchenService kitchenService;
     @Autowired UserRepository users;
     @Autowired KitchenRepository kitchens;
@@ -119,6 +122,34 @@ class SellerFavouriteQuickPostIntegrationTest {
                 .hasMessageContaining("Today only");
         assertThatThrownBy(() -> sellerApp.createQuickPost(otherSeller, "Wrong seller", null, "foreign", null))
                 .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    void quickPostProductUsesNormalOfferingPersistenceAndCarriesOptionalImage() {
+        ProductCreateDto request = new ProductCreateDto();
+        request.setName("Fresh Poha");
+        request.setDescription("Made this morning");
+        request.setPrice(BigDecimal.valueOf(40));
+        request.setPriceUnit("Per Plate");
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        request.setAvailableDate(today);
+        request.setOrderWindowEnd("23:59");
+        request.setReadyByTime(today.plusDays(1) + "T00:01");
+        request.setIsPreorder(false);
+        request.setIsHomemade(false);
+        request.setCategories(List.of("LUNCH"));
+        request.setQuickPost(true);
+        request.setQuickPostImageData("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/DQAAAABJRU5ErkJggg==");
+
+        var product = sellerService.createProduct(kitchen.getId(), request, seller);
+        assertThat(product.getQuickPost()).isTrue();
+        assertThat(product.getQuickPostImageData()).isEqualTo(request.getQuickPostImageData());
+        assertThat(products.findById(product.getId()).orElseThrow().isQuickPost()).isTrue();
+
+        request.setAvailableDate(today.plusDays(1));
+        assertThatThrownBy(() -> sellerService.createProduct(kitchen.getId(), request, seller))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("today");
     }
 
     private SellerTemplateDto template(String name) {
