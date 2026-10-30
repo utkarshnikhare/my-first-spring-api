@@ -213,6 +213,28 @@ Until then, do not retry deployment or claim a verified production release.
   the previously failing test passed locally (`mvnw.cmd -B -Dtest=SocioMartV1Flow1SmokeTest#givenSellerApplication_whenAdminRequestsChanges_thenSellerResubmitsWithSameSlug_thenAdminApproves test`)
   and the full merged-main CI passed. This was a test-only adjustment; it does not change application
   or production data.
-- Evidence update PR [#100](https://github.com/utkarshnikhare/my-first-spring-api/pull/100), head
-  `42ba704528caee44effe6b6a5309e01288fbf4ae`, passed both GitHub Actions jobs. It remains an open
-  documentation PR; production remains NO-GO.
+- Evidence update PR [#100](https://github.com/utkarshnikhare/my-first-spring-api/pull/100) was merged;
+  its final head `68a70e313f4e153969345fa85e72d5456c7dbd74` passed both GitHub Actions jobs.
+  PR [#101](https://github.com/utkarshnikhare/my-first-spring-api/pull/101) then refreshed this report
+  and was also merged after CI passed.
+
+## 10. Final Access and Main Recheck (2026-10-30 18:27 +05:30)
+
+**Disposition: NO-GO; production safety gates remain blocked.** No production deployment, database
+query, migration, backup operation, authenticated write, or payment attempt was performed.
+
+| Gate | Status | Evidence |
+|---|---|---|
+| Current `main` and CI | **PASS** | GitHub reports `main` at `ff27a3d329e87d01cfcf08fd122c9fc7c1d923eb`. Main CI run `41058676439` passed both build and E2E jobs for that exact SHA. |
+| Render dashboard access | **BLOCKED** | Opening the service URL redirected to Render's sign-in page. No login or credential entry was attempted. |
+| Render service/deployment metadata | **NOT VERIFIED** | The last dashboard-authenticated evidence is in section 9; it is not a fresh deployment check. |
+| Public application health | **PASS** | `GET /api/health` returned HTTP 200 with `{"status":"UP"}`. This old endpoint does not establish database readiness. |
+| Public version/commit | **FAIL** | `GET /api/version` returned `commit=unknown`, `shortCommit=unknown`, and build time `2026-10-27T11:26:08.886Z`. This does not identify a current deployment SHA. |
+| Secure production credentials | **BLOCKED** | No Render API key or approved DB JDBC URL, username, or password is available in this environment. No secret was requested in chat, exposed, or queried. |
+| Database identity/history/schema, backup/restore, data integrity | **BLOCKED / NOT VERIFIED** | No authenticated database access or approved isolated restore evidence is available. The prior startup attempt's database effects remain unverified. |
+| Authenticated workflows and exact commit deployed | **NOT TESTED / BLOCKED** | No authorized production test account was available; current Render deployment metadata could not be refreshed. |
+
+The last verified application release remains `fee5592fe8f8f6cd0dfc608e6be986027a0cbc3c`, now an
+ancestor of current `main`. The later main changes are the test fixture correction and report updates.
+Do not manually deploy until an authorized operator completes read-only database/schema/history checks
+and verifies an owner-approved backup with an isolated restore. Keep Auto-Deploy Off.
