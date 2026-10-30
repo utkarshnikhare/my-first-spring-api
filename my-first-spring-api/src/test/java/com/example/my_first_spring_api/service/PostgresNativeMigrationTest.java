@@ -58,8 +58,8 @@ class PostgresNativeMigrationTest {
         // V12 syncs legacy order_items.unit_price column;
         // V13 syncs legacy order_items.subtotal column; V14 adds payment_method
         // to orders; V15 adds scheduled opening timestamps; V16 adds orderable
-        // Quick Post metadata and optional images.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("16");
+        // Quick Post metadata and optional images; V17 repairs missing payment_method.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("17");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
@@ -75,6 +75,13 @@ class PostgresNativeMigrationTest {
                         + "AND column_name = 'email'",
                 Integer.class);
         assertThat(emailColumnCount).isEqualTo(1);
+
+        Integer paymentMethodColumnCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                        + "WHERE table_schema = 'public' AND table_name = 'orders' "
+                        + "AND column_name = 'payment_method'",
+                Integer.class);
+        assertThat(paymentMethodColumnCount).isEqualTo(1);
 
         Integer sessionTableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "

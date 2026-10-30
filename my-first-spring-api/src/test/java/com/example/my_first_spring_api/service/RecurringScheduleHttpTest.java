@@ -199,6 +199,25 @@ class RecurringScheduleHttpTest {
     }
 
     @Test
+    void sellersCannotCreateNewSchedulesButExistingSchedulesRemainAvailable() throws Exception {
+        User owner = seller("Owner");
+        RecurringSchedule existing = scheduleFor(owner);
+        long occurrenceCount = occurrences.count();
+        Browser mine = browserAs(owner);
+        assertThat(mine.call(mine.req(get("/api/seller/schedules"))).getResponse().getStatus()).isEqualTo(200);
+
+        MvcResult rejected = mine.call(mine.req(post("/api/seller/schedules/" + existing.getProduct().getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"startDate\":\"2026-10-30\",\"endDate\":\"2026-11-06\",\"recurrenceWeekdays\":[\"MONDAY\"]}")));
+
+        assertThat(rejected.getResponse().getStatus()).isEqualTo(410);
+        assertThat(schedules.findByProductId(existing.getProduct().getId())).isPresent();
+        assertThat(occurrences.count()).isEqualTo(occurrenceCount);
+        assertThat(mine.call(mine.req(get("/api/seller/schedules/" + existing.getId())))
+                .getResponse().getStatus()).isEqualTo(200);
+    }
+
+    @Test
     void ongoingExtensionRouteChecksOwnershipAndIsRetrySafe() throws Exception {
         User owner = seller("Owner");
         User stranger = seller("Stranger");
@@ -251,4 +270,3 @@ class RecurringScheduleHttpTest {
         assertThat(saved.getDefaultOrderCloseTime()).isEqualTo("14:00");
     }
 }
-

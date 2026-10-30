@@ -115,6 +115,32 @@ final class OfferingTiming {
             }
         }
 
+        validateOrdersOpenFromBounds(opensAt, deliveryDate, orderWindowEnd, readyByTime, today);
+        return opensAt;
+    }
+
+    static boolean matchesOrdersOpenFrom(LocalDateTime existingOpenFrom, LocalDate openingDate,
+                                         String openingTime) {
+        if (existingOpenFrom == null || openingDate == null) return false;
+        String normalizedTime = normalizeHhmm(openingTime, "Orders Open From time");
+        if (normalizedTime == null) return false;
+        int openMinutes = minutes(normalizedTime);
+        LocalTime requestedTime = LocalTime.of(openMinutes / 60, openMinutes % 60);
+        return existingOpenFrom.toLocalDate().equals(openingDate)
+                && existingOpenFrom.toLocalTime().withSecond(0).withNano(0).equals(requestedTime);
+    }
+
+    static LocalDateTime validatePersistedOrdersOpenFrom(LocalDateTime opensAt, LocalDate deliveryDate,
+                                                          String orderWindowEnd, String readyByTime,
+                                                          LocalDate today) {
+        if (opensAt == null) return null;
+        validateOrdersOpenFromBounds(opensAt, deliveryDate, orderWindowEnd, readyByTime, today);
+        return opensAt;
+    }
+
+    private static void validateOrdersOpenFromBounds(LocalDateTime opensAt, LocalDate deliveryDate,
+                                                      String orderWindowEnd, String readyByTime,
+                                                      LocalDate today) {
         LocalDateTime deliveryAt = null;
         if (readyByTime != null && !readyByTime.isBlank()) {
             try {
@@ -134,7 +160,6 @@ final class OfferingTiming {
                 throw new IllegalArgumentException("Orders Open From must be before Orders Close.");
             }
         }
-        return opensAt;
     }
 
     static LocalDateTime resolveCutoffDateTime(Product product, LocalDate fulfillmentDate, LocalDate today) {

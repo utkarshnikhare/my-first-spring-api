@@ -54,13 +54,13 @@ public class RecurringScheduleService {
      * follows the blank=null convention, and HH:mm close text is checked when
      * present (the ready-by text keeps the legacy free-text contract).
      */
-    public RecurringSchedule createSchedule(Product product, LocalDate startDate, LocalDate endDate, Set<DayOfWeek> weekdays,
-                                             Integer qty, String orderClose, String readyBy) {
+    RecurringSchedule createSchedule(Product product, LocalDate startDate, LocalDate endDate, Set<DayOfWeek> weekdays,
+                                     Integer qty, String orderClose, String readyBy) {
         return createSchedule(product, startDate, endDate, weekdays, qty, orderClose, readyBy, false);
     }
 
-    public RecurringSchedule createSchedule(Product product, LocalDate startDate, LocalDate endDate, Set<DayOfWeek> weekdays,
-                                             Integer qty, String orderClose, String readyBy, boolean ongoing) {
+    RecurringSchedule createSchedule(Product product, LocalDate startDate, LocalDate endDate, Set<DayOfWeek> weekdays,
+                                     Integer qty, String orderClose, String readyBy, boolean ongoing) {
         if (product == null || product.getId() == null) {
             throw new IllegalArgumentException("A saved product is required to create a recurring schedule.");
         }
@@ -109,19 +109,6 @@ public class RecurringScheduleService {
 
         generateOccurrences(saved);
         return saved;
-    }
-
-    public RecurringSchedule createOwnedSchedule(Long productId, RecurringScheduleDto dto, Long sellerId) {
-        Product product = products.findById(productId).orElseThrow();
-        Long ownerId = product.getKitchen() != null && product.getKitchen().getSeller() != null
-                ? product.getKitchen().getSeller().getId() : null;
-        if (ownerId == null || !ownerId.equals(sellerId)) {
-            throw new com.example.my_first_spring_api.exception.SellerNotAuthorizedException(
-                    "You do not own this kitchen");
-        }
-        return createSchedule(product, dto.getStartDate(), dto.getEndDate(), dto.getRecurrenceWeekdays(),
-                dto.getDefaultQuantity(), dto.getDefaultOrderCloseTime(), dto.getDefaultReadyByTime(),
-                Boolean.TRUE.equals(dto.getOngoing()));
     }
 
     /**

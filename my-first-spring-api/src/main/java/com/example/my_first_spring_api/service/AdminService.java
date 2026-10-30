@@ -2917,7 +2917,7 @@ private static void addHistoryEvent(List<Map<String, Object>> events, LocalDateT
             database.put("orders", orderRepository.count());
         } catch (RuntimeException ex) {
             database.put("reachable", false);
-            database.put("error", ex.getMessage());
+            database.put("error", "Database health check failed.");
         }
         out.put("database", database);
 

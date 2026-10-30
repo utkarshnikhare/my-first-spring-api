@@ -1,8 +1,10 @@
 # SocioMart QA Defect Register
 
-**Document Version:** 2.0.0  
-**Effective Date:** 2026-10-26  
-**Status:** **ALL KNOWN DEFECTS RESOLVED IN CODE; RELEASE NOT VERIFIED (deploy pending)**
+**Document Version:** 3.0.0
+**Effective Date:** 2026-10-30
+**Status:** **AUDIT CODE FIXES IMPLEMENTED; PRODUCTION RELEASE BLOCKED**
+
+Entries dated before 2026-10-30 are historical snapshots. Section 6 is the current audit disposition.
 
 ---
 
@@ -15,7 +17,7 @@
 ---
 
 
-## 2. Master Defect Ledger (SM-001 through SM-027)
+## 2. Master Defect Ledger (SM-001 through SM-028)
 |---|---|---|---|---|---|---|
 | **SM-001** | **P0** | **Buyer order missing from seller dashboard (UK Kitchen flow)** | Disconnected query filters between seller order items and offering occurrences. | Aligned JPQL query and seller isolation checks in `OrderService.java` and `SellerAppService.java`. | `UKKitchenBuyerToSellerOrderWorkflowIntegrationTest.java` (PASS). Order persisted, amount 300.00, isolated by seller. | **PASS** |
 | **SM-002** | **P2** | **Category filter missing or incomplete** | Some categories did not match case-insensitively in discovery filter. | Standardized uppercase category matching across SQL and JavaScript. | `SellerFilterScriptStructureTest.java` (PASS). | **PASS** |
@@ -86,3 +88,20 @@
 - Render: service is reachable after cold start. /api/health returned 200 {"status":"UP"} after approximately 120 seconds. Homepage returned 200. /api/version returned 401, indicating the currently deployed service is an older deployment that does not expose the public version endpoint. No Render API key, CLI, or deploy credentials are available in this environment.
 - No production code changes were made in this closure pass. No new defect IDs were added.
 - Final status: PARTIALLY VERIFIED. Remaining action: manually deploy approved main commit 07f4def8352afff7c7a1c05b113f04017f18bf7f through Render, then verify /api/health, /api/version, homepage, and non-destructive smoke tests.
+
+## 6. Current Independent Audit (2026-10-30)
+
+Eight additional actionable findings were identified. All eight have code fixes in the audit branch; production remains blocked for the schema repair until the database and backup gates are satisfied.
+
+| ID | Severity | Finding and root cause | Fix and evidence | Current status |
+|---|---|---|---|---|
+| AUD-001 | P1 | Render startup failed Hibernate validation because `orders.payment_method` was absent despite older migrations. | Added additive V17 `ADD COLUMN IF NOT EXISTS`; `PostgresSchemaMigrationTest.v17RepairsPaymentMethodWhenV14IsAlreadyRecorded` simulates the drift in an isolated H2 PostgreSQL-mode database. | **CODE FIXED; PROD NOT DEPLOYED** |
+| AUD-002 | P1 | Email password recovery exposed a live bearer reset link/token in the response and logs without verified delivery. | Disabled email-token recovery with HTTP 503 until secure delivery is configured; mobile/manual-admin recovery remains. `AuthForgotPasswordTest` covers the disabled flow and no token creation. | **FIXED** |
+| AUD-003 | P2 | Generic server and database-integrity errors could expose internal exception details. | Replaced client-facing database/rollback messages with fixed generic responses; `GlobalExceptionHandlerTest` covers redaction. | **FIXED** |
+| AUD-004 | P2 | Editing offering timing could leave a persisted Orders Open From timestamp invalid. | Revalidate the stored timestamp whenever its related timing changes; covered by `Requirement5LiveOfferingEditTest`. | **FIXED** |
+| AUD-005 | P2 | `/api/health` reported application availability without checking database connectivity. | Readiness now executes `SELECT 1`; tests cover healthy and unavailable database responses without exposing details. | **FIXED** |
+| AUD-006 | P2 | Render Docker builds omit `.git`, causing `/api/version` to report an unknown commit. | Prefer Render's validated 40-character `RENDER_GIT_COMMIT` at runtime; `VersionControllerTest` covers valid and malformed metadata. | **CODE FIXED; PROD NOT DEPLOYED** |
+| AUD-007 | P1 | New recurring schedules remained creatable despite the specification; removing the UI alone would permit API bypass. | Removed seller creation UI, reject recurring product creation, return HTTP 410 on schedule creation, and restrict the service method; existing schedules/history remain. Covered by service/API tests and 13 passing Playwright tests. | **FIXED** |
+| AUD-008 | P2 | Editing Orders Close after the stored opening time had elapsed failed because timing edits reused the future-only validator intended for new/changed opening timestamps. | Existing timestamps now retain their original value and are checked only against revised delivery/cutoff bounds; unchanged submitted values use the same path. `Requirement5LiveOfferingEditTest.ordersCloseCanBeExtendedAfterTheStoredOpeningTimeHasPassed` covers the regression. | **FIXED** |
+
+Local release evidence is recorded in `TEST_EXECUTION_REPORT.md`. PostgreSQL Testcontainers, Render deployment, production health, backups/restoration, and production data integrity remain unverified.

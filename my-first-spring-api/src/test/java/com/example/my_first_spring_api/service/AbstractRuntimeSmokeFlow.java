@@ -5,7 +5,6 @@ import com.example.my_first_spring_api.dto.OrderDto;
 import com.example.my_first_spring_api.dto.OrderItemRequest;
 import com.example.my_first_spring_api.dto.ProductCreateDto;
 import com.example.my_first_spring_api.dto.ProductDto;
-import com.example.my_first_spring_api.dto.RecurringScheduleDto;
 import com.example.my_first_spring_api.model.DeliveryStatus;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Occurrence;
@@ -15,6 +14,7 @@ import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.model.UserRole;
 import com.example.my_first_spring_api.repository.KitchenRepository;
 import com.example.my_first_spring_api.repository.OccurrenceRepository;
+import com.example.my_first_spring_api.repository.ProductRepository;
 import com.example.my_first_spring_api.repository.RecurringScheduleRepository;
 import com.example.my_first_spring_api.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -65,9 +65,11 @@ abstract class AbstractRuntimeSmokeFlow {
     @Autowired private KitchenRepository kitchens;
     @Autowired private RecurringScheduleRepository schedules;
     @Autowired private OccurrenceRepository occurrences;
+    @Autowired private ProductRepository products;
     @Autowired private LocationService locations;
     @Autowired private FeatureService featureService;
     @Autowired private SellerService sellerService;
+    @Autowired private RecurringScheduleService scheduleService;
     @Autowired private SellerAppService sellerApp;
     @Autowired private KitchenService kitchenService;
     @Autowired private MarketplaceService marketplaceService;
@@ -136,15 +138,11 @@ abstract class AbstractRuntimeSmokeFlow {
         dto.setMaxQuantity(20);
         dto.setOrderWindowEnd("23:58");
         dto.setReadyByTime(today.atTime(23, 59).toString());
-        RecurringScheduleDto recurring = new RecurringScheduleDto();
-        recurring.setStartDate(today);
-        recurring.setEndDate(today.plusDays(14));
-        recurring.setRecurrenceWeekdays(EnumSet.of(today.getDayOfWeek()));
-        recurring.setDefaultQuantity(10);
-        recurring.setDefaultOrderCloseTime("23:58");
-        recurring.setDefaultReadyByTime(today.atTime(23, 59).toString());
-        dto.setRecurringSchedule(recurring);
         ProductDto product = sellerService.createProduct(kitchen.getId(), dto, seller);
+        scheduleService.createSchedule(
+                products.findById(product.getId()).orElseThrow(),
+                today, today.plusDays(14), EnumSet.of(today.getDayOfWeek()),
+                10, "23:58", today.atTime(23, 59).toString());
         RecurringSchedule schedule = schedules.findByProductId(product.getId()).orElseThrow();
         Occurrence occurrence = occurrences.findByScheduleIdAndOccurrenceDate(schedule.getId(), today).orElseThrow();
         assertThat(sellerApp.getDashboard(seller).getOfferings()).extracting(ProductDto::getId).contains(product.getId());

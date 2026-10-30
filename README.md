@@ -2,7 +2,7 @@
 
 **A society-level marketplace connecting buyers with home-kitchen and homemade sellers. The demo includes Buyer, Seller and Admin apps, recurring offerings, date-specific occurrence overrides, seller-recorded delivery, and an operations console.**
 
-> **Project status:** Recurring Offerings V2 and Seller Dashboard V3 are implemented and covered by automated tests. The `prod` profile is configured for PostgreSQL with Flyway-managed schema and JDBC session persistence. **Verified 2026-10-16:** all CI checks for the latest merge commit (`348697f`) are green (644 tests, 0 failures, 0 errors, 0 skipped in CI). **Production health is NOT verified:** the live `GET /api/health` probe returns HTTP 503 and the `V9` repair migration has not been deployed yet — the Render service must be redeployed manually (`autoDeploy: false`) before health can be confirmed.
+> **Project status (2026-10-30):** The production service is **not verified**. Render reports live commit `76c11a4`; the latest manual deployment attempt (`dd0807e`) failed during Hibernate schema validation because `orders.payment_method` was missing. The audit branch adds a forward-only V17 repair migration, but no production migration or deployment has been run. Render auto-deploy is Off; `/api/health` and `/api/version` requests timed out during this check. See the [production release runbook](./docs/PRODUCTION-RELEASE-RUNBOOK.md) for the release gate and exact evidence.
 
 
 ## 🔗 Quick Links
@@ -157,11 +157,11 @@ requires `SUPER_ADMIN`. Hiding a menu item is never the protection.
 
 ## 🔁 Recurring Offerings and Pre-orders (V2)
 
-The existing Create Offering flow supports one-time items and repeating schedules. A schedule stores its
-weekday pattern and defaults; each selling date is materialized as a separate occurrence with its own
-quantity, order window, ready/delivery time, status and order bucket.
+Existing repeating schedules store a weekday pattern and defaults; each selling date is materialized as a
+separate occurrence with its own quantity, order window, ready/delivery time, status and order bucket. New
+schedule creation is disabled in Create Offering and the schedule-create API. Existing schedules, occurrences,
+orders and history remain available for buyers and sellers; sellers can still manage existing schedules.
 
-- Choose weekdays and an end rule; **Ongoing** is capped at 90 days and can be extended.
 - Blank default quantity means **No limit**.
 - **Edit Today / Edit This Date** changes only that occurrence. **Manage Schedule** changes the rule and
   future defaults; it does not silently overwrite past or explicitly overridden dates.
@@ -505,8 +505,9 @@ Responses travel back the same way and always use the same error shape.
 
 - Session-based authentication; the acting user is resolved from the session, **never** from a request body
 - `/api/admin/**` requires `ADMIN` or `SUPER_ADMIN`; `/api/superadmin/**` requires `SUPER_ADMIN`
-- Demo/dev Buyer and Seller passwords are stored as password hashes; OTP, password recovery and production
-  identity checks are not implemented. Admin and Super Admin use separately configured passwords.
+- Demo/dev Buyer and Seller passwords are stored as password hashes; OTP and production identity checks are
+  not implemented. Email-token recovery is disabled until a verified delivery channel is configured; mobile
+  recovery requests use the manual Admin review queue. Admin and Super Admin use separately configured passwords.
 - Direct registration/login is enabled by default in every profile; the legacy passwordless demo-login endpoints are denied.
 - CSRF protection using a JS-readable cookie echoed back in `X-XSRF-TOKEN` - **enabled in every profile**
 - Ownership is re-derived server-side for every sensitive action (orders, delivery, admin operations), so a
@@ -737,8 +738,9 @@ claim otherwise:
 **Identity and access**
 
 - Authentication is for demonstration only. In the non-production demo flow, Buyers and Sellers register and
-  sign in with a mobile number and password; OTP/SMS, email verification, password recovery, MFA and production
-  account protections are not provided. Do not use real customer credentials.
+  sign in with a mobile number and password; OTP/SMS, email verification, MFA and production account protections
+  are not provided. Email-token recovery is disabled without verified email delivery; mobile recovery requires
+  manual Admin review. Do not use real customer credentials.
 - New Seller registrations create a pending account and storefront; an Admin must approve the Seller before
   approved Seller operations are available.
 - Admin and Super Admin accounts are not self-registered. Sign-in requires the role-specific configured

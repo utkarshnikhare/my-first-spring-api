@@ -7,7 +7,6 @@ import com.example.my_first_spring_api.dto.OrderDto;
 import com.example.my_first_spring_api.dto.SellerOrderSummaryRowDto;
 import com.example.my_first_spring_api.dto.ProductCreateDto;
 import com.example.my_first_spring_api.dto.ProductDto;
-import com.example.my_first_spring_api.dto.RecurringScheduleDto;
 import com.example.my_first_spring_api.dto.ProductUpdateDto;
 import com.example.my_first_spring_api.dto.SellerOfferingEditDto;
 import com.example.my_first_spring_api.dto.AuthResponseDto;
@@ -49,7 +48,6 @@ public class SellerService {
     private final FeatureService featureService;
     private final SocietyDirectory societyDirectory;
     private final LocationService locationService;
-    private final RecurringScheduleService recurringScheduleService;
     /** Public-URL slug authority. Field-injected so manually-constructed test instances keep working. */
     @Autowired
     private SlugService slugService;
@@ -70,8 +68,7 @@ public class SellerService {
                          OrderService orderService,
                          FeatureService featureService,
                          SocietyDirectory societyDirectory,
-                         LocationService locationService,
-                         RecurringScheduleService recurringScheduleService) {
+                         LocationService locationService) {
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
         this.orderItemRepository = orderItemRepository;
@@ -79,19 +76,6 @@ public class SellerService {
         this.featureService = featureService;
         this.societyDirectory = societyDirectory;
         this.locationService = locationService;
-        this.recurringScheduleService = recurringScheduleService;
-    }
-
-    /** Compatibility constructor for existing focused unit tests. Production uses constructor injection above. */
-    public SellerService(KitchenRepository kitchenRepository,
-                         ProductRepository productRepository,
-                         OrderItemRepository orderItemRepository,
-                         OrderService orderService,
-                         FeatureService featureService,
-                         SocietyDirectory societyDirectory,
-                         LocationService locationService) {
-        this(kitchenRepository, productRepository, orderItemRepository, orderService, featureService,
-                societyDirectory, locationService, null);
     }
 
     public KitchenDto createKitchen(KitchenCreateDto dto, User seller) {
@@ -263,6 +247,10 @@ public class SellerService {
         LocalDate today = LocalDate.now(AppTimeZone.ZONE);
         LocalDate offeringDate = dto.getAvailableDate() != null ? dto.getAvailableDate() : today;
         boolean recurringRequest = dto.getRecurringSchedule() != null;
+        if (recurringRequest) {
+            throw new IllegalArgumentException(
+                    "Creating new recurring schedules is no longer supported. Existing schedules can still be managed.");
+        }
         boolean quickPost = Boolean.TRUE.equals(dto.getQuickPost());
         if (quickPost && (recurringRequest || !offeringDate.equals(today)
                 || Boolean.TRUE.equals(dto.getIsPreorder()))) {
@@ -270,13 +258,9 @@ public class SellerService {
         }
         String quickPostImageData = quickPost
                 ? validateQuickPostImageData(dto.getQuickPostImageData()) : null;
-        if (recurringRequest && (dto.getOrderOpenDate() != null
-                || (dto.getOrderOpenTime() != null && !dto.getOrderOpenTime().isBlank()))) {
-            throw new IllegalArgumentException("Orders Open From date/time is available for one-time offerings only.");
-        }
-        boolean preorder = !recurringRequest && (dto.getIsPreorder() != null
-                ? dto.getIsPreorder() : offeringDate.isAfter(today));
-        if (!recurringRequest && offeringDate.isAfter(today) && !preorder) {
+        boolean preorder = dto.getIsPreorder() != null
+                ? dto.getIsPreorder() : offeringDate.isAfter(today);
+        if (offeringDate.isAfter(today) && !preorder) {
             preorder = true;
         }
         if (preorder && !offeringDate.isAfter(today)) {
@@ -290,14 +274,6 @@ public class SellerService {
                 : null;
         String readyByTime = dto.getReadyByTime() == null ? null : dto.getReadyByTime().trim();
         Integer maxQuantity = dto.getMaxQuantity();
-        if (recurringRequest) {
-            RecurringScheduleDto rule = dto.getRecurringSchedule();
-            orderWindowEnd = rule.getDefaultOrderCloseTime() != null && !rule.getDefaultOrderCloseTime().isBlank()
-                    ? OfferingTiming.normalizeHhmm(rule.getDefaultOrderCloseTime(), "Orders Close")
-                    : "23:59";
-            readyByTime = rule.getDefaultReadyByTime() == null ? null : rule.getDefaultReadyByTime().trim();
-            maxQuantity = rule.getDefaultQuantity();
-        }
         if (maxQuantity != null && maxQuantity < 0) {
             throw new IllegalArgumentException("Quantity Available cannot be negative; leave blank for unlimited.");
         }
@@ -315,12 +291,7 @@ public class SellerService {
             throw new IllegalArgumentException("Seller is only approved for Homemade products.");
         }
 
-        if (recurringRequest) {
-            OfferingTiming.validateWindowPair(orderWindowStart, orderWindowEnd);
-            if (readyByTime == null || readyByTime.isBlank()) {
-                throw new IllegalArgumentException("Default Delivery / Ready By is required.");
-            }
-        } else if (isHomemade && !Boolean.TRUE.equals(preorder) && (orderWindowEnd == null || orderWindowEnd.isBlank())) {
+        if (isHomemade && !Boolean.TRUE.equals(preorder) && (orderWindowEnd == null || orderWindowEnd.isBlank())) {
             // Section 8.3 & 8.4: Always Available & Made on Request do not require Orders Close.
             if (readyByTime == null || readyByTime.isBlank()) {
                 readyByTime = "Usually ready in 1 day";
@@ -334,7 +305,7 @@ public class SellerService {
             orderWindowEnd = OfferingTiming.validateNewOffering(offeringDate, preorder,
                     orderWindowStart, orderWindowEnd, readyByTime);
         }
-        LocalDateTime ordersOpenFrom = !recurringRequest && dto.getOrderOpenDate() != null
+        LocalDateTime ordersOpenFrom = dto.getOrderOpenDate() != null
                 ? OfferingTiming.validateOrdersOpenFrom(dto.getOrderOpenDate(), dto.getOrderOpenTime(),
                         offeringDate, orderWindowEnd, readyByTime, today, LocalTime.now(AppTimeZone.ZONE))
                 : null;
@@ -374,23 +345,7 @@ public class SellerService {
         }
         product.setCategory(category);
 
-        // Persist the product first so the recurring schedule's product foreign
-        // key is valid. The recurring schedule + occurrences are created in the
-        // SAME atomic transaction.
-        Product savedProduct = productRepository.save(product);
-
-        RecurringScheduleDto recurring = dto.getRecurringSchedule();
-        if (recurring != null) {
-            LocalDate recurringStart = recurring.getStartDate() != null
-                    ? recurring.getStartDate() : savedProduct.getAvailableDate();
-            recurringScheduleService.createSchedule(savedProduct, recurringStart,
-                    recurring.getEndDate(),
-                    recurring.getRecurrenceWeekdays(), recurring.getDefaultQuantity(),
-                    recurring.getDefaultOrderCloseTime(), recurring.getDefaultReadyByTime(),
-                    Boolean.TRUE.equals(recurring.getOngoing()));
-        }
-
-        return toProductDto(savedProduct);
+        return toProductDto(productRepository.save(product));
     }
 
     public ProductDto updateProduct(Long productId, ProductUpdateDto dto, User seller) {
@@ -465,10 +420,17 @@ public class SellerService {
             effectiveReady = OfferingTiming.rebaseReadyByTimeForOffering(effectiveReady, effectiveDate);
             effectiveClose = OfferingTiming.validateNewOffering(effectiveDate, effectivePreorder,
                     effectiveOpen, effectiveClose, effectiveReady);
-            if (dto.getOrderOpenDate() != null || dto.getOrderOpenTime() != null) {
+            boolean ordersOpenFromChanged = (dto.getOrderOpenDate() != null || dto.getOrderOpenTime() != null)
+                    && !OfferingTiming.matchesOrdersOpenFrom(
+                            effectiveOrdersOpenFrom, effectiveOpenDate, effectiveOpenTime);
+            if (ordersOpenFromChanged) {
                 effectiveOrdersOpenFrom = OfferingTiming.validateOrdersOpenFrom(
                         effectiveOpenDate, effectiveOpenTime, effectiveDate, effectiveClose,
                         effectiveReady, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
+            } else if (effectiveOrdersOpenFrom != null) {
+                effectiveOrdersOpenFrom = OfferingTiming.validatePersistedOrdersOpenFrom(
+                        effectiveOrdersOpenFrom, effectiveDate, effectiveClose, effectiveReady,
+                        LocalDate.now(AppTimeZone.ZONE));
             }
         }
 

@@ -1,7 +1,7 @@
 # SocioMart Adversarial Test Checklist
 
 **Version:** 1.0.0  
-**Date:** 2026-10-27  
+**Date:** 2026-10-30
 **Scope:** Existing SocioMart functionality only. No new product features.
 
 ## 1. Conventional Testing
@@ -107,6 +107,21 @@ Status: H2 invariants verified by test assertions. PostgreSQL invariants rely on
 - Render: health endpoint timed out; deployed commit SHA unverified.
 - Final status: PARTIALLY VERIFIED.
 
+## 12. Current Reliability and Adversarial Audit (2026-10-30)
+
+**TESTED:** `mvnw -B clean verify` passed (812 tests, 0 failures, 0 errors); 13 Playwright tests passed; the order/stock rollback and elapsed Orders Open From regression tests passed; database-down health behavior, request-ID correlation, generic error redaction, seller/buyer/admin boundaries, and concurrent inventory rules are covered locally. `npm audit --audit-level=high` found 0 vulnerabilities in the E2E dependency tree.
+
+**NOT TESTED / BLOCKED:**
+
+- PostgreSQL/Testcontainers: 5 tests skipped locally because Docker is unavailable. The V17 repair scenario passed only against an isolated H2 database in PostgreSQL compatibility mode; actual PostgreSQL execution awaits CI.
+- Production PostgreSQL identity, migration history, row counts, existing-record integrity, backup policy, and isolated backup restoration are not verified. No production query, migration, or deployment was performed.
+- Chaos scenarios involving real network partitions, API timeouts, database process restarts, and recovery after partial external-service failures were not simulated. The database-unavailable readiness path and transactional rollback were unit/integration tested.
+- Structured logs, request correlation, and the database-backed health check are implemented; production log ingestion, alert delivery, retention, metrics, and on-call response were not verified.
+- The Render dashboard reports auto-deploy Off, live commit `76c11a4`, and a failed manual attempt at `dd0807e` due to the missing `orders.payment_method` column. Read-only health/version requests timed out at 30 seconds. The V17 repair has not been deployed.
+- Physical devices, production order/payment workflows, and production browser-console/network traces were not tested.
+
+No claim of zero defects is made. Production readiness remains **BLOCKED** until PostgreSQL and backup/restore gates pass, the required CI checks pass on the final commit, and a safe manual deployment is verified.
+
 
 
 ## 11. Final Release Blocker Closure (2026-10-27)
@@ -116,4 +131,3 @@ Status: H2 invariants verified by test assertions. PostgreSQL invariants rely on
 - PostgreSQL-sensitive tests: 5/5 PASS in CI.
 - Render: /api/health 200 after cold start; homepage 200; /api/version 401 on current deployment.
 - Final status: PARTIALLY VERIFIED.
-

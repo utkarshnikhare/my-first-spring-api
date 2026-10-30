@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -48,6 +49,7 @@ public class MultiUserConcurrencyAndAdversarialSecurityTest {
     @Autowired private OrderService orderService;
     @Autowired private SellerService sellerService;
     @Autowired private SellerAppService sellerAppService;
+    @Autowired private TransactionTemplate transactionTemplate;
 
     private User kitchenSeller;
     private Kitchen kitchen;
@@ -400,6 +402,39 @@ public class MultiUserConcurrencyAndAdversarialSecurityTest {
 
         Product afterSecondCancel = productRepository.findById(product.getId()).orElseThrow();
         assertThat(afterSecondCancel.getRemainingQuantity()).isEqualTo(10); // No double-increment
+    }
+
+    @Test
+    @DisplayName("RES-002: A failure after checkout work rolls back order and inventory in the same transaction")
+    void checkoutFailureRollsBackOrderAndStockTogether() {
+        Product product = new Product(kitchen, "Rollback Meal", "desc", BigDecimal.valueOf(100), null);
+        product.setAvailableToday(true);
+        product.setAvailableDate(LocalDate.now());
+        product.setRemainingQuantity(10);
+        product.setMaxQuantity(10);
+        product.setCutoffTime("23:59");
+        product.setOrderWindowEnd("23:59");
+        product.setReadyByTime(LocalDate.now().atTime(23, 59).toString());
+        product = productRepository.saveAndFlush(product);
+
+        User buyer = createBuyer("RollbackBuyer");
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute(BuyerService.BUYER_SESSION_KEY, buyer.getId());
+        OrderItemRequest request = new OrderItemRequest();
+        request.setProductId(product.getId());
+        request.setQuantity(2);
+        OrderDto draft = orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request), session);
+        Long orderId = draft.getId();
+        Long productId = product.getId();
+
+        assertThatThrownBy(() -> transactionTemplate.execute(status -> {
+            orderService.placeOrder(PaymentStatus.PENDING, null, null, "injected transaction failure", session);
+            throw new IllegalStateException("injected transaction failure");
+        })).isInstanceOf(IllegalStateException.class)
+                .hasMessage("injected transaction failure");
+
+        assertThat(productRepository.findById(productId).orElseThrow().getRemainingQuantity()).isEqualTo(10);
+        assertThat(orderRepository.findById(orderId).orElseThrow().getOrderStatus()).isEqualTo(OrderStatus.DRAFT);
     }
 
     private User createBuyer(String name) {

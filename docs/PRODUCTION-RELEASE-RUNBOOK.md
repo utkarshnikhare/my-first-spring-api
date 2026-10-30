@@ -1,33 +1,19 @@
 # SocioMart — Production Release Runbook (PostgreSQL, Render)
 
-**Status: PREPARED, NOT EXECUTED.** Nothing in this document has been provisioned, billed, migrated,
-deployed or restore-tested. Every step requires explicit owner authorization first. Pricing and free-tier
-facts were re-verified against provider pricing pages on **2026-10-12** and must be re-checked at
-provisioning time. No credential values belong in this file — environment-variable **names** only.
+**Status: PRODUCTION RELEASE BLOCKED; BACKUP/RESTORE NOT TESTED.** The Render dashboard reports the
+service's live commit as `76c11a4`, with auto-deploy Off. Its latest manual attempt, commit `dd0807e`,
+failed Hibernate schema validation because `orders.payment_method` was missing. Read-only `/api/health`
+and `/api/version` requests each timed out after 30 seconds. The audit branch adds a forward-only V17
+repair migration; it has not been applied to production. Database identity, migration history, backup
+policy and existing-record integrity remain unverified. No production migration or deployment was run
+during this audit. Render configuration has `SPRING_FLYWAY_ENABLED=true` and
+`SPRING_FLYWAY_BASELINE_ON_MIGRATE=true`; inspect the actual Flyway history before any deployment and do
+not change either setting as a shortcut. Do not assume the production database is empty or matches this
+repository. No credential values belong in this file.
 
 ---
 
 ## 1. Exact connection contract (verified from `application-prod.properties`)
-
-*** Option‑B Recurring‑Offerings Documentation ***
-::
-**Recurring products are intentionally excluded from the buyer's *Tomorrow* tab and
-marketplace pre‑order listings/counts.  Consumers discover recurring items only
-through the dedicated recurring‑schedule interface, which presents full control
-over the occurrence dates and order windows.
-
-The current implementation enforces this policy:
-
-* `SellerService.createProduct` sets `isPreorder = false` when a recurring
-  schedule is attached—so the product is never flagged as a one‑off
-  pre‑order.
-* `DiscoveryService.availableTomorrow` requires `isPreorder == true` **and** the
-  `availableDate` matching tomorrow.  Because recurring products never meet
-  these predicates, they are omitted from the Tomorrow listing.
-
-This distinguishes *recurring* offerings from *one‑off* pre‑orders and
-prevents unintended exposure of long‑term offerings in the quick‑order UI.
-::
 
 The `prod` profile reads exactly these environment variables (no alternatives, no defaults):
 
@@ -44,8 +30,9 @@ Also required at boot: `SPRING_PROFILES_ACTIVE=prod`, `SOCIOMART_ADMIN_PASSWORD`
 plus `PUBLIC_BASE_URL` and the Render-injected `PORT`.
 
 Pooler note from the profile: the session-mode pooler (5432) works as-is; if a transaction pooler (6543)
-is used, append `prepareThreshold=0` to the JDBC URL. Hikari is pre-tuned for a small pooled database
-(max pool 5, fail fast, keepalive for idle drops).
+is used, append `prepareThreshold=0` to the JDBC URL. Current repository Hikari settings are a maximum
+pool of 4, minimum idle of 2, 10-second connection timeout and 3-second validation timeout. These are
+repository settings, not proof of the running Render configuration.
 
 ## 2. Provider-neutral provisioning checklist
 
@@ -62,11 +49,16 @@ is used, append `prepareThreshold=0` to the JDBC URL. Hikari is pre-tuned for a 
 6. Leave `sociomart.bootstrap.enabled` unset (defaults to `true`) so `ProductionBootstrap` creates the
    two admin accounts, the feature flags and — only when the database is completely empty — the pilot
    area/society. It never creates sellers, kitchens, products, buyers or orders.
-7. Provision an **empty** database: Flyway owns the schema (`V1`–`V5` forward-only; `V1`–`V3` are
-   immutable). Do **not** enable automatic demo seeding; do **not** copy the demo dataset.
-8. Deploy the exact approved commit once, then verify: boot log shows profile `prod`, Flyway
-   `Successfully applied ... migration(s)`, the `schema_version`/flyway history row present,
-   `/api/health` = `UP`, `/h2-console` denied, `/api/auth/config` reflects production auth settings.
+7. Treat the live database as existing and unknown until verified. Identify its provider, database,
+   schema, Flyway history and record counts using approved read-only access. Take and restore-test a
+   backup before any deployment that may run migrations. Flyway owns the schema; this branch includes
+   migrations through V17, including an additive repair for a missing `orders.payment_method` column.
+   Never baseline, reset, clean or drop an existing database to force startup.
+   Do not enable automatic demo seeding or copy demo data.
+8. Only after the release gate is satisfied, deploy the exact approved commit and verify: boot log shows
+   profile `prod`, Flyway validation/application outcome is recorded, `/api/health` reports both
+   `status=UP` and `database=UP`, `/h2-console` is denied, and `/api/auth/config` reflects production
+   authentication settings.
 9. Exercise the backup/restore procedure (section 5) on an **isolated** copy before declaring the
    release viable.
 10. Record evidence (log excerpts, screenshots, Flyway version row) in the release PR/issue.
@@ -106,15 +98,21 @@ performed and evidenced on an **isolated** copy before any production release; u
 succeeds end-to-end, backup/restore must be described as *untested*.
 
 **Backup (manual verification step):**
-1. Trigger/confirm the provider backup (provider UI or CLI), or take a logical dump:
-   `pg_dump --no-owner --no-privileges "$SOCIOMART_DB_JDBC_URL" > sociomart-YYYYMMDD.sql`.
+1. Trigger/confirm the provider backup (provider UI or CLI), or take a logical dump with PostgreSQL
+   client tools. `pg_dump` requires a libpq connection URI, not the application's `jdbc:postgresql:` URL.
+   In a secure operator shell, derive `SOCIOMART_LIBPQ_URI` from the private JDBC configuration (remove
+   only the `jdbc:` prefix and verify PostgreSQL client-compatible options), and use a protected
+   `PGPASSFILE` for credentials rather than embedding a password in the URI or command line:
+   `pg_dump --no-owner --no-privileges --format=custom --dbname="$SOCIOMART_LIBPQ_URI" --file=sociomart-YYYYMMDD.dump`.
 2. Store the artifact in owner-controlled storage; record its size, timestamp and checksum.
 3. Confirm the dump contains the Flyway history rows (`flyway_schema_history`) and the `SPRING_SESSION*`
    tables.
 
 **Isolated restore validation (must pass before release):**
 1. Create a throwaway empty database (`sociomart-restore-test`) — separate from production.
-2. Restore the dump into it (`psql -d sociomart-restore-test -f sociomart-YYYYMMDD.sql`).
+2. Restore the custom-format dump into that isolated database with a separate non-production connection
+   URI and protected credentials:
+   `pg_restore --no-owner --no-privileges --dbname="$SOCIOMART_RESTORE_LIBPQ_URI" sociomart-YYYYMMDD.dump`.
 3. Boot the app against it with `SPRING_PROFILES_ACTIVE=prod` and **test-only** admin env vars; verify
    Flyway reports the schema version as already applied (`validate` passes, no pending migrations),
    `/api/health` = `UP`, and one read query per core table succeeds.
@@ -126,10 +124,10 @@ If any step fails, the release stops (Phase 5 gate) — no production cutover.
 
 ## 6. Seed-data policy
 
-Do **not** migrate demo/seed records automatically and do **not** claim existing demo records have been
-preserved. The demo dataset lives only in the current in-memory H2 instance and has no verified export.
-The production database starts empty (bootstrap adds only admin accounts, feature flags and the pilot
-location). Any demo content wanted in production must be re-created through the application by the owner.
+Do **not** migrate demo/seed records automatically and do **not** claim existing production records have
+been preserved without a before/after comparison. The production database identity and contents are not
+verified in this audit. Preserve all existing data; any test data must be created only in an isolated
+environment.
 
 ## 7. Release gate and recovery plan
 
@@ -149,10 +147,9 @@ deploy, no migrations.
    commit from the Render dashboard (Render keeps prior images/builds).
 2. Environment variables are only added/changed with the change recorded beforehand; rollback = restore
    the recorded prior values (Render env-var history) and redeploy.
-3. Migrations are forward-only: never edit `V1`–`V5`. A bad migration is corrected with a new forward
+3. Migrations are forward-only: never edit any applied migration (`V1`–`V17` in this branch). A bad migration is corrected with a new forward
    migration, or — before any data loss matters — the database is restored from the section-5 backup and
    the fixed commit re-deployed.
 4. If a critical acceptance test fails after deploy (Phase 5 list): halt rollout, roll back the service
    to the previous commit, keep the database untouched, and report the failure with evidence before any
    further attempt.
-
