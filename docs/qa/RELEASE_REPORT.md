@@ -1,7 +1,10 @@
-# SocioMart Release Report (refreshed 2026-10-27)
+# SocioMart Release Report (refreshed 2026-10-30)
 
-**Report Date:** 2026-10-27
-**Auditor:** Principal Engineer / QA Lead (corrective audit)
+**Report Date:** 2026-10-30
+**Auditor:** Principal Engineer / QA Lead (release and reliability audit)
+
+> Sections 1–7 are a historical snapshot from 2026-10-27. Section 8 is the authoritative current
+> disposition; do not use the historical branch, commit, CI, or Render status as current evidence.
 
 ## 1. Git state
 
@@ -91,3 +94,52 @@ Release cannot be marked fully verified until:
 - (b) `/api/health`, `/api/version` (commit SHA = `07f4def...`), homepage, and non-destructive buyer/seller/admin smoke tests all pass in production.
 
 No new features and no unrelated code changes were introduced in this pass.
+
+## 8. Current Release Disposition (2026-10-30)
+
+**Status: CODE MERGED AND CI-VERIFIED; PRODUCTION RELEASE BLOCKED.** The current code is on `main`,
+but it has not been deployed to Render. No production query, migration, or deployment was executed.
+
+### GitHub and CI
+
+- Pull request [#96](https://github.com/utkarshnikhare/my-first-spring-api/pull/96) merged successfully.
+- Exact merge commit on `main`: `7220f6c241585cb2094f20c11c49f632cdd3d36e`.
+- GitHub Actions run [41048205309](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/41048205309) completed successfully for that exact SHA; both `build` and `e2e` jobs passed.
+- Earlier conflicting PR #94 was closed as superseded by #96; its branch was left unchanged.
+
+### Local Verification
+
+| Check | Result |
+|---|---|
+| `.\mvnw.cmd -B clean verify` | PASS — 812 tests, 0 failures, 0 errors, 5 Docker-dependent skips |
+| `npm test` (`my-first-spring-api/e2e`) | PASS — 13/13 Playwright tests |
+| `npm audit --audit-level=high` | PASS — 0 vulnerabilities in the E2E dependency tree |
+| `node --check` (`buyer.js`, `seller.js`) | PASS |
+| `git diff --check` | PASS |
+
+The five local skips require Docker/PostgreSQL Testcontainers. The GitHub CI build and E2E jobs both
+passed on the merged commit.
+
+### Render and Production Data
+
+- Service: [sociomart-demo](https://sociomart-demo.onrender.com); Render auto-deploy is **Off**.
+- Dashboard-reported live commit: `76c11a45f7ac37c552fd570519608fd96840f084`.
+- Latest failed deployment: `dep-dbi4qu5g1s2s73e0h7i0`, attempted commit
+  `dd0807eecdefe1e8acc63300dcf6ddb522aecfe3`; startup failed because
+  `orders.payment_method` was absent.
+- Latest read-only requests to `/`, `/api/health`, and `/api/version` each timed out after 30 seconds
+  with no response bytes. Production health and deployed version are **NOT VERIFIED**.
+- Render configuration has `SPRING_FLYWAY_ENABLED=true` and
+  `SPRING_FLYWAY_BASELINE_ON_MIGRATE=true`. The actual production Flyway history and schema have not
+  been inspected; do not change these settings or deploy to bypass that verification.
+- V17 is an additive, forward-only repair migration on `main`. It has not been applied to production.
+- Production database identity, schema/history, record counts, existing-data integrity, backup
+  configuration, and isolated backup restoration are **NOT VERIFIED**. No production data was changed.
+
+### Remaining Production Gate
+
+Before any manual deployment of `7220f6c241585cb2094f20c11c49f632cdd3d36e`, an authorized operator must
+verify the target database identity, Flyway history and core-table record counts using read-only access;
+confirm an owner-approved backup and a successful isolated restore; and then verify the exact deployed
+commit, startup logs, health/version endpoints, database connectivity, and non-destructive workflows.
+Keep auto-deploy Off. No production readiness or zero-defect claim is made.
