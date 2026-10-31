@@ -15,9 +15,11 @@ import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.dto.CoverageOptionDto;
 import com.example.my_first_spring_api.model.Kitchen;
+import com.example.my_first_spring_api.model.GpayIdentifierType;
 import com.example.my_first_spring_api.model.OrderItem;
 import com.example.my_first_spring_api.model.OrderStatus;
 import com.example.my_first_spring_api.model.Product;
+import com.example.my_first_spring_api.model.SellerPaymentMode;
 import com.example.my_first_spring_api.model.SellerType;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.model.SellerApprovalStatus;
@@ -97,7 +99,15 @@ public class SellerService {
         kitchen.setBuilding(dto.getBuilding());
         kitchen.setWhatsappLink(dto.getWhatsappLink());
         kitchen.setInstagramLink(dto.getInstagramLink());
-        kitchen.setUpiId(dto.getUpiId());
+        SellerPaymentMode paymentMode = SellerPaymentConfiguration.parseMode(dto.getAcceptedPaymentMode());
+        GpayIdentifierType gpayIdentifierType =
+                SellerPaymentConfiguration.parseGpayIdentifierType(dto.getGpayIdentifierType());
+        SellerPaymentConfiguration.validate(paymentMode, dto.getUpiId(),
+                gpayIdentifierType, dto.getGpayIdentifier());
+        kitchen.setUpiId(cleanPaymentIdentifier(dto.getUpiId()));
+        kitchen.setAcceptedPaymentMode(paymentMode);
+        kitchen.setGpayIdentifierType(gpayIdentifierType);
+        kitchen.setGpayIdentifier(cleanPaymentIdentifier(dto.getGpayIdentifier()));
         kitchen.setAvailableToday(dto.getAvailableToday() != null ? dto.getAvailableToday() : true);
         if (dto.getSellerType() != null && !dto.getSellerType().isBlank()) {
             try {
@@ -170,7 +180,23 @@ public class SellerService {
             }
         }
         if (dto.getInstagramLink() != null) kitchen.setInstagramLink(dto.getInstagramLink());
-        if (dto.getUpiId() != null) kitchen.setUpiId(dto.getUpiId());
+        SellerPaymentMode paymentMode = dto.getAcceptedPaymentMode() == null
+                ? kitchen.getAcceptedPaymentMode()
+                : SellerPaymentConfiguration.parseMode(dto.getAcceptedPaymentMode());
+        GpayIdentifierType gpayIdentifierType = dto.getGpayIdentifierType() == null
+                ? kitchen.getGpayIdentifierType()
+                : SellerPaymentConfiguration.parseGpayIdentifierType(dto.getGpayIdentifierType());
+        String upiId = dto.getUpiId() == null ? kitchen.getUpiId() : cleanPaymentIdentifier(dto.getUpiId());
+        String gpayIdentifier = dto.getGpayIdentifier() == null
+                ? kitchen.getGpayIdentifier() : cleanPaymentIdentifier(dto.getGpayIdentifier());
+        if (dto.getAcceptedPaymentMode() != null || dto.getGpayIdentifierType() != null
+                || dto.getGpayIdentifier() != null || dto.getUpiId() != null) {
+            SellerPaymentConfiguration.validate(paymentMode, upiId, gpayIdentifierType, gpayIdentifier);
+            kitchen.setAcceptedPaymentMode(paymentMode);
+            kitchen.setGpayIdentifierType(gpayIdentifierType);
+            kitchen.setGpayIdentifier(gpayIdentifier);
+            kitchen.setUpiId(upiId);
+        }
         if (dto.getGalleryImages() != null) kitchen.setGalleryImages(dto.getGalleryImages());
         if (dto.getAvailableToday() != null) kitchen.setAvailableToday(dto.getAvailableToday());
         if (dto.getSellerType() != null && !dto.getSellerType().isBlank()) {
@@ -244,20 +270,60 @@ public class SellerService {
 
     public ProductDto createProduct(Long kitchenId, ProductCreateDto dto, User seller) {
         Kitchen kitchen = resolveOfferingKitchen(kitchenId, seller);
-        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
-        LocalDate offeringDate = dto.getAvailableDate() != null ? dto.getAvailableDate() : today;
+        LocalDate today = AppTimeZone.today();
+        boolean quickPost = Boolean.TRUE.equals(dto.getQuickPost());
+        String quickPostRequestId = null;
+        if (quickPost) {
+            quickPostRequestId = dto.getQuickPostRequestId() == null
+                    ? null : dto.getQuickPostRequestId().trim();
+            if (quickPostRequestId == null || quickPostRequestId.isBlank()
+                    || quickPostRequestId.length() > 80) {
+                throw new IllegalArgumentException(
+                        "Quick Post request reference is required and must be at most 80 characters.");
+            }
+            kitchen = kitchenRepository.findByIdForUpdate(kitchen.getId())
+                    .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
+        }
         boolean recurringRequest = dto.getRecurringSchedule() != null;
         if (recurringRequest) {
             throw new IllegalArgumentException(
                     "Creating new recurring schedules is no longer supported. Existing schedules can still be managed.");
         }
-        boolean quickPost = Boolean.TRUE.equals(dto.getQuickPost());
-        if (quickPost && (recurringRequest || !offeringDate.equals(today)
+        LocalDate offeringDate = quickPost ? today
+                : (dto.getAvailableDate() != null ? dto.getAvailableDate() : today);
+        if (quickPost && ((dto.getAvailableDate() != null && !today.equals(dto.getAvailableDate()))
                 || Boolean.TRUE.equals(dto.getIsPreorder()))) {
             throw new IllegalArgumentException("Quick Posts must be one-time offerings for today.");
         }
+        String description = dto.getDescription() == null ? ""
+                : (quickPost ? dto.getDescription().trim() : dto.getDescription());
+        if (quickPost) {
+            if (description.isBlank()) {
+                throw new IllegalArgumentException("Quick Post message is required.");
+            }
+            if (description.length() > 5000) {
+                throw new IllegalArgumentException("Quick Post message is too long.");
+            }
+            if (dto.getPrice() == null || dto.getPrice().signum() <= 0) {
+                throw new IllegalArgumentException("Price must be greater than 0.");
+            }
+        }
+        String productName = quickPost ? quickPostTitle(description) : dto.getName();
         String quickPostImageData = quickPost
                 ? validateQuickPostImageData(dto.getQuickPostImageData()) : null;
+        if (quickPost) {
+            Product existing = productRepository.findByKitchenAndQuickPostRequestId(
+                    kitchen, quickPostRequestId).orElse(null);
+            if (existing != null) {
+                boolean sameRequest = existing.isQuickPost()
+                        && existing.getDescription().equals(description)
+                        && existing.getPrice().compareTo(dto.getPrice()) == 0
+                        && Objects.equals(existing.getQuickPostImageData(), quickPostImageData);
+                if (sameRequest) return toProductDto(existing);
+                throw new IllegalArgumentException(
+                        "Quick Post request reference is already used for a different post.");
+            }
+        }
         boolean preorder = dto.getIsPreorder() != null
                 ? dto.getIsPreorder() : offeringDate.isAfter(today);
         if (offeringDate.isAfter(today) && !preorder) {
@@ -268,12 +334,15 @@ public class SellerService {
         }
         // Validate authoritative offering input before platform feature gating so
         // malformed requests receive the actionable field error, not a feature error.
-        String orderWindowStart = OfferingTiming.normalizeHhmm(dto.getOrderWindowStart(), "Orders Open");
-        String orderWindowEnd = dto.getOrderWindowEnd() != null && !dto.getOrderWindowEnd().isBlank()
-                ? OfferingTiming.normalizeHhmm(dto.getOrderWindowEnd(), "Orders Close")
-                : null;
-        String readyByTime = dto.getReadyByTime() == null ? null : dto.getReadyByTime().trim();
-        Integer maxQuantity = dto.getMaxQuantity();
+        String orderWindowStart = quickPost ? null
+                : OfferingTiming.normalizeHhmm(dto.getOrderWindowStart(), "Orders Open");
+        String orderWindowEnd = quickPost ? "23:59"
+                : dto.getOrderWindowEnd() != null && !dto.getOrderWindowEnd().isBlank()
+                    ? OfferingTiming.normalizeHhmm(dto.getOrderWindowEnd(), "Orders Close")
+                    : null;
+        String readyByTime = quickPost ? null
+                : (dto.getReadyByTime() == null ? null : dto.getReadyByTime().trim());
+        Integer maxQuantity = quickPost ? null : dto.getMaxQuantity();
         if (maxQuantity != null && maxQuantity < 0) {
             throw new IllegalArgumentException("Quantity Available cannot be negative; leave blank for unlimited.");
         }
@@ -291,7 +360,10 @@ public class SellerService {
             throw new IllegalArgumentException("Seller is only approved for Homemade products.");
         }
 
-        if (isHomemade && !Boolean.TRUE.equals(preorder) && (orderWindowEnd == null || orderWindowEnd.isBlank())) {
+        if (quickPost) {
+            // Quick Posts have no structured schedule: their server-authored
+            // publication date and end-of-day cutoff enforce same-day ordering.
+        } else if (isHomemade && !Boolean.TRUE.equals(preorder) && (orderWindowEnd == null || orderWindowEnd.isBlank())) {
             // Section 8.3 & 8.4: Always Available & Made on Request do not require Orders Close.
             if (readyByTime == null || readyByTime.isBlank()) {
                 readyByTime = "Usually ready in 1 day";
@@ -305,19 +377,22 @@ public class SellerService {
             orderWindowEnd = OfferingTiming.validateNewOffering(offeringDate, preorder,
                     orderWindowStart, orderWindowEnd, readyByTime);
         }
-        LocalDateTime ordersOpenFrom = dto.getOrderOpenDate() != null
+        LocalDateTime ordersOpenFrom = !quickPost && dto.getOrderOpenDate() != null
                 ? OfferingTiming.validateOrdersOpenFrom(dto.getOrderOpenDate(), dto.getOrderOpenTime(),
-                        offeringDate, orderWindowEnd, readyByTime, today, LocalTime.now(AppTimeZone.ZONE))
+                        offeringDate, orderWindowEnd, readyByTime, today, AppTimeZone.time())
                 : null;
-        assertFeatureCompliance(seller, preorder, offeringDate, dto.getName());
-        String description = dto.getDescription() != null ? dto.getDescription() : "";
-        Product product = new Product(kitchen, dto.getName(), description, dto.getPrice(), dto.getImageUrl());
+        assertFeatureCompliance(seller, preorder, offeringDate, productName);
+        Product product = new Product(kitchen, productName, description, dto.getPrice(),
+                quickPost ? null : dto.getImageUrl());
         product.setQuickPost(quickPost);
         product.setQuickPostImageData(quickPostImageData);
+        product.setQuickPostRequestId(quickPostRequestId);
         product.setDescription(description);
-        product.setPriceUnit(dto.getPriceUnit() != null ? dto.getPriceUnit() : "portion");
-        product.setUnit(dto.getUnit() != null ? dto.getUnit() : "portion");
-        product.setAvailableToday(dto.getAvailableToday() != null ? dto.getAvailableToday() : Boolean.TRUE);
+        product.setPriceUnit(quickPost ? "unit"
+                : (dto.getPriceUnit() != null ? dto.getPriceUnit() : "portion"));
+        product.setUnit(quickPost ? "unit" : (dto.getUnit() != null ? dto.getUnit() : "portion"));
+        product.setAvailableToday(quickPost || dto.getAvailableToday() == null
+                ? Boolean.TRUE : dto.getAvailableToday());
         product.setIsVeg(dto.getIsVeg() != null ? dto.getIsVeg() : Boolean.TRUE);
         product.setAvailableDate(offeringDate);
         product.setOrderWindowStart(orderWindowStart);
@@ -348,11 +423,20 @@ public class SellerService {
         return toProductDto(productRepository.save(product));
     }
 
+    private String quickPostTitle(String message) {
+        return message.lines()
+                .map(String::trim)
+                .filter(line -> !line.isEmpty())
+                .findFirst()
+                .map(line -> line.length() > 160 ? line.substring(0, 160) : line)
+                .orElse("Quick Post");
+    }
+
     public ProductDto updateProduct(Long productId, ProductUpdateDto dto, User seller) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
         getOwnedKitchen(product.getKitchen().getId(), seller);
-        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        LocalDate today = AppTimeZone.today();
         boolean effectivePreorder = dto.getIsPreorder() != null
                 ? dto.getIsPreorder()
                 : (dto.getAvailableDate() != null
@@ -382,7 +466,7 @@ public class SellerService {
         LocalDate effectiveOpenDate = dto.getOrderOpenDate() != null
                 ? dto.getOrderOpenDate()
                 : (product.getOrdersOpenFrom() != null
-                    ? product.getOrdersOpenFrom().toLocalDate() : LocalDate.now(AppTimeZone.ZONE));
+                    ? product.getOrdersOpenFrom().toLocalDate() : AppTimeZone.today());
         String effectiveOpenTime = dto.getOrderOpenTime() != null
                 ? dto.getOrderOpenTime()
                 : (product.getOrdersOpenFrom() != null
@@ -426,11 +510,11 @@ public class SellerService {
             if (ordersOpenFromChanged) {
                 effectiveOrdersOpenFrom = OfferingTiming.validateOrdersOpenFrom(
                         effectiveOpenDate, effectiveOpenTime, effectiveDate, effectiveClose,
-                        effectiveReady, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
+                        effectiveReady, AppTimeZone.today(), AppTimeZone.time());
             } else if (effectiveOrdersOpenFrom != null) {
                 effectiveOrdersOpenFrom = OfferingTiming.validatePersistedOrdersOpenFrom(
                         effectiveOrdersOpenFrom, effectiveDate, effectiveClose, effectiveReady,
-                        LocalDate.now(AppTimeZone.ZONE));
+                        AppTimeZone.today());
             }
         }
 
@@ -472,7 +556,7 @@ public class SellerService {
         if (dto.getRemainingQuantity() != null) product.setRemainingQuantity(dto.getRemainingQuantity());
         if (dto.getAvailableDate() != null) {
             product.setAvailableDate(dto.getAvailableDate());
-            product.setAvailableToday(dto.getAvailableDate().equals(LocalDate.now(AppTimeZone.ZONE)) && !effectivePreorder);
+            product.setAvailableToday(dto.getAvailableDate().equals(AppTimeZone.today()) && !effectivePreorder);
         }
         if (dto.getOrderWindowStart() != null) product.setOrderWindowStart(effectiveOpen);
         if (dto.getOrderOpenDate() != null || dto.getOrderOpenTime() != null) {
@@ -529,7 +613,7 @@ public class SellerService {
         dto.setIsPreorder(product.getIsPreorder());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
-        dto.setLifecycleState(OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE)));
+        dto.setLifecycleState(OfferingTiming.lifecycleState(product, AppTimeZone.today(), AppTimeZone.time()));
         dto.setHasOrders(orderCount > 0);
         dto.setOrderCount((int) orderCount);
         return dto;
@@ -743,7 +827,7 @@ public class SellerService {
             featureService.assertSellerCanUse(seller, FeatureService.KEY_PREORDERS);
         }
         if (availableDate != null) {
-            long daysAhead = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(AppTimeZone.ZONE), availableDate);
+            long daysAhead = java.time.temporal.ChronoUnit.DAYS.between(AppTimeZone.today(), availableDate);
             if (daysAhead > 0) {
                 if (!featureService.sellerHasAccess(seller, FeatureService.KEY_MENU_ADVANCE_DAYS)) {
                     throw new IllegalStateException(
@@ -782,6 +866,11 @@ public class SellerService {
         dto.setSlug(kitchen.getSlug() != null ? kitchen.getSlug() : kitchen.getName());
         dto.setInstagramLink(kitchen.getInstagramLink());
         dto.setUpiId(kitchen.getUpiId());
+        dto.setAcceptedPaymentMode(kitchen.getAcceptedPaymentMode() == null
+                ? null : kitchen.getAcceptedPaymentMode().name());
+        dto.setGpayIdentifierType(kitchen.getGpayIdentifierType() == null
+                ? null : kitchen.getGpayIdentifierType().name());
+        dto.setGpayIdentifier(kitchen.getGpayIdentifier());
         dto.setGalleryImages(kitchen.getGalleryImages());
         dto.setOrderDeadline(kitchen.getOrderDeadline());
         // The kitchen owner's name, read from the seller's own User record so the
@@ -790,6 +879,10 @@ public class SellerService {
         dto.setSellerType(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : null);
         dto.setPaused(KitchenVisibility.isPaused(kitchen));
         return dto;
+    }
+
+    private static String cleanPaymentIdentifier(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private ProductDto toProductDto(Product product) {
@@ -821,7 +914,7 @@ public class SellerService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
-        String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
+        String lifecycle = OfferingTiming.lifecycleState(product, AppTimeZone.today(), AppTimeZone.time());
         dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle)
                 || "SCHEDULED_TO_OPEN".equals(lifecycle));
         dto.setLifecycleState(lifecycle);

@@ -52,6 +52,7 @@ public class OrderPlacementProductionSimulationTest {
 
         Kitchen kitchen = new Kitchen("k" + suffix, "Kitchen " + suffix, "", null, seller);
         kitchen.setSociety(society.getName());
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         kitchen.setAvailableToday(true);
         kitchen.getServedSocieties().add(society);
         kitchen = kitchens.saveAndFlush(kitchen);
@@ -99,7 +100,7 @@ public class OrderPlacementProductionSimulationTest {
         buyerDetails.setFlatHouseNumber("A-402");
 
         txTemplate.execute(status -> {
-            var placed = orderService.placeOrder(PaymentStatus.PENDING, null, buyerDetails, "spicy", session);
+            var placed = orderService.placeOrder(PaymentStatus.PENDING, "cod", buyerDetails, "spicy", session);
             assertThat(placed).isNotNull();
             assertThat(placed.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
             return null;
@@ -107,7 +108,7 @@ public class OrderPlacementProductionSimulationTest {
     }
 
     @Test
-    public void testPlaceOrderWithPaymentMethod() {
+    public void testPlaceOrderWithSupportedPaymentMethod() {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
 
         Area area = areas.saveAndFlush(new Area("Area " + suffix));
@@ -121,6 +122,7 @@ public class OrderPlacementProductionSimulationTest {
 
         Kitchen kitchen = new Kitchen("k" + suffix, "Kitchen " + suffix, "", null, seller);
         kitchen.setSociety(society.getName());
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         kitchen.setAvailableToday(true);
         kitchen.getServedSocieties().add(society);
         kitchen = kitchens.saveAndFlush(kitchen);
@@ -167,7 +169,7 @@ public class OrderPlacementProductionSimulationTest {
         buyerDetails.setFlatHouseNumber("A-402");
 
         txTemplate.execute(status -> {
-            var placed = orderService.placeOrder(PaymentStatus.PENDING, "card", buyerDetails, "spicy", session);
+            var placed = orderService.placeOrder(PaymentStatus.PENDING, "cod", buyerDetails, "spicy", session);
             assertThat(placed).isNotNull();
             assertThat(placed.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
             return null;

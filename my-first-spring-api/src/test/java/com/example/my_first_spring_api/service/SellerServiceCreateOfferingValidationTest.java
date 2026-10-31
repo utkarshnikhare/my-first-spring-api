@@ -13,6 +13,7 @@ import com.example.my_first_spring_api.repository.ProductRepository;
 import com.example.my_first_spring_api.repository.UserRepository;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -369,15 +370,22 @@ class SellerServiceCreateOfferingValidationTest {
             expectedPm = String.format(java.util.Locale.ROOT, "%02d:00", targetHour);
         } else {
             amInput = "04:00";
-            expectedPm = "23:59";
+            expectedPm = null;
         }
         dto.setOrderWindowEnd(amInput);
         dto.setReadyByTime(offeringDate + "T23:59");
 
         var result = sellerService.createProduct(1L, dto, approvedSeller());
         assertThat(result).isNotNull();
-        assertThat(result.getOrderWindowEnd()).isEqualTo(expectedPm);
-        assertThat(result.getCutoffTime()).isEqualTo(expectedPm);
+        if (expectedPm != null) {
+            assertThat(result.getOrderWindowEnd()).isEqualTo(expectedPm);
+        } else {
+            Assumptions.assumeTrue(now.isBefore(LocalTime.of(23, 58)));
+            LocalTime corrected = LocalTime.parse(result.getOrderWindowEnd());
+            assertThat(corrected).isAfterOrEqualTo(now.minusMinutes(1));
+            assertThat(corrected).isBefore(LocalTime.of(23, 59));
+        }
+        assertThat(result.getCutoffTime()).isEqualTo(result.getOrderWindowEnd());
     }
 
     @Test

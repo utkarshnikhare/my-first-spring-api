@@ -86,4 +86,52 @@ class OrderServicePaymentTest {
         assertThat(result.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
         verify(orderRepository, never()).save(any());
     }
+
+    @Test
+    void historicalOrderPaymentSnapshotDoesNotFollowLaterKitchenSettings() {
+        Kitchen kitchen = order.getKitchen();
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.GPAY_AND_UPI);
+        kitchen.setGpayIdentifierType(GpayIdentifierType.PHONE_NUMBER);
+        kitchen.setGpayIdentifier("9876543210");
+        kitchen.setUpiId("seller@upi");
+        order.setOrderStatus(OrderStatus.ORDERED);
+        order.setPaymentMethod("gpay");
+        order.setPaymentConfigurationSnapshot("GPAY_AND_UPI");
+
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
+        kitchen.setGpayIdentifierType(null);
+        kitchen.setGpayIdentifier(null);
+        kitchen.setUpiId(null);
+
+        var result = orderService.toOrderDto(order);
+        assertThat(result.getPaymentMethod()).isEqualTo("gpay");
+        assertThat(result.getPaymentConfigurationSnapshot()).isEqualTo("GPAY_AND_UPI");
+        assertThat(result.getKitchen().getAcceptedPaymentMode()).isEqualTo("GPAY_AND_UPI");
+        assertThat(result.getKitchen().getGpayIdentifierType()).isNull();
+        assertThat(result.getKitchen().getGpayIdentifier()).isNull();
+        assertThat(result.getKitchen().getUpiId()).isNull();
+    }
+
+    @Test
+    void checkoutDraftStillUsesCurrentKitchenPaymentSettings() {
+        Kitchen kitchen = order.getKitchen();
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.GPAY);
+        kitchen.setGpayIdentifierType(GpayIdentifierType.PHONE_NUMBER);
+        kitchen.setGpayIdentifier("9876543210");
+        order.setOrderStatus(OrderStatus.DRAFT);
+
+        var result = orderService.toOrderDto(order);
+        assertThat(result.getKitchen().getAcceptedPaymentMode()).isEqualTo("GPAY");
+        assertThat(result.getKitchen().getGpayIdentifierType()).isEqualTo("PHONE_NUMBER");
+        assertThat(result.getKitchen().getGpayIdentifier()).isEqualTo("9876543210");
+    }
+
+    @Test
+    void buyerCannotChangeSellerVerificationState() {
+        order.setPaymentStatus(PaymentStatus.AWAITING_SELLER_VERIFICATION);
+        assertThatThrownBy(() -> orderService.updatePaymentStatus(4L, PaymentStatus.PENDING, buyer))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("managed by the seller");
+        verify(orderRepository, never()).save(any());
+    }
 }

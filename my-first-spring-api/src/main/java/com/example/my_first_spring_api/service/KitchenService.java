@@ -80,7 +80,7 @@ public class KitchenService {
                         && !Boolean.TRUE.equals(p.getOrdersPaused())
                         && !Boolean.TRUE.equals(p.getSoldOut()))
                 .collect(Collectors.toList()));
-        detailDto.setQuickPosts(toQuickPostDtos(quickPostRepository.findByKitchenAndPostedDateOrderByCreatedAtDesc(kitchen, LocalDate.now())));
+        detailDto.setQuickPosts(toQuickPostDtos(quickPostRepository.findByKitchenAndPostedDateOrderByCreatedAtDesc(kitchen, AppTimeZone.today())));
         return detailDto;
     }
 
@@ -109,7 +109,7 @@ public class KitchenService {
         KitchenDto kitchenDto = toKitchenDto(kitchen);
         List<ProductDto> all = productRepository.findByKitchen(kitchen).stream()
                 .map(this::toProductDto).collect(Collectors.toList());
-        LocalDate todayDate = LocalDate.now(AppTimeZone.ZONE);
+        LocalDate todayDate = AppTimeZone.today();
         List<ProductDto> preorder = all.stream()
                 .filter(p -> "PRE_ORDER".equals(p.getBuyerSection()))
                 .collect(Collectors.toList());
@@ -243,6 +243,11 @@ public class KitchenService {
         dto.setWhatsappLink(kitchen.getWhatsappLink());
         dto.setInstagramLink(kitchen.getInstagramLink());
         dto.setUpiId(kitchen.getUpiId());
+        dto.setAcceptedPaymentMode(kitchen.getAcceptedPaymentMode() == null
+                ? null : kitchen.getAcceptedPaymentMode().name());
+        dto.setGpayIdentifierType(kitchen.getGpayIdentifierType() == null
+                ? null : kitchen.getGpayIdentifierType().name());
+        dto.setGpayIdentifier(kitchen.getGpayIdentifier());
         dto.setOrderDeadline(kitchen.getOrderDeadline());
         dto.setSellerType(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : null);
         dto.setPaused(KitchenVisibility.isPaused(kitchen));
@@ -288,7 +293,7 @@ public class KitchenService {
         dto.setOrdersPaused(product.isOrdersPaused());
         dto.setQuickPost(product.isQuickPost());
         dto.setQuickPostImageData(product.getQuickPostImageData());
-        String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
+        String lifecycle = OfferingTiming.lifecycleState(product, AppTimeZone.today(), AppTimeZone.time());
         dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle)
                 || "SCHEDULED_TO_OPEN".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
@@ -302,10 +307,10 @@ public class KitchenService {
         if (!Boolean.TRUE.equals(dto.getRecurring())
                 && !Boolean.TRUE.equals(dto.getAvailableToday())
                 && (product.getAvailableDate() == null
-                    || !product.getAvailableDate().isAfter(LocalDate.now(AppTimeZone.ZONE)))) {
+                    || !product.getAvailableDate().isAfter(AppTimeZone.today()))) {
             dto.setOrdersClosed(true);
         }
-        dto.setBuyerSection(OfferingTiming.buyerSection(dto, product, LocalDate.now(AppTimeZone.ZONE)));
+        dto.setBuyerSection(OfferingTiming.buyerSection(dto, product, AppTimeZone.today()));
         return dto;
     }
 }

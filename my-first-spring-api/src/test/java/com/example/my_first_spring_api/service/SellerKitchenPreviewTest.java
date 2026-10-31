@@ -58,8 +58,10 @@ class SellerKitchenPreviewTest {
                 .as("the stub that only toasted must be gone")
                 .doesNotContain("case 'preview-kitchen': toast('Opening kitchen preview...', 'info'); break;");
         assertThat(sellerJs)
-                .as("the preview must load the existing buyer kitchen page by id")
-                .contains("location.href = '/index.html#/kitchen/' + encodeURIComponent(previewId);");
+                .as("the preview must open the existing buyer kitchen page in a new tab")
+                .contains("var previewWindow = window.open('about:blank', '_blank');")
+                .contains("previewWindow.location.replace('/index.html#/kitchen/' + encodeURIComponent(previewId));")
+                .doesNotContain("location.href = '/index.html#/kitchen/' + encodeURIComponent(previewId);");
     }
 
     /**
@@ -73,6 +75,9 @@ class SellerKitchenPreviewTest {
                 .contains("var previewKitchen = S.myKitchen || S.kitchen;")
                 .contains("var previewId = previewKitchen && previewKitchen.id;");
         assertThat(sellerJs)
+                .as("the new preview tab must not retain an opener reference to the seller app")
+                .contains("previewWindow.opener = null;");
+        assertThat(sellerJs)
                 .as("a missing id must re-read the seller's kitchen, not guess")
                 .contains("previewKitchen = await sellerApi('/api/seller/kitchen');");
     }
@@ -83,6 +88,7 @@ class SellerKitchenPreviewTest {
         assertThat(sellerJs)
                 .as("the loading message is shown only once the kitchen id is known")
                 .contains("if (!previewId) {")
+                .contains("previewWindow.close();")
                 .contains("toast('Could not load your kitchen. Please retry.', 'error');")
                 .contains("toast('No kitchen found to preview. Publish your kitchen first.', 'error');");
     }

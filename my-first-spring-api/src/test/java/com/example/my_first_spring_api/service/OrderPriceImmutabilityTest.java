@@ -61,6 +61,7 @@ class OrderPriceImmutabilityTest {
 
     private Kitchen approvedKitchen(User seller) {
         Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller);
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         kitchen.setId(1L);
         kitchen.setAvailableToday(true);
         return kitchen;
@@ -113,12 +114,12 @@ class OrderPriceImmutabilityTest {
 
         sessionMap.put("BUYER_USER", buyer.getId());
 
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, null, null, null, httpSession);
+        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, "cod", null, null, httpSession);
         assertThat(placed.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(2000));
         assertThat(placed.getItems()).hasSize(1);
         assertThat(placed.getItems().get(0).getPrice()).isEqualByComparingTo(BigDecimal.valueOf(20));
-        assertThat(placed.getOrderStatus()).isEqualTo(OrderStatus.CONFIRMED);
-        assertThat(savedDraft.getOrderStatus()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(placed.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
+        assertThat(savedDraft.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
         assertThat(savedDraft.getOrderTime()).isNotNull();
         assertThat(placed.getOrderTime()).isNotNull();
 
@@ -244,6 +245,7 @@ class OrderPriceImmutabilityTest {
         otherSeller.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
 
         Kitchen otherKitchen = new Kitchen("k2", "Other Kitchen", "d", null, otherSeller);
+        otherKitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         otherKitchen.setId(2L);
         when(kitchenRepository.findById(2L)).thenReturn(Optional.of(otherKitchen));
 

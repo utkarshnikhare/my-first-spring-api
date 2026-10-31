@@ -125,6 +125,7 @@ public class OrderService {
                 if (product.getKitchen() == null || !product.getKitchen().getId().equals(kitchen.getId())) {
                     throw new IllegalArgumentException("The selected offering does not belong to this kitchen.");
                 }
+                OfferingTiming.enforceQuickPostPublicationDate(product, AppTimeZone.today());
                 int qty = itemReq.getQuantity() == null ? 0 : itemReq.getQuantity();
                 if (qty <= 0) {
                     throw new IllegalArgumentException("Quantity must be at least 1.");
@@ -132,7 +133,7 @@ public class OrderService {
                 if (Boolean.TRUE.equals(product.getOrdersPaused())) {
                     throw new IllegalArgumentException("Orders are paused for '" + product.getName() + "'.");
                 }
-                boolean itemPreorder = Boolean.TRUE.equals(product.getIsPreorder());
+                boolean itemPreorder = OfferingTiming.isPreorderForOrdering(product, AppTimeZone.today());
                 // Recurring offerings are governed by their occurrence rows:
                 // today's selling date when one exists, otherwise the next
                 // scheduled date (a future-occurrence pre-order, V2 §14). This
@@ -187,12 +188,12 @@ public class OrderService {
      * slot from the offering's time slots; cutoff applies the day before pickup.
      */
     private void applyScheduling(Product product, OrderItemRequest req, OrderItem item) {
-        boolean preorder = Boolean.TRUE.equals(product.getIsPreorder());
+        boolean preorder = OfferingTiming.isPreorderForOrdering(product, AppTimeZone.today());
         if (!preorder) {
-            enforceCutoff(product, LocalDate.now(AppTimeZone.ZONE), "today");
+            enforceCutoff(product, AppTimeZone.today(), "today");
             return;
         }
-        LocalDate earliest = product.getAvailableDate() != null ? product.getAvailableDate() : LocalDate.now(AppTimeZone.ZONE).plusDays(1);
+        LocalDate earliest = product.getAvailableDate() != null ? product.getAvailableDate() : AppTimeZone.today().plusDays(1);
         LocalDate latest = product.getAvailableUntilDate() != null ? product.getAvailableUntilDate() : earliest;
         LocalDate scheduled;
         if (req.getScheduledDate() == null || req.getScheduledDate().isBlank()) {
@@ -269,7 +270,7 @@ public class OrderService {
      * per-date bucket total ("14 plates" means 14 plates for that date).
      */
     private void validateRecurringOrder(Product product, OccurrenceDto occ, int qty) {
-        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        LocalDate today = AppTimeZone.today();
         if (occ.getDate() == null || occ.getDate().isBefore(today)) {
             throw new IllegalArgumentException("'" + product.getName() + "' is no longer scheduled for " + occ.getDate() + ".");
         }
@@ -283,12 +284,12 @@ public class OrderService {
         // recurring pre-orders. The occurrence close time is enforced only on
         // its fulfilment date; future dates remain open until then.
         LocalTime openAt = parseHhmmOrNull(product.getOrderWindowStart());
-        if (openAt != null && LocalTime.now().isBefore(openAt)) {
+        if (openAt != null && AppTimeZone.time().isBefore(openAt)) {
             throw new IllegalArgumentException("Orders for '" + product.getName() + "' have not opened yet.");
         }
         if (occ.getDate().equals(today)) {
             LocalTime closeAt = parseHhmmOrNull(occ.getOrderCloseTime());
-            if (closeAt != null && LocalTime.now().isAfter(closeAt)) {
+            if (closeAt != null && AppTimeZone.time().isAfter(closeAt)) {
                 throw new IllegalArgumentException("Orders for '" + product.getName() + "' are closed for " + occ.getDate() + ".");
             }
         }
@@ -410,14 +411,22 @@ public class OrderService {
         if (order.getItems() == null || order.getItems().isEmpty()) {
             throw new IllegalArgumentException("Your order is empty. Please add items before placing it.");
         }
-        // Validate payment method against supported types
-        if (paymentMethod != null && !paymentMethod.isBlank()) {
-            String normalized = paymentMethod.toLowerCase();
-            if (!java.util.Arrays.asList("upi", "card", "cod").contains(normalized)) {
-                throw new IllegalArgumentException("Unsupported payment method: " + paymentMethod);
-            }
+        if (paymentMethod == null || paymentMethod.isBlank()) {
+            throw new IllegalArgumentException("Choose a payment method accepted by this kitchen.");
         }
-        order.setPaymentMethod(paymentMethod);
+        String normalizedPaymentMethod = paymentMethod.trim().toLowerCase(java.util.Locale.ROOT);
+        if (!java.util.Arrays.asList("upi", "gpay", "cod").contains(normalizedPaymentMethod)) {
+            throw new IllegalArgumentException("Unsupported payment method: " + paymentMethod);
+        }
+        if (order.getKitchen().getAcceptedPaymentMode() == null) {
+            throw new IllegalArgumentException(
+                    "This kitchen has not configured its payment methods yet. Please try again later.");
+        }
+        if (!SellerPaymentConfiguration.allows(order.getKitchen().getAcceptedPaymentMode(), normalizedPaymentMethod)) {
+            throw new IllegalArgumentException("The selected payment method is not accepted by this kitchen.");
+        }
+        order.setPaymentMethod(normalizedPaymentMethod);
+        order.setPaymentConfigurationSnapshot(order.getKitchen().getAcceptedPaymentMode().name());
         order.setBuyer(buyer);
         if (buyerDetails != null) updateBuyerDetails(buyer, buyerDetails);
         if (customInstructions != null && !customInstructions.isBlank()) {
@@ -479,6 +488,10 @@ public class OrderService {
         // before stock is committed. This catches past-date, sold-out, paused,
         // order-window-closed, and unavailable-area items that became invalid
         // after the draft was created.
+        for (OrderItem item : order.getItems()) {
+            OfferingTiming.enforceQuickPostPublicationDate(
+                    item.getProduct(), AppTimeZone.today());
+        }
         if (availabilityService != null) {
             for (OrderItem item : order.getItems()) {
                 Product product = item.getProduct();
@@ -497,22 +510,17 @@ public class OrderService {
         }
         // Notify seller if any tracked offering newly sold out as a result of this order.
         notifyNewlySoldOut(order);
-        boolean isHomemade = KitchenVisibility.isHomemadeStore(order.getKitchen());
-        PaymentStatus effectivePaymentStatus = paymentStatus == null || paymentStatus == PaymentStatus.WILL_PAY_LATER
-                ? PaymentStatus.PENDING : paymentStatus;
-        if (effectivePaymentStatus == PaymentStatus.PAID && !isHomemade) {
-            order.setPaymentStatus(PaymentStatus.PAID);
-            order.setOrderStatus(OrderStatus.CONFIRMED);
-        } else {
-            order.setPaymentStatus(effectivePaymentStatus);
-            order.setOrderStatus(OrderStatus.ORDERED);
-        }
+        // A buyer acknowledgement is never proof of settlement. The seller's
+        // authenticated verification endpoint is the only transition to PAID.
+        order.setPaymentStatus("cod".equals(normalizedPaymentMethod)
+                ? PaymentStatus.UNPAID : PaymentStatus.AWAITING_SELLER_VERIFICATION);
+        order.setOrderStatus(OrderStatus.ORDERED);
         order.recalculateTotal();
         // Server-side authoritative order timestamp: set exactly once when the draft
         // transitions to a finalized order state. This represents the real order creation
         // time — NOT the draft creation time (createdAt). Never overwritten on updates.
         if (order.getOrderTime() == null) {
-            order.setOrderTime(LocalDateTime.now());
+            order.setOrderTime(AppTimeZone.now());
         }
         order = orderRepository.save(order);
         orderRepository.flush();
@@ -636,6 +644,11 @@ public class OrderService {
         if (order.getOrderStatus() == OrderStatus.CANCELLED) {
             throw new IllegalArgumentException("A cancelled order cannot change payment status.");
         }
+        if ((order.getPaymentStatus() == PaymentStatus.UNPAID
+                || order.getPaymentStatus() == PaymentStatus.AWAITING_SELLER_VERIFICATION)
+                && requestedStatus != order.getPaymentStatus()) {
+            throw new IllegalArgumentException("Payment status is managed by the seller.");
+        }
         // Buyers cannot mark an order paid; the seller-only endpoint owns that transition.
         if (requestedStatus == PaymentStatus.PAID && order.getPaymentStatus() != PaymentStatus.PAID) {
             throw new IllegalArgumentException("Payment status is managed by the seller.");
@@ -734,7 +747,7 @@ public class OrderService {
         if (order.getAcknowledgedAt() != null) {
             throw new IllegalArgumentException("This order has already been acknowledged.");
         }
-        order.setAcknowledgedAt(java.time.LocalDateTime.now());
+        order.setAcknowledgedAt(AppTimeZone.now());
         order.setAcknowledgedBy(seller);
         if (order.getOrderStatus() == OrderStatus.ORDERED) {
             order.setOrderStatus(OrderStatus.CONFIRMED);
@@ -775,7 +788,7 @@ public class OrderService {
                             : "This order is not an active customer order yet.");
         }
         // Backend clock only: the browser's clock is never authoritative.
-        boolean changed = order.applyDeliveryStatus(target, seller, LocalDateTime.now());
+        boolean changed = order.applyDeliveryStatus(target, seller, AppTimeZone.now());
         orderRepository.save(order);
         if (changed && target == DeliveryStatus.DELIVERED) {
             // Handover 18: capture "order delivered" on the real transition only,
@@ -821,7 +834,7 @@ public class OrderService {
             before = computeDeliveryProgress(productId, targetDate, kitchen);
         }
         int confirmedScope = before.getBulkScopeOrderCount();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = AppTimeZone.now();
 
         int updated = 0;
         for (Order order : orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen)) {
@@ -1022,7 +1035,9 @@ public class OrderService {
         OrderDto full = toOrderDto(order);
         SellerOrderSummaryRowDto dto = new SellerOrderSummaryRowDto();
         dto.setId(full.getId()); dto.setOrderNumber(full.getOrderNumber()); dto.setTotalAmount(full.getTotalAmount());
-        dto.setPaymentStatus(full.getPaymentStatus()); dto.setOrderStatus(full.getOrderStatus()); dto.setCreatedAt(full.getCreatedAt());
+        dto.setPaymentStatus(full.getPaymentStatus()); dto.setPaymentMethod(full.getPaymentMethod());
+        dto.setPaymentConfigurationSnapshot(full.getPaymentConfigurationSnapshot());
+        dto.setOrderStatus(full.getOrderStatus()); dto.setCreatedAt(full.getCreatedAt());
         dto.setOrderTime(full.getOrderTime()); dto.setUpdatedAt(full.getUpdatedAt()); dto.setKitchen(full.getKitchen());
         dto.setItems(full.getItems()); dto.setCustomInstructions(full.getCustomInstructions()); dto.setAcknowledgedAt(full.getAcknowledgedAt());
         dto.setAcknowledgedBySellerId(full.getAcknowledgedBySellerId());
@@ -1040,6 +1055,8 @@ public class OrderService {
         dto.setOrderNumber(order.getOrderNumber());
         dto.setTotalAmount(order.getTotalAmount());
         dto.setPaymentStatus(order.getPaymentStatus());
+        dto.setPaymentMethod(order.getPaymentMethod());
+        dto.setPaymentConfigurationSnapshot(order.getPaymentConfigurationSnapshot());
         dto.setOrderStatus(order.getOrderStatus());
         // Delivery is read from the SAME Order row for every audience (seller
         // drill-down, seller order detail and the buyer's Orders page). There is
@@ -1059,6 +1076,16 @@ public class OrderService {
                     kitchen.getId(), kitchen.getName(), kitchen.getDisplayName(),
                     kitchen.getImageUrl(), kitchen.getRating());
             ks.setSociety(kitchen.getSociety());
+            if (order.getOrderStatus() == OrderStatus.DRAFT) {
+                ks.setUpiId(kitchen.getUpiId());
+                ks.setAcceptedPaymentMode(kitchen.getAcceptedPaymentMode() == null
+                        ? null : kitchen.getAcceptedPaymentMode().name());
+                ks.setGpayIdentifierType(kitchen.getGpayIdentifierType() == null
+                        ? null : kitchen.getGpayIdentifierType().name());
+                ks.setGpayIdentifier(kitchen.getGpayIdentifier());
+            } else {
+                ks.setAcceptedPaymentMode(order.getPaymentConfigurationSnapshot());
+            }
             dto.setKitchen(ks);
         }
             if (order.getBuyer() != null) {
@@ -1160,12 +1187,12 @@ public class OrderService {
                 validateRecurringOrder(product, target, quantity);
                 continue;
             }
-            boolean preorder = Boolean.TRUE.equals(product.getIsPreorder());
-            LocalDate fulfillmentDate = LocalDate.now(AppTimeZone.ZONE);
+            boolean preorder = OfferingTiming.isPreorderForOrdering(product, AppTimeZone.today());
+            LocalDate fulfillmentDate = AppTimeZone.today();
             if (preorder) {
                 if (item.getScheduledDate() == null) {
                     fulfillmentDate = product.getAvailableDate() != null
-                            ? product.getAvailableDate() : LocalDate.now(AppTimeZone.ZONE);
+                            ? product.getAvailableDate() : AppTimeZone.today();
                 } else {
                     fulfillmentDate = item.getScheduledDate();
                 }
@@ -1186,10 +1213,10 @@ public class OrderService {
                 throw new IllegalArgumentException("At most " + product.getMaxQuantity() + " units of '" + product.getName() + "' per order.");
             }
             if (!preorder) {
-                enforceCutoff(product, LocalDate.now(AppTimeZone.ZONE), "today");
+                enforceCutoff(product, AppTimeZone.today(), "today");
             } else {
                 LocalDate scheduled = item.getScheduledDate();
-                LocalDate earliest = product.getAvailableDate() != null ? product.getAvailableDate() : LocalDate.now(AppTimeZone.ZONE).plusDays(1);
+                LocalDate earliest = product.getAvailableDate() != null ? product.getAvailableDate() : AppTimeZone.today().plusDays(1);
                 LocalDate latest = product.getAvailableUntilDate() != null ? product.getAvailableUntilDate() : earliest;
                 if (scheduled == null || scheduled.isBefore(earliest) || scheduled.isAfter(latest)) {
                     throw new IllegalArgumentException("'" + product.getName() + "' can be scheduled between "

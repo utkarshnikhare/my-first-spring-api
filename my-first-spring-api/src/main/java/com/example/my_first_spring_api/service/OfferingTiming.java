@@ -50,7 +50,7 @@ final class OfferingTiming {
                                     String orderWindowStart, String orderWindowEnd,
                                     String readyByTime) {
         return validateNewOffering(offeringDate, preorder, orderWindowStart, orderWindowEnd,
-                readyByTime, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
+                readyByTime, AppTimeZone.today(), AppTimeZone.time());
     }
 
     static String validateNewOffering(LocalDate offeringDate, boolean preorder,
@@ -187,7 +187,7 @@ final class OfferingTiming {
         // If close on offeringDate is after delivery (e.g. delivery 10:00, close 20:00),
         // check if it fits on the day before delivery, provided that day is not in the past.
         LocalDateTime prevDay = LocalDateTime.of(offeringDate.minusDays(1), closeTime);
-        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        LocalDate today = AppTimeZone.today();
         if (prevDay.isBefore(delivery) && !prevDay.toLocalDate().isBefore(today)) {
             return prevDay;
         }
@@ -201,6 +201,11 @@ final class OfferingTiming {
         int currentMinute = current.getHour() * 60 + current.getMinute();
         int cutoffMinute = cutoff.getHour() * 60 + cutoff.getMinute();
         return currentMinute > cutoffMinute;
+    }
+
+    static boolean isPreorderForOrdering(Product product, LocalDate today) {
+        return product != null && product.getAvailableDate() != null
+                && product.getAvailableDate().isAfter(today);
     }
 
     static String autoCorrectOrdersClose(LocalDate orderingDate, String close,
@@ -263,7 +268,16 @@ final class OfferingTiming {
     }
 
     static void enforceOrderWindow(Product product, LocalDate fulfillmentDate, String context) {
-        enforceOrderWindow(product, fulfillmentDate, context, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
+        enforceOrderWindow(product, fulfillmentDate, context, AppTimeZone.today(), AppTimeZone.time());
+    }
+
+    static void enforceQuickPostPublicationDate(Product product, LocalDate today) {
+        if (product != null && product.isQuickPost()
+                && product.getAvailableDate() != null
+                && product.getAvailableDate().isBefore(today)) {
+            throw new IllegalArgumentException("Quick Post '" + product.getName()
+                    + "' has expired and can no longer be ordered.");
+        }
     }
 
     static void enforceOrderWindow(Product product, LocalDate fulfillmentDate, String context,
@@ -293,8 +307,8 @@ final class OfferingTiming {
     }
 
     static boolean isWindowOpenNow(Product product) {
-        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
-        return isWindowOpenNow(product, today, LocalTime.now(AppTimeZone.ZONE));
+        LocalDate today = AppTimeZone.today();
+        return isWindowOpenNow(product, today, AppTimeZone.time());
     }
 
     static boolean isWindowOpenNow(Product product, LocalDate today, LocalTime now) {
@@ -320,7 +334,7 @@ final class OfferingTiming {
             return "SCHEDULED_TO_OPEN";
         }
         if (!isWindowOpenNow(product, today, now)) return "ORDERS_CLOSED";
-        return Boolean.TRUE.equals(product.getIsPreorder()) ? "PRE_ORDER" : "LIVE";
+        return offeringDate.isAfter(today) ? "PRE_ORDER" : "LIVE";
     }
 
     static String buyerSection(ProductDto dto, Product product, LocalDate today) {
@@ -433,7 +447,7 @@ final class OfferingTiming {
                     } catch (RuntimeException notInstant) {
                         if (!legacy.matches()) return value; // Malformed input: validate reports it.
                         try {
-                            resolved = parseReadyByTime(text, LocalDate.now(AppTimeZone.ZONE));
+                            resolved = parseReadyByTime(text, AppTimeZone.today());
                         } catch (RuntimeException invalid) {
                             return value;
                         }
@@ -451,7 +465,7 @@ final class OfferingTiming {
     }
 
     static LocalDateTime parseReadyByTime(String value) {
-        return parseReadyByTime(value, LocalDate.now(AppTimeZone.ZONE));
+        return parseReadyByTime(value, AppTimeZone.today());
     }
 
     static LocalDateTime parseReadyByTime(String value, LocalDate today) {

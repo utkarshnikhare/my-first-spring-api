@@ -164,6 +164,39 @@ class SellerServiceUpdateKitchenTest {
     }
 
     @Test
+    void updateKitchenPersistsExplicitGooglePayAndUpiSettings() {
+        Kitchen kitchen = ownedKitchen();
+        when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
+        when(kitchenRepository.save(any(Kitchen.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        KitchenUpdateDto dto = new KitchenUpdateDto();
+        dto.setAcceptedPaymentMode("GPAY_AND_UPI");
+        dto.setGpayIdentifierType("PHONE_NUMBER");
+        dto.setGpayIdentifier("+91 9876543210");
+        dto.setUpiId("cook@examplebank");
+
+        var result = sellerService.updateKitchen(1L, dto, seller());
+
+        assertThat(result.getAcceptedPaymentMode()).isEqualTo("GPAY_AND_UPI");
+        assertThat(result.getGpayIdentifierType()).isEqualTo("PHONE_NUMBER");
+        assertThat(result.getGpayIdentifier()).isEqualTo("+91 9876543210");
+        assertThat(result.getUpiId()).isEqualTo("cook@examplebank");
+    }
+
+    @Test
+    void updateKitchenRejectsInvalidConfiguredPaymentDetails() {
+        Kitchen kitchen = ownedKitchen();
+        when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
+
+        KitchenUpdateDto dto = new KitchenUpdateDto();
+        dto.setAcceptedPaymentMode("GPAY");
+        dto.setGpayIdentifier("9876543210");
+
+        assertThrows(IllegalArgumentException.class,
+                () -> sellerService.updateKitchen(1L, dto, seller()));
+    }
+
+    @Test
     void updateKitchenThrowsWhenNotFound() {
         when(kitchenRepository.findById(1L)).thenReturn(Optional.empty());
 
