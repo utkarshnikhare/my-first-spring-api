@@ -1,6 +1,8 @@
 package com.example.my_first_spring_api.service;
 
+import db.migration.V20__allow_seller_verified_payment_states;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.migration.Context;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,8 +15,16 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
@@ -174,5 +184,52 @@ class PostgresNativeMigrationTest {
                         + "VALUES (?, ?, ?, ?, ?, ?)",
                 invalidProbeId, 1L, 1L, "status-probe-invalid", "ORDERED", "NOT_A_PAYMENT_STATUS"))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void v20OnlyDropsPaymentStatusChecksOwnedByOrders() throws Exception {
+        String schema = "v20_constraint_probe_" + UUID.randomUUID().toString().replace("-", "");
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+             Statement statement = connection.createStatement()) {
+            statement.execute("CREATE SCHEMA " + schema);
+            connection.setSchema(schema);
+            statement.execute("""
+                    CREATE TABLE orders (
+                        payment_status text NOT NULL,
+                        quantity integer NOT NULL,
+                        CONSTRAINT orders_payment_status_check
+                            CHECK (payment_status IN ('PENDING', 'PAID', 'WILL_PAY_LATER')),
+                        CONSTRAINT shared_check CHECK (quantity >= 0)
+                    )
+                    """);
+            statement.execute("""
+                    CREATE TABLE unrelated (
+                        payment_status text NOT NULL,
+                        CONSTRAINT shared_check
+                            CHECK (payment_status IN ('PENDING', 'PAID', 'WILL_PAY_LATER'))
+                    )
+                    """);
+
+            Context context = mock(Context.class);
+            when(context.getConnection()).thenReturn(connection);
+            new V20__allow_seller_verified_payment_states().migrate(context);
+
+            try (ResultSet result = statement.executeQuery(
+                    "SELECT COUNT(*) FROM pg_constraint "
+                            + "WHERE conrelid = 'orders'::regclass AND conname = 'shared_check'")) {
+                assertThat(result.next()).isTrue();
+                assertThat(result.getInt(1)).isEqualTo(1);
+            }
+            assertThatThrownBy(() -> statement.executeUpdate(
+                    "INSERT INTO orders (payment_status, quantity) VALUES ('PAID', -1)"))
+                    .isInstanceOf(java.sql.SQLException.class);
+        } finally {
+            try (Connection cleanup = DriverManager.getConnection(
+                    POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                 Statement statement = cleanup.createStatement()) {
+                statement.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
+            }
+        }
     }
 }

@@ -39,31 +39,59 @@ public class V20__allow_seller_verified_payment_states extends BaseJavaMigration
         }
 
         List<String> paymentStatusConstraints = new ArrayList<>();
-        String findConstraints = """
-                SELECT tc.constraint_name
-                FROM information_schema.table_constraints tc
-                JOIN information_schema.check_constraints cc
-                  ON tc.constraint_catalog = cc.constraint_catalog
-                 AND tc.constraint_schema = cc.constraint_schema
-                 AND tc.constraint_name = cc.constraint_name
-                WHERE LOWER(tc.table_name) = 'orders'
-                  AND LOWER(tc.constraint_type) = 'check'
-                  AND LOWER(cc.check_clause) LIKE '%payment_status%'
-                  AND LOWER(cc.check_clause) NOT LIKE '%is not null%'
-                  AND (
-                    (
-                      LOWER(cc.check_clause) LIKE '%pending%'
-                      AND LOWER(cc.check_clause) LIKE '%paid%'
-                      AND LOWER(cc.check_clause) LIKE '%will_pay_later%'
-                      AND LOWER(cc.check_clause) NOT LIKE '%unpaid%'
-                      AND LOWER(cc.check_clause) NOT LIKE '%awaiting_seller_verification%'
+        String databaseProduct = connection.getMetaData().getDatabaseProductName();
+        String findConstraints = "PostgreSQL".equalsIgnoreCase(databaseProduct)
+                ? """
+                  SELECT con.conname
+                  FROM pg_constraint con
+                  JOIN pg_class tbl ON tbl.oid = con.conrelid
+                  JOIN pg_namespace ns ON ns.oid = tbl.relnamespace
+                  WHERE tbl.relname = ?
+                    AND ns.nspname = ?
+                    AND con.contype = 'c'
+                    AND LOWER(pg_get_constraintdef(con.oid)) LIKE '%payment_status%'
+                    AND LOWER(pg_get_constraintdef(con.oid)) NOT LIKE '%is not null%'
+                    AND (
+                      (
+                        LOWER(pg_get_constraintdef(con.oid)) LIKE '%pending%'
+                        AND LOWER(pg_get_constraintdef(con.oid)) LIKE '%paid%'
+                        AND LOWER(pg_get_constraintdef(con.oid)) LIKE '%will_pay_later%'
+                        AND LOWER(pg_get_constraintdef(con.oid)) NOT LIKE '%unpaid%'
+                        AND LOWER(pg_get_constraintdef(con.oid)) NOT LIKE '%awaiting_seller_verification%'
+                      )
+                      OR LOWER(con.conname) = 'orders_payment_status_check'
                     )
-                    OR LOWER(tc.constraint_name) = 'orders_payment_status_check'
-                  )
-                  AND LOWER(tc.table_schema) = LOWER(?)
-                """;
+                  """
+                : """
+                  SELECT tc.constraint_name
+                  FROM information_schema.table_constraints tc
+                  JOIN information_schema.check_constraints cc
+                    ON tc.constraint_catalog = cc.constraint_catalog
+                   AND tc.constraint_schema = cc.constraint_schema
+                   AND tc.constraint_name = cc.constraint_name
+                  WHERE LOWER(tc.table_name) = 'orders'
+                    AND LOWER(tc.constraint_type) = 'check'
+                    AND LOWER(cc.check_clause) LIKE '%payment_status%'
+                    AND LOWER(cc.check_clause) NOT LIKE '%is not null%'
+                    AND (
+                      (
+                        LOWER(cc.check_clause) LIKE '%pending%'
+                        AND LOWER(cc.check_clause) LIKE '%paid%'
+                        AND LOWER(cc.check_clause) LIKE '%will_pay_later%'
+                        AND LOWER(cc.check_clause) NOT LIKE '%unpaid%'
+                        AND LOWER(cc.check_clause) NOT LIKE '%awaiting_seller_verification%'
+                      )
+                      OR LOWER(tc.constraint_name) = 'orders_payment_status_check'
+                    )
+                    AND LOWER(tc.table_schema) = LOWER(?)
+                  """;
         try (PreparedStatement statement = connection.prepareStatement(findConstraints)) {
-            statement.setString(1, schema);
+            if ("PostgreSQL".equalsIgnoreCase(databaseProduct)) {
+                statement.setString(1, tableName);
+                statement.setString(2, schema);
+            } else {
+                statement.setString(1, schema);
+            }
             try (ResultSet result = statement.executeQuery()) {
                 while (result.next()) paymentStatusConstraints.add(result.getString(1));
             }
