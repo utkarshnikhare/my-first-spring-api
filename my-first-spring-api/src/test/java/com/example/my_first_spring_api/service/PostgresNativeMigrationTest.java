@@ -87,6 +87,13 @@ class PostgresNativeMigrationTest {
                 Integer.class);
         assertThat(paymentMethodColumnCount).isEqualTo(1);
 
+        String paymentStatusNullable = jdbcTemplate.queryForObject(
+                "SELECT is_nullable FROM information_schema.columns "
+                        + "WHERE table_schema = 'public' AND table_name = 'orders' "
+                        + "AND column_name = 'payment_status'",
+                String.class);
+        assertThat(paymentStatusNullable).isEqualTo("NO");
+
         Integer sessionTableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
                         + "WHERE table_schema = 'public' AND table_type = 'BASE TABLE' "
