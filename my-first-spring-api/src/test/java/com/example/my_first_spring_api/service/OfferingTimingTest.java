@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Product;
 import com.example.my_first_spring_api.model.SellerApprovalStatus;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZonedDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -58,6 +60,31 @@ class OfferingTimingTest {
         assertThatThrownBy(() -> OfferingTiming.validateOrdersOpenFrom(TODAY.plusDays(1), "18:00",
                 TODAY.plusDays(1), "23:00", "2026-09-25T18:00", TODAY, LocalTime.NOON))
                 .hasMessageContaining("before Delivery");
+    }
+
+    @Test
+    void scheduledOpeningAcrossIstMidnightActivatesTheSamePreorderAtItsTimestamp() {
+        LocalDate deliveryDate = TODAY.plusDays(1);
+        Product product = product(deliveryDate, true, null, "17:00", 10);
+        product.setAvailableToday(true);
+        LocalDateTime opensAt = LocalDateTime.of(deliveryDate, LocalTime.MIDNIGHT);
+        product.setOrdersOpenFrom(opensAt);
+
+        ZonedDateTime immediatelyBeforeOpening =
+                ZonedDateTime.of(TODAY, LocalTime.of(23, 59, 59), AppTimeZone.ZONE);
+        ProductDto dto = buyerDto(product, OfferingTiming.lifecycleState(product,
+                immediatelyBeforeOpening.toLocalDate(), immediatelyBeforeOpening.toLocalTime()), true);
+        assertThat(dto.getLifecycleState()).isEqualTo("SCHEDULED_TO_OPEN");
+        assertThat(OfferingTiming.buyerSection(dto, product, TODAY)).isEqualTo("PRE_ORDER");
+        assertThat(OfferingTiming.isBuyerOrderableNow(dto, product, TODAY)).isFalse();
+
+        ZonedDateTime openingInstant = ZonedDateTime.of(deliveryDate, LocalTime.MIDNIGHT, AppTimeZone.ZONE);
+        dto.setLifecycleState(OfferingTiming.lifecycleState(product,
+                openingInstant.toLocalDate(), openingInstant.toLocalTime()));
+        dto.setOrdersClosed(false);
+        assertThat(dto.getLifecycleState()).isEqualTo("LIVE");
+        assertThat(OfferingTiming.buyerSection(dto, product, deliveryDate)).isEqualTo("ORDER");
+        assertThat(OfferingTiming.isBuyerOrderableNow(dto, product, deliveryDate)).isTrue();
     }
 
     @Test
