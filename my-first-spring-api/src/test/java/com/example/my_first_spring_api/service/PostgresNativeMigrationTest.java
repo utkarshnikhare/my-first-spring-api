@@ -153,12 +153,16 @@ class PostgresNativeMigrationTest {
                 "PENDING", "UNPAID", "AWAITING_SELLER_VERIFICATION", "PAID", "WILL_PAY_LATER"
         }) {
             jdbcTemplate.update(
-                    "INSERT INTO payment_status_constraint_probe (order_status, payment_status) VALUES (?, ?)",
-                    "ORDERED", validStatus);
+                    "INSERT INTO payment_status_constraint_probe "
+                            + "(buyer_id, kitchen_id, order_number, order_status, payment_status) "
+                            + "VALUES (?, ?, ?, ?, ?)",
+                    1L, 1L, "status-probe-" + validStatus, "ORDERED", validStatus);
         }
         assertThatThrownBy(() -> jdbcTemplate.update(
-                "INSERT INTO payment_status_constraint_probe (order_status, payment_status) VALUES (?, ?)",
-                "ORDERED", "NOT_A_PAYMENT_STATUS"))
+                "INSERT INTO payment_status_constraint_probe "
+                        + "(buyer_id, kitchen_id, order_number, order_status, payment_status) "
+                        + "VALUES (?, ?, ?, ?, ?)",
+                1L, 1L, "status-probe-invalid", "ORDERED", "NOT_A_PAYMENT_STATUS"))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 }
