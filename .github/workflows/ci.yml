@@ -10,6 +10,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      TZ: 'Asia/Kolkata'
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -42,6 +44,8 @@ jobs:
 
   e2e:
     runs-on: ubuntu-24.04
+    env:
+      TZ: 'Asia/Kolkata'
     steps:
       - name: Checkout
         uses: actions/checkout@v5

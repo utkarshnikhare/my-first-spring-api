@@ -29,6 +29,7 @@ module.exports = defineConfig({
   ],
   use: {
     baseURL,
+    timezoneId: 'Asia/Kolkata',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
