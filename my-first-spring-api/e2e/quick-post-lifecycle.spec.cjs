@@ -128,12 +128,38 @@ test('seller publishes a Quick Post that buyers can order through the existing c
   await expect(page.locator('.pay-method')).toHaveCount(2);
   await page.locator('[data-action="select-pay-method"][data-method="gpay"]').click();
   await expect(page.locator('body')).toContainText('9876543210');
+  const placeButton = page.locator('#payNowBtn');
+  await page.route('**/api/buyer/orders/place', route => route.abort('internetdisconnected'));
+  await placeButton.click();
+  await expect(page.locator('#placeOrderStatus')).toContainText('Order was not placed');
+  await expect(placeButton).toBeEnabled();
+  await expect(placeButton).not.toHaveAttribute('aria-busy');
+  const expectedNetworkFailure = browserIssues.filter(issue =>
+    issue === 'API request failed: POST /api/buyer/orders/place'
+      || issue.startsWith('console.error: Failed to load resource:'));
+  expect(expectedNetworkFailure).toHaveLength(2);
+  expectedNetworkFailure.forEach(issue => {
+    browserIssues.splice(browserIssues.indexOf(issue), 1);
+  });
+  await page.unroute('**/api/buyer/orders/place');
+
+  let placeRequestCount = 0;
+  await page.route('**/api/buyer/orders/place', async route => {
+    placeRequestCount++;
+    await new Promise(resolve => setTimeout(resolve, 300));
+    await route.continue();
+  });
   const placePaymentOrder = page.waitForResponse(response =>
     new URL(response.url()).pathname === '/api/buyer/orders/place'
       && response.request().method() === 'POST');
-  await page.locator('#payNowBtn').click();
+  await placeButton.click();
+  await expect(placeButton).toBeDisabled();
+  await expect(placeButton).toContainText('Placing your order…');
+  await placeButton.dispatchEvent('click');
   const paymentOrderResponse = await placePaymentOrder;
+  await page.unroute('**/api/buyer/orders/place');
   expect(paymentOrderResponse.status()).toBe(200);
+  expect(placeRequestCount).toBe(1);
   expect(await paymentOrderResponse.json()).toMatchObject({ paymentMethod: 'gpay' });
   await expect(page.getByRole('heading', { name: 'Order Confirmed' })).toBeVisible();
 

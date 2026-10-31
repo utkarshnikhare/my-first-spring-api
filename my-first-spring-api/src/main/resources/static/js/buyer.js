@@ -1531,6 +1531,7 @@ async function paymentView() {
         '<button class="btn btn-primary btn-block" type="button" id="payNowBtn" data-action="confirm-payment"' +
         (isCod ? ' data-cod="1"' : '') + '>' +
         (isCod ? 'PLACE ORDER (PAY ON DELIVERY) — ' : 'I’VE PAID — PLACE ORDER — ') + money(draft.totalAmount) + '</button>' +
+        '<p class="tiny muted text-center mt-1" id="placeOrderStatus" role="status" aria-live="polite"></p>' +
         '</div></div>';
 
     h += '</div>';
@@ -1547,10 +1548,13 @@ async function confirmPayment(btnEl) {
     var cod = btnEl && btnEl.dataset.cod === '1';
     state.placingOrder = true;
     var original = btnEl ? btnEl.innerHTML : '';
+    var statusMessage = document.getElementById('placeOrderStatus');
     if (btnEl) {
         btnEl.disabled = true;
-        btnEl.innerHTML = '<span class="btn-spinner"></span> ' + (cod ? 'Placing order...' : 'Processing payment...');
+        btnEl.setAttribute('aria-busy', 'true');
+        btnEl.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span> Placing your order…';
     }
+    if (statusMessage) statusMessage.textContent = 'Placing your order…';
     try {
         await withAuthGate(async function () {
             var buyerDetails = null;
@@ -1622,8 +1626,13 @@ async function confirmPayment(btnEl) {
             navigate('#/payment-success');
         });
     } catch (err) {
-        if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = original; }
         var reason = (err && err.data && (err.data.message || err.data.error)) || (err && err.message) || 'Could not place order. Please try again.';
+        if (btnEl) {
+            btnEl.disabled = false;
+            btnEl.removeAttribute('aria-busy');
+            btnEl.innerHTML = original;
+        }
+        if (statusMessage) statusMessage.textContent = 'Order was not placed. ' + reason + ' You can review and retry.';
         if (!(err instanceof ApiError && err.status === 401)) toast(reason, 'error');
         if (err instanceof ApiError && (err.status === 400 || err.status === 404)) {
             await render();
