@@ -325,7 +325,7 @@ final class OfferingTiming {
             return "SCHEDULED_TO_OPEN";
         }
         if (!isWindowOpenNow(product, today, now)) return "ORDERS_CLOSED";
-        return Boolean.TRUE.equals(product.getIsPreorder()) ? "PRE_ORDER" : "LIVE";
+        return offeringDate.isAfter(today) ? "PRE_ORDER" : "LIVE";
     }
 
     static String buyerSection(ProductDto dto, Product product, LocalDate today) {

@@ -190,3 +190,89 @@ await logout(page);
   await anonymousContext.close();
   expect(browserIssues).toEqual([]);
 });
+
+test('a persisted future offering moves from Pre-order to Order on its IST delivery date', async ({
+  page,
+  browserIssues
+}) => {
+  const seller = await registerSeller(page);
+  await logout(page);
+  expect((await adminLogin(page)).status()).toBe(200);
+  await page.locator('[data-hash="#/approvals"]').first().click();
+  const sellerRow = page.locator('.seller-row').filter({ hasText: seller.name });
+  const approval = page.waitForResponse(response =>
+    new URL(response.url()).pathname === `/api/admin/sellers/${seller.id}/approve`);
+  await sellerRow.getByRole('button', { name: 'Approve' }).click();
+  expect((await approval).status()).toBe(200);
+
+  await logout(page);
+  await loginSeller(page, seller);
+  await page.goto('/seller.html');
+  await page.getByRole('link', { name: '+ Create Offering' }).click();
+  const form = page.locator('#createOfferingForm');
+  await expect(form).toBeVisible();
+  const offeringName = `IST date transition ${seller.token}`;
+  await form.locator('[name="name"]').fill(offeringName);
+  await form.locator('[name="description"]').fill('A future offering transitions on its delivery date.');
+  await form.locator('[name="price"]').fill('70');
+  await form.locator('[name="maxQuantity"]').fill('5');
+  await form.locator('input[name="categories"][value="LUNCH"]').check();
+  const tomorrowOption = page.locator('[data-action="set-availability"][data-val="tomorrow"]');
+  if (await tomorrowOption.count()) await tomorrowOption.click();
+
+  const dates = await page.evaluate(() => {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(new Date()).map(part => [part.type, part.value]));
+    const todayMidnightUtc = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
+    return {
+      today: `${parts.year}-${parts.month}-${parts.day}`,
+      tomorrow: new Date(todayMidnightUtc + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    };
+  });
+  const deliveryDate = `${dates.tomorrow}T23:59`;
+  await form.evaluate((element, value) => {
+    for (const [selector, nextValue] of [
+      ['input[name="readyByTime"]', value],
+      ['input[name="orderWindowEnd"]', '23:58'],
+      ['input[name="availableDate"]', value.slice(0, 10)]
+    ]) {
+      const input = element.querySelector(selector);
+      if (!input) continue;
+      input.value = nextValue;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }, deliveryDate);
+  const publish = page.waitForResponse(response =>
+    new URL(response.url()).pathname === '/api/seller/products'
+      && response.request().method() === 'POST');
+  await form.getByRole('button', { name: 'Publish Offering' }).click();
+  const published = await publish;
+  expect(published.status()).toBe(200);
+  const offering = await published.json();
+  expect(offering).toMatchObject({ name: offeringName, availableDate: dates.tomorrow });
+
+  const kitchen = await apiJson(page, '/api/seller/kitchen');
+  expect(kitchen.status).toBe(200);
+  await logout(page);
+  await registerBuyer(page);
+  await page.clock.install({ time: new Date(`${dates.today}T12:00:00+05:30`) });
+  await page.goto(`/index.html#/kitchen/${kitchen.body.id}`);
+
+  const card = page.locator('.offering-card').filter({ hasText: offeringName });
+  await expect(card).toBeVisible();
+  await expect(card.locator('.oc-preorder-badge')).toBeVisible();
+  await expect(card.getByRole('button', { name: 'PRE-ORDER' })).toBeVisible();
+
+  await page.clock.setFixedTime(new Date(`${dates.tomorrow}T12:00:00+05:30`));
+  await page.reload();
+  await expect(card).toBeVisible();
+  await expect(card.locator('.oc-preorder-badge')).toHaveCount(0);
+  await expect(card.getByRole('button', { name: 'ORDER' })).toBeVisible();
+  await expect(page.locator('h3').filter({ hasText: 'Available Today' }).first()).toBeVisible();
+  await expect(browserIssues).toEqual([]);
+});

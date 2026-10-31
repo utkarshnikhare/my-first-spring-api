@@ -17,7 +17,6 @@ function todayDate() {
 
 function buyerOfferingSection(product) {
     if (!product) return 'UNAVAILABLE';
-    if (product.buyerSection) return product.buyerSection;
     if (product.ordersPaused || product.soldOut || product.ordersClosed ||
         product.lifecycleState === 'SCHEDULED_TO_OPEN' ||
         product.lifecycleState === 'ORDERS_CLOSED' || product.lifecycleState === 'HISTORY') return 'UNAVAILABLE';

@@ -206,11 +206,13 @@ class OfferingTimingTest {
         todayProduct.setAvailableToday(true);
         ProductDto todayDto = buyerDto(todayProduct, "PRE_ORDER", false);
         assertThat(OfferingTiming.buyerSection(todayDto, todayProduct, TODAY)).isEqualTo("ORDER");
+        assertThat(OfferingTiming.lifecycleState(todayProduct, TODAY, LocalTime.NOON)).isEqualTo("LIVE");
 
-        Product futureProduct = product(TODAY.plusDays(1), true, null, "23:58", 10);
+        Product futureProduct = product(TODAY.plusDays(1), false, null, "23:58", 10);
         ProductDto futureDto = buyerDto(futureProduct, "PRE_ORDER", false);
         assertThat(futureDto.getAvailableToday()).isFalse();
         assertThat(OfferingTiming.buyerSection(futureDto, futureProduct, TODAY)).isEqualTo("PRE_ORDER");
+        assertThat(OfferingTiming.lifecycleState(futureProduct, TODAY, LocalTime.NOON)).isEqualTo("PRE_ORDER");
 
         futureDto.setLifecycleState("SCHEDULED_TO_OPEN");
         futureDto.setOrdersClosed(true);
