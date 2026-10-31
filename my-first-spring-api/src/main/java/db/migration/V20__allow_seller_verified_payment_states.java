@@ -50,6 +50,16 @@ public class V20__allow_seller_verified_payment_states extends BaseJavaMigration
                   AND LOWER(tc.constraint_type) = 'check'
                   AND LOWER(cc.check_clause) LIKE '%payment_status%'
                   AND LOWER(cc.check_clause) NOT LIKE '%is not null%'
+                  AND (
+                    (
+                      LOWER(cc.check_clause) LIKE '%pending%'
+                      AND LOWER(cc.check_clause) LIKE '%paid%'
+                      AND LOWER(cc.check_clause) LIKE '%will_pay_later%'
+                      AND LOWER(cc.check_clause) NOT LIKE '%unpaid%'
+                      AND LOWER(cc.check_clause) NOT LIKE '%awaiting_seller_verification%'
+                    )
+                    OR LOWER(tc.constraint_name) = 'orders_payment_status_check'
+                  )
                   AND LOWER(tc.table_schema) = LOWER(?)
                 """;
         try (PreparedStatement statement = connection.prepareStatement(findConstraints)) {

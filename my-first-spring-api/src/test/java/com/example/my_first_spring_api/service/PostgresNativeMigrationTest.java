@@ -2,6 +2,7 @@ package com.example.my_first_spring_api.service;
 
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -13,6 +14,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
@@ -130,11 +132,33 @@ class PostgresNativeMigrationTest {
                 Integer.class);
         assertThat(sellerPaymentColumnCount).isEqualTo(3);
 
+        Integer paymentStatusCheckCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM pg_constraint "
+                        + "WHERE conrelid = 'orders'::regclass AND contype = 'c' "
+                        + "AND pg_get_constraintdef(oid) LIKE '%payment_status%'",
+                Integer.class);
+        assertThat(paymentStatusCheckCount).isEqualTo(1);
+
         String paymentStatusConstraint = jdbcTemplate.queryForObject(
                 "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
                         + "WHERE conrelid = 'orders'::regclass AND contype = 'c' "
                         + "AND pg_get_constraintdef(oid) LIKE '%payment_status%'",
                 String.class);
-        assertThat(paymentStatusConstraint).contains("UNPAID", "AWAITING_SELLER_VERIFICATION");
+        assertThat(paymentStatusConstraint).contains(
+                "PENDING", "UNPAID", "AWAITING_SELLER_VERIFICATION", "PAID", "WILL_PAY_LATER");
+
+        jdbcTemplate.execute("CREATE TEMP TABLE payment_status_constraint_probe "
+                + "(LIKE orders INCLUDING CONSTRAINTS)");
+        for (String validStatus : new String[]{
+                "PENDING", "UNPAID", "AWAITING_SELLER_VERIFICATION", "PAID", "WILL_PAY_LATER"
+        }) {
+            jdbcTemplate.update(
+                    "INSERT INTO payment_status_constraint_probe (order_status, payment_status) VALUES (?, ?)",
+                    "ORDERED", validStatus);
+        }
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "INSERT INTO payment_status_constraint_probe (order_status, payment_status) VALUES (?, ?)",
+                "ORDERED", "NOT_A_PAYMENT_STATUS"))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 }
