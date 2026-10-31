@@ -24,14 +24,17 @@ public class V20__allow_seller_verified_payment_states extends BaseJavaMigration
 
         String tableName = null;
         try (PreparedStatement statement = connection.prepareStatement("""
-                SELECT table_name
+                SELECT table_schema, table_name
                 FROM information_schema.tables
                 WHERE LOWER(table_name) = 'orders'
                   AND LOWER(table_schema) = LOWER(?)
                 """)) {
             statement.setString(1, schema);
             try (ResultSet result = statement.executeQuery()) {
-                if (result.next()) tableName = result.getString(1);
+                if (result.next()) {
+                    schema = result.getString(1);
+                    tableName = result.getString(2);
+                }
             }
         }
         if (tableName == null) {
@@ -46,8 +49,8 @@ public class V20__allow_seller_verified_payment_states extends BaseJavaMigration
                   FROM pg_constraint con
                   JOIN pg_class tbl ON tbl.oid = con.conrelid
                   JOIN pg_namespace ns ON ns.oid = tbl.relnamespace
-                  WHERE tbl.relname = ?
-                    AND ns.nspname = ?
+                  WHERE LOWER(tbl.relname) = LOWER(?)
+                    AND LOWER(ns.nspname) = LOWER(?)
                     AND con.contype = 'c'
                     AND LOWER(pg_get_constraintdef(con.oid)) LIKE '%payment_status%'
                     AND LOWER(pg_get_constraintdef(con.oid)) NOT LIKE '%is not null%'
@@ -97,21 +100,27 @@ public class V20__allow_seller_verified_payment_states extends BaseJavaMigration
             }
         }
 
-        String quote = connection.getMetaData().getIdentifierQuoteString().trim();
-        String table = quoteIdentifier(quote, tableName);
+        String quote = connection.getMetaData().getIdentifierQuoteString();
+        String safeQuote = (quote == null || quote.isBlank()) ? "" : quote.trim();
+        String table = (schema != null && !schema.isBlank())
+                ? quoteIdentifier(safeQuote, schema) + "." + quoteIdentifier(safeQuote, tableName)
+                : quoteIdentifier(safeQuote, tableName);
         try (Statement statement = connection.createStatement()) {
             for (String constraint : paymentStatusConstraints) {
                 statement.execute("ALTER TABLE " + table + " DROP CONSTRAINT "
-                        + quoteIdentifier(quote, constraint));
+                        + quoteIdentifier(safeQuote, constraint));
             }
             statement.execute("ALTER TABLE " + table + " ADD CONSTRAINT "
-                    + quoteIdentifier(quote, "orders_payment_status_check")
+                    + quoteIdentifier(safeQuote, "orders_payment_status_check")
                     + " CHECK (payment_status IN ('PENDING', 'UNPAID', "
                     + "'AWAITING_SELLER_VERIFICATION', 'PAID', 'WILL_PAY_LATER'))");
         }
     }
 
     private static String quoteIdentifier(String quote, String identifier) {
+        if (quote == null || quote.isBlank()) {
+            return identifier;
+        }
         return quote + identifier.replace(quote, quote + quote) + quote;
     }
 }

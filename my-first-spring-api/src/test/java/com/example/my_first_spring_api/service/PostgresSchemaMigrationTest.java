@@ -14,6 +14,7 @@ import org.h2.jdbcx.JdbcDataSource;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
@@ -133,6 +134,11 @@ class PostgresSchemaMigrationTest {
                     "INSERT INTO orders (order_number, order_status, payment_status, buyer_id, kitchen_id) "
                             + "VALUES (?, ?, ?, ?, ?)",
                     "migration-awaiting-verification", "ORDERED", "AWAITING_SELLER_VERIFICATION", 1L, 1L);
+            assertThatThrownBy(() -> jdbcTemplate.update(
+                    "INSERT INTO orders (order_number, order_status, payment_status, buyer_id, kitchen_id) "
+                            + "VALUES (?, ?, ?, ?, ?)",
+                    "migration-invalid", "ORDERED", "INVALID_STATUS", 1L, 1L))
+                    .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
         } finally {
             jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY TRUE");
         }
