@@ -698,7 +698,7 @@ function quickPostsHtml(posts, orderablePosts, kitchen) {
     if ((!posts || !posts.length) && (!orderablePosts || !orderablePosts.length)) return '';
     var h = '<h3 class="section-gap mb-2">📢 Today\'s Quick Posts</h3><div class="quick-posts">';
     (posts || []).forEach(function (p) {
-        h += '<div class="card pad card-mb"><div>' + esc(p.message) + '</div>' +
+        h += '<div class="card pad card-mb"><div class="quick-post-message">' + esc(p.message) + '</div>' +
             (p.imageData ? '<img class="mt-2" style="max-width:100%;border-radius:8px" src="' + esc(p.imageData) + '" alt="Kitchen quick post" onerror="imgFallback(this)">' : '') + '</div>';
     });
     (orderablePosts || []).forEach(function (p) {
@@ -731,8 +731,9 @@ function buyerScarcityLabel(p) {
 function offeringCardHtml(p, kitchen, isPreorderSection) {
     var soldOut = p.soldOut || (p.remainingQuantity != null && p.remainingQuantity <= 0);
     var paused = !!p.ordersPaused;
+    var isQuickPost = !!p.quickPost;
     var section = buyerOfferingSection(p);
-    var isPre = section === 'PRE_ORDER' || !!isPreorderSection;
+    var isPre = !isQuickPost && (section === 'PRE_ORDER' || !!isPreorderSection);
     var todayIso = todayDate();
     var isNextOcc = isPre && !!p.recurring && !!p.nextOccurrenceDate && p.nextOccurrenceDate !== todayIso;
     var isPreOrNext = isPre || isNextOcc;
@@ -742,7 +743,9 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
     var kitchenJson = encodeURIComponent(JSON.stringify({ id: kitchen.id, displayName: kitchen.displayName }));
     var imageUrl = p.quickPostImageData || (usableImageUrl(p.imageUrl) ? p.imageUrl : '');
     var timingHtml;
-    if (isPreOrNext) {
+    if (isQuickPost) {
+        timingHtml = '';
+    } else if (isPreOrNext) {
         var timingDate = p.recurring ? p.nextOccurrenceDate : p.availableDate;
         var orderBy = timingDate ? prettyDate(timingDate) : '';
         if (p.cutoffTime) orderBy = (orderBy ? orderBy + ', ' : '') + prettyTime(p.cutoffTime);
@@ -758,10 +761,12 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
     return '<div class="offering-card' + (soldOut ? ' sold-out' : '') + (paused ? ' paused' : '') + (isPreOrNext ? ' is-preorder' : '') + '">' +
         dishImg('oc-photo', emojiFor(p.name), imageUrl, p.name) +
         '<div class="oc-body">' +
-        '<div class="oc-name-row"><span class="oc-name">' + esc(p.name) + '</span>' +
+        '<div class="oc-name-row"><span class="oc-name">' + esc(isQuickPost ? 'Quick Post' : p.name) + '</span>' +
         (isPreOrNext ? '<span class="oc-preorder-badge">🔮 Pre-order</span>' : '') + '</div>' +
-        '<p class="oc-desc">' + esc((p.description || '').slice(0, 70)) +
-        ((p.description || '').length > 70 ? '… <button class="oc-more" type="button" data-action="read-more" data-full="' + encodeURIComponent(p.description) + '">More →</button>' : '') + '</p>' +
+        (isQuickPost
+            ? '<p class="oc-desc quick-post-message">' + esc(p.description || '') + '</p>'
+            : '<p class="oc-desc">' + esc((p.description || '').slice(0, 70)) +
+              ((p.description || '').length > 70 ? '… <button class="oc-more" type="button" data-action="read-more" data-full="' + encodeURIComponent(p.description) + '">More →</button>' : '') + '</p>') +
         '<div class="oc-price">' + money(p.price) + ' <span class="unit">/ ' + esc(p.priceUnit || 'serving') + '</span></div>' +
         timingHtml +
         buyerScarcityLabel(p) +

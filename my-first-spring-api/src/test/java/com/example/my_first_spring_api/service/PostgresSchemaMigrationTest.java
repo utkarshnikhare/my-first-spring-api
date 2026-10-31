@@ -49,8 +49,9 @@ class PostgresSchemaMigrationTest {
         // V11 syncs legacy orders.status column and sets default PENDING;
         // V12 syncs legacy order_items.unit_price column;
         // V14 adds payment_method; V15 adds scheduled opening timestamps;
-        // V16 adds Quick Post metadata; V17 repairs missing payment_method.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("17");
+        // V16 adds Quick Post metadata; V17 repairs missing payment_method;
+        // V18 adds a nullable Quick Post retry key and its uniqueness constraint.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("18");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
@@ -103,10 +104,11 @@ class PostgresSchemaMigrationTest {
         Integer productFeatureColumnCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'PUBLIC' "
                         + "AND table_name = 'PRODUCTS' "
-                        + "AND column_name IN ('ORDERS_OPEN_FROM', 'QUICK_POST', 'QUICK_POST_IMAGE_DATA')",
+                        + "AND column_name IN ('ORDERS_OPEN_FROM', 'QUICK_POST', 'QUICK_POST_IMAGE_DATA', "
+                        + "'QUICK_POST_REQUEST_ID')",
                 Integer.class);
         Assertions.assertNotNull(productFeatureColumnCount);
-        assertThat(productFeatureColumnCount).isEqualTo(3);
+        assertThat(productFeatureColumnCount).isEqualTo(4);
     }
 
     @Test
@@ -139,7 +141,7 @@ class PostgresSchemaMigrationTest {
                 Integer.class);
         Assertions.assertNotNull(paymentMethodColumnCount);
         assertThat(paymentMethodColumnCount).isEqualTo(1);
-        assertThat(repair.info().current().getVersion().getVersion()).isEqualTo("17");
+        assertThat(repair.info().current().getVersion().getVersion()).isEqualTo("18");
     }
 
 }

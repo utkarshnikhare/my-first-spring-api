@@ -1248,49 +1248,34 @@ function updateQuickPostCounter() {
     if (btn) btn.disabled = over > 0;
 }
 
+function getQuickPostRequestId() {
+    if (!S.quickPostRequestId) {
+        S.quickPostRequestId = window.crypto && typeof window.crypto.randomUUID === 'function'
+            ? window.crypto.randomUUID()
+            : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)
+                + Math.random().toString(36).slice(2);
+    }
+    return S.quickPostRequestId;
+}
+
 async function sellerQuickPostView() {
     var h = '<div class="view-enter">';
     h += '<div class="page-head"><h1>Quick Post</h1><p class="muted small">Paste your WhatsApp message. Quick Posts are always published for Today.</p></div>';
-    h += '<div class="card pad card-purple card-mb"><div class="font-700">This becomes a real offering</div>' +
-        '<p class="small mt-1">Your post is published as an offering buyers can order from, using the same ' +
-        'price, timing and order window as Create Offering.</p></div>';
+    h += '<div class="card pad card-purple card-mb"><div class="font-700">One simple same-day offer</div>' +
+        '<p class="small mt-1">Describe one item or fixed-price combo in your message. Buyers order units of that offer ' +
+        'through the usual checkout. Include any portion size, ready time or ordering instructions in the message.</p></div>';
     h += '<form class="seller-form" id="quickPostForm">';
     h += '<div class="form-group"><label class="form-label" for="qpMessage">Paste WhatsApp message <span class="req">*</span></label>' +
         '<textarea class="form-textarea" id="qpMessage" name="message" rows="6" maxlength="' + (QUICK_POST_MAX + 1) + '" ' +
         'aria-describedby="qpCounter" placeholder="Paste your WhatsApp message here..." required></textarea>' +
         '<div class="qp-counter-row"><span id="qpCounter" class="qp-counter" role="status" aria-live="polite">' +
         QUICK_POST_MAX + ' of ' + QUICK_POST_MAX + ' characters left</span></div></div>';
-    // Minimum extra fields required by the existing Product creation architecture.
-    // These reuse the exact Create Offering controls, names and help text so the
-    // two screens stay consistent instead of inventing a parallel form.
-    h += '<div class="form-group"><label class="form-label">Item Name <span class="req">*</span></label>' +
-        '<input class="form-input" name="name" placeholder="e.g. Paneer Butter Masala" required></div>';
     h += '<div class="form-group"><label class="form-label" for="qpImage">Photo — Optional</label>' +
         '<input class="form-input" id="qpImage" name="quickPostImage" type="file" accept="image/png,image/jpeg,image/gif,image/webp">' +
         '<p class="muted small">PNG, JPEG, GIF, or WebP; maximum 2 MB.</p></div>';
-    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Price (Rs) <span class="req">*</span></label>' +
-        '<input class="form-input" name="price" type="number" min="0.01" step="0.01" placeholder="100" required></div>' +
-        '<div class="form-group"><label class="form-label">Unit <span class="req">*</span></label>' +
-        '<select class="form-select" name="priceUnit"><option value="Per Piece">Per Piece</option>' +
-        '<option value="Per Plate" selected>Per Plate</option><option value="Per Box">Per Box</option></select></div></div>';
-    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open — Optional</label>' +
-        '<input class="form-input" name="orderWindowStart" type="time">' +
-        '<p class="muted small">Leave blank to start accepting orders immediately.</p></div>' +
-        '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label>' +
-        '<input class="form-input" name="orderWindowEnd" type="time" required>' +
-        '<p class="muted small">Last date/time customers can place an order. (Auto-set to 1 hour before delivery)</p></div></div>';
-    h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label>' +
-        '<input class="form-input" name="readyByTime" type="datetime-local" required>' +
-        '<p class="muted small">Date/time by which the order will be ready/delivered.</p></div>';
-    h += '<div class="form-group"><label class="form-label">Quantity Available — Optional</label>' +
-        '<input class="form-input" name="maxQuantity" type="number" min="1" step="1" placeholder="Blank for unlimited">' +
-        '<p class="muted small">Leave blank for unlimited quantity.</p></div>';
-    h += '<div class="form-group"><label class="form-label">To be listed in <span class="req">*</span></label>' +
-        '<div class="checkbox-group">' + offeringCategoryBox('BREAKFAST', 'Breakfast', []) +
-        offeringCategoryBox('LUNCH', 'Lunch', []) + offeringCategoryBox('DINNER', 'Dinner', []) +
-        offeringCategoryBox('SNACKS', 'Snacks', []) + '</div>' +
-        '<p class="muted small">Select at least one category.</p></div>';
-    h += '<button class="btn btn-primary btn-block" type="submit" id="qpSubmit">Publish Offering</button>';
+    h += '<div class="form-group"><label class="form-label" for="qpPrice">Price (₹) <span class="req">*</span></label>' +
+        '<input class="form-input" id="qpPrice" name="price" type="number" min="0.01" step="0.01" placeholder="100" required></div>';
+    h += '<button class="btn btn-primary btn-block" type="submit" id="qpSubmit">Publish Quick Post</button>';
     h += '</form>';
     // Legacy announcements already stored in quick_posts remain listed so nothing
     // that exists today disappears. NEW Quick Posts are ordinary offerings and
@@ -3802,105 +3787,60 @@ document.addEventListener('submit', async function (e) {
                 return;
             }
             var submitButton = form.querySelector('#qpSubmit');
-            if (submitButton) submitButton.disabled = true;
-
-            // A Quick Post is now an ordinary Product. Rather than duplicating
-            // Product/Offerings/Order logic, the form is submitted to the SAME
-            // endpoint Create Offering already uses, so every existing rule
-            // (price, timing, categories, ownership, authorization) applies
-            // unchanged, and the result lands in Offerings + buyer discovery
-            // with the normal Order button.
-            autoClampOrderWindowEndIfInvalid(form);
-            var vals = formVals(form);
-            var qpImageFile = form.querySelector('[name="quickPostImage"]').files[0];
-            if (qpImageFile && qpImageFile.size > 2 * 1024 * 1024) {
-                toast('Quick Post image must be 2 MB or smaller', 'error');
-                if (submitButton) submitButton.disabled = false;
-                return;
+            var originalLabel = submitButton ? submitButton.textContent : '';
+            var formControls = Array.prototype.slice.call(form.querySelectorAll('input, textarea, select, button'));
+            var originalDisabled = formControls.map(function (control) { return control.disabled; });
+            formControls.forEach(function (control) { control.disabled = true; });
+            if (submitButton) {
+                submitButton.setAttribute('aria-busy', 'true');
+                submitButton.textContent = 'Publishing Quick Post…';
             }
-            if (qpImageFile) {
-                vals.quickPostImageData = await new Promise(function (resolve, reject) {
-                    var reader = new FileReader();
-                    reader.onload = function () { resolve(String(reader.result || '')); };
-                    reader.onerror = function () { reject(new Error('Could not read the selected Quick Post image')); };
-                    reader.readAsDataURL(qpImageFile);
-                });
-            }
-            delete vals.quickPostImage;
-            vals.quickPost = true;
-            // The seller's post text is the offering's primary content.
-            vals.description = message;
-            delete vals.message;
-
-            vals.orderWindowStart = parseOptionalHhmm(vals.orderWindowStart, 'Orders Open');
-            vals.orderWindowEnd = parseOptionalHhmm(vals.orderWindowEnd, 'Orders Close');
-            if (!vals.orderWindowEnd) { toast('Orders Close is required', 'error'); if (submitButton) submitButton.disabled = false; return; }
-            var qpReadyBy = (vals.readyByTime || '').trim();
-            if (!qpReadyBy) { toast('Delivery / Ready By is required', 'error'); if (submitButton) submitButton.disabled = false; return; }
-            vals.readyByTime = qpReadyBy;
-
-            // Quick Posts stay a Today-only offering, exactly as before.
-            vals.availableDate = sellerDate('today');
-            vals.isPreorder = false;
-
-            var qpPrice = Number(vals.price);
-            if (!isFinite(qpPrice) || qpPrice <= 0) {
-                toast('Price must be greater than 0', 'error');
-                if (submitButton) submitButton.disabled = false;
-                return;
-            }
-            vals.price = qpPrice;
-
-            if (vals.maxQuantity !== '' && vals.maxQuantity !== null && vals.maxQuantity !== undefined) {
-                var qpQty = Number(vals.maxQuantity);
-                if (!Number.isInteger(qpQty) || qpQty < 1) {
-                    toast('Quantity Available must be a whole number of at least 1, or blank for unlimited', 'error');
-                    if (submitButton) submitButton.disabled = false;
+            try {
+                var price = Number(form.querySelector('[name="price"]').value);
+                if (!isFinite(price) || price <= 0) {
+                    toast('Price must be greater than 0', 'error');
                     return;
                 }
-                vals.maxQuantity = qpQty;
-            } else {
-                vals.maxQuantity = null; // blank = unlimited
-            }
-
-            // Same cross-field timing rule the Create Offering form uses.
-            var qpTimingError = offeringTimingError(vals.availableDate, vals.orderWindowStart, vals.orderWindowEnd, qpReadyBy);
-            if (qpTimingError) {
-                toast(qpTimingError, 'error');
-                if (submitButton) submitButton.disabled = false;
-                return;
-            }
-
-            var qpCategories = [];
-            $all('input[name="categories"]:checked', form).forEach(function (cb) { qpCategories.push(cb.value); });
-            if (qpCategories.length === 0) {
-                toast('Select at least one category', 'error');
-                if (submitButton) submitButton.disabled = false;
-                return;
-            }
-            vals.categories = qpCategories;
-
-            // Product has no "Offering For" chooser on this screen: it is always
-            // Today, matching the original Quick Post rule.
-            vals.imageUrl = '';
-            vals.is_available = true;
-            vals.availableToday = true;
-            vals.isVeg = true;
-            vals.unit = vals.unit || vals.priceUnit || 'portion';
-            try {
+                var imageFile = form.querySelector('[name="quickPostImage"]').files[0];
+                if (imageFile && imageFile.size > 2 * 1024 * 1024) {
+                    toast('Quick Post image must be 2 MB or smaller', 'error');
+                    return;
+                }
+                var payload = {
+                    quickPost: true,
+                    description: message,
+                    price: price,
+                    quickPostRequestId: getQuickPostRequestId()
+                };
+                if (imageFile) {
+                    payload.quickPostImageData = await new Promise(function (resolve, reject) {
+                        var reader = new FileReader();
+                        reader.onload = function () { resolve(String(reader.result || '')); };
+                        reader.onerror = function () { reject(new Error('Could not read the selected Quick Post image')); };
+                        reader.readAsDataURL(imageFile);
+                    });
+                }
                 var qpKid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
                 if (!qpKid) {
                     var qpK = await sellerApi('/api/seller/kitchen');
                     qpKid = qpK.id;
                     S.myKitchen = qpK;
                 }
-                await sellerApi('/api/seller/products?kitchenId=' + qpKid, { method: 'POST', body: vals });
+                await sellerApi('/api/seller/products?kitchenId=' + qpKid, { method: 'POST', body: payload });
                 toast('Quick Post published as an offering!', 'success');
                 S.quickPostRequestId = null;
                 S.offeringFor = 'today';
                 sellerNavigate('#/home');
+            } catch (err) {
+                toast(err.message || 'Could not publish Quick Post', 'error');
             } finally {
-                if (submitButton) submitButton.disabled = false;
+                formControls.forEach(function (control, index) {
+                    control.disabled = originalDisabled[index];
+                });
+                if (submitButton) {
+                    submitButton.removeAttribute('aria-busy');
+                    submitButton.textContent = originalLabel;
+                }
             }
         } else if (form.id === 'kitchenForm') {
             var kid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
@@ -4589,12 +4529,16 @@ document.addEventListener('click', async function (e) {
             }
             case 'preview-offering': toast('Preview mode', 'info'); break;
             case 'preview-kitchen': {
-                // Opens the EXISTING buyer-facing kitchen page. seller.html and
-                // index.html are separate documents, so the buyer SPA is reached
-                // by a full page load using its own hash route "#/kitchen/{id}",
-                // which buyer.js resolves through MarketplaceController's
-                // GET /api/kitchens/id/{id}. This is the same mechanism the Admin
-                // console already uses for open-buyer (admin.js location.href).
+                // Keep seller management open while the public buyer storefront
+                // loads in a separate tab.
+                var previewWindow = window.open('about:blank', '_blank');
+                if (!previewWindow) {
+                    toast('Allow pop-ups to open the kitchen preview in a new tab.', 'error');
+                    break;
+                }
+                previewWindow.opener = null;
+                previewWindow.document.title = 'SocioMart kitchen preview';
+                previewWindow.document.body.textContent = 'Loading your public kitchen preview...';
                 var previewKitchen = S.myKitchen || S.kitchen;
                 var previewId = previewKitchen && previewKitchen.id;
                 if (!previewId) {
@@ -4607,16 +4551,18 @@ document.addEventListener('click', async function (e) {
                         S.kitchen = previewKitchen;
                         previewId = previewKitchen && previewKitchen.id;
                     } catch (previewErr) {
+                        previewWindow.close();
                         toast('Could not load your kitchen. Please retry.', 'error');
                         break;
                     }
                 }
                 if (!previewId) {
+                    previewWindow.close();
                     toast('No kitchen found to preview. Publish your kitchen first.', 'error');
                     break;
                 }
-                toast('Opening kitchen preview...', 'info');
-                location.href = '/index.html#/kitchen/' + encodeURIComponent(previewId);
+                previewWindow.location.replace('/index.html#/kitchen/' + encodeURIComponent(previewId));
+                toast('Kitchen preview opened in a new tab. Your seller dashboard stays open.', 'success');
                 break;
             }
             case 'add-photo': toast('Photo upload (demo)', 'info'); break;
@@ -4837,6 +4783,10 @@ document.addEventListener('change', function (e) {
 // Live Quick Post character feedback. Delegated on document so it keeps working
 // across the SPA re-renders that replace #view on every navigation.
 document.addEventListener('input', function (e) {
+    if (e.target && e.target.closest && e.target.closest('#quickPostForm')
+            && (e.target.name === 'message' || e.target.name === 'price')) {
+        S.quickPostRequestId = null;
+    }
     if (e.target && e.target.id === 'qpMessage') updateQuickPostCounter();
     if (e.target && e.target.name === 'readyByTime') {
         var form = e.target.closest('form');
@@ -4863,6 +4813,13 @@ document.addEventListener('input', function (e) {
     }
     if (e.target && (e.target.name === 'orderWindowEnd' || e.target.name === 'readyByTime' || e.target.name === 'orderWindowStart')) {
         validateFormTiming(e.target.closest('form'));
+    }
+});
+
+document.addEventListener('change', function (e) {
+    if (e.target && e.target.name === 'quickPostImage'
+            && e.target.closest && e.target.closest('#quickPostForm')) {
+        S.quickPostRequestId = null;
     }
 });
 

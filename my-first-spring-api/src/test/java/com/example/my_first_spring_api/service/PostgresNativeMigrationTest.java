@@ -59,8 +59,9 @@ class PostgresNativeMigrationTest {
         // V12 syncs legacy order_items.unit_price column;
         // V13 syncs legacy order_items.subtotal column; V14 adds payment_method
         // to orders; V15 adds scheduled opening timestamps; V16 adds orderable
-        // Quick Post metadata and optional images; V17 repairs missing payment_method.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("17");
+        // Quick Post metadata and optional images; V17 repairs missing payment_method;
+        // V18 adds the nullable Quick Post retry key and uniqueness constraint.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("18");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
@@ -108,8 +109,9 @@ class PostgresNativeMigrationTest {
         Integer productFeatureColumnCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'public' "
                         + "AND table_name = 'products' "
-                        + "AND column_name IN ('orders_open_from', 'quick_post', 'quick_post_image_data')",
+                        + "AND column_name IN ('orders_open_from', 'quick_post', 'quick_post_image_data', "
+                        + "'quick_post_request_id')",
                 Integer.class);
-        assertThat(productFeatureColumnCount).isEqualTo(3);
+        assertThat(productFeatureColumnCount).isEqualTo(4);
     }
 }

@@ -45,7 +45,7 @@ class ProductionStartupPortBindingTest {
     @Test
     void migratesAndValidatesBeforeServingHealthOnAssignedPort() throws Exception {
         assertThat(port).isPositive();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("17");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("18");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.columns "
                         + "WHERE table_schema = 'PUBLIC' AND table_name = 'ORDERS' "
