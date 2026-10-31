@@ -64,7 +64,26 @@ test('seller publishes a Quick Post that buyers can order through the existing c
   const kitchen = await apiJson(page, '/api/seller/kitchen');
   expect(kitchen.status).toBe(200);
 
-  await page.goto('/seller.html#/kitchen');
+  await page.getByRole('link', { name: 'Store', exact: true }).click();
+  const kitchenForm = page.locator('#kitchenForm');
+  await expect(kitchenForm).toBeVisible();
+  await kitchenForm.locator('[name="acceptedPaymentMode"]').selectOption('GPAY_AND_UPI');
+  await kitchenForm.locator('[name="gpayIdentifierType"]').selectOption('PHONE_NUMBER');
+  await kitchenForm.locator('[name="gpayIdentifier"]').fill('9876543210');
+  await kitchenForm.locator('[name="upiId"]').fill('sociomart-test@okaxis');
+  const paymentSettingsSave = page.waitForResponse(response =>
+    new URL(response.url()).pathname === `/api/seller/kitchen/${kitchen.body.id}`
+      && response.request().method() === 'PUT');
+  await kitchenForm.getByRole('button', { name: 'SAVE CHANGES' }).click();
+  const settingsResponse = await paymentSettingsSave;
+  expect(settingsResponse.status()).toBe(200);
+  expect(await settingsResponse.json()).toMatchObject({
+    acceptedPaymentMode: 'GPAY_AND_UPI',
+    gpayIdentifierType: 'PHONE_NUMBER',
+    gpayIdentifier: '9876543210',
+    upiId: 'sociomart-test@okaxis'
+  });
+
   const previewTabPromise = page.waitForEvent('popup');
   await page.getByRole('button', { name: 'Preview Kitchen Page' }).click();
   const previewTab = await previewTabPromise;
@@ -102,11 +121,20 @@ test('seller publishes a Quick Post that buyers can order through the existing c
   await page.locator('#sheetRoot').getByRole('button', { name: 'Add to Order' }).click();
   await page.goto('/index.html#/summary');
   await expect(page.getByRole('heading', { name: 'Order Summary' })).toBeVisible();
-  await expect(page.locator('body')).toContainText('Fresh idli, four pieces per plate.');
   await page.locator('[data-action="go-checkout"]').click();
   await expect(page.getByRole('heading', { name: 'Confirm Order' })).toBeVisible();
-  await page.locator('[data-action="select-pay-status"][data-status="PENDING"]').click();
-  await page.locator('#placeOrderBtn').click();
+  await page.goto('/index.html#/payment');
+  await expect(page.getByRole('heading', { name: 'Payment', exact: true })).toBeVisible();
+  await expect(page.locator('.pay-method')).toHaveCount(2);
+  await page.locator('[data-action="select-pay-method"][data-method="gpay"]').click();
+  await expect(page.locator('body')).toContainText('9876543210');
+  const placePaymentOrder = page.waitForResponse(response =>
+    new URL(response.url()).pathname === '/api/buyer/orders/place'
+      && response.request().method() === 'POST');
+  await page.locator('#payNowBtn').click();
+  const paymentOrderResponse = await placePaymentOrder;
+  expect(paymentOrderResponse.status()).toBe(200);
+  expect(await paymentOrderResponse.json()).toMatchObject({ paymentMethod: 'gpay' });
   await expect(page.getByRole('heading', { name: 'Order Confirmed' })).toBeVisible();
 
   const orders = await apiJson(page, '/api/buyer/orders/my');
@@ -114,11 +142,61 @@ test('seller publishes a Quick Post that buyers can order through the existing c
   expect(orders.body.active.some(order =>
     order.items.some(item => item.productName === product.name))).toBe(true);
 
+  await logout(page);
+  await loginSeller(page, seller);
+  await page.getByRole('link', { name: 'Store', exact: true }).click();
+  await expect(kitchenForm).toBeVisible();
+  await kitchenForm.locator('[name="acceptedPaymentMode"]').selectOption('CASH_ONLY');
+  const cashSettingsSave = page.waitForResponse(response =>
+    new URL(response.url()).pathname === `/api/seller/kitchen/${kitchen.body.id}`
+      && response.request().method() === 'PUT');
+  await kitchenForm.getByRole('button', { name: 'SAVE CHANGES' }).click();
+  const cashSettingsResponse = await cashSettingsSave;
+  expect(cashSettingsResponse.status()).toBe(200);
+  expect((await cashSettingsResponse.json()).acceptedPaymentMode).toBe('CASH_ONLY');
+
+  await logout(page);
+  await registerBuyer(page);
+  await page.goto(`/index.html#/kitchen/${kitchen.body.id}`);
+  const cashBuyerCard = page.locator('.offering-card').filter({
+    hasText: 'Fresh idli, four pieces per plate.'
+  });
+  await expect(cashBuyerCard).toBeVisible();
+  await cashBuyerCard.getByRole('button', { name: 'ORDER' }).click();
+  await page.locator('#sheetRoot').getByRole('button', { name: 'Add to Order' }).click();
+  await page.goto('/index.html#/summary');
+  await expect(page.getByRole('heading', { name: 'Order Summary' })).toBeVisible();
+  await page.locator('[data-action="go-checkout"]').click();
+  await expect(page.getByRole('heading', { name: 'Confirm Order' })).toBeVisible();
+  await page.goto('/index.html#/payment');
+  await expect(page.locator('.pay-method')).toHaveCount(1);
+  await expect(page.locator('.pay-method[data-method="cod"]')).toHaveClass(/selected/);
+  await expect(page.locator('#payNowBtn')).toContainText('PLACE ORDER (PAY ON DELIVERY)');
+  const placeCashOrder = page.waitForResponse(response =>
+    new URL(response.url()).pathname === '/api/buyer/orders/place'
+      && response.request().method() === 'POST');
+  await page.locator('#payNowBtn').click();
+  const cashOrderResponse = await placeCashOrder;
+  expect(cashOrderResponse.status()).toBe(200);
+  const cashOrder = await cashOrderResponse.json();
+  expect(cashOrder.paymentMethod).toBe('cod');
+
+  await logout(page);
+  await loginSeller(page, seller);
+  const closePost = page.waitForResponse(response =>
+    new URL(response.url()).pathname === `/api/seller-app/products/${product.id}/pause`
+      && response.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Close Post', exact: true }).click();
+  expect((await closePost).status()).toBe(200);
+  const preservedOrder = await apiJson(page, `/api/seller/orders/${cashOrder.id}`);
+  expect(preservedOrder.status).toBe(200);
+  expect(preservedOrder.body.orderStatus).not.toBe('CANCELLED');
+
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`/index.html#/kitchen/${kitchen.body.id}`);
   await expect(page.locator('.offering-card').filter({
     hasText: 'Fresh idli, four pieces per plate.'
-  })).toBeVisible();
+  })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(browserIssues).toEqual([]);
 });

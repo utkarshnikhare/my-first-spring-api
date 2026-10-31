@@ -14,6 +14,7 @@ public class OrderDto {
     private String orderNumber;
     private BigDecimal totalAmount;
     private PaymentStatus paymentStatus;
+    private String paymentMethod;
     private OrderStatus orderStatus;
     /**
      * Seller-recorded delivery completion. Always emitted, and emitted for the
@@ -44,6 +45,10 @@ public class OrderDto {
         private String imageUrl;
         private Double rating;
         private String society;
+        private String upiId;
+        private String acceptedPaymentMode;
+        private String gpayIdentifierType;
+        private String gpayIdentifier;
 
         public KitchenSummary() {}
         public KitchenSummary(Long id, String name, String displayName, String imageUrl, Double rating) {
@@ -67,6 +72,14 @@ public class OrderDto {
         public void setRating(Double rating) { this.rating = rating; }
         public String getSociety() { return society; }
         public void setSociety(String society) { this.society = society; }
+        public String getUpiId() { return upiId; }
+        public void setUpiId(String upiId) { this.upiId = upiId; }
+        public String getAcceptedPaymentMode() { return acceptedPaymentMode; }
+        public void setAcceptedPaymentMode(String acceptedPaymentMode) { this.acceptedPaymentMode = acceptedPaymentMode; }
+        public String getGpayIdentifierType() { return gpayIdentifierType; }
+        public void setGpayIdentifierType(String gpayIdentifierType) { this.gpayIdentifierType = gpayIdentifierType; }
+        public String getGpayIdentifier() { return gpayIdentifier; }
+        public void setGpayIdentifier(String gpayIdentifier) { this.gpayIdentifier = gpayIdentifier; }
     }
 
     public static class BuyerSummary {
@@ -96,6 +109,8 @@ public class OrderDto {
     public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
     public PaymentStatus getPaymentStatus() { return paymentStatus; }
     public void setPaymentStatus(PaymentStatus paymentStatus) { this.paymentStatus = paymentStatus; }
+    public String getPaymentMethod() { return paymentMethod; }
+    public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
     public OrderStatus getOrderStatus() { return orderStatus; }
     public void setOrderStatus(OrderStatus orderStatus) { this.orderStatus = orderStatus; }
     public String getDeliveryStatus() { return deliveryStatus; }

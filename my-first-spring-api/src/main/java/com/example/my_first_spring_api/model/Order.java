@@ -250,6 +250,7 @@ public class Order {
     public void setId(Long id) { this.id = id; }
     public String getOrderNumber() { return orderNumber; }
     public void setOrderNumber(String orderNumber) { this.orderNumber = orderNumber; }
+    public String getPaymentMethod() { return paymentMethod; }
     public User getBuyer() { return buyer; }
     public void setBuyer(User buyer) { this.buyer = buyer; }
     public Kitchen getKitchen() { return kitchen; }

@@ -50,8 +50,9 @@ class PostgresSchemaMigrationTest {
         // V12 syncs legacy order_items.unit_price column;
         // V14 adds payment_method; V15 adds scheduled opening timestamps;
         // V16 adds Quick Post metadata; V17 repairs missing payment_method;
-        // V18 adds a nullable Quick Post retry key and its uniqueness constraint.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("18");
+        // V18 adds a nullable Quick Post retry key and its uniqueness constraint;
+        // V19 adds seller-configurable payment methods.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("19");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
@@ -109,6 +110,14 @@ class PostgresSchemaMigrationTest {
                 Integer.class);
         Assertions.assertNotNull(productFeatureColumnCount);
         assertThat(productFeatureColumnCount).isEqualTo(4);
+
+        Integer sellerPaymentColumnCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'PUBLIC' "
+                        + "AND table_name = 'KITCHENS' "
+                        + "AND column_name IN ('ACCEPTED_PAYMENT_MODE', 'GPAY_IDENTIFIER_TYPE', 'GPAY_IDENTIFIER')",
+                Integer.class);
+        Assertions.assertNotNull(sellerPaymentColumnCount);
+        assertThat(sellerPaymentColumnCount).isEqualTo(3);
     }
 
     @Test
@@ -141,7 +150,7 @@ class PostgresSchemaMigrationTest {
                 Integer.class);
         Assertions.assertNotNull(paymentMethodColumnCount);
         assertThat(paymentMethodColumnCount).isEqualTo(1);
-        assertThat(repair.info().current().getVersion().getVersion()).isEqualTo("18");
+        assertThat(repair.info().current().getVersion().getVersion()).isEqualTo("19");
     }
 
 }

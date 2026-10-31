@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import com.example.my_first_spring_api.dto.BuyerProfileDto;
 import com.example.my_first_spring_api.dto.OrderDto;
 import com.example.my_first_spring_api.dto.OrderItemRequest;
@@ -15,6 +16,8 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -164,6 +167,92 @@ assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null,
 
         assertThat(orders.count()).isEqualTo(ordersBefore);
         // No double inventory decrement.
+        assertThat(products.findById(product.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(9);
+    }
+
+    @Test
+    void fulfillmentDateOverridesStalePreorderFlagAtDraftAndPlacement() {
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        LocalDate tomorrow = today.plusDays(1);
+
+        product.setAvailableDate(tomorrow);
+        product.setIsPreorder(false);
+        products.saveAndFlush(product);
+
+        MockHttpSession futureSession = buyerSession();
+        OrderItemRequest futureItem = new OrderItemRequest();
+        futureItem.setProductId(product.getId());
+        futureItem.setQuantity(1);
+        futureItem.setScheduledDate(tomorrow.toString());
+        orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(futureItem), futureSession);
+        var futureOrder = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, futureSession);
+
+        assertThat(orders.findByIdWithItems(futureOrder.getId()).orElseThrow()
+                .getItems().get(0).getScheduledDate()).isEqualTo(tomorrow);
+
+        product.setAvailableDate(today);
+        product.setIsPreorder(true);
+        products.saveAndFlush(product);
+
+        MockHttpSession todaySession = buyerSession();
+        OrderItemRequest todayItem = new OrderItemRequest();
+        todayItem.setProductId(product.getId());
+        todayItem.setQuantity(1);
+        orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(todayItem), todaySession);
+        var sameDayOrder = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, todaySession);
+
+        assertThat(orders.findByIdWithItems(sameDayOrder.getId()).orElseThrow()
+                .getItems().get(0).getScheduledDate()).isNull();
+    }
+
+    @Test
+    void configuredCashOnlyKitchenRejectsDigitalPaymentAndAcceptsCashOnDelivery() {
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
+        kitchens.saveAndFlush(kitchen);
+        MockHttpSession session = buyerSession();
+        draft(session);
+
+        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, "gpay", null, null, session))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not accepted by this kitchen");
+        assertThat(products.findById(product.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(10);
+
+        var placed = orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, session);
+        assertThat(placed.getPaymentMethod()).isEqualTo("cod");
+        assertThat(orders.findByIdWithItems(placed.getId())).isPresent();
+        assertThat(products.findById(product.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(9);
+    }
+
+    @Test
+    void scheduledPreorderOpensFromItsIstTimestampWithoutASeparateActivationWrite() {
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        LocalDate deliveryDate = today.plusDays(2);
+        LocalDateTime opensAt = LocalDateTime.now(AppTimeZone.ZONE).plusHours(1);
+        product.setAvailableDate(deliveryDate);
+        product.setIsPreorder(false);
+        product.setOrdersOpenFrom(opensAt);
+        products.saveAndFlush(product);
+
+        MockHttpSession session = buyerSession();
+        OrderItemRequest request = new OrderItemRequest();
+        request.setProductId(product.getId());
+        request.setQuantity(1);
+        request.setScheduledDate(deliveryDate.toString());
+
+        assertThatThrownBy(() ->
+                orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request), session))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Orders for")
+                .hasMessageContaining("open on");
+        assertThat(products.findById(product.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(10);
+
+        product.setOrdersOpenFrom(LocalDateTime.now(AppTimeZone.ZONE).minusSeconds(1));
+        products.saveAndFlush(product);
+        orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request), session);
+        var placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
+
+        assertThat(orders.findByIdWithItems(placed.getId()).orElseThrow()
+                .getItems().get(0).getScheduledDate()).isEqualTo(deliveryDate);
         assertThat(products.findById(product.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(9);
     }
 

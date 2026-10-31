@@ -127,7 +127,7 @@ await logout(page);
   const productState = await apiJson(page, `/api/products/${offering.id}`);
   expect(productState.status).toBe(200);
   expect(productState.body).toMatchObject({ remainingQuantity: 0, soldOut: true });
-  const publicKitchen = await apiJson(page, `/api/kitchens/${encodeURIComponent(seller.slug)}`);
+  const publicKitchen = await apiJson(page, `/api/kitchens/by-slug/${encodeURIComponent(seller.slug)}`);
   expect(publicKitchen.status).toBe(200);
   expect(publicKitchen.body.products.some(product => product.name === offeringName)).toBe(false);
 

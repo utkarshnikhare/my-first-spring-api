@@ -15,9 +15,11 @@ import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.dto.CoverageOptionDto;
 import com.example.my_first_spring_api.model.Kitchen;
+import com.example.my_first_spring_api.model.GpayIdentifierType;
 import com.example.my_first_spring_api.model.OrderItem;
 import com.example.my_first_spring_api.model.OrderStatus;
 import com.example.my_first_spring_api.model.Product;
+import com.example.my_first_spring_api.model.SellerPaymentMode;
 import com.example.my_first_spring_api.model.SellerType;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.model.SellerApprovalStatus;
@@ -97,7 +99,15 @@ public class SellerService {
         kitchen.setBuilding(dto.getBuilding());
         kitchen.setWhatsappLink(dto.getWhatsappLink());
         kitchen.setInstagramLink(dto.getInstagramLink());
-        kitchen.setUpiId(dto.getUpiId());
+        SellerPaymentMode paymentMode = SellerPaymentConfiguration.parseMode(dto.getAcceptedPaymentMode());
+        GpayIdentifierType gpayIdentifierType =
+                SellerPaymentConfiguration.parseGpayIdentifierType(dto.getGpayIdentifierType());
+        SellerPaymentConfiguration.validate(paymentMode, dto.getUpiId(),
+                gpayIdentifierType, dto.getGpayIdentifier());
+        kitchen.setUpiId(cleanPaymentIdentifier(dto.getUpiId()));
+        kitchen.setAcceptedPaymentMode(paymentMode);
+        kitchen.setGpayIdentifierType(gpayIdentifierType);
+        kitchen.setGpayIdentifier(cleanPaymentIdentifier(dto.getGpayIdentifier()));
         kitchen.setAvailableToday(dto.getAvailableToday() != null ? dto.getAvailableToday() : true);
         if (dto.getSellerType() != null && !dto.getSellerType().isBlank()) {
             try {
@@ -170,7 +180,23 @@ public class SellerService {
             }
         }
         if (dto.getInstagramLink() != null) kitchen.setInstagramLink(dto.getInstagramLink());
-        if (dto.getUpiId() != null) kitchen.setUpiId(dto.getUpiId());
+        SellerPaymentMode paymentMode = dto.getAcceptedPaymentMode() == null
+                ? kitchen.getAcceptedPaymentMode()
+                : SellerPaymentConfiguration.parseMode(dto.getAcceptedPaymentMode());
+        GpayIdentifierType gpayIdentifierType = dto.getGpayIdentifierType() == null
+                ? kitchen.getGpayIdentifierType()
+                : SellerPaymentConfiguration.parseGpayIdentifierType(dto.getGpayIdentifierType());
+        String upiId = dto.getUpiId() == null ? kitchen.getUpiId() : cleanPaymentIdentifier(dto.getUpiId());
+        String gpayIdentifier = dto.getGpayIdentifier() == null
+                ? kitchen.getGpayIdentifier() : cleanPaymentIdentifier(dto.getGpayIdentifier());
+        if (dto.getAcceptedPaymentMode() != null || dto.getGpayIdentifierType() != null
+                || dto.getGpayIdentifier() != null || dto.getUpiId() != null) {
+            SellerPaymentConfiguration.validate(paymentMode, upiId, gpayIdentifierType, gpayIdentifier);
+            kitchen.setAcceptedPaymentMode(paymentMode);
+            kitchen.setGpayIdentifierType(gpayIdentifierType);
+            kitchen.setGpayIdentifier(gpayIdentifier);
+            kitchen.setUpiId(upiId);
+        }
         if (dto.getGalleryImages() != null) kitchen.setGalleryImages(dto.getGalleryImages());
         if (dto.getAvailableToday() != null) kitchen.setAvailableToday(dto.getAvailableToday());
         if (dto.getSellerType() != null && !dto.getSellerType().isBlank()) {
@@ -840,6 +866,11 @@ public class SellerService {
         dto.setSlug(kitchen.getSlug() != null ? kitchen.getSlug() : kitchen.getName());
         dto.setInstagramLink(kitchen.getInstagramLink());
         dto.setUpiId(kitchen.getUpiId());
+        dto.setAcceptedPaymentMode(kitchen.getAcceptedPaymentMode() == null
+                ? null : kitchen.getAcceptedPaymentMode().name());
+        dto.setGpayIdentifierType(kitchen.getGpayIdentifierType() == null
+                ? null : kitchen.getGpayIdentifierType().name());
+        dto.setGpayIdentifier(kitchen.getGpayIdentifier());
         dto.setGalleryImages(kitchen.getGalleryImages());
         dto.setOrderDeadline(kitchen.getOrderDeadline());
         // The kitchen owner's name, read from the seller's own User record so the
@@ -848,6 +879,10 @@ public class SellerService {
         dto.setSellerType(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : null);
         dto.setPaused(KitchenVisibility.isPaused(kitchen));
         return dto;
+    }
+
+    private static String cleanPaymentIdentifier(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private ProductDto toProductDto(Product product) {

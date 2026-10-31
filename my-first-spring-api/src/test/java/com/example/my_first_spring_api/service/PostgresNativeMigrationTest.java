@@ -60,8 +60,9 @@ class PostgresNativeMigrationTest {
         // V13 syncs legacy order_items.subtotal column; V14 adds payment_method
         // to orders; V15 adds scheduled opening timestamps; V16 adds orderable
         // Quick Post metadata and optional images; V17 repairs missing payment_method;
-        // V18 adds the nullable Quick Post retry key and uniqueness constraint.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("18");
+        // V18 adds the nullable Quick Post retry key and uniqueness constraint;
+        // V19 adds seller-configurable payment methods.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("19");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
@@ -113,5 +114,12 @@ class PostgresNativeMigrationTest {
                         + "'quick_post_request_id')",
                 Integer.class);
         assertThat(productFeatureColumnCount).isEqualTo(4);
+
+        Integer sellerPaymentColumnCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'public' "
+                        + "AND table_name = 'kitchens' "
+                        + "AND column_name IN ('accepted_payment_mode', 'gpay_identifier_type', 'gpay_identifier')",
+                Integer.class);
+        assertThat(sellerPaymentColumnCount).isEqualTo(3);
     }
 }

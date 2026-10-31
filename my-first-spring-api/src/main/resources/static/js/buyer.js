@@ -832,8 +832,9 @@ function openOrderSheet(productJson, kitchenJson) {
     // detail, so it counts interest rather than mere scrolling of a list.
     recordAnalyticsView('PRODUCT_VIEW', k && k.id);
 
-    var flex = p.isPreorder && p.preorderType === 'FLEXIBLE';
-    var fixed = p.isPreorder && !flex;
+    var isPreorder = buyerOfferingSection(p) === 'PRE_ORDER';
+    var flex = isPreorder && p.preorderType === 'FLEXIBLE';
+    var fixed = isPreorder && !flex;
     var max = p.remainingQuantity || p.maxQuantity || 10;
 
     var h = '<h3 class="sheet-title">' + esc(p.name) + '</h3>' +
@@ -913,14 +914,15 @@ function sheetQty(dir) {
 
 function sheetAdd() {
     var p = sheet.product, k = sheet.kitchen;
+    var isPreorder = buyerOfferingSection(p) === 'PRE_ORDER';
     var item = {
         productId: p.id, name: p.name, price: p.price, unit: p.priceUnit || 'serving', qty: sheet.qty,
-        isPreorder: !!p.isPreorder, preorderType: p.preorderType || null,
+        isPreorder: isPreorder, preorderType: p.preorderType || null,
         readyBy: p.readyByTime || null, cutoff: p.cutoffTime || null,
         availableDate: p.availableDate || null,
-        scheduledDate: p.isPreorder ? (sheet.date || p.availableDate || null)
+        scheduledDate: isPreorder ? (sheet.date || p.availableDate || null)
             : (p.recurring && p.nextOccurrenceDate ? p.nextOccurrenceDate : (p.availableDate || null)),
-        scheduledSlot: p.isPreorder ? sheet.slot : null
+        scheduledSlot: isPreorder ? sheet.slot : null
     };
     addToCart(item, k, function (committed) {
         if (committed) closeSheet();
@@ -1399,10 +1401,25 @@ async function confirmOrderView() {
  * COD   → backend places order as ORDERED / payment PENDING (pay on delivery).
  */
 var PAY_METHODS = [
-    { id: 'upi', icon: '📱', name: 'UPI (Demo)', sub: 'Simulated UPI — no real money moves' },
+    { id: 'upi', icon: '📱', name: 'UPI', sub: 'Seller instructions or demo only — no payment is processed' },
+    { id: 'gpay', icon: '📱', name: 'Google Pay', sub: 'Seller-provided payment instructions — no payment is processed' },
     { id: 'card', icon: '💳', name: 'Demo Card', sub: 'Simulated card — no card details collected' },
     { id: 'cod', icon: '💵', name: 'Cash on Delivery', sub: 'Pay cash when the order arrives' }
 ];
+
+function paymentMethodsForKitchen(kitchen) {
+    var configured = kitchen && kitchen.acceptedPaymentMode;
+    if (!configured) return PAY_METHODS;
+    var allowed = {
+        GPAY: ['gpay'],
+        UPI: ['upi'],
+        GPAY_AND_UPI: ['gpay', 'upi'],
+        CASH_ONLY: ['cod']
+    }[configured];
+    return allowed ? PAY_METHODS.filter(function (method) {
+        return allowed.indexOf(method.id) !== -1;
+    }) : PAY_METHODS;
+}
 
 async function paymentView() {
     var h = '<div class="view-enter">';
@@ -1435,10 +1452,15 @@ async function paymentView() {
         '<span>Total payable</span><span>' + money(draft.totalAmount) + '</span></div></div>';
 
     // Payment method selection (demo only)
+    var availablePaymentMethods = paymentMethodsForKitchen(draft.kitchen);
     var method = state.payMethod || 'upi';
+    if (!availablePaymentMethods.some(function (item) { return item.id === method; })) {
+        method = availablePaymentMethods[0].id;
+        state.payMethod = method;
+    }
     h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Payment method</h3>' +
         '<p class="tiny muted mb-2">This is a client demo — payments are simulated inside SocioMart. No real money, cards, OTPs or external sites are involved.</p>' +
-        PAY_METHODS.map(function (m) {
+        availablePaymentMethods.map(function (m) {
             var sel = method === m.id;
             return '<label class="pay-method' + (sel ? ' selected' : '') + '" data-action="select-pay-method" data-method="' + m.id + '">' +
                 '<span class="pm-radio" aria-hidden="true"></span>' +
@@ -1448,13 +1470,23 @@ async function paymentView() {
                 '</label>';
         }).join('');
 
-    // Demo UPI details — clearly fictional, shown for the UPI method
-    if (method === 'upi') {
+    // Payment identifiers are seller supplied only for explicitly configured modes.
+    if (method === 'gpay' && draft.kitchen && draft.kitchen.gpayIdentifier) {
+        var gpayTypeLabel = draft.kitchen.gpayIdentifierType === 'PHONE_NUMBER' ? 'Mobile number' : 'UPI ID';
+        h += '<div class="upi-box"><div class="upi-box-title">Google Pay ' + esc(gpayTypeLabel) + '</div>' +
+            '<div class="upi-row"><span class="upi-id">' + esc(draft.kitchen.gpayIdentifier) + '</span></div>' +
+            '<p class="tiny muted mt-2">Payment instructions only — no payment is processed by SocioMart.</p></div>';
+    } else if (method === 'upi') {
+        var configuredUpiId = draft.kitchen && draft.kitchen.acceptedPaymentMode
+            ? draft.kitchen.upiId : 'demo@sociomart';
+        var configuredUpiNote = draft.kitchen && draft.kitchen.acceptedPaymentMode
+            ? 'Use the seller-provided UPI ID. SocioMart does not process payments.'
+            : 'Demo payment only — this UPI ID is sample data and is not connected to a real account.';
         h += '<div class="upi-box">' +
             '<div class="upi-box-title">Pay to this UPI ID</div>' +
-            '<div class="upi-row"><span class="upi-id">demo@sociomart</span>' +
-            '<button class="btn btn-secondary btn-sm" type="button" data-action="copy-upi" data-upi="demo@sociomart">Copy</button></div>' +
-            '<p class="tiny muted mt-2">Demo payment only — this UPI ID is sample data for demonstration purposes and is not connected to any real account.</p>' +
+            '<div class="upi-row"><span class="upi-id">' + esc(configuredUpiId) + '</span>' +
+            '<button class="btn btn-secondary btn-sm" type="button" data-action="copy-upi" data-upi="' + esc(configuredUpiId) + '">Copy</button></div>' +
+            '<p class="tiny muted mt-2">' + esc(configuredUpiNote) + '</p>' +
             '</div>';
     }
 
@@ -1519,6 +1551,7 @@ async function confirmPayment(btnEl) {
                     return { productId: i.productId, quantity: i.qty, scheduledDate: i.scheduledDate || null, scheduledSlot: i.scheduledSlot || null };
                 }) : null,
                 paymentStatus: submittedPaymentStatus,
+                paymentMethod: state.payMethod || 'upi',
                 customInstructions: note,
                 specialInstructions: note,
                 deliveryAddress: buyerDetails ? buyerDetails.deliveryAddress : '',

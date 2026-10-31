@@ -203,6 +203,11 @@ final class OfferingTiming {
         return currentMinute > cutoffMinute;
     }
 
+    static boolean isPreorderForOrdering(Product product, LocalDate today) {
+        return product != null && product.getAvailableDate() != null
+                && product.getAvailableDate().isAfter(today);
+    }
+
     static String autoCorrectOrdersClose(LocalDate orderingDate, String close,
                                          LocalDateTime delivery, LocalDate today, LocalTime now) {
         return autoCorrectOrdersClose(orderingDate, false, close, delivery, today, now);

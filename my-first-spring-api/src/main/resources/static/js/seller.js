@@ -483,6 +483,7 @@ function applyOfferingDatePicker(picker) {
     if (hidden && picker.value) hidden.value = picker.value;
     var form = picker.closest('form');
     if (form) {
+        var readyInput = form.querySelector('input[name="readyByTime"]');
         var closeInput = form.querySelector('input[name="orderWindowEnd"]');
         if (readyInput && readyInput.value && picker.value) {
             var timePart = readyInput.value.length >= 16 ? readyInput.value.slice(11, 16) : '12:30';
@@ -2686,7 +2687,26 @@ async function sellerKitchenView() {
     h += '<div class="form-group"><label class="form-label">Gallery Images (URLs, comma-separated)</label><input class="form-input" name="galleryImages" value="' + esc(kitchen && kitchen.galleryImages ? kitchen.galleryImages : '') + '"></div>';
     var waVal = (kitchen && (kitchen.whatsappNumber || kitchen.sellerWhatsappNumber || kitchen.whatsappLink)) || '';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">WhatsApp Number</label><input class="form-input" name="whatsappNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" placeholder="10-digit WhatsApp number" value="' + esc(waVal) + '"><input type="hidden" name="whatsappLink" value="' + esc(waVal) + '"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" name="instagramLink" value="' + esc(kitchen && kitchen.instagramLink ? kitchen.instagramLink : '') + '"></div></div>';
-    h += '<div class="form-group"><label class="form-label">UPI ID</label><input class="form-input" name="upiId" value="' + esc(kitchen && kitchen.upiId ? kitchen.upiId : '') + '"></div>';
+    var paymentMode = (kitchen && kitchen.acceptedPaymentMode) || '';
+    h += '<div class="form-group"><label class="form-label" for="acceptedPaymentMode">Payment options buyers can use</label>' +
+        '<select class="form-input" id="acceptedPaymentMode" name="acceptedPaymentMode">' +
+        '<option value=""' + (paymentMode === '' ? ' selected' : '') + '>Keep existing demo payment options</option>' +
+        '<option value="GPAY"' + (paymentMode === 'GPAY' ? ' selected' : '') + '>Google Pay only</option>' +
+        '<option value="UPI"' + (paymentMode === 'UPI' ? ' selected' : '') + '>UPI only</option>' +
+        '<option value="GPAY_AND_UPI"' + (paymentMode === 'GPAY_AND_UPI' ? ' selected' : '') + '>Google Pay and UPI</option>' +
+        '<option value="CASH_ONLY"' + (paymentMode === 'CASH_ONLY' ? ' selected' : '') + '>Cash only</option>' +
+        '</select><p class="muted small mt-1">This records payment instructions only; SocioMart does not process payments.</p></div>';
+    h += '<div class="form-group"><label class="form-label">UPI ID</label><input class="form-input" name="upiId" autocomplete="off" value="' + esc(kitchen && kitchen.upiId ? kitchen.upiId : '') + '"></div>';
+    var gpayType = (kitchen && kitchen.gpayIdentifierType) || '';
+    h += '<div class="form-row-2"><div class="form-group"><label class="form-label" for="gpayIdentifierType">Google Pay identifier type</label>' +
+        '<select class="form-input" id="gpayIdentifierType" name="gpayIdentifierType">' +
+        '<option value=""' + (gpayType === '' ? ' selected' : '') + '>Choose a type</option>' +
+        '<option value="PHONE_NUMBER"' + (gpayType === 'PHONE_NUMBER' ? ' selected' : '') + '>Mobile number</option>' +
+        '<option value="UPI_ID"' + (gpayType === 'UPI_ID' ? ' selected' : '') + '>UPI ID</option></select></div>' +
+        '<div class="form-group"><label class="form-label" for="gpayIdentifier">Google Pay identifier</label>' +
+        '<input class="form-input" id="gpayIdentifier" name="gpayIdentifier" autocomplete="off" value="' +
+        esc(kitchen && kitchen.gpayIdentifier ? kitchen.gpayIdentifier : '') + '">' +
+        '<p class="muted small mt-1">Select the identifier type explicitly; it is not inferred from your UPI ID.</p></div></div>';
     var curType = (kitchen && kitchen.sellerType) || 'KITCHEN';
     h += '<div class="form-group"><label class="form-label">Store Type / Business Category</label>'
         + '<div class="radio-group">'

@@ -132,7 +132,7 @@ public class OrderService {
                 if (Boolean.TRUE.equals(product.getOrdersPaused())) {
                     throw new IllegalArgumentException("Orders are paused for '" + product.getName() + "'.");
                 }
-                boolean itemPreorder = Boolean.TRUE.equals(product.getIsPreorder());
+                boolean itemPreorder = OfferingTiming.isPreorderForOrdering(product, LocalDate.now(AppTimeZone.ZONE));
                 // Recurring offerings are governed by their occurrence rows:
                 // today's selling date when one exists, otherwise the next
                 // scheduled date (a future-occurrence pre-order, V2 §14). This
@@ -187,7 +187,7 @@ public class OrderService {
      * slot from the offering's time slots; cutoff applies the day before pickup.
      */
     private void applyScheduling(Product product, OrderItemRequest req, OrderItem item) {
-        boolean preorder = Boolean.TRUE.equals(product.getIsPreorder());
+        boolean preorder = OfferingTiming.isPreorderForOrdering(product, LocalDate.now(AppTimeZone.ZONE));
         if (!preorder) {
             enforceCutoff(product, LocalDate.now(AppTimeZone.ZONE), "today");
             return;
@@ -412,12 +412,17 @@ public class OrderService {
         }
         // Validate payment method against supported types
         if (paymentMethod != null && !paymentMethod.isBlank()) {
-            String normalized = paymentMethod.toLowerCase();
-            if (!java.util.Arrays.asList("upi", "card", "cod").contains(normalized)) {
+            String normalized = paymentMethod.trim().toLowerCase(java.util.Locale.ROOT);
+            if (!java.util.Arrays.asList("upi", "gpay", "card", "cod").contains(normalized)) {
                 throw new IllegalArgumentException("Unsupported payment method: " + paymentMethod);
             }
+            if (!SellerPaymentConfiguration.allows(order.getKitchen().getAcceptedPaymentMode(), normalized)) {
+                throw new IllegalArgumentException("The selected payment method is not accepted by this kitchen.");
+            }
+        } else if (order.getKitchen().getAcceptedPaymentMode() != null) {
+            throw new IllegalArgumentException("Choose a payment method accepted by this kitchen.");
         }
-        order.setPaymentMethod(paymentMethod);
+        order.setPaymentMethod(paymentMethod == null ? null : paymentMethod.trim().toLowerCase(java.util.Locale.ROOT));
         order.setBuyer(buyer);
         if (buyerDetails != null) updateBuyerDetails(buyer, buyerDetails);
         if (customInstructions != null && !customInstructions.isBlank()) {
@@ -1040,6 +1045,7 @@ public class OrderService {
         dto.setOrderNumber(order.getOrderNumber());
         dto.setTotalAmount(order.getTotalAmount());
         dto.setPaymentStatus(order.getPaymentStatus());
+        dto.setPaymentMethod(order.getPaymentMethod());
         dto.setOrderStatus(order.getOrderStatus());
         // Delivery is read from the SAME Order row for every audience (seller
         // drill-down, seller order detail and the buyer's Orders page). There is
@@ -1059,6 +1065,12 @@ public class OrderService {
                     kitchen.getId(), kitchen.getName(), kitchen.getDisplayName(),
                     kitchen.getImageUrl(), kitchen.getRating());
             ks.setSociety(kitchen.getSociety());
+            ks.setUpiId(kitchen.getUpiId());
+            ks.setAcceptedPaymentMode(kitchen.getAcceptedPaymentMode() == null
+                    ? null : kitchen.getAcceptedPaymentMode().name());
+            ks.setGpayIdentifierType(kitchen.getGpayIdentifierType() == null
+                    ? null : kitchen.getGpayIdentifierType().name());
+            ks.setGpayIdentifier(kitchen.getGpayIdentifier());
             dto.setKitchen(ks);
         }
             if (order.getBuyer() != null) {
@@ -1160,7 +1172,7 @@ public class OrderService {
                 validateRecurringOrder(product, target, quantity);
                 continue;
             }
-            boolean preorder = Boolean.TRUE.equals(product.getIsPreorder());
+            boolean preorder = OfferingTiming.isPreorderForOrdering(product, LocalDate.now(AppTimeZone.ZONE));
             LocalDate fulfillmentDate = LocalDate.now(AppTimeZone.ZONE);
             if (preorder) {
                 if (item.getScheduledDate() == null) {

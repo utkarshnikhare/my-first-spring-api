@@ -248,6 +248,21 @@ class PreorderMidnightDefectReproductionTest {
     }
 
     @Test
+    @DisplayName("Buyer order/pre-order classification follows the IST delivery date")
+    void classificationFollowsDeliveryDateInsteadOfStoredFlag() {
+        Product futureDateStoredAsOrder = createSamplePreorder();
+        futureDateStoredAsOrder.setIsPreorder(false);
+        assertThat(OfferingTiming.isPreorderForOrdering(futureDateStoredAsOrder, TODAY)).isTrue();
+
+        Product todayStoredAsPreorder = createSamplePreorder();
+        todayStoredAsPreorder.setAvailableDate(TODAY);
+        todayStoredAsPreorder.setIsPreorder(true);
+        assertThat(OfferingTiming.isPreorderForOrdering(todayStoredAsPreorder, TODAY)).isFalse();
+        assertThat(OfferingTiming.lifecycleState(todayStoredAsPreorder, TODAY, LocalTime.NOON))
+                .isEqualTo("PRE_ORDER");
+    }
+
+    @Test
     @DisplayName("Test H — Historical orders and past availability preserved")
     void testH_historicalOrdersAndPastAvailabilityPreserved() {
         Product historical = createSamplePreorder();
