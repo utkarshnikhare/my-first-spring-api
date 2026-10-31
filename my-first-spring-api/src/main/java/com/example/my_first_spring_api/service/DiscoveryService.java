@@ -67,7 +67,7 @@ public class DiscoveryService {
     }
 
     private List<Product> visibleProducts(User buyer) {
-        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        LocalDate today = AppTimeZone.today();
         return productRepository.findAll().stream()
                 .filter(p -> p.getKitchen() != null && KitchenVisibility.isKitchenStore(p.getKitchen())
                         && KitchenVisibility.isKitchenProduct(p)
@@ -80,13 +80,13 @@ public class DiscoveryService {
 
     private ProductDto buyerDto(Product product) {
         if (product == null) return null;
-        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        LocalDate today = AppTimeZone.today();
         ProductDto dto = new ProductDto();
         dto.setAvailableToday(product.getAvailableToday());
         dto.setOrdersPaused(product.isOrdersPaused());
         dto.setSoldOut(product.isSoldOut());
         String lifecycle = OfferingTiming.lifecycleState(
-                product, today, java.time.LocalTime.now(AppTimeZone.ZONE));
+                product, today, AppTimeZone.time());
         dto.setLifecycleState(lifecycle);
         dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle)
                 || "SCHEDULED_TO_OPEN".equals(lifecycle));
@@ -102,7 +102,7 @@ public class DiscoveryService {
     private boolean orderableNow(Product product) {
         if (product == null) return false;
         ProductDto dto = buyerDto(product);
-        return OfferingTiming.isBuyerOrderableNow(dto, product, LocalDate.now(AppTimeZone.ZONE));
+        return OfferingTiming.isBuyerOrderableNow(dto, product, AppTimeZone.today());
     }
 
     private boolean orderableToday(Product product) {
@@ -112,7 +112,7 @@ public class DiscoveryService {
     private boolean availableTomorrow(Product product) {
         LocalDate deliveryDate = buyerDeliveryDate(product);
         return "PRE_ORDER".equals(buyerSection(product)) && orderableNow(product)
-                && LocalDate.now(AppTimeZone.ZONE).plusDays(1).equals(deliveryDate);
+                && AppTimeZone.today().plusDays(1).equals(deliveryDate);
     }
 
     private boolean openPreorder(Product product) {

@@ -34,7 +34,7 @@ public class AvailabilityService {
         if (!isProductActive(product)) return false;
         if (!isKitchenEligible(product.getKitchen(), buyer)) return false;
         if (!isServiceDateValid(product)) return false;
-        if (!isOrderWindowOpen(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE)))
+        if (!isOrderWindowOpen(product, AppTimeZone.today(), AppTimeZone.time()))
             return false;
         if (isSoldOut(product)) return false;
         return true;
@@ -45,14 +45,14 @@ public class AvailabilityService {
         if (!isProductActive(product)) return false;
         if (!isKitchenEligible(product.getKitchen(), buyer)) return false;
         if (!isServiceDateValid(product)) return false;
-        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
-        LocalTime now = LocalTime.now(AppTimeZone.ZONE);
+        LocalDate today = AppTimeZone.today();
+        LocalTime now = AppTimeZone.time();
         return isOrderWindowOpen(product, today, now) && !isSoldOut(product);
     }
 
     public boolean isPreorderable(Product product, User buyer) {
         if (product == null) return false;
-        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        LocalDate today = AppTimeZone.today();
         if (!OfferingTiming.isPreorderForOrdering(product, today)) return false;
         if (!isProductActive(product)) return false;
         if (!isKitchenEligible(product.getKitchen(), buyer)) return false;
@@ -74,7 +74,7 @@ public class AvailabilityService {
     private boolean isServiceDateValid(Product product) {
         LocalDate availableDate = product.getAvailableDate();
         if (availableDate == null) return true;
-        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        LocalDate today = AppTimeZone.today();
         return !availableDate.isBefore(today);
     }
 
@@ -120,8 +120,8 @@ public class AvailabilityService {
             throw new IllegalArgumentException(
                     product.getName() + " is for a past date and can no longer be ordered.");
         }
-        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
-        LocalTime now = LocalTime.now(AppTimeZone.ZONE);
+        LocalDate today = AppTimeZone.today();
+        LocalTime now = AppTimeZone.time();
         if (!isOrderWindowOpen(product, today, now)) {
             throw new IllegalArgumentException(
                     "The order cutoff for " + product.getName()

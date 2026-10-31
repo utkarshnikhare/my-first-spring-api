@@ -236,6 +236,34 @@ async function adminLogin(page, password = JSON.parse(fs.readFileSync(localAuthF
   return responsePromise;
 }
 
+async function openE2eClock(browser) {
+  const context = await browser.newContext({ baseURL: 'http://127.0.0.1:18082' });
+  const page = await context.newPage();
+  const login = await adminLogin(page);
+  expect(login.status()).toBe(200);
+  return {
+    async set(now) {
+      const response = await apiJson(page, '/api/e2e/clock', {
+        method: 'POST',
+        body: { now }
+      });
+      expect(response.status).toBe(200);
+      expect(response.body.now).toBe(now.slice(0, 16));
+    },
+    async reset() {
+      const response = await apiJson(page, '/api/e2e/clock', { method: 'DELETE' });
+      expect(response.status).toBe(204);
+    },
+    async close() {
+      try {
+        await this.reset();
+      } finally {
+        await context.close();
+      }
+    }
+  };
+}
+
 module.exports = {
   test,
   expect,
@@ -249,5 +277,6 @@ module.exports = {
   loginBuyer,
   registerSeller,
   loginSeller,
-  adminLogin
+  adminLogin,
+  openE2eClock
 };

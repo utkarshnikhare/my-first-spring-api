@@ -1187,7 +1187,7 @@ async function sellerRecurringHtml() {
         S.recurringSchedules = schedules;
     } catch (e) { return emptyHtml('⚠️', 'Could not load recurring schedules', e.message); }
     if (!schedules.length) {
-        return h + emptyHtml('🔁', 'No recurring schedules yet', 'Create one from an offering to repeat it weekly.');
+        return h + emptyHtml('🔁', 'No recurring schedules yet', 'New recurring schedules can no longer be created. Existing schedules remain available here.');
     }
     for (var i = 0; i < schedules.length; i++) {
         h += await sellerRecurringCardHtml(schedules[i]);

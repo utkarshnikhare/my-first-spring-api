@@ -125,7 +125,7 @@ public class OrderService {
                 if (product.getKitchen() == null || !product.getKitchen().getId().equals(kitchen.getId())) {
                     throw new IllegalArgumentException("The selected offering does not belong to this kitchen.");
                 }
-                OfferingTiming.enforceQuickPostPublicationDate(product, LocalDate.now(AppTimeZone.ZONE));
+                OfferingTiming.enforceQuickPostPublicationDate(product, AppTimeZone.today());
                 int qty = itemReq.getQuantity() == null ? 0 : itemReq.getQuantity();
                 if (qty <= 0) {
                     throw new IllegalArgumentException("Quantity must be at least 1.");
@@ -133,7 +133,7 @@ public class OrderService {
                 if (Boolean.TRUE.equals(product.getOrdersPaused())) {
                     throw new IllegalArgumentException("Orders are paused for '" + product.getName() + "'.");
                 }
-                boolean itemPreorder = OfferingTiming.isPreorderForOrdering(product, LocalDate.now(AppTimeZone.ZONE));
+                boolean itemPreorder = OfferingTiming.isPreorderForOrdering(product, AppTimeZone.today());
                 // Recurring offerings are governed by their occurrence rows:
                 // today's selling date when one exists, otherwise the next
                 // scheduled date (a future-occurrence pre-order, V2 §14). This
@@ -188,12 +188,12 @@ public class OrderService {
      * slot from the offering's time slots; cutoff applies the day before pickup.
      */
     private void applyScheduling(Product product, OrderItemRequest req, OrderItem item) {
-        boolean preorder = OfferingTiming.isPreorderForOrdering(product, LocalDate.now(AppTimeZone.ZONE));
+        boolean preorder = OfferingTiming.isPreorderForOrdering(product, AppTimeZone.today());
         if (!preorder) {
-            enforceCutoff(product, LocalDate.now(AppTimeZone.ZONE), "today");
+            enforceCutoff(product, AppTimeZone.today(), "today");
             return;
         }
-        LocalDate earliest = product.getAvailableDate() != null ? product.getAvailableDate() : LocalDate.now(AppTimeZone.ZONE).plusDays(1);
+        LocalDate earliest = product.getAvailableDate() != null ? product.getAvailableDate() : AppTimeZone.today().plusDays(1);
         LocalDate latest = product.getAvailableUntilDate() != null ? product.getAvailableUntilDate() : earliest;
         LocalDate scheduled;
         if (req.getScheduledDate() == null || req.getScheduledDate().isBlank()) {
@@ -270,7 +270,7 @@ public class OrderService {
      * per-date bucket total ("14 plates" means 14 plates for that date).
      */
     private void validateRecurringOrder(Product product, OccurrenceDto occ, int qty) {
-        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        LocalDate today = AppTimeZone.today();
         if (occ.getDate() == null || occ.getDate().isBefore(today)) {
             throw new IllegalArgumentException("'" + product.getName() + "' is no longer scheduled for " + occ.getDate() + ".");
         }
@@ -284,12 +284,12 @@ public class OrderService {
         // recurring pre-orders. The occurrence close time is enforced only on
         // its fulfilment date; future dates remain open until then.
         LocalTime openAt = parseHhmmOrNull(product.getOrderWindowStart());
-        if (openAt != null && LocalTime.now().isBefore(openAt)) {
+        if (openAt != null && AppTimeZone.time().isBefore(openAt)) {
             throw new IllegalArgumentException("Orders for '" + product.getName() + "' have not opened yet.");
         }
         if (occ.getDate().equals(today)) {
             LocalTime closeAt = parseHhmmOrNull(occ.getOrderCloseTime());
-            if (closeAt != null && LocalTime.now().isAfter(closeAt)) {
+            if (closeAt != null && AppTimeZone.time().isAfter(closeAt)) {
                 throw new IllegalArgumentException("Orders for '" + product.getName() + "' are closed for " + occ.getDate() + ".");
             }
         }
@@ -490,7 +490,7 @@ public class OrderService {
         // after the draft was created.
         for (OrderItem item : order.getItems()) {
             OfferingTiming.enforceQuickPostPublicationDate(
-                    item.getProduct(), LocalDate.now(AppTimeZone.ZONE));
+                    item.getProduct(), AppTimeZone.today());
         }
         if (availabilityService != null) {
             for (OrderItem item : order.getItems()) {
@@ -520,7 +520,7 @@ public class OrderService {
         // transitions to a finalized order state. This represents the real order creation
         // time — NOT the draft creation time (createdAt). Never overwritten on updates.
         if (order.getOrderTime() == null) {
-            order.setOrderTime(LocalDateTime.now());
+            order.setOrderTime(AppTimeZone.now());
         }
         order = orderRepository.save(order);
         orderRepository.flush();
@@ -747,7 +747,7 @@ public class OrderService {
         if (order.getAcknowledgedAt() != null) {
             throw new IllegalArgumentException("This order has already been acknowledged.");
         }
-        order.setAcknowledgedAt(java.time.LocalDateTime.now());
+        order.setAcknowledgedAt(AppTimeZone.now());
         order.setAcknowledgedBy(seller);
         if (order.getOrderStatus() == OrderStatus.ORDERED) {
             order.setOrderStatus(OrderStatus.CONFIRMED);
@@ -788,7 +788,7 @@ public class OrderService {
                             : "This order is not an active customer order yet.");
         }
         // Backend clock only: the browser's clock is never authoritative.
-        boolean changed = order.applyDeliveryStatus(target, seller, LocalDateTime.now());
+        boolean changed = order.applyDeliveryStatus(target, seller, AppTimeZone.now());
         orderRepository.save(order);
         if (changed && target == DeliveryStatus.DELIVERED) {
             // Handover 18: capture "order delivered" on the real transition only,
@@ -834,7 +834,7 @@ public class OrderService {
             before = computeDeliveryProgress(productId, targetDate, kitchen);
         }
         int confirmedScope = before.getBulkScopeOrderCount();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = AppTimeZone.now();
 
         int updated = 0;
         for (Order order : orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen)) {
@@ -1187,12 +1187,12 @@ public class OrderService {
                 validateRecurringOrder(product, target, quantity);
                 continue;
             }
-            boolean preorder = OfferingTiming.isPreorderForOrdering(product, LocalDate.now(AppTimeZone.ZONE));
-            LocalDate fulfillmentDate = LocalDate.now(AppTimeZone.ZONE);
+            boolean preorder = OfferingTiming.isPreorderForOrdering(product, AppTimeZone.today());
+            LocalDate fulfillmentDate = AppTimeZone.today();
             if (preorder) {
                 if (item.getScheduledDate() == null) {
                     fulfillmentDate = product.getAvailableDate() != null
-                            ? product.getAvailableDate() : LocalDate.now(AppTimeZone.ZONE);
+                            ? product.getAvailableDate() : AppTimeZone.today();
                 } else {
                     fulfillmentDate = item.getScheduledDate();
                 }
@@ -1213,10 +1213,10 @@ public class OrderService {
                 throw new IllegalArgumentException("At most " + product.getMaxQuantity() + " units of '" + product.getName() + "' per order.");
             }
             if (!preorder) {
-                enforceCutoff(product, LocalDate.now(AppTimeZone.ZONE), "today");
+                enforceCutoff(product, AppTimeZone.today(), "today");
             } else {
                 LocalDate scheduled = item.getScheduledDate();
-                LocalDate earliest = product.getAvailableDate() != null ? product.getAvailableDate() : LocalDate.now(AppTimeZone.ZONE).plusDays(1);
+                LocalDate earliest = product.getAvailableDate() != null ? product.getAvailableDate() : AppTimeZone.today().plusDays(1);
                 LocalDate latest = product.getAvailableUntilDate() != null ? product.getAvailableUntilDate() : earliest;
                 if (scheduled == null || scheduled.isBefore(earliest) || scheduled.isAfter(latest)) {
                     throw new IllegalArgumentException("'" + product.getName() + "' can be scheduled between "

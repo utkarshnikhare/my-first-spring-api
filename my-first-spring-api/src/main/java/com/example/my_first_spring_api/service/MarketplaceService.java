@@ -114,7 +114,7 @@ public class MarketplaceService {
         dto.setOrdersPaused(product.isOrdersPaused());
         dto.setQuickPost(product.isQuickPost());
         dto.setQuickPostImageData(product.getQuickPostImageData());
-        String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
+        String lifecycle = OfferingTiming.lifecycleState(product, AppTimeZone.today(), AppTimeZone.time());
         dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle)
                 || "SCHEDULED_TO_OPEN".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
@@ -123,7 +123,7 @@ public class MarketplaceService {
         // Guarded: some tests construct this service manually without a
         // recurring bean, in which case decoration is skipped.
         if (recurringScheduleService != null) recurringScheduleService.decorateProductDto(product, dto);
-        dto.setBuyerSection(OfferingTiming.buyerSection(dto, product, LocalDate.now(AppTimeZone.ZONE)));
+        dto.setBuyerSection(OfferingTiming.buyerSection(dto, product, AppTimeZone.today()));
         return dto;
     }
 
