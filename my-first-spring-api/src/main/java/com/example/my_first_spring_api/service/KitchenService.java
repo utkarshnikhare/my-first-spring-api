@@ -243,6 +243,11 @@ public class KitchenService {
         dto.setWhatsappLink(kitchen.getWhatsappLink());
         dto.setInstagramLink(kitchen.getInstagramLink());
         dto.setUpiId(kitchen.getUpiId());
+        dto.setAcceptedPaymentMode(kitchen.getAcceptedPaymentMode() == null
+                ? null : kitchen.getAcceptedPaymentMode().name());
+        dto.setGpayIdentifierType(kitchen.getGpayIdentifierType() == null
+                ? null : kitchen.getGpayIdentifierType().name());
+        dto.setGpayIdentifier(kitchen.getGpayIdentifier());
         dto.setOrderDeadline(kitchen.getOrderDeadline());
         dto.setSellerType(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : null);
         dto.setPaused(KitchenVisibility.isPaused(kitchen));

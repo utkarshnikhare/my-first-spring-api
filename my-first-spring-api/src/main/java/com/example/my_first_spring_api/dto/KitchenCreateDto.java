@@ -29,6 +29,9 @@ public class KitchenCreateDto {
     private String whatsappLink;
     private String instagramLink;
     private String upiId;
+    private String acceptedPaymentMode;
+    private String gpayIdentifierType;
+    private String gpayIdentifier;
     private Boolean availableToday;
     private String sellerType;
 
@@ -60,6 +63,12 @@ public class KitchenCreateDto {
     public void setInstagramLink(String instagramLink) { this.instagramLink = instagramLink; }
     public String getUpiId() { return upiId; }
     public void setUpiId(String upiId) { this.upiId = upiId; }
+    public String getAcceptedPaymentMode() { return acceptedPaymentMode; }
+    public void setAcceptedPaymentMode(String acceptedPaymentMode) { this.acceptedPaymentMode = acceptedPaymentMode; }
+    public String getGpayIdentifierType() { return gpayIdentifierType; }
+    public void setGpayIdentifierType(String gpayIdentifierType) { this.gpayIdentifierType = gpayIdentifierType; }
+    public String getGpayIdentifier() { return gpayIdentifier; }
+    public void setGpayIdentifier(String gpayIdentifier) { this.gpayIdentifier = gpayIdentifier; }
     public Boolean getAvailableToday() { return availableToday; }
     public void setAvailableToday(Boolean availableToday) { this.availableToday = availableToday; }
     public String getSellerType() { return sellerType; }

@@ -151,11 +151,15 @@ async function loginBuyer(page, buyer) {
   });
 }
 
-async function registerSeller(page) {
+async function registerSeller(page, payment = {}) {
   const seller = newIdentity('E2E Seller');
   seller.kitchenName = `E2E Kitchen ${seller.token}`;
   seller.slug = `e2e-kitchen-${seller.token}`;
   seller.whatsapp = `8${randomInt(100_000_000, 1_000_000_000)}`;
+  seller.paymentMode = payment.paymentMode || 'CASH_ONLY';
+  seller.upiId = payment.upiId || `sociomart-${seller.token}@okaxis`;
+  seller.gpayIdentifierType = payment.gpayIdentifierType || 'PHONE_NUMBER';
+  seller.gpayIdentifier = payment.gpayIdentifier || seller.whatsapp;
 
   await page.goto('/seller.html');
   await page.getByRole('button', { name: 'Register as a seller' }).click();
@@ -169,6 +173,14 @@ async function registerSeller(page) {
   await page.locator('#sellerRegSlug').fill(seller.slug);
   await page.locator('#sellerRegSpeciality').fill('E2E home-cooked meals');
   await page.locator('#sellerRegCategory').selectOption('KITCHEN');
+  await page.locator('#sellerRegPaymentMode').selectOption(seller.paymentMode);
+  if (seller.paymentMode === 'UPI' || seller.paymentMode === 'GPAY_AND_UPI') {
+    await page.locator('#sellerRegUpiId').fill(seller.upiId);
+  }
+  if (seller.paymentMode === 'GPAY' || seller.paymentMode === 'GPAY_AND_UPI') {
+    await page.locator('#sellerRegGpayType').selectOption(seller.gpayIdentifierType);
+    await page.locator('#sellerRegGpayIdentifier').fill(seller.gpayIdentifier);
+  }
   await page.locator('#sellerRegPrimaryArea').selectOption({ index: 0 });
   await page.locator('#sellerRegPrimarySociety').selectOption({ index: 0 });
   await page.locator('#sellerRegServiceArea').selectOption({ index: 0 });

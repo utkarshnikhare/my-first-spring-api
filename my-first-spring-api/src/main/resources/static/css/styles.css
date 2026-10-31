@@ -630,6 +630,7 @@ html[data-theme="dark"] .password-toggle-btn:focus-visible {
 .oc-name-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .oc-name { font-weight: 800; font-size: 1rem; }
 .oc-desc { font-size: .8rem; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+.quick-post-message { white-space: pre-wrap; overflow-wrap: anywhere; }
 .oc-more { background: none; border: none; color: var(--brand-3); font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; padding: 0; }
 .oc-price { font-weight: 800; font-size: 1.05rem; margin-top: 8px; }
 .oc-price .unit { font-size: .72rem; color: var(--muted); font-weight: 600; }
@@ -1326,4 +1327,3 @@ select, textarea, input { max-width: 100%; }
 .wheel-ampm-btn { border: none; background: transparent; padding: 8px 12px; border-radius: 9999px; font-size: 0.82rem; font-weight: 700; color: #6B7280; cursor: pointer; transition: all 0.15s ease; line-height: 1; }
 [data-theme="dark"] .wheel-ampm-btn { color: #A1A1AA; }
 .wheel-ampm-btn.active { background: #d97736; color: #ffffff; box-shadow: 0 2px 6px rgba(217, 119, 54, 0.35); }
-

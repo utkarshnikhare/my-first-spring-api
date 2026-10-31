@@ -3,10 +3,12 @@ package com.example.my_first_spring_api.service;
 import com.example.my_first_spring_api.AppTimeZone;
 import com.example.my_first_spring_api.dto.KitchenDetailDto;
 import com.example.my_first_spring_api.dto.ProductCreateDto;
+import com.example.my_first_spring_api.dto.ProductDto;
 import com.example.my_first_spring_api.dto.QuickPostDto;
 import com.example.my_first_spring_api.dto.SellerTemplateDto;
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
+import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +19,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -36,6 +43,7 @@ class SellerFavouriteQuickPostIntegrationTest {
     @Autowired ProductRepository products;
     @Autowired SellerTemplateRepository templates;
     @Autowired QuickPostRepository quickPosts;
+    @Autowired Validator validator;
 
     private User seller;
     private User otherSeller;
@@ -139,6 +147,7 @@ class SellerFavouriteQuickPostIntegrationTest {
         request.setIsHomemade(false);
         request.setCategories(List.of("LUNCH"));
         request.setQuickPost(true);
+        request.setQuickPostRequestId("product-image-request");
         request.setQuickPostImageData("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/DQAAAABJRU5ErkJggg==");
 
         var product = sellerService.createProduct(kitchen.getId(), request, seller);
@@ -150,6 +159,123 @@ class SellerFavouriteQuickPostIntegrationTest {
         assertThatThrownBy(() -> sellerService.createProduct(kitchen.getId(), request, seller))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("today");
+    }
+
+    @Test
+    void quickPostNeedsOnlyMessagePriceAndOptionalImageAndGetsServerSideDefaults() {
+        ProductCreateDto request = new ProductCreateDto();
+        request.setQuickPost(true);
+        request.setDescription("  Fresh idli, four pieces per plate.\nReady from 6 PM.  ");
+        request.setPrice(BigDecimal.valueOf(50));
+        request.setQuickPostRequestId("message-price-request");
+
+        assertThat(validator.validate(request)).isEmpty();
+        ProductDto product = sellerService.createProduct(kitchen.getId(), request, seller);
+
+        assertThat(product.getName()).isEqualTo("Fresh idli, four pieces per plate.");
+        assertThat(product.getDescription()).isEqualTo("Fresh idli, four pieces per plate.\nReady from 6 PM.");
+        assertThat(product.getAvailableDate()).isEqualTo(LocalDate.now(AppTimeZone.ZONE));
+        assertThat(product.getIsPreorder()).isFalse();
+        assertThat(product.getMaxQuantity()).isNull();
+        assertThat(product.getOrderWindowEnd()).isEqualTo("23:59");
+        assertThat(product.getReadyByTime()).isNull();
+        assertThat(product.getPriceUnit()).isEqualTo("unit");
+    }
+
+    @Test
+    void quickPostMessageAndPriceAreValidatedOnTheServer() {
+        ProductCreateDto missingRequestId = new ProductCreateDto();
+        missingRequestId.setQuickPost(true);
+        missingRequestId.setDescription("Fresh idli");
+        missingRequestId.setPrice(BigDecimal.valueOf(50));
+        assertThat(validator.validate(missingRequestId))
+                .extracting("message")
+                .contains("Quick Post request reference is required and must be at most 80 characters");
+        assertThatThrownBy(() -> sellerService.createProduct(kitchen.getId(), missingRequestId, seller))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("request reference is required");
+
+        ProductCreateDto blankMessage = new ProductCreateDto();
+        blankMessage.setQuickPost(true);
+        blankMessage.setDescription("  ");
+        blankMessage.setPrice(BigDecimal.valueOf(50));
+        blankMessage.setQuickPostRequestId("blank-message-request");
+
+        assertThat(validator.validate(blankMessage))
+                .extracting("message")
+                .contains("Quick Post message is required");
+        assertThatThrownBy(() -> sellerService.createProduct(kitchen.getId(), blankMessage, seller))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("message is required");
+
+        ProductCreateDto invalidPrice = new ProductCreateDto();
+        invalidPrice.setQuickPost(true);
+        invalidPrice.setDescription("Fresh idli");
+        invalidPrice.setPrice(BigDecimal.ZERO);
+        invalidPrice.setQuickPostRequestId("invalid-price-request");
+        assertThatThrownBy(() -> sellerService.createProduct(kitchen.getId(), invalidPrice, seller))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("greater than 0");
+    }
+
+    @Test
+    void quickPostRetryWithSameRequestIdReturnsTheOriginalProduct() {
+        ProductCreateDto request = new ProductCreateDto();
+        request.setQuickPost(true);
+        request.setDescription("Fresh idli\nReady from 6 PM.");
+        request.setPrice(BigDecimal.valueOf(50));
+        request.setQuickPostRequestId("retryable-post-request");
+
+        ProductDto first = sellerService.createProduct(kitchen.getId(), request, seller);
+        long countAfterFirst = products.count();
+        ProductDto retry = sellerService.createProduct(kitchen.getId(), request, seller);
+
+        assertThat(retry.getId()).isEqualTo(first.getId());
+        assertThat(products.count()).isEqualTo(countAfterFirst);
+
+        ProductCreateDto conflictingRetry = new ProductCreateDto();
+        conflictingRetry.setQuickPost(true);
+        conflictingRetry.setDescription("Different message");
+        conflictingRetry.setPrice(BigDecimal.valueOf(60));
+        conflictingRetry.setQuickPostRequestId("retryable-post-request");
+        assertThatThrownBy(() -> sellerService.createProduct(kitchen.getId(), conflictingRetry, seller))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("already used");
+        assertThat(products.count()).isEqualTo(countAfterFirst);
+    }
+
+    @Test
+    void concurrentQuickPostRetriesCreateOnlyOneProduct() throws Exception {
+        long countBefore = products.count();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<ProductDto> first = executor.submit(() -> createConcurrentRetry(ready, start));
+            Future<ProductDto> second = executor.submit(() -> createConcurrentRetry(ready, start));
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            ProductDto firstResult = first.get(10, TimeUnit.SECONDS);
+            ProductDto secondResult = second.get(10, TimeUnit.SECONDS);
+            assertThat(secondResult.getId()).isEqualTo(firstResult.getId());
+            assertThat(products.count()).isEqualTo(countBefore + 1);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private ProductDto createConcurrentRetry(CountDownLatch ready, CountDownLatch start) throws Exception {
+        ProductCreateDto request = new ProductCreateDto();
+        request.setQuickPost(true);
+        request.setDescription("Concurrent post");
+        request.setPrice(BigDecimal.valueOf(40));
+        request.setQuickPostRequestId("concurrent-post-request");
+        ready.countDown();
+        if (!start.await(5, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Timed out waiting to start Quick Post retry.");
+        }
+        return sellerService.createProduct(kitchen.getId(), request, seller);
     }
 
     private SellerTemplateDto template(String name) {

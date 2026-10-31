@@ -6,7 +6,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "products")
+@Table(name = "products", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_products_kitchen_quick_post_request",
+                columnNames = {"kitchen_id", "quick_post_request_id"})
+})
 public class Product {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -57,6 +60,9 @@ public class Product {
 
     @Column(name = "quick_post_image_data", columnDefinition = "TEXT")
     private String quickPostImageData;
+
+    @Column(name = "quick_post_request_id", length = 80)
+    private String quickPostRequestId;
 
     @Column(name = "order_window_end")
     private String orderWindowEnd;
@@ -190,6 +196,8 @@ public class Product {
     public void setQuickPost(boolean quickPost) { this.quickPost = quickPost; }
     public String getQuickPostImageData() { return quickPostImageData; }
     public void setQuickPostImageData(String quickPostImageData) { this.quickPostImageData = quickPostImageData; }
+    public String getQuickPostRequestId() { return quickPostRequestId; }
+    public void setQuickPostRequestId(String quickPostRequestId) { this.quickPostRequestId = quickPostRequestId; }
     public String getOrderWindowEnd() { return orderWindowEnd; }
     public void setOrderWindowEnd(String orderWindowEnd) { this.orderWindowEnd = orderWindowEnd; }
     public Integer getMaxQuantity() { return maxQuantity; }

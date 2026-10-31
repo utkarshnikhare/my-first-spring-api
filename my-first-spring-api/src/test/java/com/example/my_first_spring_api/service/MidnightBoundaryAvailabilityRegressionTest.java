@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -64,6 +65,7 @@ public class MidnightBoundaryAvailabilityRegressionTest {
 
         kitchen = new Kitchen("k-" + suffix, "Boundary Kitchen " + suffix, "Authentic food", null, seller);
         kitchen.setSociety("Pride World City");
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         kitchen = kitchenRepository.saveAndFlush(kitchen);
 
         String buyerMobile = String.valueOf(MOBILE_SEQ.incrementAndGet());
@@ -110,6 +112,69 @@ public class MidnightBoundaryAvailabilityRegressionTest {
         item.setQuantity(1);
         assertThatThrownBy(() -> orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(item), session))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("Expired Quick Post cannot start or finalize checkout while accepted history remains")
+    void expiredQuickPostRejectsNewCheckoutAndPreservesAcceptedOrder() {
+        LocalDate yesterday = LocalDate.now(AppTimeZone.ZONE).minusDays(1);
+        Product expiredQuickPost = new Product(kitchen, "Yesterday's Quick Post", "Fresh special",
+                BigDecimal.valueOf(75), "unit");
+        expiredQuickPost.setQuickPost(true);
+        expiredQuickPost.setAvailableDate(yesterday);
+        expiredQuickPost.setAvailableToday(true);
+        expiredQuickPost.setOrdersPaused(false);
+        expiredQuickPost.setOrderWindowEnd("23:59");
+        expiredQuickPost.setCutoffTime("23:59");
+        expiredQuickPost = productRepository.saveAndFlush(expiredQuickPost);
+
+        Order acceptedHistory = new Order(buyer, kitchen);
+        acceptedHistory.setOrderNumber("QP-HISTORY-" + UUID.randomUUID());
+        acceptedHistory.setOrderStatus(OrderStatus.ORDERED);
+        acceptedHistory.addItem(new OrderItem(expiredQuickPost, 1, expiredQuickPost.getPrice()));
+        acceptedHistory.recalculateTotal();
+        acceptedHistory = orderRepository.saveAndFlush(acceptedHistory);
+        Long acceptedOrderId = acceptedHistory.getId();
+
+        MockHttpSession draftSession = new MockHttpSession();
+        draftSession.setAttribute("BUYER_USER", buyer.getId());
+        OrderItemRequest item = new OrderItemRequest();
+        item.setProductId(expiredQuickPost.getId());
+        item.setQuantity(1);
+        Product finalQuickPost = expiredQuickPost;
+        assertThatThrownBy(() -> orderService.createOrUpdateDraftOrder(
+                kitchen.getId(), List.of(item), draftSession))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Quick Post")
+                .hasMessageContaining("expired");
+
+        Order staleDraft = new Order(buyer, kitchen);
+        staleDraft.setOrderNumber("QP-DRAFT-" + UUID.randomUUID());
+        staleDraft.setOrderStatus(OrderStatus.DRAFT);
+        staleDraft.addItem(new OrderItem(finalQuickPost, 1, finalQuickPost.getPrice()));
+        staleDraft.recalculateTotal();
+        staleDraft = orderRepository.saveAndFlush(staleDraft);
+        MockHttpSession placementSession = new MockHttpSession();
+        placementSession.setAttribute("BUYER_USER", buyer.getId());
+        placementSession.setAttribute(OrderService.DRAFT_ORDER_SESSION_KEY, staleDraft.getId());
+
+        AvailabilityService configuredAvailabilityService =
+                (AvailabilityService) ReflectionTestUtils.getField(orderService, "availabilityService");
+        ReflectionTestUtils.setField(orderService, "availabilityService", null);
+        try {
+            assertThatThrownBy(() -> orderService.placeOrder(
+                    PaymentStatus.PENDING, "cod", null, null, placementSession))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Quick Post")
+                    .hasMessageContaining("expired");
+        } finally {
+            ReflectionTestUtils.setField(orderService, "availabilityService", configuredAvailabilityService);
+        }
+
+        Order preserved = orderRepository.findByIdWithItems(acceptedOrderId).orElseThrow();
+        assertThat(preserved.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
+        assertThat(preserved.getItems()).hasSize(1);
+        assertThat(preserved.getItems().get(0).getProduct().getId()).isEqualTo(finalQuickPost.getId());
     }
 
     @Test

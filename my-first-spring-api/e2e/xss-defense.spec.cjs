@@ -84,7 +84,7 @@ test('stored XSS in order customInstructions is rendered escaped and never execu
   expect(confirmXssExecuted).toBeUndefined();
   expect(await page.locator('#xss-canary-element').count()).toBe(0);
 
-  await page.locator('[data-action="select-pay-status"][data-status="PENDING"]').click();
+  await expect(page.getByRole('radio', { name: /Cash on Delivery/ })).toBeChecked();
   await page.locator('#placeOrderBtn').click();
   await expect(page.getByRole('heading', { name: 'Order Confirmed' })).toBeVisible();
 

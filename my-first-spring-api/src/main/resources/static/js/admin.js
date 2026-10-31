@@ -1131,7 +1131,10 @@ async function adminExportsView() {
         expOpt('HOMEMADE_PRODUCTS', 'Homemade Products', of.category || '') + '</select>' +
         '<select class="form-input" id="expPayment" aria-label="Payment" style="max-width:180px">' +
         expOpt('', 'All payments', of.payment || '') + expOpt('PAID', 'Paid', of.payment || '') +
-        expOpt('PENDING', 'Pending', of.payment || '') + expOpt('WILL_PAY_LATER', 'Will pay later', of.payment || '') + '</select>' +
+        expOpt('PENDING', 'Pending', of.payment || '') +
+        expOpt('UNPAID', 'Unpaid', of.payment || '') +
+        expOpt('AWAITING_SELLER_VERIFICATION', 'Awaiting seller verification', of.payment || '') +
+        expOpt('WILL_PAY_LATER', 'Will pay later', of.payment || '') + '</select>' +
         '<select class="form-input" id="expDelivery" aria-label="Delivery" style="max-width:180px">' +
         expOpt('', 'All delivery', of.delivery || '') + expOpt('delivered', 'Delivered', of.delivery || '') +
         expOpt('not_delivered', 'Not delivered', of.delivery || '') + '</select>' +
@@ -1608,7 +1611,9 @@ async function adminOrdersView() {
         '<option value="HOMEMADE_PRODUCTS">Homemade Products</option></select>' +
         '<select class="form-input" id="ordPayment" data-action="admin-order-axis" data-axis="payment" aria-label="Payment" style="max-width:170px">' +
         '<option value="">All payments</option><option value="PAID">Paid</option>' +
-        '<option value="PENDING">Pending</option><option value="WILL_PAY_LATER">Will pay later</option></select>' +
+        '<option value="PENDING">Pending</option><option value="UNPAID">Unpaid</option>' +
+        '<option value="AWAITING_SELLER_VERIFICATION">Awaiting seller verification</option>' +
+        '<option value="WILL_PAY_LATER">Will pay later</option></select>' +
         '<select class="form-input" id="ordDelivery" data-action="admin-order-axis" data-axis="delivery" aria-label="Delivery" style="max-width:170px">' +
         '<option value="">All delivery</option><option value="delivered">Delivered</option>' +
         '<option value="not_delivered">Not delivered</option></select>' +
@@ -1657,6 +1662,8 @@ async function adminOrdersView() {
             : '<span class="pill pill-grey">' + esc(os) + '</span>';
         var psPill = ps === 'PAID' ? '<span class="pill pill-green">● Paid</span>'
             : ps === 'WILL_PAY_LATER' ? '<span class="pill pill-amber">● Will Pay Later</span>'
+            : ps === 'AWAITING_SELLER_VERIFICATION' ? '<span class="pill pill-amber">● Awaiting seller verification</span>'
+            : ps === 'UNPAID' ? '<span class="pill pill-amber">● Unpaid</span>'
             : ps === 'PENDING' ? '<span class="pill pill-grey">● Pending</span>'
             : (ps ? '<span class="pill pill-grey">' + esc(ps) + '</span>' : '');
         // Delivery is the SELLER's own record on the shared Order row. Admin only

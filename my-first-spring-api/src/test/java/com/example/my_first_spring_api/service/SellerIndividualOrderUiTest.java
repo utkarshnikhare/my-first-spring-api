@@ -77,7 +77,9 @@ class SellerIndividualOrderUiTest {
                 .contains("data-action=\"mark-paid\"")
                 .contains("data-oid=\"' + esc(order.id) + '\"")
                 .as("mark-paid stays limited to pending non-cancelled orders")
-                .contains("(paymentStatus === 'PENDING' || paymentStatus === 'WILL_PAY_LATER') && order.orderStatus !== 'CANCELLED'");
+                .contains("paymentStatus === 'PENDING' || paymentStatus === 'UNPAID'")
+                .contains("paymentStatus === 'AWAITING_SELLER_VERIFICATION' || paymentStatus === 'WILL_PAY_LATER'")
+                .contains("order.orderStatus !== 'CANCELLED'");
         assertThat(sellerJs)
                 .as("the cancel handler still calls the existing status endpoint")
                 .contains("'/api/seller/orders/' + encodeURIComponent(t.dataset.orderId) + '/status'")

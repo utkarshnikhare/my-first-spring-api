@@ -83,6 +83,14 @@ public class AuthService {
         requireDirectAuthEnabled();
         ensureMobileAvailable(request.getMobileNumber());
         requireBcryptCompatible(request.getPassword());
+        var paymentMode = SellerPaymentConfiguration.parseMode(request.getAcceptedPaymentMode());
+        if (paymentMode == null) {
+            throw new IllegalArgumentException("Choose a seller payment option during registration.");
+        }
+        var gpayIdentifierType =
+                SellerPaymentConfiguration.parseGpayIdentifierType(request.getGpayIdentifierType());
+        SellerPaymentConfiguration.validate(paymentMode, request.getUpiId(),
+                gpayIdentifierType, request.getGpayIdentifier());
         Area primaryArea = requireActiveArea(request.getPrimaryAreaId());
         Society primarySociety = requireActiveSociety(request.getPrimarySocietyId(), primaryArea);
         Area serviceArea = requireActiveArea(request.getServiceAreaId());
@@ -117,6 +125,10 @@ public class AuthService {
         kitchen.setBuilding(clean(request.getBuilding()));
         kitchen.setInstagramLink(clean(request.getInstagramLink()));
         kitchen.setSellerType(sellerCategory);
+        kitchen.setAcceptedPaymentMode(paymentMode.name());
+        kitchen.setUpiId(clean(request.getUpiId()));
+        kitchen.setGpayIdentifierType(gpayIdentifierType == null ? null : gpayIdentifierType.name());
+        kitchen.setGpayIdentifier(clean(request.getGpayIdentifier()));
         kitchen.setAreaId(serviceArea.getId());
         kitchen.setSocietyIds(request.getServiceSocietyIds());
         KitchenDto created = sellerService.createKitchen(kitchen, seller);

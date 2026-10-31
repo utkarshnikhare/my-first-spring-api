@@ -126,6 +126,22 @@ async function sellerAuthHtml() {
         '<option value="KITCHEN">Kitchen / Food — breakfast, lunch, dinner and snacks</option>' +
         '<option value="HOMEMADE_PRODUCTS">Homemade Products — cakes, ghee, achar, papad, sweets and other homemade products</option>' +
         '<option value="BOTH">Both — Kitchen / Food and Homemade Products</option></select></div>' +
+        '<fieldset class="seller-reg-coverage"><legend>Payment methods <span class="req">*</span></legend>' +
+        '<div class="form-group"><label for="sellerRegPaymentMode">What can buyers use?</label>' +
+        '<select class="form-input" id="sellerRegPaymentMode" name="acceptedPaymentMode" required>' +
+        '<option value="">Choose payment methods</option><option value="GPAY">Google Pay only</option>' +
+        '<option value="UPI">UPI ID only</option><option value="GPAY_AND_UPI">Google Pay and UPI ID</option>' +
+        '<option value="CASH_ONLY">Cash only</option></select></div>' +
+        '<div class="form-group" id="sellerRegUpiGroup" hidden><label for="sellerRegUpiId">UPI ID</label>' +
+        '<input class="form-input" id="sellerRegUpiId" name="upiId" autocomplete="off"></div>' +
+        '<div id="sellerRegGpayGroup" hidden><div class="form-group"><label for="sellerRegGpayType">Google Pay identifier type</label>' +
+        '<select class="form-input" id="sellerRegGpayType" name="gpayIdentifierType">' +
+        '<option value="">Choose a type</option><option value="PHONE_NUMBER">GPay-linked mobile number</option>' +
+        '<option value="UPI_ID">GPay UPI ID</option></select></div>' +
+        '<div class="form-group"><label for="sellerRegGpayIdentifier">Google Pay identifier</label>' +
+        '<input class="form-input" id="sellerRegGpayIdentifier" name="gpayIdentifier" autocomplete="off">' +
+        '<p class="muted small">Choose the identifier type explicitly; a phone number is not assumed to be a UPI ID.</p></div></div>' +
+        '</fieldset>' +
         '<div class="form-group"><label for="sellerRegShort">Short description (optional)</label><textarea class="form-input" id="sellerRegShort" name="shortDescription" maxlength="500"></textarea></div>' +
         '<div class="form-group"><label for="sellerRegInstagram">Instagram URL (optional)</label><input class="form-input" id="sellerRegInstagram" name="instagramLink" type="url" maxlength="255"></div>' +
         '<div class="form-group"><label for="sellerRegPrimaryArea">Primary area</label><select class="form-input" id="sellerRegPrimaryArea" name="primaryAreaId" required>' +
@@ -151,6 +167,11 @@ function bindSellerAuth(view) {
     var registrationForm = view.querySelector('#sellerRegistrationForm');
     if (!registrationForm) return;
     registrationForm.addEventListener('submit', sellerRegistrationSubmit);
+    var paymentMode = view.querySelector('#sellerRegPaymentMode');
+    paymentMode.addEventListener('change', function () {
+        syncSellerRegistrationPaymentFields(registrationForm);
+    });
+    syncSellerRegistrationPaymentFields(registrationForm);
     var primaryArea = view.querySelector('#sellerRegPrimaryArea');
     primaryArea.addEventListener('change', function () {
         var society = view.querySelector('#sellerRegPrimarySociety');
@@ -185,6 +206,25 @@ function bindSellerAuth(view) {
         S.authSlugTouched = true;
         if (slugHint) slugHint.textContent = 'sociomart-demo.onrender.com/kitchen/' + slug.value.trim();
     });
+}
+
+function syncSellerRegistrationPaymentFields(form) {
+    var mode = form.elements.acceptedPaymentMode.value;
+    var showUpi = mode === 'UPI' || mode === 'GPAY_AND_UPI';
+    var showGpay = mode === 'GPAY' || mode === 'GPAY_AND_UPI';
+    var upiGroup = form.querySelector('#sellerRegUpiGroup');
+    var gpayGroup = form.querySelector('#sellerRegGpayGroup');
+    var upiId = form.elements.upiId;
+    var gpayType = form.elements.gpayIdentifierType;
+    var gpayIdentifier = form.elements.gpayIdentifier;
+    upiGroup.hidden = !showUpi;
+    gpayGroup.hidden = !showGpay;
+    upiId.required = showUpi;
+    upiId.disabled = !showUpi;
+    gpayType.required = showGpay;
+    gpayType.disabled = !showGpay;
+    gpayIdentifier.required = showGpay;
+    gpayIdentifier.disabled = !showGpay;
 }
 
 async function sellerLoginSubmit(event) {
@@ -289,6 +329,10 @@ async function sellerRegistrationSubmit(event) {
             primaryAreaId: Number(form.elements.primaryAreaId.value),
             primarySocietyId: Number(form.elements.primarySocietyId.value),
             building: form.elements.building.value.trim(),
+            acceptedPaymentMode: form.elements.acceptedPaymentMode.value,
+            upiId: form.elements.upiId.disabled ? null : form.elements.upiId.value.trim(),
+            gpayIdentifierType: form.elements.gpayIdentifierType.disabled ? null : form.elements.gpayIdentifierType.value,
+            gpayIdentifier: form.elements.gpayIdentifier.disabled ? null : form.elements.gpayIdentifier.value.trim(),
             serviceAreaId: Number(form.elements.serviceAreaId.value),
             serviceSocietyIds: serviceIds
         } });
@@ -483,6 +527,7 @@ function applyOfferingDatePicker(picker) {
     if (hidden && picker.value) hidden.value = picker.value;
     var form = picker.closest('form');
     if (form) {
+        var readyInput = form.querySelector('input[name="readyByTime"]');
         var closeInput = form.querySelector('input[name="orderWindowEnd"]');
         if (readyInput && readyInput.value && picker.value) {
             var timePart = readyInput.value.length >= 16 ? readyInput.value.slice(11, 16) : '12:30';
@@ -1248,49 +1293,34 @@ function updateQuickPostCounter() {
     if (btn) btn.disabled = over > 0;
 }
 
+function getQuickPostRequestId() {
+    if (!S.quickPostRequestId) {
+        S.quickPostRequestId = window.crypto && typeof window.crypto.randomUUID === 'function'
+            ? window.crypto.randomUUID()
+            : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)
+                + Math.random().toString(36).slice(2);
+    }
+    return S.quickPostRequestId;
+}
+
 async function sellerQuickPostView() {
     var h = '<div class="view-enter">';
     h += '<div class="page-head"><h1>Quick Post</h1><p class="muted small">Paste your WhatsApp message. Quick Posts are always published for Today.</p></div>';
-    h += '<div class="card pad card-purple card-mb"><div class="font-700">This becomes a real offering</div>' +
-        '<p class="small mt-1">Your post is published as an offering buyers can order from, using the same ' +
-        'price, timing and order window as Create Offering.</p></div>';
+    h += '<div class="card pad card-purple card-mb"><div class="font-700">One simple same-day offer</div>' +
+        '<p class="small mt-1">Describe one item or fixed-price combo in your message. Buyers order units of that offer ' +
+        'through the usual checkout. Include any portion size, ready time or ordering instructions in the message.</p></div>';
     h += '<form class="seller-form" id="quickPostForm">';
     h += '<div class="form-group"><label class="form-label" for="qpMessage">Paste WhatsApp message <span class="req">*</span></label>' +
         '<textarea class="form-textarea" id="qpMessage" name="message" rows="6" maxlength="' + (QUICK_POST_MAX + 1) + '" ' +
         'aria-describedby="qpCounter" placeholder="Paste your WhatsApp message here..." required></textarea>' +
         '<div class="qp-counter-row"><span id="qpCounter" class="qp-counter" role="status" aria-live="polite">' +
         QUICK_POST_MAX + ' of ' + QUICK_POST_MAX + ' characters left</span></div></div>';
-    // Minimum extra fields required by the existing Product creation architecture.
-    // These reuse the exact Create Offering controls, names and help text so the
-    // two screens stay consistent instead of inventing a parallel form.
-    h += '<div class="form-group"><label class="form-label">Item Name <span class="req">*</span></label>' +
-        '<input class="form-input" name="name" placeholder="e.g. Paneer Butter Masala" required></div>';
     h += '<div class="form-group"><label class="form-label" for="qpImage">Photo — Optional</label>' +
         '<input class="form-input" id="qpImage" name="quickPostImage" type="file" accept="image/png,image/jpeg,image/gif,image/webp">' +
         '<p class="muted small">PNG, JPEG, GIF, or WebP; maximum 2 MB.</p></div>';
-    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Price (Rs) <span class="req">*</span></label>' +
-        '<input class="form-input" name="price" type="number" min="0.01" step="0.01" placeholder="100" required></div>' +
-        '<div class="form-group"><label class="form-label">Unit <span class="req">*</span></label>' +
-        '<select class="form-select" name="priceUnit"><option value="Per Piece">Per Piece</option>' +
-        '<option value="Per Plate" selected>Per Plate</option><option value="Per Box">Per Box</option></select></div></div>';
-    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open — Optional</label>' +
-        '<input class="form-input" name="orderWindowStart" type="time">' +
-        '<p class="muted small">Leave blank to start accepting orders immediately.</p></div>' +
-        '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label>' +
-        '<input class="form-input" name="orderWindowEnd" type="time" required>' +
-        '<p class="muted small">Last date/time customers can place an order. (Auto-set to 1 hour before delivery)</p></div></div>';
-    h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label>' +
-        '<input class="form-input" name="readyByTime" type="datetime-local" required>' +
-        '<p class="muted small">Date/time by which the order will be ready/delivered.</p></div>';
-    h += '<div class="form-group"><label class="form-label">Quantity Available — Optional</label>' +
-        '<input class="form-input" name="maxQuantity" type="number" min="1" step="1" placeholder="Blank for unlimited">' +
-        '<p class="muted small">Leave blank for unlimited quantity.</p></div>';
-    h += '<div class="form-group"><label class="form-label">To be listed in <span class="req">*</span></label>' +
-        '<div class="checkbox-group">' + offeringCategoryBox('BREAKFAST', 'Breakfast', []) +
-        offeringCategoryBox('LUNCH', 'Lunch', []) + offeringCategoryBox('DINNER', 'Dinner', []) +
-        offeringCategoryBox('SNACKS', 'Snacks', []) + '</div>' +
-        '<p class="muted small">Select at least one category.</p></div>';
-    h += '<button class="btn btn-primary btn-block" type="submit" id="qpSubmit">Publish Offering</button>';
+    h += '<div class="form-group"><label class="form-label" for="qpPrice">Price (₹) <span class="req">*</span></label>' +
+        '<input class="form-input" id="qpPrice" name="price" type="number" min="0.01" step="0.01" placeholder="100" required></div>';
+    h += '<button class="btn btn-primary btn-block" type="submit" id="qpSubmit">Publish Quick Post</button>';
     h += '</form>';
     // Legacy announcements already stored in quick_posts remain listed so nothing
     // that exists today disappears. NEW Quick Posts are ordinary offerings and
@@ -2701,7 +2731,26 @@ async function sellerKitchenView() {
     h += '<div class="form-group"><label class="form-label">Gallery Images (URLs, comma-separated)</label><input class="form-input" name="galleryImages" value="' + esc(kitchen && kitchen.galleryImages ? kitchen.galleryImages : '') + '"></div>';
     var waVal = (kitchen && (kitchen.whatsappNumber || kitchen.sellerWhatsappNumber || kitchen.whatsappLink)) || '';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">WhatsApp Number</label><input class="form-input" name="whatsappNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" placeholder="10-digit WhatsApp number" value="' + esc(waVal) + '"><input type="hidden" name="whatsappLink" value="' + esc(waVal) + '"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" name="instagramLink" value="' + esc(kitchen && kitchen.instagramLink ? kitchen.instagramLink : '') + '"></div></div>';
-    h += '<div class="form-group"><label class="form-label">UPI ID</label><input class="form-input" name="upiId" value="' + esc(kitchen && kitchen.upiId ? kitchen.upiId : '') + '"></div>';
+    var paymentMode = (kitchen && kitchen.acceptedPaymentMode) || '';
+    h += '<div class="form-group"><label class="form-label" for="acceptedPaymentMode">Payment options buyers can use</label>' +
+        '<select class="form-input" id="acceptedPaymentMode" name="acceptedPaymentMode">' +
+        '<option value=""' + (paymentMode === '' ? ' selected' : '') + '>Not set up — buyers cannot place orders</option>' +
+        '<option value="GPAY"' + (paymentMode === 'GPAY' ? ' selected' : '') + '>Google Pay only</option>' +
+        '<option value="UPI"' + (paymentMode === 'UPI' ? ' selected' : '') + '>UPI only</option>' +
+        '<option value="GPAY_AND_UPI"' + (paymentMode === 'GPAY_AND_UPI' ? ' selected' : '') + '>Google Pay and UPI</option>' +
+        '<option value="CASH_ONLY"' + (paymentMode === 'CASH_ONLY' ? ' selected' : '') + '>Cash only</option>' +
+        '</select><p class="muted small mt-1">This records payment instructions only; SocioMart does not process payments.</p></div>';
+    h += '<div class="form-group"><label class="form-label">UPI ID</label><input class="form-input" name="upiId" autocomplete="off" value="' + esc(kitchen && kitchen.upiId ? kitchen.upiId : '') + '"></div>';
+    var gpayType = (kitchen && kitchen.gpayIdentifierType) || '';
+    h += '<div class="form-row-2"><div class="form-group"><label class="form-label" for="gpayIdentifierType">Google Pay identifier type</label>' +
+        '<select class="form-input" id="gpayIdentifierType" name="gpayIdentifierType">' +
+        '<option value=""' + (gpayType === '' ? ' selected' : '') + '>Choose a type</option>' +
+        '<option value="PHONE_NUMBER"' + (gpayType === 'PHONE_NUMBER' ? ' selected' : '') + '>Mobile number</option>' +
+        '<option value="UPI_ID"' + (gpayType === 'UPI_ID' ? ' selected' : '') + '>UPI ID</option></select></div>' +
+        '<div class="form-group"><label class="form-label" for="gpayIdentifier">Google Pay identifier</label>' +
+        '<input class="form-input" id="gpayIdentifier" name="gpayIdentifier" autocomplete="off" value="' +
+        esc(kitchen && kitchen.gpayIdentifier ? kitchen.gpayIdentifier : '') + '">' +
+        '<p class="muted small mt-1">Select the identifier type explicitly; it is not inferred from your UPI ID.</p></div></div>';
     var curType = (kitchen && kitchen.sellerType) || 'KITCHEN';
     h += '<div class="form-group"><label class="form-label">Store Type / Business Category</label>'
         + '<div class="radio-group">'
@@ -3252,8 +3301,10 @@ async function sellerOrderDetailByOrderView(orderId) {
         if (order.orderStatus && ['ORDERED', 'CONFIRMED', 'READY'].indexOf(order.orderStatus) >= 0) {
             h += '<button class="btn btn-secondary btn-block mt-2 oic-act" type="button" data-action="cancel-order" data-order-id="' + esc(order.id) + '">Cancel Order</button>';
         }
-        if ((paymentStatus === 'PENDING' || paymentStatus === 'WILL_PAY_LATER') && order.orderStatus !== 'CANCELLED') {
-            h += '<button class="btn btn-primary btn-block mt-2 oic-act" type="button" data-action="mark-paid" data-oid="' + esc(order.id) + '">Mark as Paid</button>';
+        if ((paymentStatus === 'PENDING' || paymentStatus === 'UNPAID'
+                || paymentStatus === 'AWAITING_SELLER_VERIFICATION' || paymentStatus === 'WILL_PAY_LATER')
+                && order.orderStatus !== 'CANCELLED') {
+            h += '<button class="btn btn-primary btn-block mt-2 oic-act" type="button" data-action="mark-paid" data-oid="' + esc(order.id) + '">Verify receipt and mark paid</button>';
         }
         if (order.orderStatus !== 'CANCELLED') { if (isDelivered) { h += '<button class="btn btn-outline btn-block mt-2 oic-act" type="button" data-action="toggle-delivery-order" data-oid="' + esc(order.id) + '" data-status="NOT_DELIVERED">↩️ Mark as Not Delivered</button>'; } else { h += '<button class="btn btn-primary btn-block mt-2 oic-act" type="button" data-action="toggle-delivery-order" data-oid="' + esc(order.id) + '" data-status="DELIVERED">🚚 Mark as Delivered</button>'; } }
     } catch (e) {
@@ -3802,105 +3853,60 @@ document.addEventListener('submit', async function (e) {
                 return;
             }
             var submitButton = form.querySelector('#qpSubmit');
-            if (submitButton) submitButton.disabled = true;
-
-            // A Quick Post is now an ordinary Product. Rather than duplicating
-            // Product/Offerings/Order logic, the form is submitted to the SAME
-            // endpoint Create Offering already uses, so every existing rule
-            // (price, timing, categories, ownership, authorization) applies
-            // unchanged, and the result lands in Offerings + buyer discovery
-            // with the normal Order button.
-            autoClampOrderWindowEndIfInvalid(form);
-            var vals = formVals(form);
-            var qpImageFile = form.querySelector('[name="quickPostImage"]').files[0];
-            if (qpImageFile && qpImageFile.size > 2 * 1024 * 1024) {
-                toast('Quick Post image must be 2 MB or smaller', 'error');
-                if (submitButton) submitButton.disabled = false;
-                return;
+            var originalLabel = submitButton ? submitButton.textContent : '';
+            var formControls = Array.prototype.slice.call(form.querySelectorAll('input, textarea, select, button'));
+            var originalDisabled = formControls.map(function (control) { return control.disabled; });
+            formControls.forEach(function (control) { control.disabled = true; });
+            if (submitButton) {
+                submitButton.setAttribute('aria-busy', 'true');
+                submitButton.textContent = 'Publishing Quick Post…';
             }
-            if (qpImageFile) {
-                vals.quickPostImageData = await new Promise(function (resolve, reject) {
-                    var reader = new FileReader();
-                    reader.onload = function () { resolve(String(reader.result || '')); };
-                    reader.onerror = function () { reject(new Error('Could not read the selected Quick Post image')); };
-                    reader.readAsDataURL(qpImageFile);
-                });
-            }
-            delete vals.quickPostImage;
-            vals.quickPost = true;
-            // The seller's post text is the offering's primary content.
-            vals.description = message;
-            delete vals.message;
-
-            vals.orderWindowStart = parseOptionalHhmm(vals.orderWindowStart, 'Orders Open');
-            vals.orderWindowEnd = parseOptionalHhmm(vals.orderWindowEnd, 'Orders Close');
-            if (!vals.orderWindowEnd) { toast('Orders Close is required', 'error'); if (submitButton) submitButton.disabled = false; return; }
-            var qpReadyBy = (vals.readyByTime || '').trim();
-            if (!qpReadyBy) { toast('Delivery / Ready By is required', 'error'); if (submitButton) submitButton.disabled = false; return; }
-            vals.readyByTime = qpReadyBy;
-
-            // Quick Posts stay a Today-only offering, exactly as before.
-            vals.availableDate = sellerDate('today');
-            vals.isPreorder = false;
-
-            var qpPrice = Number(vals.price);
-            if (!isFinite(qpPrice) || qpPrice <= 0) {
-                toast('Price must be greater than 0', 'error');
-                if (submitButton) submitButton.disabled = false;
-                return;
-            }
-            vals.price = qpPrice;
-
-            if (vals.maxQuantity !== '' && vals.maxQuantity !== null && vals.maxQuantity !== undefined) {
-                var qpQty = Number(vals.maxQuantity);
-                if (!Number.isInteger(qpQty) || qpQty < 1) {
-                    toast('Quantity Available must be a whole number of at least 1, or blank for unlimited', 'error');
-                    if (submitButton) submitButton.disabled = false;
+            try {
+                var price = Number(form.querySelector('[name="price"]').value);
+                if (!isFinite(price) || price <= 0) {
+                    toast('Price must be greater than 0', 'error');
                     return;
                 }
-                vals.maxQuantity = qpQty;
-            } else {
-                vals.maxQuantity = null; // blank = unlimited
-            }
-
-            // Same cross-field timing rule the Create Offering form uses.
-            var qpTimingError = offeringTimingError(vals.availableDate, vals.orderWindowStart, vals.orderWindowEnd, qpReadyBy);
-            if (qpTimingError) {
-                toast(qpTimingError, 'error');
-                if (submitButton) submitButton.disabled = false;
-                return;
-            }
-
-            var qpCategories = [];
-            $all('input[name="categories"]:checked', form).forEach(function (cb) { qpCategories.push(cb.value); });
-            if (qpCategories.length === 0) {
-                toast('Select at least one category', 'error');
-                if (submitButton) submitButton.disabled = false;
-                return;
-            }
-            vals.categories = qpCategories;
-
-            // Product has no "Offering For" chooser on this screen: it is always
-            // Today, matching the original Quick Post rule.
-            vals.imageUrl = '';
-            vals.is_available = true;
-            vals.availableToday = true;
-            vals.isVeg = true;
-            vals.unit = vals.unit || vals.priceUnit || 'portion';
-            try {
+                var imageFile = form.querySelector('[name="quickPostImage"]').files[0];
+                if (imageFile && imageFile.size > 2 * 1024 * 1024) {
+                    toast('Quick Post image must be 2 MB or smaller', 'error');
+                    return;
+                }
+                var payload = {
+                    quickPost: true,
+                    description: message,
+                    price: price,
+                    quickPostRequestId: getQuickPostRequestId()
+                };
+                if (imageFile) {
+                    payload.quickPostImageData = await new Promise(function (resolve, reject) {
+                        var reader = new FileReader();
+                        reader.onload = function () { resolve(String(reader.result || '')); };
+                        reader.onerror = function () { reject(new Error('Could not read the selected Quick Post image')); };
+                        reader.readAsDataURL(imageFile);
+                    });
+                }
                 var qpKid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
                 if (!qpKid) {
                     var qpK = await sellerApi('/api/seller/kitchen');
                     qpKid = qpK.id;
                     S.myKitchen = qpK;
                 }
-                await sellerApi('/api/seller/products?kitchenId=' + qpKid, { method: 'POST', body: vals });
+                await sellerApi('/api/seller/products?kitchenId=' + qpKid, { method: 'POST', body: payload });
                 toast('Quick Post published as an offering!', 'success');
                 S.quickPostRequestId = null;
                 S.offeringFor = 'today';
                 sellerNavigate('#/home');
+            } catch (err) {
+                toast(err.message || 'Could not publish Quick Post', 'error');
             } finally {
-                if (submitButton) submitButton.disabled = false;
+                formControls.forEach(function (control, index) {
+                    control.disabled = originalDisabled[index];
+                });
+                if (submitButton) {
+                    submitButton.removeAttribute('aria-busy');
+                    submitButton.textContent = originalLabel;
+                }
             }
         } else if (form.id === 'kitchenForm') {
             var kid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
@@ -4589,12 +4595,16 @@ document.addEventListener('click', async function (e) {
             }
             case 'preview-offering': toast('Preview mode', 'info'); break;
             case 'preview-kitchen': {
-                // Opens the EXISTING buyer-facing kitchen page. seller.html and
-                // index.html are separate documents, so the buyer SPA is reached
-                // by a full page load using its own hash route "#/kitchen/{id}",
-                // which buyer.js resolves through MarketplaceController's
-                // GET /api/kitchens/id/{id}. This is the same mechanism the Admin
-                // console already uses for open-buyer (admin.js location.href).
+                // Keep seller management open while the public buyer storefront
+                // loads in a separate tab.
+                var previewWindow = window.open('about:blank', '_blank');
+                if (!previewWindow) {
+                    toast('Allow pop-ups to open the kitchen preview in a new tab.', 'error');
+                    break;
+                }
+                previewWindow.opener = null;
+                previewWindow.document.title = 'SocioMart kitchen preview';
+                previewWindow.document.body.textContent = 'Loading your public kitchen preview...';
                 var previewKitchen = S.myKitchen || S.kitchen;
                 var previewId = previewKitchen && previewKitchen.id;
                 if (!previewId) {
@@ -4607,16 +4617,18 @@ document.addEventListener('click', async function (e) {
                         S.kitchen = previewKitchen;
                         previewId = previewKitchen && previewKitchen.id;
                     } catch (previewErr) {
+                        previewWindow.close();
                         toast('Could not load your kitchen. Please retry.', 'error');
                         break;
                     }
                 }
                 if (!previewId) {
+                    previewWindow.close();
                     toast('No kitchen found to preview. Publish your kitchen first.', 'error');
                     break;
                 }
-                toast('Opening kitchen preview...', 'info');
-                location.href = '/index.html#/kitchen/' + encodeURIComponent(previewId);
+                previewWindow.location.replace('/index.html#/kitchen/' + encodeURIComponent(previewId));
+                toast('Kitchen preview opened in a new tab. Your seller dashboard stays open.', 'success');
                 break;
             }
             case 'add-photo': toast('Photo upload (demo)', 'info'); break;
@@ -4837,6 +4849,10 @@ document.addEventListener('change', function (e) {
 // Live Quick Post character feedback. Delegated on document so it keeps working
 // across the SPA re-renders that replace #view on every navigation.
 document.addEventListener('input', function (e) {
+    if (e.target && e.target.closest && e.target.closest('#quickPostForm')
+            && (e.target.name === 'message' || e.target.name === 'price')) {
+        S.quickPostRequestId = null;
+    }
     if (e.target && e.target.id === 'qpMessage') updateQuickPostCounter();
     if (e.target && e.target.name === 'readyByTime') {
         var form = e.target.closest('form');
@@ -4863,6 +4879,13 @@ document.addEventListener('input', function (e) {
     }
     if (e.target && (e.target.name === 'orderWindowEnd' || e.target.name === 'readyByTime' || e.target.name === 'orderWindowStart')) {
         validateFormTiming(e.target.closest('form'));
+    }
+});
+
+document.addEventListener('change', function (e) {
+    if (e.target && e.target.name === 'quickPostImage'
+            && e.target.closest && e.target.closest('#quickPostForm')) {
+        S.quickPostRequestId = null;
     }
 });
 

@@ -187,10 +187,10 @@ public class AdminService {
 
         long pendingPaymentCount = allOrders.stream()
                 .filter(o -> o.getOrderStatus() != OrderStatus.CANCELLED)
-                .filter(o -> o.getPaymentStatus() == PaymentStatus.PENDING).count();
+                .filter(o -> o.getPaymentStatus().isUnsettled()).count();
         BigDecimal pendingPaymentValue = allOrders.stream()
                 .filter(o -> o.getOrderStatus() != OrderStatus.CANCELLED)
-                .filter(o -> o.getPaymentStatus() == PaymentStatus.PENDING)
+                .filter(o -> o.getPaymentStatus().isUnsettled())
                 .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
@@ -1198,7 +1198,9 @@ public class AdminService {
         }
         long awaiting = countOrders(OrderStatus.ORDERED);
         if (awaiting > 0) items.add(attention("Orders not yet confirmed by sellers", awaiting, "#/orders"));
-        long unpaid = countOrders(PaymentStatus.PENDING) + countOrders(PaymentStatus.WILL_PAY_LATER);
+        long unpaid = countOrders(PaymentStatus.PENDING) + countOrders(PaymentStatus.UNPAID)
+                + countOrders(PaymentStatus.AWAITING_SELLER_VERIFICATION)
+                + countOrders(PaymentStatus.WILL_PAY_LATER);
         if (unpaid > 0) items.add(attention("Orders with payment still pending", unpaid, "#/orders"));
         return items;
     }
@@ -1246,7 +1248,7 @@ public class AdminService {
         public Long sellerId;
         public Long buyerId;
         public String category;     // KITCHEN | HOMEMADE_PRODUCTS
-        public String payment;      // PAID | PENDING | WILL_PAY_LATER
+        public String payment;      // PaymentStatus name
         public String delivery;     // delivered | not_delivered
         public String status;       // OrderStatus name
         public String search;
@@ -1320,7 +1322,8 @@ public class AdminService {
         PaymentStatus ps = o.getPaymentStatus();
         if (ps == null) return false;
         return switch (wanted) {
-            case "PAID", "PENDING", "WILL_PAY_LATER" -> ps.name().equals(wanted);
+            case "PAID", "PENDING", "UNPAID", "AWAITING_SELLER_VERIFICATION", "WILL_PAY_LATER"
+                    -> ps.name().equals(wanted);
             default -> true; // unknown value: no constraint
         };
     }

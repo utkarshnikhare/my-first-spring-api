@@ -245,8 +245,8 @@ test.describe('Visual QA & Responsive Viewport Audits', () => {
     await assertNoHorizontalOverflow(page, 'Buyer Confirm Order 390x844');
     await takeVisualSnapshot(page, 'buyer-confirm-order-390x844');
 
-    // Immediate payment choice
-    await page.locator('[data-action="select-pay-status"][data-status="PENDING"]').click();
+    // Cash-only sellers use the explicitly selected cash-on-delivery method.
+    await expect(page.getByRole('radio', { name: /Cash on Delivery/ })).toBeChecked();
     await page.locator('#placeOrderBtn').click();
     await expect(page.getByRole('heading', { name: 'Order Confirmed' })).toBeVisible();
     await assertNoHorizontalOverflow(page, 'Buyer Order Confirmed 390x844');

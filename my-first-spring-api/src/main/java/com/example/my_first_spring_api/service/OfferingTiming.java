@@ -203,6 +203,11 @@ final class OfferingTiming {
         return currentMinute > cutoffMinute;
     }
 
+    static boolean isPreorderForOrdering(Product product, LocalDate today) {
+        return product != null && product.getAvailableDate() != null
+                && product.getAvailableDate().isAfter(today);
+    }
+
     static String autoCorrectOrdersClose(LocalDate orderingDate, String close,
                                          LocalDateTime delivery, LocalDate today, LocalTime now) {
         return autoCorrectOrdersClose(orderingDate, false, close, delivery, today, now);
@@ -266,6 +271,15 @@ final class OfferingTiming {
         enforceOrderWindow(product, fulfillmentDate, context, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
     }
 
+    static void enforceQuickPostPublicationDate(Product product, LocalDate today) {
+        if (product != null && product.isQuickPost()
+                && product.getAvailableDate() != null
+                && product.getAvailableDate().isBefore(today)) {
+            throw new IllegalArgumentException("Quick Post '" + product.getName()
+                    + "' has expired and can no longer be ordered.");
+        }
+    }
+
     static void enforceOrderWindow(Product product, LocalDate fulfillmentDate, String context,
                                    LocalDate today, LocalTime now) {
         LocalDate effectiveDate = fulfillmentDate != null ? fulfillmentDate
@@ -320,7 +334,7 @@ final class OfferingTiming {
             return "SCHEDULED_TO_OPEN";
         }
         if (!isWindowOpenNow(product, today, now)) return "ORDERS_CLOSED";
-        return Boolean.TRUE.equals(product.getIsPreorder()) ? "PRE_ORDER" : "LIVE";
+        return offeringDate.isAfter(today) ? "PRE_ORDER" : "LIVE";
     }
 
     static String buyerSection(ProductDto dto, Product product, LocalDate today) {

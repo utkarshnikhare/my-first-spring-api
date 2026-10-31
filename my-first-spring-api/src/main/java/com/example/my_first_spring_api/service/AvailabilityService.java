@@ -52,12 +52,11 @@ public class AvailabilityService {
 
     public boolean isPreorderable(Product product, User buyer) {
         if (product == null) return false;
-        if (!Boolean.TRUE.equals(product.getIsPreorder())) return false;
+        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        if (!OfferingTiming.isPreorderForOrdering(product, today)) return false;
         if (!isProductActive(product)) return false;
         if (!isKitchenEligible(product.getKitchen(), buyer)) return false;
-        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
-        return product.getAvailableDate() != null
-                && !product.getAvailableDate().isBefore(today);
+        return true;
     }
 
     private boolean isProductActive(Product product) {

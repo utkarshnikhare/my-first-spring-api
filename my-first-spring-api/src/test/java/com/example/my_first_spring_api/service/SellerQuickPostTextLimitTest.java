@@ -31,12 +31,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SellerQuickPostTextLimitTest {
 
     private static String sellerJs;
+    private static String buyerJs;
+    private static String stylesCss;
     private static String service;
 
     @BeforeAll
     static void load() throws IOException {
         Path staticDir = Paths.get("src", "main", "resources", "static");
         sellerJs = read(staticDir.resolve("js").resolve("seller.js"));
+        buyerJs = read(staticDir.resolve("js").resolve("buyer.js"));
+        stylesCss = read(staticDir.resolve("css").resolve("styles.css"));
         service = read(Paths.get("src", "main", "java", "com", "example", "my_first_spring_api",
                 "service").resolve("SellerAppService.java"));
     }
@@ -113,7 +117,7 @@ class SellerQuickPostTextLimitTest {
     void theSellerPostTextBecomesTheOfferingDescription() {
         assertThat(sellerJs)
                 .as("the post text must be mapped onto the Product description field")
-                .contains("vals.description = message;");
+                .contains("description: message");
     }
 
     /**
@@ -121,29 +125,52 @@ class SellerQuickPostTextLimitTest {
      * Quick Post collects all four instead of inventing marketplace defaults.
      */
     @Test
-    void everyRequiredProductFieldIsCollectedNotDefaulted() {
-        assertThat(sellerJs)
-                .as("Quick Post must collect the fields Product requires")
-                .contains("name=\"name\"")
+    void quickPostFormCollectsOnlyMessagePriceAndOptionalImage() {
+        int start = sellerJs.indexOf("async function sellerQuickPostView()");
+        int end = sellerJs.indexOf("// ==================== Offering form", start);
+        assertThat(start).isGreaterThanOrEqualTo(0);
+        assertThat(end).isGreaterThan(start);
+        String form = sellerJs.substring(start, end);
+        assertThat(form)
+                .contains("name=\"message\"")
                 .contains("name=\"price\"")
-                .contains("name=\"priceUnit\"")
-                .contains("name=\"orderWindowEnd\"")
-                .contains("name=\"readyByTime\"")
-                .contains("name=\"categories\"");
+                .contains("name=\"quickPostImage\"");
+        assertThat(form)
+                .doesNotContain("name=\"name\"")
+                .doesNotContain("name=\"priceUnit\"")
+                .doesNotContain("name=\"unit\"")
+                .doesNotContain("name=\"orderWindowStart\"")
+                .doesNotContain("name=\"orderWindowEnd\"")
+                .doesNotContain("name=\"readyByTime\"")
+                .doesNotContain("name=\"maxQuantity\"")
+                .doesNotContain("name=\"categories\"");
         assertThat(sellerJs)
                 .as("price must be seller-supplied and positive, never defaulted to zero")
-                .contains("if (!isFinite(qpPrice) || qpPrice <= 0)");
+                .contains("if (!isFinite(price) || price <= 0)");
         assertThat(sellerJs)
-                .as("at least one category must be chosen explicitly")
-                .contains("if (qpCategories.length === 0)");
+                .as("the payload contains the message, price, optional image and retry reference")
+                .contains("quickPost: true,")
+                .contains("quickPostRequestId: getQuickPostRequestId()");
+        assertThat(sellerJs)
+                .as("the same request ID is reused when a publish response is retried")
+                .contains("function getQuickPostRequestId()")
+                .contains("S.quickPostRequestId = null;");
     }
 
-    /** Quick Posts stay Today-only, matching the original announcement rule. */
     @Test
-    void quickPostRemainsATodayOnlyOffering() {
+    void buyerQuickPostShowsTheWholeMessageWithoutStructuredTimingOrPreorderBadge() {
+        assertThat(buyerJs)
+                .contains("var isQuickPost = !!p.quickPost;")
+                .contains("if (isQuickPost) {")
+                .contains("'<p class=\"oc-desc quick-post-message\">' + esc(p.description || '') + '</p>'");
+        assertThat(stylesCss).contains(".quick-post-message { white-space: pre-wrap;");
+    }
+
+    /** Quick Post publication date and cutoff are assigned by the server. */
+    @Test
+    void quickPostUsesServerAuthoredSameDayAvailability() {
         assertThat(sellerJs)
-                .contains("vals.availableDate = sellerDate('today');")
-                .contains("vals.isPreorder = false;");
+                .contains("quickPostRequestId: getQuickPostRequestId()");
     }
 
     /**

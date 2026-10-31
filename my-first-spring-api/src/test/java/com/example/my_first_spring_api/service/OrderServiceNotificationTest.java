@@ -54,6 +54,7 @@ class OrderServiceNotificationTest {
         seller.setId(10L);
         seller.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
         Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller);
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         kitchen.setId(1L);
         kitchen.setAvailableToday(true);
         when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
@@ -95,7 +96,7 @@ class OrderServiceNotificationTest {
         when(orderRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(savedDraft));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        orderService.placeOrder(PaymentStatus.PAID, null, null, null, httpSession);
+        orderService.placeOrder(PaymentStatus.PAID, "cod", null, null, httpSession);
 
         verify(notificationService, atLeastOnce()).sendNewOrderNotification(argThat(u -> u != null && u.getId().equals(10L)), any(), any());
     }
@@ -106,6 +107,7 @@ class OrderServiceNotificationTest {
         seller.setId(11L);
         seller.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
         Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller);
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         kitchen.setId(2L);
         kitchen.setAvailableToday(true);
         when(kitchenRepository.findById(2L)).thenReturn(Optional.of(kitchen));
@@ -135,7 +137,7 @@ class OrderServiceNotificationTest {
         sessionMap.put(OrderService.DRAFT_ORDER_SESSION_KEY, 200L);
         sessionMap.put("BUYER_USER", buyer.getId());
 
-        orderService.placeOrder(PaymentStatus.PAID, null, null, null, httpSession);
+        orderService.placeOrder(PaymentStatus.PAID, "cod", null, null, httpSession);
 
         // Handover 12: the rollup is fed at placement so aggregate analytics
         // outlive any future detailed-order purge. Regression guard - this call

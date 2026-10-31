@@ -10,6 +10,7 @@ import com.example.my_first_spring_api.dto.SellerDashboardDto;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Occurrence;
 import com.example.my_first_spring_api.model.PaymentStatus;
+import com.example.my_first_spring_api.model.SellerPaymentMode;
 import com.example.my_first_spring_api.model.Product;
 import com.example.my_first_spring_api.model.RecurringSchedule;
 import com.example.my_first_spring_api.model.OccurrenceStatus;
@@ -89,7 +90,9 @@ class RecurringBuyerOrderFlowTest {
         buyer.setSociety("Society");
         buyer.setBuilding("A");
         buyer = users.saveAndFlush(buyer);
-        kitchen = kitchens.saveAndFlush(new Kitchen("k" + suffix, "Kitchen " + suffix, "", null, seller));
+        kitchen = new Kitchen("k" + suffix, "Kitchen " + suffix, "", null, seller);
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
+        kitchen = kitchens.saveAndFlush(kitchen);
 
         // The "test" profile skips DataInitializer, so seed the feature
         // catalogue explicitly: future-occurrence ordering needs the same
@@ -184,7 +187,7 @@ class RecurringBuyerOrderFlowTest {
         MockHttpSession session = buyerSession();
 
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request(product.getId(), 3)), session);
-OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
+OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, session);
 
         assertThat(placed.getItems()).hasSize(1);
         assertThat(placed.getItems().get(0).getScheduledDate()).isEqualTo(LocalDate.now());
@@ -204,7 +207,7 @@ OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, nul
 
         // ...and separate orders may not add up past them either.
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request(product.getId(), 4)), first);
-orderService.placeOrder(PaymentStatus.PENDING, null, null, null, first);
+orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, first);
 
         assertThatThrownBy(() -> orderService.createOrUpdateDraftOrder(
                 kitchen.getId(), List.of(request(product.getId(), 2)), buyerSession()))
@@ -240,7 +243,7 @@ orderService.placeOrder(PaymentStatus.PENDING, null, null, null, first);
         // Ordering ahead succeeds and carries the fulfilment date.
         MockHttpSession session = buyerSession();
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request(product.getId(), 2)), session);
-OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
+OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, session);
         assertThat(placed.getItems().get(0).getScheduledDate()).isEqualTo(tomorrow);
         assertThat(placed.getItems().get(0).getOccurrenceId()).isEqualTo(tomorrowOccurrence.getId());
         assertThatThrownBy(() -> scheduleService.updateOccurrenceOverride(
@@ -294,7 +297,7 @@ OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, nul
 
         MockHttpSession session = buyerSession();
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request(product.getId(), 6)), session);
-OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
+OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, session);
 
         assertThat(placed.getItems().get(0).getQuantity()).isEqualTo(6);
         assertThat(products.findById(product.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(2);

@@ -63,6 +63,7 @@ class OrderServiceValidationTest {
         User seller = approvedSeller();
         Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller);
         kitchen.setId(1L);
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         return kitchen;
     }
 
@@ -333,7 +334,7 @@ class OrderServiceValidationTest {
         when(orderRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(mockOrder));
 
         assertThrows(BuyerProfileIncompleteException.class, () -> {
-            orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, null, null, null, httpSession);
+            orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, "cod", null, null, httpSession);
         });
     }
 
@@ -404,7 +405,7 @@ class OrderServiceValidationTest {
         assertThat(placedDto).isNotNull();
         assertThat(placedDto.getId()).isEqualTo(100L);
         assertThat(placedDto.getOrderNumber()).isNotBlank();
-        assertThat(placedDto.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(placedDto.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
         assertThat(placedDto.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
 
         ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);

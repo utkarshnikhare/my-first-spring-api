@@ -14,6 +14,8 @@ public class OrderDto {
     private String orderNumber;
     private BigDecimal totalAmount;
     private PaymentStatus paymentStatus;
+    private String paymentMethod;
+    private String paymentConfigurationSnapshot;
     private OrderStatus orderStatus;
     /**
      * Seller-recorded delivery completion. Always emitted, and emitted for the
@@ -44,6 +46,10 @@ public class OrderDto {
         private String imageUrl;
         private Double rating;
         private String society;
+        private String upiId;
+        private String acceptedPaymentMode;
+        private String gpayIdentifierType;
+        private String gpayIdentifier;
 
         public KitchenSummary() {}
         public KitchenSummary(Long id, String name, String displayName, String imageUrl, Double rating) {
@@ -67,6 +73,14 @@ public class OrderDto {
         public void setRating(Double rating) { this.rating = rating; }
         public String getSociety() { return society; }
         public void setSociety(String society) { this.society = society; }
+        public String getUpiId() { return upiId; }
+        public void setUpiId(String upiId) { this.upiId = upiId; }
+        public String getAcceptedPaymentMode() { return acceptedPaymentMode; }
+        public void setAcceptedPaymentMode(String acceptedPaymentMode) { this.acceptedPaymentMode = acceptedPaymentMode; }
+        public String getGpayIdentifierType() { return gpayIdentifierType; }
+        public void setGpayIdentifierType(String gpayIdentifierType) { this.gpayIdentifierType = gpayIdentifierType; }
+        public String getGpayIdentifier() { return gpayIdentifier; }
+        public void setGpayIdentifier(String gpayIdentifier) { this.gpayIdentifier = gpayIdentifier; }
     }
 
     public static class BuyerSummary {
@@ -96,6 +110,12 @@ public class OrderDto {
     public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
     public PaymentStatus getPaymentStatus() { return paymentStatus; }
     public void setPaymentStatus(PaymentStatus paymentStatus) { this.paymentStatus = paymentStatus; }
+    public String getPaymentMethod() { return paymentMethod; }
+    public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
+    public String getPaymentConfigurationSnapshot() { return paymentConfigurationSnapshot; }
+    public void setPaymentConfigurationSnapshot(String paymentConfigurationSnapshot) {
+        this.paymentConfigurationSnapshot = paymentConfigurationSnapshot;
+    }
     public OrderStatus getOrderStatus() { return orderStatus; }
     public void setOrderStatus(OrderStatus orderStatus) { this.orderStatus = orderStatus; }
     public String getDeliveryStatus() { return deliveryStatus; }
@@ -128,14 +148,18 @@ public class OrderDto {
         }
         boolean isDelivered = "DELIVERED".equalsIgnoreCase(deliveryStatus) || orderStatus == OrderStatus.DELIVERED;
         if (isDelivered) {
-            return paymentStatus == PaymentStatus.PAID ? "Delivered · Paid" : "Delivered · Payment pending";
+            return paymentStatus == PaymentStatus.PAID ? "Delivered · Paid" : "Delivered · Payment unpaid";
         }
         if (paymentStatus == PaymentStatus.PAID) {
             return "Confirmed · Paid";
+        } else if (paymentStatus == PaymentStatus.AWAITING_SELLER_VERIFICATION) {
+            return "Awaiting seller payment verification";
+        } else if (paymentStatus == PaymentStatus.UNPAID) {
+            return "Unpaid · seller confirmation required";
         } else if (paymentStatus == PaymentStatus.WILL_PAY_LATER) {
             return "Confirmed · Pay later";
         } else {
-            return "Confirmed · Buyer says paid";
+            return "Payment pending seller confirmation";
         }
     }
 
