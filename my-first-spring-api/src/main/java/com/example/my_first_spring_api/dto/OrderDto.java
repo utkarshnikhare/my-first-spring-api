@@ -15,6 +15,7 @@ public class OrderDto {
     private BigDecimal totalAmount;
     private PaymentStatus paymentStatus;
     private String paymentMethod;
+    private String paymentConfigurationSnapshot;
     private OrderStatus orderStatus;
     /**
      * Seller-recorded delivery completion. Always emitted, and emitted for the
@@ -111,6 +112,10 @@ public class OrderDto {
     public void setPaymentStatus(PaymentStatus paymentStatus) { this.paymentStatus = paymentStatus; }
     public String getPaymentMethod() { return paymentMethod; }
     public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
+    public String getPaymentConfigurationSnapshot() { return paymentConfigurationSnapshot; }
+    public void setPaymentConfigurationSnapshot(String paymentConfigurationSnapshot) {
+        this.paymentConfigurationSnapshot = paymentConfigurationSnapshot;
+    }
     public OrderStatus getOrderStatus() { return orderStatus; }
     public void setOrderStatus(OrderStatus orderStatus) { this.orderStatus = orderStatus; }
     public String getDeliveryStatus() { return deliveryStatus; }

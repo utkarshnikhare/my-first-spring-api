@@ -64,8 +64,9 @@ class PostgresNativeMigrationTest {
         // Quick Post metadata and optional images; V17 repairs missing payment_method;
         // V18 adds the nullable Quick Post retry key and uniqueness constraint;
         // V19 adds seller-configurable payment methods; V20 adds seller-verified
-        // payment states without rewriting historical orders.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("20");
+        // payment states without rewriting historical orders; V21 stores an
+        // immutable, non-sensitive payment configuration snapshot per placed order.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("21");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
@@ -88,6 +89,13 @@ class PostgresNativeMigrationTest {
                         + "AND column_name = 'payment_method'",
                 Integer.class);
         assertThat(paymentMethodColumnCount).isEqualTo(1);
+
+        Integer paymentSnapshotColumnCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                        + "WHERE table_schema = 'public' AND table_name = 'orders' "
+                        + "AND column_name = 'payment_configuration_snapshot'",
+                Integer.class);
+        assertThat(paymentSnapshotColumnCount).isEqualTo(1);
 
         String paymentStatusNullable = jdbcTemplate.queryForObject(
                 "SELECT is_nullable FROM information_schema.columns "

@@ -425,6 +425,7 @@ public class OrderService {
             throw new IllegalArgumentException("The selected payment method is not accepted by this kitchen.");
         }
         order.setPaymentMethod(normalizedPaymentMethod);
+        order.setPaymentConfigurationSnapshot(order.getKitchen().getAcceptedPaymentMode().name());
         order.setBuyer(buyer);
         if (buyerDetails != null) updateBuyerDetails(buyer, buyerDetails);
         if (customInstructions != null && !customInstructions.isBlank()) {
@@ -1029,7 +1030,9 @@ public class OrderService {
         OrderDto full = toOrderDto(order);
         SellerOrderSummaryRowDto dto = new SellerOrderSummaryRowDto();
         dto.setId(full.getId()); dto.setOrderNumber(full.getOrderNumber()); dto.setTotalAmount(full.getTotalAmount());
-        dto.setPaymentStatus(full.getPaymentStatus()); dto.setOrderStatus(full.getOrderStatus()); dto.setCreatedAt(full.getCreatedAt());
+        dto.setPaymentStatus(full.getPaymentStatus()); dto.setPaymentMethod(full.getPaymentMethod());
+        dto.setPaymentConfigurationSnapshot(full.getPaymentConfigurationSnapshot());
+        dto.setOrderStatus(full.getOrderStatus()); dto.setCreatedAt(full.getCreatedAt());
         dto.setOrderTime(full.getOrderTime()); dto.setUpdatedAt(full.getUpdatedAt()); dto.setKitchen(full.getKitchen());
         dto.setItems(full.getItems()); dto.setCustomInstructions(full.getCustomInstructions()); dto.setAcknowledgedAt(full.getAcknowledgedAt());
         dto.setAcknowledgedBySellerId(full.getAcknowledgedBySellerId());
@@ -1048,6 +1051,7 @@ public class OrderService {
         dto.setTotalAmount(order.getTotalAmount());
         dto.setPaymentStatus(order.getPaymentStatus());
         dto.setPaymentMethod(order.getPaymentMethod());
+        dto.setPaymentConfigurationSnapshot(order.getPaymentConfigurationSnapshot());
         dto.setOrderStatus(order.getOrderStatus());
         // Delivery is read from the SAME Order row for every audience (seller
         // drill-down, seller order detail and the buyer's Orders page). There is
@@ -1067,12 +1071,16 @@ public class OrderService {
                     kitchen.getId(), kitchen.getName(), kitchen.getDisplayName(),
                     kitchen.getImageUrl(), kitchen.getRating());
             ks.setSociety(kitchen.getSociety());
-            ks.setUpiId(kitchen.getUpiId());
-            ks.setAcceptedPaymentMode(kitchen.getAcceptedPaymentMode() == null
-                    ? null : kitchen.getAcceptedPaymentMode().name());
-            ks.setGpayIdentifierType(kitchen.getGpayIdentifierType() == null
-                    ? null : kitchen.getGpayIdentifierType().name());
-            ks.setGpayIdentifier(kitchen.getGpayIdentifier());
+            if (order.getOrderStatus() == OrderStatus.DRAFT) {
+                ks.setUpiId(kitchen.getUpiId());
+                ks.setAcceptedPaymentMode(kitchen.getAcceptedPaymentMode() == null
+                        ? null : kitchen.getAcceptedPaymentMode().name());
+                ks.setGpayIdentifierType(kitchen.getGpayIdentifierType() == null
+                        ? null : kitchen.getGpayIdentifierType().name());
+                ks.setGpayIdentifier(kitchen.getGpayIdentifier());
+            } else {
+                ks.setAcceptedPaymentMode(order.getPaymentConfigurationSnapshot());
+            }
             dto.setKitchen(ks);
         }
             if (order.getBuyer() != null) {
