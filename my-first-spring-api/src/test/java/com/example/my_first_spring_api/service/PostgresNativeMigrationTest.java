@@ -149,20 +149,22 @@ class PostgresNativeMigrationTest {
 
         jdbcTemplate.execute("CREATE TEMP TABLE payment_status_constraint_probe "
                 + "(LIKE orders INCLUDING CONSTRAINTS)");
+        long probeId = 1L;
         for (String validStatus : new String[]{
                 "PENDING", "UNPAID", "AWAITING_SELLER_VERIFICATION", "PAID", "WILL_PAY_LATER"
         }) {
             jdbcTemplate.update(
                     "INSERT INTO payment_status_constraint_probe "
-                            + "(buyer_id, kitchen_id, order_number, order_status, payment_status) "
-                            + "VALUES (?, ?, ?, ?, ?)",
-                    1L, 1L, "status-probe-" + validStatus, "ORDERED", validStatus);
+                            + "(id, buyer_id, kitchen_id, order_number, order_status, payment_status) "
+                            + "VALUES (?, ?, ?, ?, ?, ?)",
+                    probeId++, 1L, 1L, "status-probe-" + validStatus, "ORDERED", validStatus);
         }
+        long invalidProbeId = probeId;
         assertThatThrownBy(() -> jdbcTemplate.update(
                 "INSERT INTO payment_status_constraint_probe "
-                        + "(buyer_id, kitchen_id, order_number, order_status, payment_status) "
-                        + "VALUES (?, ?, ?, ?, ?)",
-                1L, 1L, "status-probe-invalid", "ORDERED", "NOT_A_PAYMENT_STATUS"))
+                        + "(id, buyer_id, kitchen_id, order_number, order_status, payment_status) "
+                        + "VALUES (?, ?, ?, ?, ?, ?)",
+                invalidProbeId, 1L, 1L, "status-probe-invalid", "ORDERED", "NOT_A_PAYMENT_STATUS"))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 }
