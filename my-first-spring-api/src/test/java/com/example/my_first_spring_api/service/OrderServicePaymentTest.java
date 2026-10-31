@@ -86,4 +86,13 @@ class OrderServicePaymentTest {
         assertThat(result.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
         verify(orderRepository, never()).save(any());
     }
+
+    @Test
+    void buyerCannotChangeSellerVerificationState() {
+        order.setPaymentStatus(PaymentStatus.AWAITING_SELLER_VERIFICATION);
+        assertThatThrownBy(() -> orderService.updatePaymentStatus(4L, PaymentStatus.PENDING, buyer))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("managed by the seller");
+        verify(orderRepository, never()).save(any());
+    }
 }

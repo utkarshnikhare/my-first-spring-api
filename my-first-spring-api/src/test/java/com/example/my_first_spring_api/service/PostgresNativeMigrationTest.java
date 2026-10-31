@@ -61,8 +61,9 @@ class PostgresNativeMigrationTest {
         // to orders; V15 adds scheduled opening timestamps; V16 adds orderable
         // Quick Post metadata and optional images; V17 repairs missing payment_method;
         // V18 adds the nullable Quick Post retry key and uniqueness constraint;
-        // V19 adds seller-configurable payment methods.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("19");
+        // V19 adds seller-configurable payment methods; V20 adds seller-verified
+        // payment states without rewriting historical orders.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("20");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
@@ -121,5 +122,12 @@ class PostgresNativeMigrationTest {
                         + "AND column_name IN ('accepted_payment_mode', 'gpay_identifier_type', 'gpay_identifier')",
                 Integer.class);
         assertThat(sellerPaymentColumnCount).isEqualTo(3);
+
+        String paymentStatusConstraint = jdbcTemplate.queryForObject(
+                "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                        + "WHERE conrelid = 'orders'::regclass AND contype = 'c' "
+                        + "AND pg_get_constraintdef(oid) LIKE '%payment_status%'",
+                String.class);
+        assertThat(paymentStatusConstraint).contains("UNPAID", "AWAITING_SELLER_VERIFICATION");
     }
 }

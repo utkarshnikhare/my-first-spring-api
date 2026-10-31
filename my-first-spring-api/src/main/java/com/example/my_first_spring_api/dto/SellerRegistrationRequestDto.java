@@ -67,6 +67,15 @@ public class SellerRegistrationRequestDto {
     @NotEmpty
     private List<@NotNull Long> serviceSocietyIds;
 
+    @NotBlank
+    @Pattern(regexp = "(?i)GPAY|UPI|GPAY_AND_UPI|CASH_ONLY",
+            message = "Choose one of the supported seller payment options.")
+    private String acceptedPaymentMode;
+
+    private String upiId;
+    private String gpayIdentifierType;
+    private String gpayIdentifier;
+
     public String getSellerName() { return sellerName; }
     public void setSellerName(String sellerName) { this.sellerName = sellerName; }
     public String getMobileNumber() { return mobileNumber; }
@@ -99,4 +108,12 @@ public class SellerRegistrationRequestDto {
     public void setServiceAreaId(Long serviceAreaId) { this.serviceAreaId = serviceAreaId; }
     public List<Long> getServiceSocietyIds() { return serviceSocietyIds; }
     public void setServiceSocietyIds(List<Long> serviceSocietyIds) { this.serviceSocietyIds = serviceSocietyIds; }
+    public String getAcceptedPaymentMode() { return acceptedPaymentMode; }
+    public void setAcceptedPaymentMode(String acceptedPaymentMode) { this.acceptedPaymentMode = acceptedPaymentMode; }
+    public String getUpiId() { return upiId; }
+    public void setUpiId(String upiId) { this.upiId = upiId; }
+    public String getGpayIdentifierType() { return gpayIdentifierType; }
+    public void setGpayIdentifierType(String gpayIdentifierType) { this.gpayIdentifierType = gpayIdentifierType; }
+    public String getGpayIdentifier() { return gpayIdentifier; }
+    public void setGpayIdentifier(String gpayIdentifier) { this.gpayIdentifier = gpayIdentifier; }
 }

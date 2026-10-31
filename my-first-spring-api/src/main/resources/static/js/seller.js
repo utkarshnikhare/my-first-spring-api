@@ -126,6 +126,22 @@ async function sellerAuthHtml() {
         '<option value="KITCHEN">Kitchen / Food — breakfast, lunch, dinner and snacks</option>' +
         '<option value="HOMEMADE_PRODUCTS">Homemade Products — cakes, ghee, achar, papad, sweets and other homemade products</option>' +
         '<option value="BOTH">Both — Kitchen / Food and Homemade Products</option></select></div>' +
+        '<fieldset class="seller-reg-coverage"><legend>Payment methods <span class="req">*</span></legend>' +
+        '<div class="form-group"><label for="sellerRegPaymentMode">What can buyers use?</label>' +
+        '<select class="form-input" id="sellerRegPaymentMode" name="acceptedPaymentMode" required>' +
+        '<option value="">Choose payment methods</option><option value="GPAY">Google Pay only</option>' +
+        '<option value="UPI">UPI ID only</option><option value="GPAY_AND_UPI">Google Pay and UPI ID</option>' +
+        '<option value="CASH_ONLY">Cash only</option></select></div>' +
+        '<div class="form-group" id="sellerRegUpiGroup" hidden><label for="sellerRegUpiId">UPI ID</label>' +
+        '<input class="form-input" id="sellerRegUpiId" name="upiId" autocomplete="off"></div>' +
+        '<div id="sellerRegGpayGroup" hidden><div class="form-group"><label for="sellerRegGpayType">Google Pay identifier type</label>' +
+        '<select class="form-input" id="sellerRegGpayType" name="gpayIdentifierType">' +
+        '<option value="">Choose a type</option><option value="PHONE_NUMBER">GPay-linked mobile number</option>' +
+        '<option value="UPI_ID">GPay UPI ID</option></select></div>' +
+        '<div class="form-group"><label for="sellerRegGpayIdentifier">Google Pay identifier</label>' +
+        '<input class="form-input" id="sellerRegGpayIdentifier" name="gpayIdentifier" autocomplete="off">' +
+        '<p class="muted small">Choose the identifier type explicitly; a phone number is not assumed to be a UPI ID.</p></div></div>' +
+        '</fieldset>' +
         '<div class="form-group"><label for="sellerRegShort">Short description (optional)</label><textarea class="form-input" id="sellerRegShort" name="shortDescription" maxlength="500"></textarea></div>' +
         '<div class="form-group"><label for="sellerRegInstagram">Instagram URL (optional)</label><input class="form-input" id="sellerRegInstagram" name="instagramLink" type="url" maxlength="255"></div>' +
         '<div class="form-group"><label for="sellerRegPrimaryArea">Primary area</label><select class="form-input" id="sellerRegPrimaryArea" name="primaryAreaId" required>' +
@@ -151,6 +167,11 @@ function bindSellerAuth(view) {
     var registrationForm = view.querySelector('#sellerRegistrationForm');
     if (!registrationForm) return;
     registrationForm.addEventListener('submit', sellerRegistrationSubmit);
+    var paymentMode = view.querySelector('#sellerRegPaymentMode');
+    paymentMode.addEventListener('change', function () {
+        syncSellerRegistrationPaymentFields(registrationForm);
+    });
+    syncSellerRegistrationPaymentFields(registrationForm);
     var primaryArea = view.querySelector('#sellerRegPrimaryArea');
     primaryArea.addEventListener('change', function () {
         var society = view.querySelector('#sellerRegPrimarySociety');
@@ -185,6 +206,25 @@ function bindSellerAuth(view) {
         S.authSlugTouched = true;
         if (slugHint) slugHint.textContent = 'sociomart-demo.onrender.com/kitchen/' + slug.value.trim();
     });
+}
+
+function syncSellerRegistrationPaymentFields(form) {
+    var mode = form.elements.acceptedPaymentMode.value;
+    var showUpi = mode === 'UPI' || mode === 'GPAY_AND_UPI';
+    var showGpay = mode === 'GPAY' || mode === 'GPAY_AND_UPI';
+    var upiGroup = form.querySelector('#sellerRegUpiGroup');
+    var gpayGroup = form.querySelector('#sellerRegGpayGroup');
+    var upiId = form.elements.upiId;
+    var gpayType = form.elements.gpayIdentifierType;
+    var gpayIdentifier = form.elements.gpayIdentifier;
+    upiGroup.hidden = !showUpi;
+    gpayGroup.hidden = !showGpay;
+    upiId.required = showUpi;
+    upiId.disabled = !showUpi;
+    gpayType.required = showGpay;
+    gpayType.disabled = !showGpay;
+    gpayIdentifier.required = showGpay;
+    gpayIdentifier.disabled = !showGpay;
 }
 
 async function sellerLoginSubmit(event) {
@@ -289,6 +329,10 @@ async function sellerRegistrationSubmit(event) {
             primaryAreaId: Number(form.elements.primaryAreaId.value),
             primarySocietyId: Number(form.elements.primarySocietyId.value),
             building: form.elements.building.value.trim(),
+            acceptedPaymentMode: form.elements.acceptedPaymentMode.value,
+            upiId: form.elements.upiId.disabled ? null : form.elements.upiId.value.trim(),
+            gpayIdentifierType: form.elements.gpayIdentifierType.disabled ? null : form.elements.gpayIdentifierType.value,
+            gpayIdentifier: form.elements.gpayIdentifier.disabled ? null : form.elements.gpayIdentifier.value.trim(),
             serviceAreaId: Number(form.elements.serviceAreaId.value),
             serviceSocietyIds: serviceIds
         } });
@@ -2690,7 +2734,7 @@ async function sellerKitchenView() {
     var paymentMode = (kitchen && kitchen.acceptedPaymentMode) || '';
     h += '<div class="form-group"><label class="form-label" for="acceptedPaymentMode">Payment options buyers can use</label>' +
         '<select class="form-input" id="acceptedPaymentMode" name="acceptedPaymentMode">' +
-        '<option value=""' + (paymentMode === '' ? ' selected' : '') + '>Keep existing demo payment options</option>' +
+        '<option value=""' + (paymentMode === '' ? ' selected' : '') + '>Not set up — buyers cannot place orders</option>' +
         '<option value="GPAY"' + (paymentMode === 'GPAY' ? ' selected' : '') + '>Google Pay only</option>' +
         '<option value="UPI"' + (paymentMode === 'UPI' ? ' selected' : '') + '>UPI only</option>' +
         '<option value="GPAY_AND_UPI"' + (paymentMode === 'GPAY_AND_UPI' ? ' selected' : '') + '>Google Pay and UPI</option>' +
@@ -3257,8 +3301,10 @@ async function sellerOrderDetailByOrderView(orderId) {
         if (order.orderStatus && ['ORDERED', 'CONFIRMED', 'READY'].indexOf(order.orderStatus) >= 0) {
             h += '<button class="btn btn-secondary btn-block mt-2 oic-act" type="button" data-action="cancel-order" data-order-id="' + esc(order.id) + '">Cancel Order</button>';
         }
-        if ((paymentStatus === 'PENDING' || paymentStatus === 'WILL_PAY_LATER') && order.orderStatus !== 'CANCELLED') {
-            h += '<button class="btn btn-primary btn-block mt-2 oic-act" type="button" data-action="mark-paid" data-oid="' + esc(order.id) + '">Mark as Paid</button>';
+        if ((paymentStatus === 'PENDING' || paymentStatus === 'UNPAID'
+                || paymentStatus === 'AWAITING_SELLER_VERIFICATION' || paymentStatus === 'WILL_PAY_LATER')
+                && order.orderStatus !== 'CANCELLED') {
+            h += '<button class="btn btn-primary btn-block mt-2 oic-act" type="button" data-action="mark-paid" data-oid="' + esc(order.id) + '">Verify receipt and mark paid</button>';
         }
         if (order.orderStatus !== 'CANCELLED') { if (isDelivered) { h += '<button class="btn btn-outline btn-block mt-2 oic-act" type="button" data-action="toggle-delivery-order" data-oid="' + esc(order.id) + '" data-status="NOT_DELIVERED">↩️ Mark as Not Delivered</button>'; } else { h += '<button class="btn btn-primary btn-block mt-2 oic-act" type="button" data-action="toggle-delivery-order" data-oid="' + esc(order.id) + '" data-status="DELIVERED">🚚 Mark as Delivered</button>'; } }
     } catch (e) {

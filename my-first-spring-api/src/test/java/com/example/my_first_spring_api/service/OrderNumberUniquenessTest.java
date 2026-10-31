@@ -70,7 +70,9 @@ class OrderNumberUniquenessTest {
             buyer.setFlatHouseNumber("101");
             users.save(buyer);
 
-            Kitchen kitchen = kitchens.save(new Kitchen("k" + s, "Kitchen " + s, "", null, seller));
+            Kitchen kitchen = new Kitchen("k" + s, "Kitchen " + s, "", null, seller);
+            kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
+            kitchen = kitchens.save(kitchen);
         // The kitchen must be inside the buyer's service area ("Test Society"), otherwise
         // the order is refused as out-of-area before the order-number format is reached.
         kitchen.setSociety("Test Society");
@@ -94,7 +96,7 @@ class OrderNumberUniquenessTest {
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("BUYER_USER", buyerId);
         orders.createOrUpdateDraftOrder(kitchenId, List.of(item()), session);
-        return orders.placeOrder(PaymentStatus.WILL_PAY_LATER, null, null, null, session).getOrderNumber();
+        return orders.placeOrder(PaymentStatus.WILL_PAY_LATER, "cod", null, null, session).getOrderNumber();
     }
 
     private OrderItemRequest item() {

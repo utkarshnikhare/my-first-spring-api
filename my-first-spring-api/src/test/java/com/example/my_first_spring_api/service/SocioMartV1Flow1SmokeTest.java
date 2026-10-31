@@ -98,6 +98,7 @@ public class SocioMartV1Flow1SmokeTest {
                 Map.entry("kitchenSlug", s1Slug),
                 Map.entry("speciality", "North Indian Home Cooking"),
                 Map.entry("sellerCategory", "KITCHEN"),
+                Map.entry("acceptedPaymentMode", "CASH_ONLY"),
                 Map.entry("shortDescription", "Authentic home cooked meals"),
                 Map.entry("building", "A Wing"),
                 Map.entry("primaryAreaId", area.getId()),
@@ -124,6 +125,7 @@ public class SocioMartV1Flow1SmokeTest {
                 Map.entry("kitchenSlug", s2Slug),
                 Map.entry("speciality", "Traditional Organic Pickles and Spices"),
                 Map.entry("sellerCategory", "HOMEMADE_PRODUCTS"),
+                Map.entry("acceptedPaymentMode", "CASH_ONLY"),
                 Map.entry("shortDescription", "Sun-dried pickles and handcrafted spice blends"),
                 Map.entry("building", "B Wing"),
                 Map.entry("primaryAreaId", area.getId()),
@@ -150,6 +152,7 @@ public class SocioMartV1Flow1SmokeTest {
                 Map.entry("kitchenSlug", s3Slug),
                 Map.entry("speciality", "Baking and Home Made Delicacies"),
                 Map.entry("sellerCategory", "BOTH"),
+                Map.entry("acceptedPaymentMode", "CASH_ONLY"),
                 Map.entry("shortDescription", "Fresh home bakes and seasonal sweets"),
                 Map.entry("building", "C Wing"),
                 Map.entry("primaryAreaId", area.getId()),
@@ -405,10 +408,10 @@ public class SocioMartV1Flow1SmokeTest {
         bd1.setBuilding("Tower A");
         bd1.setFlatHouseNumber("101");
 
-        OrderDto order1 = orderService.placeOrder(PaymentStatus.PENDING, null, bd1, "Please pack separately", buyer1Session);
+        OrderDto order1 = orderService.placeOrder(PaymentStatus.PENDING, "cod", bd1, "Please pack separately", buyer1Session);
         assertThat(order1.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
-        assertThat(order1.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
-        assertThat(order1.getDisplayStatus()).isEqualTo("Confirmed · Buyer says paid");
+        assertThat(order1.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
+        assertThat(order1.getDisplayStatus()).isEqualTo("Unpaid · seller confirmation required");
         assertThat(order1.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(300));
 
         // Verify stock decremented: 10 - 2 = 8
@@ -444,10 +447,10 @@ public class SocioMartV1Flow1SmokeTest {
         bd2.setBuilding("Tower B");
         bd2.setFlatHouseNumber("202");
 
-        OrderDto order2 = orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, null, bd2, "Less spicy", buyer2Session);
+        OrderDto order2 = orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, "cod", bd2, "Less spicy", buyer2Session);
         assertThat(order2.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
-        assertThat(order2.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
-        assertThat(order2.getDisplayStatus()).isEqualTo("Confirmed · Buyer says paid");
+        assertThat(order2.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
+        assertThat(order2.getDisplayStatus()).isEqualTo("Unpaid · seller confirmation required");
         assertThat(order2.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(360));
 
         // Buyer 3: Amit (orders 1x Fresh Amla Murabba from Seller 2, chooses "I've paid")
@@ -479,10 +482,10 @@ public class SocioMartV1Flow1SmokeTest {
         bd3.setBuilding("Tower C");
         bd3.setFlatHouseNumber("303");
 
-        OrderDto order3 = orderService.placeOrder(PaymentStatus.PENDING, null, bd3, "Handle with care glass jar", buyer3Session);
+        OrderDto order3 = orderService.placeOrder(PaymentStatus.PENDING, "cod", bd3, "Handle with care glass jar", buyer3Session);
         assertThat(order3.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
-        assertThat(order3.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
-        assertThat(order3.getDisplayStatus()).isEqualTo("Confirmed · Buyer says paid");
+        assertThat(order3.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
+        assertThat(order3.getDisplayStatus()).isEqualTo("Unpaid · seller confirmation required");
 
         // Verify stock decremented: 5 - 1 = 4
         Product p2Db = productRepository.findById(p2_murabba.getId()).orElseThrow();
@@ -521,11 +524,11 @@ public class SocioMartV1Flow1SmokeTest {
                 .hasMessageContaining("already delivered");
 
         // Seller 1 delivers Order 2 while still unpaid:
-        // Order status becomes DELIVERED; payment status remains PENDING.
+        // Order status becomes DELIVERED; payment status remains UNPAID.
         OrderDto o2Delivered = sellerService.updateOrderStatus(order2.getId(), OrderStatus.DELIVERED, seller1);
         assertThat(o2Delivered.getOrderStatus()).isEqualTo(OrderStatus.DELIVERED);
-        assertThat(o2Delivered.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
-        assertThat(o2Delivered.getDisplayStatus()).isEqualTo("Delivered · Payment pending");
+        assertThat(o2Delivered.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
+        assertThat(o2Delivered.getDisplayStatus()).isEqualTo("Delivered · Payment unpaid");
 
         // Seller 1 later marks Order 2's payment received:
         // Order status remains DELIVERED; payment status becomes PAID.

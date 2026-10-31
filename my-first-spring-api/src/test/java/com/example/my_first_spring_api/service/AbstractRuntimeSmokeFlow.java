@@ -101,6 +101,7 @@ abstract class AbstractRuntimeSmokeFlow {
                 Map.entry("kitchenSlug", slug),
                 Map.entry("speciality", "Breakfast"),
                 Map.entry("sellerCategory", "BOTH"),
+                Map.entry("acceptedPaymentMode", "CASH_ONLY"),
                 Map.entry("shortDescription", "Postgres smoke test"),
                 Map.entry("primaryAreaId", area.getId()),
                 Map.entry("primarySocietyId", society.getId()),
@@ -168,7 +169,7 @@ abstract class AbstractRuntimeSmokeFlow {
         item.setProductId(product.getId());
         item.setQuantity(2);
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(item), buyerSession);
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, buyerSession);
+        OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, buyerSession);
         assertThat(placed.getItems()).hasSize(1);
         assertThat(placed.getItems().get(0).getOccurrenceId()).isEqualTo(occurrence.getId());
         assertThat(occurrences.findById(occurrence.getId())).isPresent();

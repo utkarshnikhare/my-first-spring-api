@@ -410,19 +410,21 @@ public class OrderService {
         if (order.getItems() == null || order.getItems().isEmpty()) {
             throw new IllegalArgumentException("Your order is empty. Please add items before placing it.");
         }
-        // Validate payment method against supported types
-        if (paymentMethod != null && !paymentMethod.isBlank()) {
-            String normalized = paymentMethod.trim().toLowerCase(java.util.Locale.ROOT);
-            if (!java.util.Arrays.asList("upi", "gpay", "card", "cod").contains(normalized)) {
-                throw new IllegalArgumentException("Unsupported payment method: " + paymentMethod);
-            }
-            if (!SellerPaymentConfiguration.allows(order.getKitchen().getAcceptedPaymentMode(), normalized)) {
-                throw new IllegalArgumentException("The selected payment method is not accepted by this kitchen.");
-            }
-        } else if (order.getKitchen().getAcceptedPaymentMode() != null) {
+        if (paymentMethod == null || paymentMethod.isBlank()) {
             throw new IllegalArgumentException("Choose a payment method accepted by this kitchen.");
         }
-        order.setPaymentMethod(paymentMethod == null ? null : paymentMethod.trim().toLowerCase(java.util.Locale.ROOT));
+        String normalizedPaymentMethod = paymentMethod.trim().toLowerCase(java.util.Locale.ROOT);
+        if (!java.util.Arrays.asList("upi", "gpay", "cod").contains(normalizedPaymentMethod)) {
+            throw new IllegalArgumentException("Unsupported payment method: " + paymentMethod);
+        }
+        if (order.getKitchen().getAcceptedPaymentMode() == null) {
+            throw new IllegalArgumentException(
+                    "This kitchen has not configured its payment methods yet. Please try again later.");
+        }
+        if (!SellerPaymentConfiguration.allows(order.getKitchen().getAcceptedPaymentMode(), normalizedPaymentMethod)) {
+            throw new IllegalArgumentException("The selected payment method is not accepted by this kitchen.");
+        }
+        order.setPaymentMethod(normalizedPaymentMethod);
         order.setBuyer(buyer);
         if (buyerDetails != null) updateBuyerDetails(buyer, buyerDetails);
         if (customInstructions != null && !customInstructions.isBlank()) {
@@ -502,16 +504,11 @@ public class OrderService {
         }
         // Notify seller if any tracked offering newly sold out as a result of this order.
         notifyNewlySoldOut(order);
-        boolean isHomemade = KitchenVisibility.isHomemadeStore(order.getKitchen());
-        PaymentStatus effectivePaymentStatus = paymentStatus == null || paymentStatus == PaymentStatus.WILL_PAY_LATER
-                ? PaymentStatus.PENDING : paymentStatus;
-        if (effectivePaymentStatus == PaymentStatus.PAID && !isHomemade) {
-            order.setPaymentStatus(PaymentStatus.PAID);
-            order.setOrderStatus(OrderStatus.CONFIRMED);
-        } else {
-            order.setPaymentStatus(effectivePaymentStatus);
-            order.setOrderStatus(OrderStatus.ORDERED);
-        }
+        // A buyer acknowledgement is never proof of settlement. The seller's
+        // authenticated verification endpoint is the only transition to PAID.
+        order.setPaymentStatus("cod".equals(normalizedPaymentMethod)
+                ? PaymentStatus.UNPAID : PaymentStatus.AWAITING_SELLER_VERIFICATION);
+        order.setOrderStatus(OrderStatus.ORDERED);
         order.recalculateTotal();
         // Server-side authoritative order timestamp: set exactly once when the draft
         // transitions to a finalized order state. This represents the real order creation
@@ -640,6 +637,11 @@ public class OrderService {
         if (order.getBuyer() == null || !order.getBuyer().getId().equals(buyer.getId())) throw new OrderNotFoundException(orderId);
         if (order.getOrderStatus() == OrderStatus.CANCELLED) {
             throw new IllegalArgumentException("A cancelled order cannot change payment status.");
+        }
+        if ((order.getPaymentStatus() == PaymentStatus.UNPAID
+                || order.getPaymentStatus() == PaymentStatus.AWAITING_SELLER_VERIFICATION)
+                && requestedStatus != order.getPaymentStatus()) {
+            throw new IllegalArgumentException("Payment status is managed by the seller.");
         }
         // Buyers cannot mark an order paid; the seller-only endpoint owns that transition.
         if (requestedStatus == PaymentStatus.PAID && order.getPaymentStatus() != PaymentStatus.PAID) {

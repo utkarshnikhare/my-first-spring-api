@@ -8,6 +8,7 @@ import com.example.my_first_spring_api.dto.ProductCreateDto;
 import com.example.my_first_spring_api.dto.ProductDto;
 import com.example.my_first_spring_api.model.Area;
 import com.example.my_first_spring_api.model.PaymentStatus;
+import com.example.my_first_spring_api.model.SellerPaymentMode;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Order;
 import com.example.my_first_spring_api.model.OrderItem;
@@ -102,6 +103,7 @@ class DemoMarketplaceE2ETest {
         dto.setAreaId(area.getId());
         dto.setSocietyIds(List.of(society.getId()));
         dto.setAvailableToday(Boolean.TRUE);
+        dto.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY.name());
         return sellerService.createKitchen(dto, seller);
     }
 
@@ -124,7 +126,7 @@ class DemoMarketplaceE2ETest {
     /** Draft then place, exactly as the buyer app does. */
     private OrderDto order(MockHttpSession session, Long kitchenId, List<OrderItemRequest> items) {
         orderService.createOrUpdateDraftOrder(kitchenId, items, session);
-        return orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
+        return orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, session);
     }
 
     private static OrderItemRequest item(Long productId, int qty) {
@@ -368,7 +370,7 @@ class DemoMarketplaceE2ETest {
         if (!start.await(10, TimeUnit.SECONDS)) {
             throw new IllegalStateException("Timed out waiting for concurrent checkout start.");
         }
-        return orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
+        return orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, session);
     }
 
     @Test

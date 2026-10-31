@@ -80,6 +80,7 @@ public class BoundedLoadSimulationTest {
 
         Kitchen kitchen = new Kitchen("k-load-" + suffix, "Load Kitchen " + suffix, "Speciality", null, seller);
         kitchen.setSociety(sharedSociety.getName());
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         kitchen.setAvailableToday(true);
         kitchen.getServedSocieties().add(sharedSociety);
         kitchen = kitchens.saveAndFlush(kitchen);
@@ -284,7 +285,8 @@ public class BoundedLoadSimulationTest {
                                 "items", List.of(Map.of("productId", sharedProductId, "quantity", 1)),
                                 "buyerDetails", bd,
                                 "customInstructions", "Load iteration " + it,
-                                "paymentStatus", "PENDING"
+                                "paymentStatus", "PENDING",
+                                "paymentMethod", "cod"
                         );
                         HttpRequest placeReq = HttpRequest.newBuilder()
                                 .uri(URI.create(baseUrl + "/api/buyer/orders/place"))

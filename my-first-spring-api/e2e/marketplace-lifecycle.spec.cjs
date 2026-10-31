@@ -109,7 +109,7 @@ await logout(page);
   await page.locator('[data-action="go-checkout"]').click();
   await expect(page.getByRole('heading', { name: 'Confirm Order' })).toBeVisible();
   await expect(page.locator('body')).toContainText('Less spicy, please call on arrival.');
-  await page.locator('[data-action="select-pay-status"][data-status="PENDING"]').click();
+  await expect(page.getByRole('radio', { name: /Cash on Delivery/ })).toBeChecked();
 
   let placeRequests = 0;
   page.on('request', request => {
@@ -137,6 +137,7 @@ await logout(page);
   const placedOrder = orders.body.active.find(order =>
     order.items.some(item => item.productName === offeringName));
   expect(placedOrder, 'the order should persist and belong to the buyer').toBeTruthy();
+  expect(placedOrder).toMatchObject({ paymentMethod: 'cod', paymentStatus: 'UNPAID' });
   expect(placedOrder.customInstructions).toBe('Less spicy, please call on arrival.');
 
   await logout(page);

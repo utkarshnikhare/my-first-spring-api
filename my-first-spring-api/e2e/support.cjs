@@ -169,6 +169,7 @@ async function registerSeller(page) {
   await page.locator('#sellerRegSlug').fill(seller.slug);
   await page.locator('#sellerRegSpeciality').fill('E2E home-cooked meals');
   await page.locator('#sellerRegCategory').selectOption('KITCHEN');
+  await page.locator('#sellerRegPaymentMode').selectOption('CASH_ONLY');
   await page.locator('#sellerRegPrimaryArea').selectOption({ index: 0 });
   await page.locator('#sellerRegPrimarySociety').selectOption({ index: 0 });
   await page.locator('#sellerRegServiceArea').selectOption({ index: 0 });

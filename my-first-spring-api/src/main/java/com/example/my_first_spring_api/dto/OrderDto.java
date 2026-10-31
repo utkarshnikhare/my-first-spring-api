@@ -143,14 +143,18 @@ public class OrderDto {
         }
         boolean isDelivered = "DELIVERED".equalsIgnoreCase(deliveryStatus) || orderStatus == OrderStatus.DELIVERED;
         if (isDelivered) {
-            return paymentStatus == PaymentStatus.PAID ? "Delivered · Paid" : "Delivered · Payment pending";
+            return paymentStatus == PaymentStatus.PAID ? "Delivered · Paid" : "Delivered · Payment unpaid";
         }
         if (paymentStatus == PaymentStatus.PAID) {
             return "Confirmed · Paid";
+        } else if (paymentStatus == PaymentStatus.AWAITING_SELLER_VERIFICATION) {
+            return "Awaiting seller payment verification";
+        } else if (paymentStatus == PaymentStatus.UNPAID) {
+            return "Unpaid · seller confirmation required";
         } else if (paymentStatus == PaymentStatus.WILL_PAY_LATER) {
             return "Confirmed · Pay later";
         } else {
-            return "Confirmed · Buyer says paid";
+            return "Payment pending seller confirmation";
         }
     }
 

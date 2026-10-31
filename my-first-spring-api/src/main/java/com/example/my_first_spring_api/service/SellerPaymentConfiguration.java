@@ -57,7 +57,7 @@ final class SellerPaymentConfiguration {
     }
 
     static boolean allows(SellerPaymentMode mode, String paymentMethod) {
-        if (mode == null) return true;
+        if (mode == null) return false;
         if (paymentMethod == null || paymentMethod.isBlank()) return false;
         return switch (mode) {
             case GPAY -> "gpay".equalsIgnoreCase(paymentMethod);

@@ -214,6 +214,7 @@ class SecurityHardeningHttpTest {
                                 Map.entry("kitchenSlug", "hardening-kitchen-" + suffix),
                                 Map.entry("speciality", "Maharashtrian breakfast"),
                                 Map.entry("sellerCategory", "BOTH"),
+                                Map.entry("acceptedPaymentMode", "CASH_ONLY"),
                                 Map.entry("shortDescription", "Phase D hardening test storefront"),
                                 Map.entry("instagramLink", "https://instagram.com/hardening-test"),
                                 Map.entry("primaryAreaId", areaId),

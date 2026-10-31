@@ -73,6 +73,7 @@ class BuyerOrderBlockerRegressionTest {
 
         kitchen = new Kitchen("k" + suffix, "Kitchen " + suffix, "", null, seller);
         kitchen.setSociety(SOCIETY);
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         kitchen = kitchens.saveAndFlush(kitchen);
 
         buyer = new User("Buyer" + suffix, "93" + suffix + "01", "A-402", UserRole.BUYER);
@@ -134,14 +135,20 @@ class BuyerOrderBlockerRegressionTest {
         MockHttpSession session = buyerSession();
         assertThat(draft(session).getId()).isNotNull();
 
-        var placed = orderService.placeOrder(PaymentStatus.PAID, null, null, "note", session);
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.GPAY);
+        kitchen.setGpayIdentifierType(GpayIdentifierType.UPI_ID);
+        kitchen.setGpayIdentifier("seller@examplebank");
+        kitchens.saveAndFlush(kitchen);
+        var placed = orderService.placeOrder(PaymentStatus.PAID, "gpay", null, "note", session);
 
         assertThat(placed.getId()).isNotNull();
         assertThat(placed.getOrderNumber()).isNotBlank();
         assertThat(placed.getKitchen().getId()).isEqualTo(kitchen.getId());
         assertThat(placed.getBuyer().getSociety()).isEqualTo(SOCIETY);
-        assertThat(placed.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(placed.getPaymentStatus()).isEqualTo(PaymentStatus.AWAITING_SELLER_VERIFICATION);
         assertThat(placed.getTotalAmount()).isEqualByComparingTo("40.00");
+        assertThat(orderService.markOrderAsPaid(placed.getId(), seller).getPaymentStatus())
+                .isEqualTo(PaymentStatus.PAID);
 
         // Inventory changes exactly once.
         assertThat(products.findById(product.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(9);
@@ -157,12 +164,12 @@ class BuyerOrderBlockerRegressionTest {
         draft(session);
 
         long ordersBefore = orders.count();
-orderService.placeOrder(PaymentStatus.PAID, null, null, null, session);
+orderService.placeOrder(PaymentStatus.PAID, "cod", null, null, session);
         // The draft row is reused as the placed order - no extra row.
         assertThat(orders.count()).isEqualTo(ordersBefore);
 
         // Second click on the same (already consumed) draft session.
-assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, null, session))
+        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, "cod", null, null, session))
                 .isInstanceOf(IllegalArgumentException.class);
 
         assertThat(orders.count()).isEqualTo(ordersBefore);
@@ -185,7 +192,7 @@ assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null,
         futureItem.setQuantity(1);
         futureItem.setScheduledDate(tomorrow.toString());
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(futureItem), futureSession);
-        var futureOrder = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, futureSession);
+        var futureOrder = orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, futureSession);
 
         assertThat(orders.findByIdWithItems(futureOrder.getId()).orElseThrow()
                 .getItems().get(0).getScheduledDate()).isEqualTo(tomorrow);
@@ -199,7 +206,7 @@ assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null,
         todayItem.setProductId(product.getId());
         todayItem.setQuantity(1);
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(todayItem), todaySession);
-        var sameDayOrder = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, todaySession);
+        var sameDayOrder = orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, todaySession);
 
         assertThat(orders.findByIdWithItems(sameDayOrder.getId()).orElseThrow()
                 .getItems().get(0).getScheduledDate()).isNull();
@@ -249,7 +256,7 @@ assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null,
         product.setOrdersOpenFrom(LocalDateTime.now(AppTimeZone.ZONE).minusSeconds(1));
         products.saveAndFlush(product);
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request), session);
-        var placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, null, session);
+        var placed = orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, session);
 
         assertThat(orders.findByIdWithItems(placed.getId()).orElseThrow()
                 .getItems().get(0).getScheduledDate()).isEqualTo(deliveryDate);
@@ -284,7 +291,7 @@ assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null,
         buyer.setSociety("Green Valley");
         buyer = users.saveAndFlush(buyer);
 
-assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, null, session))
+assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, "cod", null, null, session))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("does not serve your selected area");
 
@@ -304,7 +311,7 @@ assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null,
         MockHttpSession session = buyerSession();
         draft(session);
 
-assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, null, null, null, session))
+assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PAID, "cod", null, null, session))
                 .isInstanceOf(BuyerProfileIncompleteException.class);
 
         assertThat(products.findById(product.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(10);

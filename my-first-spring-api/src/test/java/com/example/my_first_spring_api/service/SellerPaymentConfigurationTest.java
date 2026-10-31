@@ -18,7 +18,8 @@ class SellerPaymentConfigurationTest {
         assertThat(SellerPaymentConfiguration.allows(SellerPaymentMode.GPAY_AND_UPI, "upi")).isTrue();
         assertThat(SellerPaymentConfiguration.allows(SellerPaymentMode.CASH_ONLY, "cod")).isTrue();
         assertThat(SellerPaymentConfiguration.allows(SellerPaymentMode.CASH_ONLY, "card")).isFalse();
-        assertThat(SellerPaymentConfiguration.allows(null, "card")).isTrue();
+        assertThat(SellerPaymentConfiguration.allows(null, "upi")).isFalse();
+        assertThat(SellerPaymentConfiguration.allows(null, "cod")).isFalse();
     }
 
     @Test

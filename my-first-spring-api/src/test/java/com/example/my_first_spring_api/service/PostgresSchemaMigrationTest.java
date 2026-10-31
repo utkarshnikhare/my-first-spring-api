@@ -51,8 +51,9 @@ class PostgresSchemaMigrationTest {
         // V14 adds payment_method; V15 adds scheduled opening timestamps;
         // V16 adds Quick Post metadata; V17 repairs missing payment_method;
         // V18 adds a nullable Quick Post retry key and its uniqueness constraint;
-        // V19 adds seller-configurable payment methods.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("19");
+        // V19 adds seller-configurable payment methods; V20 adds seller-verified
+        // payment states without rewriting historical orders.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("20");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
@@ -121,6 +122,23 @@ class PostgresSchemaMigrationTest {
     }
 
     @Test
+    void v20AllowsSellerVerifiedPaymentStatesOnMigratedSchema() {
+        jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY FALSE");
+        try {
+            jdbcTemplate.update(
+                    "INSERT INTO orders (order_number, order_status, payment_status, buyer_id, kitchen_id) "
+                            + "VALUES (?, ?, ?, ?, ?)",
+                    "migration-unpaid", "ORDERED", "UNPAID", 1L, 1L);
+            jdbcTemplate.update(
+                    "INSERT INTO orders (order_number, order_status, payment_status, buyer_id, kitchen_id) "
+                            + "VALUES (?, ?, ?, ?, ?)",
+                    "migration-awaiting-verification", "ORDERED", "AWAITING_SELLER_VERIFICATION", 1L, 1L);
+        } finally {
+            jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY TRUE");
+        }
+    }
+
+    @Test
     void v17RepairsPaymentMethodWhenV14IsAlreadyRecorded() {
         String databaseName = "payment_method_repair_" + UUID.randomUUID().toString().replace("-", "");
         JdbcDataSource isolatedDataSource = new JdbcDataSource();
@@ -150,7 +168,7 @@ class PostgresSchemaMigrationTest {
                 Integer.class);
         Assertions.assertNotNull(paymentMethodColumnCount);
         assertThat(paymentMethodColumnCount).isEqualTo(1);
-        assertThat(repair.info().current().getVersion().getVersion()).isEqualTo("19");
+        assertThat(repair.info().current().getVersion().getVersion()).isEqualTo("20");
     }
 
 }
