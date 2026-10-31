@@ -1,8 +1,8 @@
-﻿# SocioMart
+# SocioMart
 
 **A society-level marketplace connecting buyers with home-kitchen and homemade sellers. The demo includes Buyer, Seller and Admin apps, recurring offerings, date-specific occurrence overrides, seller-recorded delivery, and an operations console.**
 
-> **Project status (2026-10-30):** The production service is **not verified**. Render reports live commit `76c11a4`; the latest manual deployment attempt (`dd0807e`) failed during Hibernate schema validation because `orders.payment_method` was missing. The audit branch adds a forward-only V17 repair migration, but no production migration or deployment has been run. Render auto-deploy is Off; `/api/health` and `/api/version` requests timed out during this check. See the [production release runbook](./docs/PRODUCTION-RELEASE-RUNBOOK.md) for the release gate and exact evidence.
+> **Project status (2026-10-31):** The production service is **LIVE and VERIFIED**. Render reports live commit `bbf0ece` (matching merged PR #104 on GitHub `main`). Hibernate schema validation and Flyway migrations V1–V21 succeeded against production PostgreSQL on startup. The historical `orders.payment_method` missing column error has been completely resolved by V17. Public `/api/health` (`UP`, database `UP`) and `/api/version` (`bbf0eced5f3e7fb2328308360345433cf7cb82e4`) are verified live. Render `autoDeploy: false` remains enforced (manual deployments only). Existing production kitchens and offerings remain preserved and intact. See the [production release runbook](./docs/PRODUCTION-RELEASE-RUNBOOK.md) for the release gate and exact evidence.
 
 
 ## 🔗 Quick Links
