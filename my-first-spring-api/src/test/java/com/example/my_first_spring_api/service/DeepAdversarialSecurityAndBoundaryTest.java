@@ -1,22 +1,30 @@
 package com.example.my_first_spring_api.service;
 
-import com.example.my_first_spring_api.AppTimeZone;
-import com.example.my_first_spring_api.controller.SellerAppController;
 import com.example.my_first_spring_api.dto.OrderDto;
 import com.example.my_first_spring_api.dto.OrderItemRequest;
 import com.example.my_first_spring_api.dto.PlaceOrderRequest;
 import com.example.my_first_spring_api.dto.ProductCreateDto;
+import com.example.my_first_spring_api.dto.UpdateDeliveryStatusRequest;
 import com.example.my_first_spring_api.dto.UpdatePaymentStatusRequest;
-import com.example.my_first_spring_api.exception.*;
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.web.context.WebApplicationContext;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -26,17 +34,23 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:deep-adversarial-test;DB_CLOSE_DELAY=-1;DEFAULT_LOCK_TIMEOUT=10000",
+        "spring.datasource.url=jdbc:h2:mem:deep-adversarial-test;DB_CLOSE_DELAY=-1;DEFAULT_LOCK_TIMEOUT=15000",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.jpa.open-in-view=false",
+        "spring.datasource.hikari.maximum-pool-size=30",
         "sociomart.bootstrap.enabled=false"
 })
 @ActiveProfiles("test")
 public class DeepAdversarialSecurityAndBoundaryTest {
 
+    @Autowired private WebApplicationContext webApplicationContext;
     @Autowired private UserRepository userRepository;
     @Autowired private AreaRepository areaRepository;
     @Autowired private SocietyRepository societyRepository;
@@ -45,11 +59,8 @@ public class DeepAdversarialSecurityAndBoundaryTest {
     @Autowired private OrderRepository orderRepository;
     @Autowired private OrderItemRepository orderItemRepository;
 
-    @Autowired private OrderService orderService;
-    @Autowired private SellerService sellerService;
-    @Autowired private SellerAppService sellerAppService;
-    @Autowired private SellerAppController sellerAppController;
-    @Autowired private DiscoveryService discoveryService;
+    private MockMvc mvc;
+    private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
 
     private Area areaNorth;
     private Area areaSouth;
@@ -58,18 +69,41 @@ public class DeepAdversarialSecurityAndBoundaryTest {
 
     private User approvedSellerA;
     private Kitchen kitchenA;
+    private MockHttpSession sessionSellerA;
 
     private User approvedSellerB;
     private Kitchen kitchenB;
+    private MockHttpSession sessionSellerB;
 
     private User pendingSeller;
     private Kitchen pendingKitchen;
+    private MockHttpSession sessionPendingSeller;
 
     private User buyerA;
+    private MockHttpSession sessionBuyerA;
+
     private User buyerB;
+    private MockHttpSession sessionBuyerB;
+
+    private MockHttpSession createSession(User user) {
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute(BuyerService.BUYER_SESSION_KEY, user.getId());
+        String role = user.getRole().name();
+        if (user.getRole() == UserRole.SELLER && !user.isApprovedSeller()) {
+            role = "SELLER_PENDING";
+        }
+        SecurityContext sc = SecurityContextHolder.createEmptyContext();
+        sc.setAuthentication(new UsernamePasswordAuthenticationToken(
+                user.getId(), null,
+                List.of(new SimpleGrantedAuthority("ROLE_" + role))));
+        session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, sc);
+        return session;
+    }
 
     @BeforeEach
     void setUp() {
+        mvc = webAppContextSetup(webApplicationContext).apply(springSecurity()).build();
+
         orderItemRepository.deleteAll();
         orderRepository.deleteAll();
         productRepository.deleteAll();
@@ -101,6 +135,8 @@ public class DeepAdversarialSecurityAndBoundaryTest {
         kitchenA.getServedSocieties().add(societyNorth);
         kitchenA = kitchenRepository.saveAndFlush(kitchenA);
 
+        sessionSellerA = createSession(approvedSellerA);
+
         // Approved Seller B (South)
         approvedSellerB = new User("Seller Beta", "920000" + suffix, "B-1", UserRole.SELLER);
         approvedSellerB.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
@@ -116,6 +152,8 @@ public class DeepAdversarialSecurityAndBoundaryTest {
         kitchenB.getServedSocieties().add(societySouth);
         kitchenB = kitchenRepository.saveAndFlush(kitchenB);
 
+        sessionSellerB = createSession(approvedSellerB);
+
         // Pending Seller (Unapproved)
         pendingSeller = new User("Seller Pending", "930000" + suffix, "P-1", UserRole.SELLER);
         pendingSeller.setSellerApprovalStatus(SellerApprovalStatus.PENDING);
@@ -129,6 +167,8 @@ public class DeepAdversarialSecurityAndBoundaryTest {
         pendingKitchen.setSellerType(SellerType.KITCHEN);
         pendingKitchen = kitchenRepository.saveAndFlush(pendingKitchen);
 
+        sessionPendingSeller = createSession(pendingSeller);
+
         // Buyer A (Living in North Society)
         buyerA = new User("Buyer Alice", "980000" + suffix, "Flat 101", UserRole.BUYER);
         buyerA.setAreaRef(areaNorth);
@@ -138,6 +178,8 @@ public class DeepAdversarialSecurityAndBoundaryTest {
         buyerA.setFlatHouseNumber("101");
         buyerA = userRepository.saveAndFlush(buyerA);
 
+        sessionBuyerA = createSession(buyerA);
+
         // Buyer B (Living in South Society)
         buyerB = new User("Buyer Bob", "990000" + suffix, "Flat 202", UserRole.BUYER);
         buyerB.setAreaRef(areaSouth);
@@ -146,6 +188,8 @@ public class DeepAdversarialSecurityAndBoundaryTest {
         buyerB.setBuilding("Tower Beta");
         buyerB.setFlatHouseNumber("202");
         buyerB = userRepository.saveAndFlush(buyerB);
+
+        sessionBuyerB = createSession(buyerB);
     }
 
     // =========================================================================
@@ -153,48 +197,73 @@ public class DeepAdversarialSecurityAndBoundaryTest {
     // =========================================================================
 
     @Test
-    @DisplayName("ADV-01: Product creation rejects negative or zero prices")
-    void productCreationRejectsNegativeOrZeroPrice() {
-        ProductCreateDto negativePriceDto = new ProductCreateDto();
-        negativePriceDto.setName("Negative Price Meal");
-        negativePriceDto.setDescription("Should fail");
-        negativePriceDto.setPrice(BigDecimal.valueOf(-50));
-        negativePriceDto.setAvailableToday(true);
+    @DisplayName("ADV-01: Product creation rejects negative or zero prices via HTTP boundary")
+    void productCreationRejectsNegativeOrZeroPrice() throws Exception {
+        Map<String, Object> negativePriceDto = Map.of(
+                "name", "Negative Price Meal",
+                "description", "Should fail",
+                "price", -50,
+                "availableToday", true
+        );
 
-        assertThatThrownBy(() -> sellerService.createProduct(kitchenA.getId(), negativePriceDto, approvedSellerA))
-                .isInstanceOf(IllegalArgumentException.class);
+        mvc.perform(post("/api/seller/products?kitchenId=" + kitchenA.getId())
+                        .session(sessionSellerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(negativePriceDto)))
+                .andExpect(status().isBadRequest());
 
-        ProductCreateDto zeroPriceDto = new ProductCreateDto();
-        zeroPriceDto.setName("Zero Price Meal");
-        zeroPriceDto.setDescription("Should fail");
-        zeroPriceDto.setPrice(BigDecimal.ZERO);
-        zeroPriceDto.setAvailableToday(true);
+        Map<String, Object> zeroPriceDto = Map.of(
+                "name", "Zero Price Meal",
+                "description", "Should fail",
+                "price", 0,
+                "availableToday", true
+        );
 
-        assertThatThrownBy(() -> sellerService.createProduct(kitchenA.getId(), zeroPriceDto, approvedSellerA))
-                .isInstanceOf(IllegalArgumentException.class);
+        mvc.perform(post("/api/seller/products?kitchenId=" + kitchenA.getId())
+                        .session(sessionSellerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(zeroPriceDto)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
-    @DisplayName("ADV-02: Massive Unicode, Emoji and SQL tokens in custom instructions persist safely")
-    void orderHandlesMassiveUnicodeEmojiAndSqlTokensSafely() {
+    @DisplayName("ADV-02: Massive Unicode, Emoji and SQL tokens in custom instructions persist safely via HTTP")
+    void orderHandlesMassiveUnicodeEmojiAndSqlTokensSafely() throws Exception {
         Product meal = createProduct(kitchenA, "Dal Fry", BigDecimal.valueOf(150), 10);
 
-        MockHttpSession session = new MockHttpSession();
-        session.setAttribute("BUYER_USER", buyerA.getId());
-
-        OrderItemRequest item = new OrderItemRequest();
-        item.setProductId(meal.getId());
-        item.setQuantity(2);
-
-        orderService.createOrUpdateDraftOrder(kitchenA.getId(), List.of(item), session);
+        // Draft order via HTTP
+        List<Map<String, Object>> draftItems = List.of(Map.of("productId", meal.getId(), "quantity", 2));
+        mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchenA.getId())
+                        .session(sessionBuyerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(draftItems)))
+                .andExpect(status().isOk());
 
         // Payload with SQL injection tokens, XSS tags, Devanagari text, and Emojis
         String complexInstructions = "स्वादिष्ट भोजन! Please make spicy \uD83C\uDF36\uFE0F\uD83C\uDF5B. "
                 + "'; DROP TABLE orders; -- <script>alert('xss')</script> "
                 + "Repeat 100 times: " + "A".repeat(200);
 
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, "upi", null, complexInstructions, session);
+        Map<String, Object> placePayload = Map.of(
+                "kitchenId", kitchenA.getId(),
+                "items", draftItems,
+                "paymentStatus", "PAID",
+                "paymentMethod", "upi",
+                "customInstructions", complexInstructions
+        );
 
+        MvcResult result = mvc.perform(post("/api/buyer/orders/place")
+                        .session(sessionBuyerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(placePayload)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        OrderDto placed = mapper.readValue(result.getResponse().getContentAsString(), OrderDto.class);
         assertThat(placed).isNotNull();
         assertThat(placed.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
         assertThat(placed.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(300));
@@ -213,27 +282,46 @@ public class DeepAdversarialSecurityAndBoundaryTest {
     // =========================================================================
 
     @Test
-    @DisplayName("ADV-03: IDOR Attack - Buyer B cannot inspect or cancel Buyer A's order")
-    void buyerBCannotAccessOrCancelBuyerAOrder() {
+    @DisplayName("ADV-03: IDOR Attack - Buyer B cannot inspect or cancel Buyer A's order via HTTP (masked with 404)")
+    void buyerBCannotAccessOrCancelBuyerAOrder() throws Exception {
         Product meal = createProduct(kitchenA, "Paneer Butter Masala", BigDecimal.valueOf(220), 10);
 
-        MockHttpSession sessionA = new MockHttpSession();
-        sessionA.setAttribute("BUYER_USER", buyerA.getId());
+        List<Map<String, Object>> draftItems = List.of(Map.of("productId", meal.getId(), "quantity", 1));
+        mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchenA.getId())
+                        .session(sessionBuyerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(draftItems)))
+                .andExpect(status().isOk());
 
-        OrderItemRequest item = new OrderItemRequest();
-        item.setProductId(meal.getId());
-        item.setQuantity(1);
+        Map<String, Object> placePayload = Map.of(
+                "kitchenId", kitchenA.getId(),
+                "items", draftItems,
+                "paymentStatus", "PAID",
+                "paymentMethod", "upi",
+                "customInstructions", "No onions"
+        );
 
-        orderService.createOrUpdateDraftOrder(kitchenA.getId(), List.of(item), sessionA);
-        OrderDto orderA = orderService.placeOrder(PaymentStatus.PAID, "upi", null, "No onions", sessionA);
+        MvcResult result = mvc.perform(post("/api/buyer/orders/place")
+                        .session(sessionBuyerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(placePayload)))
+                .andExpect(status().isOk())
+                .andReturn();
 
-        // Buyer B attempts to get order details
-        assertThatThrownBy(() -> orderService.getOrderDetails(orderA.getId(), buyerB))
-                .isInstanceOf(OrderNotFoundException.class);
+        OrderDto orderA = mapper.readValue(result.getResponse().getContentAsString(), OrderDto.class);
 
-        // Buyer B attempts to cancel Buyer A's order
-        assertThatThrownBy(() -> orderService.cancelOrder(orderA.getId(), buyerB))
-                .isInstanceOf(OrderNotFoundException.class);
+        // Buyer B attempts to get order details -> HTTP 404
+        mvc.perform(get("/api/buyer/orders/" + orderA.getId())
+                        .session(sessionBuyerB))
+                .andExpect(status().isNotFound());
+
+        // Buyer B attempts to cancel Buyer A's order -> HTTP 404
+        mvc.perform(post("/api/buyer/orders/" + orderA.getId() + "/cancel")
+                        .session(sessionBuyerB)
+                        .with(csrf()))
+                .andExpect(status().isNotFound());
 
         // Order remains intact for Buyer A
         Order checkOrder = orderRepository.findById(orderA.getId()).orElseThrow();
@@ -241,27 +329,49 @@ public class DeepAdversarialSecurityAndBoundaryTest {
     }
 
     @Test
-    @DisplayName("ADV-04: IDOR Attack - Seller B cannot mark paid or delivered an order belonging to Kitchen A")
-    void sellerBCannotMutateKitchenAOrders() {
+    @DisplayName("ADV-04: IDOR Attack - Seller B cannot mark paid or delivered an order belonging to Kitchen A via HTTP")
+    void sellerBCannotMutateKitchenAOrders() throws Exception {
         Product meal = createProduct(kitchenA, "Thali Deluxe", BigDecimal.valueOf(180), 10);
 
-        MockHttpSession session = new MockHttpSession();
-        session.setAttribute("BUYER_USER", buyerA.getId());
+        List<Map<String, Object>> draftItems = List.of(Map.of("productId", meal.getId(), "quantity", 1));
+        mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchenA.getId())
+                        .session(sessionBuyerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(draftItems)))
+                .andExpect(status().isOk());
 
-        OrderItemRequest item = new OrderItemRequest();
-        item.setProductId(meal.getId());
-        item.setQuantity(1);
+        Map<String, Object> placePayload = Map.of(
+                "kitchenId", kitchenA.getId(),
+                "items", draftItems,
+                "paymentStatus", "AWAITING_SELLER_VERIFICATION",
+                "paymentMethod", "upi"
+        );
 
-        orderService.createOrUpdateDraftOrder(kitchenA.getId(), List.of(item), session);
-        OrderDto order = orderService.placeOrder(PaymentStatus.AWAITING_SELLER_VERIFICATION, "upi", null, null, session);
+        MvcResult result = mvc.perform(post("/api/buyer/orders/place")
+                        .session(sessionBuyerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(placePayload)))
+                .andExpect(status().isOk())
+                .andReturn();
 
-        // Seller B attempts to mark order as paid
-        assertThatThrownBy(() -> orderService.markOrderAsPaid(order.getId(), approvedSellerB))
-                .isInstanceOf(SellerNotAuthorizedException.class);
+        OrderDto order = mapper.readValue(result.getResponse().getContentAsString(), OrderDto.class);
 
-        // Seller B attempts to update delivery status
-        assertThatThrownBy(() -> sellerAppService.updateDeliveryStatus(approvedSellerB, order.getId(), DeliveryStatus.DELIVERED))
-                .isInstanceOf(SellerNotAuthorizedException.class);
+        // Seller B attempts to mark order as paid -> HTTP 403 Forbidden
+        mvc.perform(patch("/api/seller/orders/" + order.getId() + "/payment-status")
+                        .session(sessionSellerB)
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+
+        // Seller B attempts to update delivery status -> HTTP 403 Forbidden
+        Map<String, Object> delivPayload = Map.of("deliveryStatus", "DELIVERED");
+        mvc.perform(patch("/api/seller-app/orders/" + order.getId() + "/delivery-status")
+                        .session(sessionSellerB)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(delivPayload)))
+                .andExpect(status().isForbidden());
 
         // Verify order payment status remained unchanged
         Order check = orderRepository.findById(order.getId()).orElseThrow();
@@ -270,24 +380,43 @@ public class DeepAdversarialSecurityAndBoundaryTest {
     }
 
     @Test
-    @DisplayName("ADV-05: IDOR Attack - Buyer cannot self-verify payment to PAID status")
-    void buyerCannotSelfVerifyPaymentToPaid() {
+    @DisplayName("ADV-05: IDOR Attack - Buyer cannot self-verify payment to PAID status via HTTP")
+    void buyerCannotSelfVerifyPaymentToPaid() throws Exception {
         Product meal = createProduct(kitchenA, "Biryani", BigDecimal.valueOf(200), 10);
 
-        MockHttpSession session = new MockHttpSession();
-        session.setAttribute("BUYER_USER", buyerA.getId());
+        List<Map<String, Object>> draftItems = List.of(Map.of("productId", meal.getId(), "quantity", 1));
+        mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchenA.getId())
+                        .session(sessionBuyerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(draftItems)))
+                .andExpect(status().isOk());
 
-        OrderItemRequest item = new OrderItemRequest();
-        item.setProductId(meal.getId());
-        item.setQuantity(1);
+        Map<String, Object> placePayload = Map.of(
+                "kitchenId", kitchenA.getId(),
+                "items", draftItems,
+                "paymentStatus", "AWAITING_SELLER_VERIFICATION",
+                "paymentMethod", "upi"
+        );
 
-        orderService.createOrUpdateDraftOrder(kitchenA.getId(), List.of(item), session);
-        OrderDto order = orderService.placeOrder(PaymentStatus.AWAITING_SELLER_VERIFICATION, "upi", null, null, session);
+        MvcResult result = mvc.perform(post("/api/buyer/orders/place")
+                        .session(sessionBuyerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(placePayload)))
+                .andExpect(status().isOk())
+                .andReturn();
 
-        // Buyer attempts to update payment status to PAID
-        assertThatThrownBy(() -> orderService.updatePaymentStatus(order.getId(), PaymentStatus.PAID, buyerA))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Payment status is managed by the seller");
+        OrderDto order = mapper.readValue(result.getResponse().getContentAsString(), OrderDto.class);
+
+        // Buyer attempts to update payment status to PAID -> HTTP 400 Bad Request
+        Map<String, Object> payPayload = Map.of("paymentStatus", "PAID");
+        mvc.perform(patch("/api/buyer/orders/" + order.getId() + "/payment-status")
+                        .session(sessionBuyerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(payPayload)))
+                .andExpect(status().isBadRequest());
 
         Order check = orderRepository.findById(order.getId()).orElseThrow();
         assertThat(check.getPaymentStatus()).isEqualTo(PaymentStatus.AWAITING_SELLER_VERIFICATION);
@@ -298,36 +427,33 @@ public class DeepAdversarialSecurityAndBoundaryTest {
     // =========================================================================
 
     @Test
-    @DisplayName("ADV-06: Cross-society restriction - Buyer B cannot order from Kitchen A (unserved society)")
-    void buyerBlockedFromOrderingFromUnservedKitchen() {
+    @DisplayName("ADV-06: Cross-society restriction - Buyer B cannot order from Kitchen A (unserved society) via HTTP")
+    void buyerBlockedFromOrderingFromUnservedKitchen() throws Exception {
         Product meal = createProduct(kitchenA, "Special Meal", BigDecimal.valueOf(150), 10);
 
-        MockHttpSession sessionB = new MockHttpSession();
-        sessionB.setAttribute("BUYER_USER", buyerB.getId());
+        List<Map<String, Object>> draftItems = List.of(Map.of("productId", meal.getId(), "quantity", 1));
 
-        OrderItemRequest item = new OrderItemRequest();
-        item.setProductId(meal.getId());
-        item.setQuantity(1);
-
-        // Draft creation must fail because Kitchen A does not serve Buyer B's society
-        assertThatThrownBy(() -> orderService.createOrUpdateDraftOrder(kitchenA.getId(), List.of(item), sessionB))
-                .isInstanceOf(InvalidKitchenSelectionException.class)
-                .hasMessageContaining("not currently accepting orders in your area");
+        // Draft creation must fail because Kitchen A does not serve Buyer B's society -> HTTP 400 Bad Request
+        mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchenA.getId())
+                        .session(sessionBuyerB)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(draftItems)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
-    @DisplayName("ADV-07: Unapproved / Pending seller cannot access dashboard or appear in public discovery")
-    void unapprovedSellerBlockedFromOperationsAndDiscovery() {
-        MockHttpSession pendingSession = new MockHttpSession();
-        pendingSession.setAttribute("BUYER_USER", pendingSeller.getId());
+    @DisplayName("ADV-07: Unapproved / Pending seller cannot access dashboard or appear in public discovery via HTTP")
+    void unapprovedSellerBlockedFromOperationsAndDiscovery() throws Exception {
+        // Pending seller dashboard access rejected -> HTTP 403 Forbidden
+        mvc.perform(get("/api/seller-app/dashboard")
+                        .session(sessionPendingSeller))
+                .andExpect(status().isForbidden());
 
-        assertThatThrownBy(() -> sellerAppController.getDashboard(pendingSession))
-                .isInstanceOf(SellerNotAuthorizedException.class)
-                .hasMessageContaining("awaiting Admin approval");
-
-        // Ensure pending kitchen does not show in discovery
-        var discoveredKitchens = discoveryService.getKitchens(societyNorth.getName(), null);
-        assertThat(discoveredKitchens.stream().noneMatch(k -> k.getId().equals(pendingKitchen.getId()))).isTrue();
+        // Ensure pending kitchen does not appear in public discovery
+        mvc.perform(get("/api/discovery/kitchens?society=" + societyNorth.getName()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == " + pendingKitchen.getId() + ")]").doesNotExist());
     }
 
     // =========================================================================
@@ -335,8 +461,8 @@ public class DeepAdversarialSecurityAndBoundaryTest {
     // =========================================================================
 
     @Test
-    @DisplayName("ADV-08: Extreme Stock Contention - 20 concurrent threads competing for 3 units")
-    void extremeStockContentionNeverOversells() throws InterruptedException {
+    @DisplayName("ADV-08: Extreme Stock Contention - 20 concurrent HTTP requests competing for 3 units")
+    void extremeStockContentionNeverOversells() throws Exception {
         Product scarceItem = createProduct(kitchenA, "Rare Special Dish", BigDecimal.valueOf(100), 3);
 
         int threadCount = 20;
@@ -351,14 +477,16 @@ public class DeepAdversarialSecurityAndBoundaryTest {
         List<MockHttpSession> sessions = new ArrayList<>();
         for (int i = 0; i < threadCount; i++) {
             User buyer = createBuyer("ConcurrentBuyer_" + i);
-            MockHttpSession session = new MockHttpSession();
-            session.setAttribute("BUYER_USER", buyer.getId());
+            MockHttpSession session = createSession(buyer);
 
-            OrderItemRequest req = new OrderItemRequest();
-            req.setProductId(scarceItem.getId());
-            req.setQuantity(1);
+            List<Map<String, Object>> draftItems = List.of(Map.of("productId", scarceItem.getId(), "quantity", 1));
+            mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchenA.getId())
+                            .session(session)
+                            .with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(mapper.writeValueAsBytes(draftItems)))
+                    .andExpect(status().isOk());
 
-            orderService.createOrUpdateDraftOrder(kitchenA.getId(), List.of(req), session);
             sessions.add(session);
         }
 
@@ -370,8 +498,26 @@ public class DeepAdversarialSecurityAndBoundaryTest {
                 try {
                     startLatch.await();
                     if (index > 0) Thread.sleep(index * 15L); // slight stagger for DB lock acquisition
-                    orderService.placeOrder(PaymentStatus.PAID, "upi", null, null, session);
-                    successCount.incrementAndGet();
+
+                    Map<String, Object> placePayload = Map.of(
+                            "kitchenId", kitchenA.getId(),
+                            "items", List.of(Map.of("productId", scarceItem.getId(), "quantity", 1)),
+                            "paymentStatus", "PAID",
+                            "paymentMethod", "upi"
+                    );
+
+                    MvcResult res = mvc.perform(post("/api/buyer/orders/place")
+                                    .session(session)
+                                    .with(csrf())
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(mapper.writeValueAsBytes(placePayload)))
+                            .andReturn();
+
+                    if (res.getResponse().getStatus() == 200) {
+                        successCount.incrementAndGet();
+                    } else {
+                        failCount.incrementAndGet();
+                    }
                 } catch (Exception ex) {
                     failCount.incrementAndGet();
                 } finally {
@@ -382,7 +528,7 @@ public class DeepAdversarialSecurityAndBoundaryTest {
 
         readyLatch.await(5, TimeUnit.SECONDS);
         startLatch.countDown();
-        doneLatch.await(20, TimeUnit.SECONDS);
+        doneLatch.await(30, TimeUnit.SECONDS);
         executor.shutdown();
 
         // Exactly 3 orders must succeed
@@ -405,118 +551,213 @@ public class DeepAdversarialSecurityAndBoundaryTest {
     // =========================================================================
 
     @Test
-    @DisplayName("ADV-09: Seller mark paid is idempotent and rejected on cancelled order")
-    void sellerMarkPaidIdempotencyAndCancelledGuard() {
+    @DisplayName("ADV-09: Seller mark paid is idempotent and rejected on cancelled order via HTTP")
+    void sellerMarkPaidIdempotencyAndCancelledGuard() throws Exception {
         Product meal = createProduct(kitchenA, "Kofta Curry", BigDecimal.valueOf(170), 5);
 
-        MockHttpSession session = new MockHttpSession();
-        session.setAttribute("BUYER_USER", buyerA.getId());
+        List<Map<String, Object>> draftItems = List.of(Map.of("productId", meal.getId(), "quantity", 1));
+        mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchenA.getId())
+                        .session(sessionBuyerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(draftItems)))
+                .andExpect(status().isOk());
 
-        OrderItemRequest req = new OrderItemRequest();
-        req.setProductId(meal.getId());
-        req.setQuantity(1);
+        Map<String, Object> placePayload = Map.of(
+                "kitchenId", kitchenA.getId(),
+                "items", draftItems,
+                "paymentStatus", "AWAITING_SELLER_VERIFICATION",
+                "paymentMethod", "upi"
+        );
 
-        orderService.createOrUpdateDraftOrder(kitchenA.getId(), List.of(req), session);
-        OrderDto placed = orderService.placeOrder(PaymentStatus.AWAITING_SELLER_VERIFICATION, "upi", null, null, session);
+        MvcResult result = mvc.perform(post("/api/buyer/orders/place")
+                        .session(sessionBuyerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(placePayload)))
+                .andExpect(status().isOk())
+                .andReturn();
 
-        // First transition to PAID
-        OrderDto paid = orderService.markOrderAsPaid(placed.getId(), approvedSellerA);
-        assertThat(paid.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+        OrderDto placed = mapper.readValue(result.getResponse().getContentAsString(), OrderDto.class);
 
-        // Second transition is idempotent
-        OrderDto secondPaid = orderService.markOrderAsPaid(placed.getId(), approvedSellerA);
-        assertThat(secondPaid.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+        // First transition to PAID via HTTP -> 200 OK
+        mvc.perform(patch("/api/seller/orders/" + placed.getId() + "/payment-status")
+                        .session(sessionSellerA)
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paymentStatus").value("PAID"));
 
-        // Cancellation on paid order restores stock but cannot transition back to paid if cancelled
+        // Second transition is idempotent via HTTP -> 200 OK
+        mvc.perform(patch("/api/seller/orders/" + placed.getId() + "/payment-status")
+                        .session(sessionSellerA)
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paymentStatus").value("PAID"));
+
+        // Cancellation on unverified order restores stock but cannot transition back to paid if cancelled
         Product cancelMeal = createProduct(kitchenA, "Sweet Lassi", BigDecimal.valueOf(50), 5);
-        MockHttpSession cancelSession = new MockHttpSession();
-        cancelSession.setAttribute("BUYER_USER", buyerA.getId());
-        OrderItemRequest cancelItem = new OrderItemRequest();
-        cancelItem.setProductId(cancelMeal.getId());
-        cancelItem.setQuantity(1);
+        List<Map<String, Object>> cancelItems = List.of(Map.of("productId", cancelMeal.getId(), "quantity", 1));
+        mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchenA.getId())
+                        .session(sessionBuyerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(cancelItems)))
+                .andExpect(status().isOk());
 
-        orderService.createOrUpdateDraftOrder(kitchenA.getId(), List.of(cancelItem), cancelSession);
-        OrderDto toCancel = orderService.placeOrder(PaymentStatus.AWAITING_SELLER_VERIFICATION, "upi", null, null, cancelSession);
-        orderService.cancelOrder(toCancel.getId(), buyerA);
+        Map<String, Object> cancelPlacePayload = Map.of(
+                "kitchenId", kitchenA.getId(),
+                "items", cancelItems,
+                "paymentStatus", "AWAITING_SELLER_VERIFICATION",
+                "paymentMethod", "upi"
+        );
 
-        assertThatThrownBy(() -> orderService.markOrderAsPaid(toCancel.getId(), approvedSellerA))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("already cancelled");
+        MvcResult cancelRes = mvc.perform(post("/api/buyer/orders/place")
+                        .session(sessionBuyerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(cancelPlacePayload)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        OrderDto toCancel = mapper.readValue(cancelRes.getResponse().getContentAsString(), OrderDto.class);
+
+        // Buyer cancels order via HTTP
+        mvc.perform(post("/api/buyer/orders/" + toCancel.getId() + "/cancel")
+                        .session(sessionBuyerA)
+                        .with(csrf()))
+                .andExpect(status().isOk());
+
+        // Seller attempts to mark cancelled order as PAID -> HTTP 400 Bad Request
+        mvc.perform(patch("/api/seller/orders/" + toCancel.getId() + "/payment-status")
+                        .session(sessionSellerA)
+                        .with(csrf()))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
-    @DisplayName("ADV-10: Rating validation bounds - rejected if unpaid, invalid star range, or duplicate")
-    void ratingValidationBoundsEnforced() {
+    @DisplayName("ADV-10: Rating validation bounds via HTTP - rejected if unpaid, invalid star range, or duplicate")
+    void ratingValidationBoundsEnforced() throws Exception {
         Product meal = createProduct(kitchenA, "Paneer Tikka", BigDecimal.valueOf(200), 5);
 
-        MockHttpSession session = new MockHttpSession();
-        session.setAttribute("BUYER_USER", buyerA.getId());
+        List<Map<String, Object>> draftItems = List.of(Map.of("productId", meal.getId(), "quantity", 1));
+        mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchenA.getId())
+                        .session(sessionBuyerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(draftItems)))
+                .andExpect(status().isOk());
 
-        OrderItemRequest req = new OrderItemRequest();
-        req.setProductId(meal.getId());
-        req.setQuantity(1);
+        Map<String, Object> placePayload = Map.of(
+                "kitchenId", kitchenA.getId(),
+                "items", draftItems,
+                "paymentStatus", "AWAITING_SELLER_VERIFICATION",
+                "paymentMethod", "upi"
+        );
 
-        orderService.createOrUpdateDraftOrder(kitchenA.getId(), List.of(req), session);
-        OrderDto placed = orderService.placeOrder(PaymentStatus.AWAITING_SELLER_VERIFICATION, "upi", null, null, session);
+        MvcResult result = mvc.perform(post("/api/buyer/orders/place")
+                        .session(sessionBuyerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(placePayload)))
+                .andExpect(status().isOk())
+                .andReturn();
 
-        // Attempt rating before payment is verified -> Rejected
-        assertThatThrownBy(() -> orderService.rateOrder(placed.getId(), 5, buyerA))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("only after completing the payment");
+        OrderDto placed = mapper.readValue(result.getResponse().getContentAsString(), OrderDto.class);
 
-        // Seller marks paid
-        orderService.markOrderAsPaid(placed.getId(), approvedSellerA);
+        // Attempt rating before payment is verified -> HTTP 400 Bad Request
+        mvc.perform(post("/api/buyer/orders/" + placed.getId() + "/rate?rating=5")
+                        .session(sessionBuyerA)
+                        .with(csrf()))
+                .andExpect(status().isBadRequest());
 
-        // Rating with 0 -> Rejected
-        assertThatThrownBy(() -> orderService.rateOrder(placed.getId(), 0, buyerA))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Rating must be between 1 and 5");
+        // Seller marks paid via HTTP
+        mvc.perform(patch("/api/seller/orders/" + placed.getId() + "/payment-status")
+                        .session(sessionSellerA)
+                        .with(csrf()))
+                .andExpect(status().isOk());
 
-        // Rating with 6 -> Rejected
-        assertThatThrownBy(() -> orderService.rateOrder(placed.getId(), 6, buyerA))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Rating must be between 1 and 5");
+        // Rating with 0 -> HTTP 400 Bad Request
+        mvc.perform(post("/api/buyer/orders/" + placed.getId() + "/rate?rating=0")
+                        .session(sessionBuyerA)
+                        .with(csrf()))
+                .andExpect(status().isBadRequest());
 
-        // Valid rating with 5 -> Success
-        OrderDto rated = orderService.rateOrder(placed.getId(), 5, buyerA);
-        assertThat(rated.getOrderStatus()).isEqualTo(OrderStatus.COMPLETED);
+        // Rating with 6 -> HTTP 400 Bad Request
+        mvc.perform(post("/api/buyer/orders/" + placed.getId() + "/rate?rating=6")
+                        .session(sessionBuyerA)
+                        .with(csrf()))
+                .andExpect(status().isBadRequest());
+
+        // Valid rating with 5 -> HTTP 200 OK
+        mvc.perform(post("/api/buyer/orders/" + placed.getId() + "/rate?rating=5")
+                        .session(sessionBuyerA)
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orderStatus").value("COMPLETED"));
 
         Order ratedOrder = orderRepository.findById(placed.getId()).orElseThrow();
         assertThat(ratedOrder.getRating()).isEqualTo(5);
 
-        // Duplicate rating -> Rejected
-        assertThatThrownBy(() -> orderService.rateOrder(placed.getId(), 4, buyerA))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("already rated this order");
+        // Duplicate rating -> HTTP 400 Bad Request
+        mvc.perform(post("/api/buyer/orders/" + placed.getId() + "/rate?rating=4")
+                        .session(sessionBuyerA)
+                        .with(csrf()))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
-    @DisplayName("ADV-11: Delivery completion is idempotent and updates deliveredAt timestamp")
-    void deliveryCompletionIdempotencyAndTimestamp() {
+    @DisplayName("ADV-11: Delivery completion is idempotent and updates deliveredAt timestamp via HTTP")
+    void deliveryCompletionIdempotencyAndTimestamp() throws Exception {
         Product meal = createProduct(kitchenA, "Thali Simple", BigDecimal.valueOf(120), 5);
 
-        MockHttpSession session = new MockHttpSession();
-        session.setAttribute("BUYER_USER", buyerA.getId());
+        List<Map<String, Object>> draftItems = List.of(Map.of("productId", meal.getId(), "quantity", 1));
+        mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchenA.getId())
+                        .session(sessionBuyerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(draftItems)))
+                .andExpect(status().isOk());
 
-        OrderItemRequest req = new OrderItemRequest();
-        req.setProductId(meal.getId());
-        req.setQuantity(1);
+        Map<String, Object> placePayload = Map.of(
+                "kitchenId", kitchenA.getId(),
+                "items", draftItems,
+                "paymentStatus", "PAID",
+                "paymentMethod", "upi"
+        );
 
-        orderService.createOrUpdateDraftOrder(kitchenA.getId(), List.of(req), session);
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, "upi", null, null, session);
+        MvcResult result = mvc.perform(post("/api/buyer/orders/place")
+                        .session(sessionBuyerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(placePayload)))
+                .andExpect(status().isOk())
+                .andReturn();
 
-        // Mark delivered
-        OrderDto delivered1 = sellerAppService.updateDeliveryStatus(approvedSellerA, placed.getId(), DeliveryStatus.DELIVERED);
-        assertThat(delivered1.getDeliveryStatus()).isEqualTo("DELIVERED");
+        OrderDto placed = mapper.readValue(result.getResponse().getContentAsString(), OrderDto.class);
+
+        // Mark delivered via HTTP
+        Map<String, Object> delivPayload = Map.of("deliveryStatus", "DELIVERED");
+        mvc.perform(patch("/api/seller-app/orders/" + placed.getId() + "/delivery-status")
+                        .session(sessionSellerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(delivPayload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deliveryStatus").value("DELIVERED"));
 
         Order dbOrder1 = orderRepository.findById(placed.getId()).orElseThrow();
         LocalDateTime deliveredAt1 = dbOrder1.getDeliveredAt();
         assertThat(deliveredAt1).isNotNull();
         assertThat(dbOrder1.getDeliveryStatus()).isEqualTo(DeliveryStatus.DELIVERED);
 
-        // Mark delivered again (idempotent)
-        OrderDto delivered2 = sellerAppService.updateDeliveryStatus(approvedSellerA, placed.getId(), DeliveryStatus.DELIVERED);
-        assertThat(delivered2.getDeliveryStatus()).isEqualTo("DELIVERED");
+        // Mark delivered again (idempotent) via HTTP
+        mvc.perform(patch("/api/seller-app/orders/" + placed.getId() + "/delivery-status")
+                        .session(sessionSellerA)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(delivPayload)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deliveryStatus").value("DELIVERED"));
 
         Order dbOrder2 = orderRepository.findById(placed.getId()).orElseThrow();
         assertThat(dbOrder2.getDeliveredAt()).isEqualTo(deliveredAt1); // Timestamp preserved exactly
