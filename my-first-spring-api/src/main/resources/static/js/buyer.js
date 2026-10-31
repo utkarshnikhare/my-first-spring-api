@@ -17,9 +17,7 @@ function todayDate() {
 
 function buyerOfferingSection(product) {
     if (!product) return 'UNAVAILABLE';
-    if (product.ordersPaused || product.soldOut || product.ordersClosed ||
-        product.lifecycleState === 'SCHEDULED_TO_OPEN' ||
-        product.lifecycleState === 'ORDERS_CLOSED' || product.lifecycleState === 'HISTORY') return 'UNAVAILABLE';
+    if (product.ordersPaused || product.soldOut || product.lifecycleState === 'HISTORY') return 'UNAVAILABLE';
     var date = product.recurring ? product.nextOccurrenceDate : product.availableDate;
     if (!date) date = todayDate();
     if (date < todayDate()) return 'UNAVAILABLE';
