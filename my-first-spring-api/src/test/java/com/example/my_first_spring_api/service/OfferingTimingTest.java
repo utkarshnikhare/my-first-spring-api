@@ -189,6 +189,17 @@ class OfferingTimingTest {
     }
 
     @Test
+    void quickPostPublicationDateExpiresAtIstDateBoundary() {
+        Product quickPost = product(TODAY, false, null, "23:59", 10);
+        quickPost.setQuickPost(true);
+
+        OfferingTiming.enforceQuickPostPublicationDate(quickPost, TODAY);
+        assertThatThrownBy(() -> OfferingTiming.enforceQuickPostPublicationDate(quickPost, TODAY.plusDays(1)))
+                .hasMessageContaining("Quick Post")
+                .hasMessageContaining("expired");
+    }
+
+    @Test
     void isLaterHhmmOnlyAcceptsARealExtension() {
         assertThat(OfferingTiming.isLaterHhmm("22:00", "21:00")).isTrue();
         assertThat(OfferingTiming.isLaterHhmm("21:00", "21:00")).isFalse();

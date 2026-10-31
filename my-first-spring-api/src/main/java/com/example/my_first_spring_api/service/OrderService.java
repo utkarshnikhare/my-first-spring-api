@@ -125,6 +125,7 @@ public class OrderService {
                 if (product.getKitchen() == null || !product.getKitchen().getId().equals(kitchen.getId())) {
                     throw new IllegalArgumentException("The selected offering does not belong to this kitchen.");
                 }
+                OfferingTiming.enforceQuickPostPublicationDate(product, LocalDate.now(AppTimeZone.ZONE));
                 int qty = itemReq.getQuantity() == null ? 0 : itemReq.getQuantity();
                 if (qty <= 0) {
                     throw new IllegalArgumentException("Quantity must be at least 1.");
@@ -487,6 +488,10 @@ public class OrderService {
         // before stock is committed. This catches past-date, sold-out, paused,
         // order-window-closed, and unavailable-area items that became invalid
         // after the draft was created.
+        for (OrderItem item : order.getItems()) {
+            OfferingTiming.enforceQuickPostPublicationDate(
+                    item.getProduct(), LocalDate.now(AppTimeZone.ZONE));
+        }
         if (availabilityService != null) {
             for (OrderItem item : order.getItems()) {
                 Product product = item.getProduct();

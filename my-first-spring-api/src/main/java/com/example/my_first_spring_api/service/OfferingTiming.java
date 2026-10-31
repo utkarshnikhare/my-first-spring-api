@@ -271,6 +271,15 @@ final class OfferingTiming {
         enforceOrderWindow(product, fulfillmentDate, context, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
     }
 
+    static void enforceQuickPostPublicationDate(Product product, LocalDate today) {
+        if (product != null && product.isQuickPost()
+                && product.getAvailableDate() != null
+                && product.getAvailableDate().isBefore(today)) {
+            throw new IllegalArgumentException("Quick Post '" + product.getName()
+                    + "' has expired and can no longer be ordered.");
+        }
+    }
+
     static void enforceOrderWindow(Product product, LocalDate fulfillmentDate, String context,
                                    LocalDate today, LocalTime now) {
         LocalDate effectiveDate = fulfillmentDate != null ? fulfillmentDate
