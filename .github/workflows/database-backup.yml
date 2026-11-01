@@ -34,9 +34,13 @@ jobs:
         env:
           SOCIOMART_DB_URL: ${{ secrets.SOCIOMART_PROD_DB_URL }}
           BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+          CONFIRM_RUN: ${{ github.event.inputs.confirm_run }}
+          INPUT_RETENTION_DAYS: ${{ github.event.inputs.retention_days }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
+          RETENTION="${INPUT_RETENTION_DAYS:-14}"
           # Enforce deliberate operator confirmation for manual execution
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.confirm_run }}" != "RUN_BACKUP" ]; then
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$CONFIRM_RUN" != "RUN_BACKUP" ]; then
             echo "[-] ERROR: Manual execution requires confirm_run='RUN_BACKUP'."
             exit 1
           fi
@@ -58,7 +62,7 @@ jobs:
           echo "::add-mask::$BACKUP_ENCRYPTION_PASSPHRASE"
 
           chmod +x scripts/backup-database.sh
-          ./scripts/backup-database.sh --encrypt --output-dir ./backups/exports --retention-days ${{ github.event.inputs.retention_days || 14 }}
+          ./scripts/backup-database.sh --encrypt --output-dir ./backups/exports --retention-days "$RETENTION"
 
       - name: Archive Encrypted Backup Artifact
         uses: actions/upload-artifact@v4

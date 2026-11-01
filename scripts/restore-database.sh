@@ -19,7 +19,7 @@
 set -euo pipefail
 
 BACKUP_FILE=""
-TARGET_URL="${TARGET_DB_URL:-${SOCIOMART_DB_URL:-}}"
+TARGET_URL="${TARGET_DB_URL:-}"
 CONFIRM_ISOLATED="${CONFIRM_ISOLATED_RECOVERY_TARGET:-false}"
 SKIP_CHECKSUM=false
 
@@ -127,6 +127,7 @@ if [[ "${CONFIRM_ISOLATED}" != "true" ]]; then
 fi
 
 # Safeguard 2: Detect and reject known production database hostnames and database identities
+shopt -s nocasematch
 if [[ "${PGHOST}" =~ (supabase\.co|render\.com|prod|production) || "${PGDATABASE}" =~ (prod|production) ]]; then
   echo "[-] CRITICAL REFUSAL: Target database identity (${PGHOST} / ${PGDATABASE}) matches PRODUCTION patterns." >&2
   echo "    Restoration into a live production database is strictly prohibited by this tool." >&2
@@ -246,9 +247,7 @@ pg_restore \
   --no-owner \
   --no-privileges \
   --exit-on-error \
-  "${RESTORE_INPUT}" || {
-    echo "[-] WARNING: pg_restore exited with warnings/errors. Inspect target database." >&2
-  }
+  "${RESTORE_INPUT}"
 
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))

@@ -17,7 +17,7 @@
 set -euo pipefail
 
 OUTPUT_DIR="./backups/exports"
-ENCRYPT=false
+ENCRYPT=true
 RETENTION_DAYS=7
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_NAME="sociomart_backup_${TIMESTAMP}"
@@ -31,6 +31,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --encrypt)
       ENCRYPT=true
+      shift
+      ;;
+    --no-encrypt)
+      ENCRYPT=false
       shift
       ;;
     --retention-days)

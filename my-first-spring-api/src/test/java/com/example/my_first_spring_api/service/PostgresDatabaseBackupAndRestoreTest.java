@@ -122,17 +122,17 @@ class PostgresDatabaseBackupAndRestoreTest {
         String sellerMobile = "98" + suffix + "11";
         String buyerMobile = "97" + suffix + "22";
 
-        jdbcTemplate.update("INSERT INTO users(name, mobile_number, password_hash, role, seller_approval_status, created_at, updated_at) "
-                + "VALUES (?, ?, ?, 'SELLER', 'APPROVED', NOW(), NOW())", "Chef Ananya " + suffix, sellerMobile, "SecretP@ss1!");
+        jdbcTemplate.update("INSERT INTO users(name, mobile_number, password_hash, role, seller_approval_status, blocked, storefront_removed, created_at, updated_at) "
+                + "VALUES (?, ?, ?, 'SELLER', 'APPROVED', false, false, NOW(), NOW())", "Chef Ananya " + suffix, sellerMobile, "SecretP@ss1!");
         Long sellerId = jdbcTemplate.queryForObject("SELECT id FROM users WHERE mobile_number = ?", Long.class, sellerMobile);
 
-        jdbcTemplate.update("INSERT INTO users(name, mobile_number, password_hash, role, seller_approval_status, created_at, updated_at) "
-                + "VALUES (?, ?, ?, 'BUYER', 'APPROVED', NOW(), NOW())", "Rohan Mehta " + suffix, buyerMobile, "SecretP@ss2!");
+        jdbcTemplate.update("INSERT INTO users(name, mobile_number, password_hash, role, seller_approval_status, blocked, storefront_removed, created_at, updated_at) "
+                + "VALUES (?, ?, ?, 'BUYER', 'APPROVED', false, false, NOW(), NOW())", "Rohan Mehta " + suffix, buyerMobile, "SecretP@ss2!");
         Long buyerId = jdbcTemplate.queryForObject("SELECT id FROM users WHERE mobile_number = ?", Long.class, buyerMobile);
 
         String kitchenSlug = "ananya-kitchen-" + suffix;
-        jdbcTemplate.update("INSERT INTO kitchens(name, display_name, description, slug, accepted_payment_mode, upi_id, gpay_identifier, gpay_identifier_type, seller_id, paused, rating) "
-                + "VALUES (?, ?, ?, ?, 'GPAY_AND_UPI', 'ananya@okaxis', '9800011122', 'PHONE_NUMBER', ?, false, 4.8)",
+        jdbcTemplate.update("INSERT INTO kitchens(name, display_name, description, slug, accepted_payment_mode, upi_id, gpay_identifier, gpay_identifier_type, seller_id, seller_type, storefront_paused, rating) "
+                + "VALUES (?, ?, ?, ?, 'GPAY_AND_UPI', 'ananya@okaxis', '9800011122', 'PHONE_NUMBER', ?, 'KITCHEN', false, 4.8)",
                 "Ananya Kitchen " + suffix, "Ananya's Kitchen", "Traditional homemade meals", kitchenSlug, sellerId);
         Long kitchenId = jdbcTemplate.queryForObject("SELECT id FROM kitchens WHERE slug = ?", Long.class, kitchenSlug);
 
@@ -141,18 +141,22 @@ class PostgresDatabaseBackupAndRestoreTest {
                 kitchenId, "Kathiyawadi Thali " + suffix);
         Long productId = jdbcTemplate.queryForObject("SELECT id FROM products WHERE kitchen_id = ? AND name LIKE 'Kathiyawadi Thali%'", Long.class, kitchenId);
 
-        // Insert 3 orders with different payment statuses
-        jdbcTemplate.update("INSERT INTO orders(kitchen_id, buyer_id, order_status, payment_status, payment_method, payment_configuration_snapshot, total_amount, custom_instructions, created_at) "
-                + "VALUES (?, ?, 'ORDERED', 'UNPAID', 'upi', 'GPAY_AND_UPI', 440.00, 'Less spicy', NOW())", kitchenId, buyerId);
-        Long order1Id = jdbcTemplate.queryForObject("SELECT id FROM orders WHERE custom_instructions = 'Less spicy'", Long.class);
+        // Insert 3 orders with different payment statuses allowed by PostgreSQL schema check constraint
+        String orderNum1 = "ORD-" + suffix + "-1";
+        String orderNum2 = "ORD-" + suffix + "-2";
+        String orderNum3 = "ORD-" + suffix + "-3";
 
-        jdbcTemplate.update("INSERT INTO orders(kitchen_id, buyer_id, order_status, payment_status, payment_method, payment_configuration_snapshot, total_amount, custom_instructions, created_at) "
-                + "VALUES (?, ?, 'ORDERED', 'AWAITING_SELLER_VERIFICATION', 'gpay', 'GPAY_AND_UPI', 220.00, 'Extra chutney', NOW())", kitchenId, buyerId);
-        Long order2Id = jdbcTemplate.queryForObject("SELECT id FROM orders WHERE custom_instructions = 'Extra chutney'", Long.class);
+        jdbcTemplate.update("INSERT INTO orders(order_number, kitchen_id, buyer_id, order_status, payment_status, payment_method, payment_configuration_snapshot, total_amount, custom_instructions, created_at) "
+                + "VALUES (?, ?, ?, 'ORDERED', 'PENDING', 'upi', 'GPAY_AND_UPI', 440.00, 'Less spicy', NOW())", orderNum1, kitchenId, buyerId);
+        Long order1Id = jdbcTemplate.queryForObject("SELECT id FROM orders WHERE order_number = ?", Long.class, orderNum1);
 
-        jdbcTemplate.update("INSERT INTO orders(kitchen_id, buyer_id, order_status, payment_status, payment_method, payment_configuration_snapshot, total_amount, custom_instructions, created_at) "
-                + "VALUES (?, ?, 'ORDERED', 'PAID', 'upi', 'GPAY_AND_UPI', 660.00, 'Call before delivery', NOW())", kitchenId, buyerId);
-        Long order3Id = jdbcTemplate.queryForObject("SELECT id FROM orders WHERE custom_instructions = 'Call before delivery'", Long.class);
+        jdbcTemplate.update("INSERT INTO orders(order_number, kitchen_id, buyer_id, order_status, payment_status, payment_method, payment_configuration_snapshot, total_amount, custom_instructions, created_at) "
+                + "VALUES (?, ?, ?, 'ORDERED', 'WILL_PAY_LATER', 'gpay', 'GPAY_AND_UPI', 220.00, 'Extra chutney', NOW())", orderNum2, kitchenId, buyerId);
+        Long order2Id = jdbcTemplate.queryForObject("SELECT id FROM orders WHERE order_number = ?", Long.class, orderNum2);
+
+        jdbcTemplate.update("INSERT INTO orders(order_number, kitchen_id, buyer_id, order_status, payment_status, payment_method, payment_configuration_snapshot, total_amount, custom_instructions, created_at) "
+                + "VALUES (?, ?, ?, 'ORDERED', 'PAID', 'upi', 'GPAY_AND_UPI', 660.00, 'Call before delivery', NOW())", orderNum3, kitchenId, buyerId);
+        Long order3Id = jdbcTemplate.queryForObject("SELECT id FROM orders WHERE order_number = ?", Long.class, orderNum3);
 
         // Insert order items
         jdbcTemplate.update("INSERT INTO order_items(order_id, product_id, quantity, price, unit_price, subtotal) VALUES (?, ?, 2, 220.00, 220.00, 440.00)", order1Id, productId);
@@ -316,15 +320,15 @@ class PostgresDatabaseBackupAndRestoreTest {
         assertThat(restoredUpiId).isEqualTo("ananya@okaxis");
 
         // 7. Verify Payment Status Distribution in Restored Orders
-        Integer unpaidCount = targetJdbc.queryForObject(
-                "SELECT COUNT(*) FROM orders WHERE payment_status = 'UNPAID'", Integer.class);
-        Integer awaitingCount = targetJdbc.queryForObject(
-                "SELECT COUNT(*) FROM orders WHERE payment_status = 'AWAITING_SELLER_VERIFICATION'", Integer.class);
+        Integer pendingCount = targetJdbc.queryForObject(
+                "SELECT COUNT(*) FROM orders WHERE payment_status = 'PENDING'", Integer.class);
+        Integer willPayLaterCount = targetJdbc.queryForObject(
+                "SELECT COUNT(*) FROM orders WHERE payment_status = 'WILL_PAY_LATER'", Integer.class);
         Integer paidCount = targetJdbc.queryForObject(
                 "SELECT COUNT(*) FROM orders WHERE payment_status = 'PAID'", Integer.class);
 
-        assertThat(unpaidCount).isEqualTo(1);
-        assertThat(awaitingCount).isEqualTo(1);
+        assertThat(pendingCount).isEqualTo(1);
+        assertThat(willPayLaterCount).isEqualTo(1);
         assertThat(paidCount).isEqualTo(1);
 
         // 8. Verify Sequence State and Test Transaction Insertion
@@ -336,8 +340,9 @@ class PostgresDatabaseBackupAndRestoreTest {
         assertThat(nextOrderId).isGreaterThan(maxOrderIdBefore);
 
         // Execute a new live insert transaction on restored database to prove write-readiness without sequence collision
-        targetJdbc.update("INSERT INTO orders(id, kitchen_id, buyer_id, order_status, payment_status, payment_method, total_amount, custom_instructions, created_at) "
-                + "VALUES (?, ?, ?, 'ORDERED', 'UNPAID', 'cod', 150.00, 'Post-recovery test order', NOW())", nextOrderId, kitchenId, buyerId);
+        String postRecoveryOrderNum = "ORD-" + suffix + "-4";
+        targetJdbc.update("INSERT INTO orders(id, order_number, kitchen_id, buyer_id, order_status, payment_status, payment_method, total_amount, custom_instructions, created_at) "
+                + "VALUES (?, ?, ?, ?, 'ORDERED', 'WILL_PAY_LATER', 'cod', 150.00, 'Post-recovery test order', NOW())", nextOrderId, postRecoveryOrderNum, kitchenId, buyerId);
 
         Integer totalOrdersAfter = targetJdbc.queryForObject("SELECT COUNT(*) FROM orders", Integer.class);
         assertThat(totalOrdersAfter).isEqualTo(4);

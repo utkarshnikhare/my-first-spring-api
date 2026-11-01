@@ -7,6 +7,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
 import java.util.Arrays;
 
@@ -123,6 +124,7 @@ public class BackupCrypto {
         byte[] salt = new byte[SALT_BYTES];
         byte[] iv = new byte[IV_BYTES];
 
+        File tempOutputFile = new File(outputPath + ".tmp." + System.currentTimeMillis());
         try (InputStream in = new BufferedInputStream(new FileInputStream(inFile))) {
             int saltRead = in.readNBytes(salt, 0, SALT_BYTES);
             if (saltRead != SALT_BYTES) {
@@ -138,39 +140,51 @@ public class BackupCrypto {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.DECRYPT_MODE, secretKey, new GCMParameterSpec(TAG_BITS, iv));
 
-            // Stream decryption
-            ByteArrayOutputStream decryptedBuffer = new ByteArrayOutputStream();
-            byte[] inBuffer = new byte[BUFFER_SIZE];
-            int read;
-            while ((read = in.read(inBuffer)) != -1) {
-                byte[] plainChunk = cipher.update(inBuffer, 0, read);
-                if (plainChunk != null && plainChunk.length > 0) {
-                    decryptedBuffer.write(plainChunk);
+            // Stream decryption directly to temp disk file to prevent heap exhaustion (OOM) on large archives
+            try (OutputStream out = new BufferedOutputStream(new FileOutputStream(tempOutputFile))) {
+                byte[] inBuffer = new byte[BUFFER_SIZE];
+                int read;
+                while ((read = in.read(inBuffer)) != -1) {
+                    byte[] plainChunk = cipher.update(inBuffer, 0, read);
+                    if (plainChunk != null && plainChunk.length > 0) {
+                        out.write(plainChunk);
+                    }
                 }
+
+                // doFinal verifies the 128-bit authentication tag. Throws AEADBadTagException on any tampering!
+                byte[] finalChunk = cipher.doFinal();
+                if (finalChunk != null && finalChunk.length > 0) {
+                    out.write(finalChunk);
+                }
+                out.flush();
             }
 
-            // doFinal verifies the 128-bit authentication tag. Throws AEADBadTagException on any tampering!
-            byte[] finalChunk = cipher.doFinal();
-            if (finalChunk != null && finalChunk.length > 0) {
-                decryptedBuffer.write(finalChunk);
-            }
-
-            // Only write output after tag verification succeeds completely
+            // Only move to final output path after complete tag verification succeeds
             File outFile = new File(outputPath);
             if (outFile.getParentFile() != null) {
                 outFile.getParentFile().mkdirs();
             }
-            try (OutputStream out = new BufferedOutputStream(new FileOutputStream(outFile))) {
-                decryptedBuffer.writeTo(out);
-                out.flush();
-            }
+            Files.move(tempOutputFile.toPath(), outFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception e) {
+            deleteIfExists(tempOutputFile.getAbsolutePath());
+            deleteIfExists(outputPath);
+            throw e;
         }
     }
 
     private static SecretKey deriveKey(char[] passphrase, byte[] salt) throws Exception {
         SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
         PBEKeySpec spec = new PBEKeySpec(passphrase, salt, PBKDF2_ITERATIONS, 256);
-        return new SecretKeySpec(factory.generateSecret(spec).getEncoded(), "AES");
+        byte[] keyBytes = null;
+        try {
+            keyBytes = factory.generateSecret(spec).getEncoded();
+            return new SecretKeySpec(keyBytes, "AES");
+        } finally {
+            spec.clearPassword();
+            if (keyBytes != null) {
+                Arrays.fill(keyBytes, (byte) 0);
+            }
+        }
     }
 
     private static void deleteIfExists(String path) {
