@@ -19,6 +19,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -84,25 +85,25 @@ class PostgresDatabaseBackupAndRestoreTest {
         return hexString.toString();
     }
 
-    private static byte[] encryptAes256(byte[] plaintext, char[] password, byte[] salt, byte[] iv) throws Exception {
+    private static byte[] encryptAes256Gcm(byte[] plaintext, char[] password, byte[] salt, byte[] iv) throws Exception {
         SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
         PBEKeySpec spec = new PBEKeySpec(password, salt, 100000, 256);
         SecretKey tmp = factory.generateSecret(spec);
         SecretKeySpec secretKey = new SecretKeySpec(tmp.getEncoded(), "AES");
 
-        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey, new IvParameterSpec(iv));
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, new GCMParameterSpec(128, iv));
         return cipher.doFinal(plaintext);
     }
 
-    private static byte[] decryptAes256(byte[] ciphertext, char[] password, byte[] salt, byte[] iv) throws Exception {
+    private static byte[] decryptAes256Gcm(byte[] ciphertext, char[] password, byte[] salt, byte[] iv) throws Exception {
         SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
         PBEKeySpec spec = new PBEKeySpec(password, salt, 100000, 256);
         SecretKey tmp = factory.generateSecret(spec);
         SecretKeySpec secretKey = new SecretKeySpec(tmp.getEncoded(), "AES");
 
-        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-        cipher.init(Cipher.DECRYPT_MODE, secretKey, new IvParameterSpec(iv));
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, new GCMParameterSpec(128, iv));
         return cipher.doFinal(ciphertext);
     }
 
@@ -199,34 +200,32 @@ class PostgresDatabaseBackupAndRestoreTest {
         assertThat(originalChecksum).matches("^[a-f0-9]{64}$");
 
         // ---------------------------------------------------------------------
-        // STEP 5: Encrypt Archive via AES-256-CBC and Test Corruption Detection
+        // STEP 5: Encrypt Archive via AES-256-GCM AEAD and Test Tag Mismatch
         // ---------------------------------------------------------------------
         char[] passphrase = "DisasterRecoveryPassphrase2026!".toCharArray();
         byte[] salt = new byte[16];
-        byte[] iv = new byte[16];
+        byte[] iv = new byte[12]; // 96-bit nonce for AES-GCM
         SecureRandom random = new SecureRandom();
         random.nextBytes(salt);
         random.nextBytes(iv);
 
-        byte[] encryptedBytes = encryptAes256(rawDumpBytes, passphrase, salt, iv);
+        byte[] encryptedBytes = encryptAes256Gcm(rawDumpBytes, passphrase, salt, iv);
         String encryptedChecksum = sha256(encryptedBytes);
 
-        // Simulate corrupted / truncated transfer
-        byte[] corruptedBytes = Arrays.copyOf(encryptedBytes, encryptedBytes.length + 8);
-        corruptedBytes[corruptedBytes.length - 1] = 0x7F;
-        String corruptedChecksum = sha256(corruptedBytes);
+        // Simulate corrupted / tampered transfer
+        byte[] tamperedBytes = Arrays.copyOf(encryptedBytes, encryptedBytes.length);
+        tamperedBytes[tamperedBytes.length - 1] ^= (byte) 0xFF;
 
-        assertThat(corruptedChecksum).isNotEqualTo(encryptedChecksum);
+        // Checksum verification must detect altered ciphertext
+        assertThat(sha256(tamperedBytes)).isNotEqualTo(encryptedChecksum);
 
-        // Checksum verification must abort immediately on tampered payload
-        assertThatThrownBy(() -> {
-            if (!encryptedChecksum.equals(corruptedChecksum)) {
-                throw new IllegalStateException("BACKUP_INTEGRITY_VIOLATION: Checksum mismatch. Aborting restore.");
-            }
-        }).isInstanceOf(IllegalStateException.class).hasMessageContaining("BACKUP_INTEGRITY_VIOLATION");
+        // GCM Authenticated decryption MUST throw AEADBadTagException on tampered payload!
+        assertThatThrownBy(() -> decryptAes256Gcm(tamperedBytes, passphrase, salt, iv))
+                .isInstanceOf(javax.crypto.AEADBadTagException.class)
+                .hasMessageContaining("Tag mismatch");
 
-        // Decrypt valid archive
-        byte[] decryptedBytes = decryptAes256(encryptedBytes, passphrase, salt, iv);
+        // Decrypt authentic archive
+        byte[] decryptedBytes = decryptAes256Gcm(encryptedBytes, passphrase, salt, iv);
         assertThat(decryptedBytes).isEqualTo(rawDumpBytes);
         assertThat(sha256(decryptedBytes)).isEqualTo(originalChecksum);
 

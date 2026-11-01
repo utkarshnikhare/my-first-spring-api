@@ -127,27 +127,11 @@ if [[ "${CONFIRM_ISOLATED}" != "true" ]]; then
 fi
 
 # Safeguard 2: Detect and reject known production database hostnames and database identities
-IS_PRODUCTION_TARGET=false
 if [[ "${PGHOST}" =~ (supabase\.co|render\.com|prod|production) || "${PGDATABASE}" =~ (prod|production) ]]; then
-  IS_PRODUCTION_TARGET=true
-fi
-
-if [[ "${IS_PRODUCTION_TARGET}" == "true" ]]; then
   echo "[-] CRITICAL REFUSAL: Target database identity (${PGHOST} / ${PGDATABASE}) matches PRODUCTION patterns." >&2
-  echo "    Standard restoration into a live production database is strictly prohibited." >&2
-
-  # Check for deliberate, approved emergency disaster recovery overwrite
-  EMERGENCY_OVERWRITE="${ALLOW_EMERGENCY_PRODUCTION_OVERWRITE:-false}"
-  CONFIRMATION_KEY="${EMERGENCY_OVERWRITE_CONFIRMATION_KEY:-}"
-
-  if [[ "${EMERGENCY_OVERWRITE}" != "true" || "${CONFIRMATION_KEY}" != "OVERWRITE_PRODUCTION_CONFIRMED" ]]; then
-    echo "    Emergency disaster recovery override requires BOTH:" >&2
-    echo "      1. ALLOW_EMERGENCY_PRODUCTION_OVERWRITE=true" >&2
-    echo "      2. EMERGENCY_OVERWRITE_CONFIRMATION_KEY=OVERWRITE_PRODUCTION_CONFIRMED" >&2
-    echo "    Aborting immediately to protect production data." >&2
-    exit 1
-  fi
-  echo "[!] WARNING: EMERGENCY PRODUCTION OVERWRITE AUTHORIZED BY OPERATOR."
+  echo "    Restoration into a live production database is strictly prohibited by this tool." >&2
+  echo "    For emergency disaster recovery, follow the documented manual runbook in docs/PRODUCTION_DATABASE_BACKUP_AND_DISASTER_RECOVERY.md." >&2
+  exit 1
 fi
 
 # Ensure pg_restore utility is available
@@ -205,7 +189,7 @@ if command -v psql >/dev/null 2>&1; then
   echo "[+] Target database verified: database='${PROBE_DB}', user='${PROBE_USER}'."
 
   # Double-check probed database name
-  if [[ "${PROBE_DB}" =~ (prod|production) && "${IS_PRODUCTION_TARGET}" != "true" ]]; then
+  if [[ "${PROBE_DB}" =~ (prod|production) ]]; then
     echo "[-] CRITICAL REFUSAL: Probed database name '${PROBE_DB}' appears to be a production database." >&2
     exit 1
   fi
@@ -228,9 +212,9 @@ if [[ "${SKIP_CHECKSUM}" == "false" ]]; then
   fi
 fi
 
-# Step 2: Decrypt if needed
+# Step 2: Authenticated Decryption if needed
 if [[ "${BACKUP_FILE}" =~ \.enc$ ]]; then
-  echo "[*] Decrypting AES-256 backup archive..."
+  echo "[*] Decrypting AES-256-GCM AEAD backup archive and verifying authentication tag..."
   PASSPHRASE="${BACKUP_ENCRYPTION_PASSPHRASE:-}"
   if [[ -z "${PASSPHRASE}" ]]; then
     echo "[-] ERROR: Backup is encrypted but BACKUP_ENCRYPTION_PASSPHRASE is unset." >&2
@@ -238,10 +222,12 @@ if [[ "${BACKUP_FILE}" =~ \.enc$ ]]; then
   fi
   TEMP_DECRYPTED=$(mktemp "${TMPDIR:-/tmp}/sociomart_decrypted_XXXXXX.dump" 2>/dev/null || mktemp)
   chmod 0600 "${TEMP_DECRYPTED}"
-  openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 \
-    -in "${BACKUP_FILE}" \
-    -out "${TEMP_DECRYPTED}" \
-    -pass env:BACKUP_ENCRYPTION_PASSPHRASE
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  java "${SCRIPT_DIR}/BackupCrypto.java" decrypt "${BACKUP_FILE}" "${TEMP_DECRYPTED}" || {
+    echo "[-] CRITICAL REFUSAL: Authenticated decryption failed. Backup archive may be corrupted or tampered with." >&2
+    rm -f "${TEMP_DECRYPTED}"
+    exit 1
+  }
   RESTORE_INPUT="${TEMP_DECRYPTED}"
 fi
 

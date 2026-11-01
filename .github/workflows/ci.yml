@@ -2,7 +2,7 @@ name: CI Build Verification
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, chore/database-backup-disaster-recovery-readiness ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -22,6 +22,15 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+
+      - name: Execute Restore Safeguards and AEAD Verification Suite
+        run: |
+          chmod +x scripts/test-restore-safeguards.sh scripts/backup-database.sh scripts/restore-database.sh
+          ./scripts/test-restore-safeguards.sh
+
+      - name: Execute Native PostgreSQL 16 Backup and Restore Drill
+        working-directory: my-first-spring-api
+        run: mvn -B test -Dtest=PostgresDatabaseBackupAndRestoreTest
 
       - name: Build and test gate (compile, run all tests, package)
         working-directory: my-first-spring-api

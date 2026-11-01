@@ -94,7 +94,8 @@ The SocioMart schema comprises **29 tables** (26 business entities, `flyway_sche
 | Supabase Prod DB  | ---------------------------> | sociomart_backup.dump |
 +-------------------+                              +-----------------------+
                                                                |
-                                                   OpenSSL AES-256-CBC
+                                                   AES-256-GCM AEAD
+                                                   (PBKDF2, 12-byte IV)
                                                                |
                                                                v
                                                    +-----------------------+
@@ -108,21 +109,17 @@ The SocioMart schema comprises **29 tables** (26 business entities, `flyway_sche
 
 - **Frequency:** Automated daily at 20:30 UTC (02:00 AM IST).
 - **Format:** PostgreSQL Custom Archive (`--format=custom`, compressed binary, supports selective table restore).
-- **Encryption:** AES-256-CBC via PBKDF2 with 100,000 iterations.
-- **Integrity:** SHA-256 hash manifest generated simultaneously.
+- **Encryption:** Authenticated Encryption with Associated Data (AEAD) via **AES-256-GCM** (`BackupCrypto.java`).
+- **Key Derivation:** PBKDF2WithHmacSHA256 with 100,000 iterations and unique 16-byte cryptographically secure salt.
+- **Nonce/IV:** Unique 12-byte (96-bit) cryptographically secure random nonce generated per backup via `SecureRandom`.
+- **Authentication Tag:** 128-bit authentication tag appended to payload; verified by GCM engine prior to any plaintext output. Any single-bit alteration causes immediate `AEADBadTagException` and restoration aborts.
+- **Integrity Manifest:** SHA-256 hash manifest generated simultaneously as secondary defense.
 - **File Permissions:** Enforces `chmod 0600` on raw and encrypted backup files.
 - **Credential Protection:** Passwords are read via ephemeral `PGPASSFILE` (mode 0600) and NEVER appear in process command-line arguments.
 - **Retention Schedule:**
   - Daily backups: Retained for **14 days**.
   - Weekly snapshots (Sunday): Retained for **30 days**.
   - Monthly snapshots: Retained for **90 days**.
-
-### Cryptographic Security Review & AEAD Recommendation
-> [!NOTE]
-> **Cryptographic Limitations of AES-256-CBC + SHA-256 Sidecar:**
-> - The current backup pipeline uses **AES-256-CBC** (confidentiality) accompanied by a **SHA-256** checksum manifest.
-> - **Limitation:** AES-CBC is an unauthenticated cipher mode. It does not provide cryptographic authenticity by itself (susceptible to bit-flipping and padding oracle attacks if decrypted without prior verification). While our restore script performs pre-decryption SHA-256 verification to detect random transmission corruption or naive file tampering, the `.sha256` manifest is unauthenticated. An adversary with write access to the backup storage could alter both the `.enc` and `.sha256` files.
-> - **Recommendation:** For enhanced cryptographic defense, the storage tier should adopt Authenticated Encryption with Associated Data (AEAD) using **AES-256-GCM** or an Encrypt-then-MAC scheme using **HMAC-SHA256** with an independent signing key.
 
 ---
 
@@ -244,14 +241,18 @@ SELECT last_value FROM users_id_seq;
    - Create a new project in the same region (`us-west` / `ap-south-1`).
    - Secure the connection credentials.
 
-#### Step 4: Execute Full Restoration
+#### Step 4: Execute Restoration into Fresh Database Target
 ```bash
-export TARGET_DB_URL="postgresql://postgres:<password>@<new-host>:5432/postgres?sslmode=require"
+export TARGET_DB_URL="postgresql://postgres:<password>@<new-isolated-host>:5432/postgres?sslmode=require"
+export CONFIRM_ISOLATED_RECOVERY_TARGET=true
 export BACKUP_ENCRYPTION_PASSPHRASE="<backup-passphrase>"
-export ALLOW_PRODUCTION_OVERWRITE=true
 
 ./scripts/restore-database.sh --backup-file sociomart_backup_<timestamp>.dump.enc
 ```
+
+> [!CAUTION]
+> `restore-database.sh` unconditionally rejects production hostnames (`supabase.co`, `render.com`) and databases named `*prod*`.
+> If an operator must perform an exceptional, manual in-place restore directly over an existing production database, this must be executed manually using native `pg_restore` with explicit dual-operator authorization, never via automated scripts.
 
 #### Step 5: Repoint Render Application & Restart
 1. In Render dashboard $\to$ `sociomart-demo` $\to$ **Environment**:

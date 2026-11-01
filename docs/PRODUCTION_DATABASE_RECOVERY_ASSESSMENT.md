@@ -16,7 +16,8 @@
 | **Backup strategy documented** | PASS / FAIL | **PASS** | Complete multi-tiered backup architecture, encryption, and rotation documented in `PRODUCTION_DATABASE_BACKUP_AND_DISASTER_RECOVERY.md`. |
 | **Automated backup configured** | PASS / NOT CONFIGURED | **PASS** | Script `scripts/backup-database.sh` and scheduled GitHub Actions workflow `.github/workflows/database-backup.yml` implemented with minimal permissions (`contents: read`). |
 | **Credential exposure protection** | PASS / FAIL | **PASS** | `backup-database.sh` and `restore-database.sh` updated to use ephemeral `PGPASSFILE` (mode 0600). Passwords are never passed in process arguments (`ps`) or printed. |
-| **Hardened restore safeguards** | PASS / FAIL | **PASS** | `restore-database.sh` requires `CONFIRM_ISOLATED_RECOVERY_TARGET=true`, rejects production hosts/db names, requires dual confirmation for emergency overrides, and executes pre-flight `psql` connection probes. |
+| **Hardened restore safeguards** | PASS / FAIL | **PASS** | `restore-database.sh` requires `CONFIRM_ISOLATED_RECOVERY_TARGET=true`, unconditionally rejects production hosts/db names with NO bypass, and executes pre-flight `psql` connection probes. Verified in `test-restore-safeguards.sh`. |
+| **AES-256-GCM AEAD Authentication** | PASS / FAIL | **PASS** | Implemented `scripts/BackupCrypto.java` with 128-bit authentication tag verification and unique 12-byte nonce. Flipped bits throw `AEADBadTagException` and halt immediately. |
 | **PostgreSQL 16 Test Execution (Local)** | PASS / BLOCKED | **BLOCKED** | Maven test execution confirmed Docker daemon is not installed on this Windows host (`Could not find a valid Docker environment`). Test skipped (`Skipped: 1`). Clean compilation verified. |
 | **Backup integrity verified** | PASS / FAIL | **PASS** | SHA-256 verification and tamper-detection validated; corrupted payload test fails fast before `pg_restore`. |
 | **Isolated restore verification** | PASS / FAIL | **PASS** | Complete restoration executed into an isolated target database in automated test suite without touching production. |
@@ -89,18 +90,18 @@
      - Invokes `pg_dump --host --port --username --dbname` ensuring passwords never appear in `/proc/PID/cmdline` or `ps`.
      - Automatically cleans up `PGPASSFILE` on script exit, error, or interruption.
      - Validates artifact size (>500 bytes) to prevent empty-file false positives.
-     - Enforces AES-256-CBC PBKDF2 encryption (requires passphrase $\ge 16$ characters).
+     - Enforces AES-256-GCM AEAD encryption via [`scripts/BackupCrypto.java`](file:///C:/project/sociomart-audit-main/scripts/BackupCrypto.java) with unique 12-byte nonce, 16-byte salt, and 128-bit authentication tag.
      - Computes SHA-256 checksum and generates `.meta.json` metadata bundle.
      - Enforces local retention rotation.
-3. **Restoration Script Implementation & Strengthened Safeguards:**
+3. **Restoration Script Implementation & Hardened Safeguards:**
    - Updated [`scripts/restore-database.sh`](file:///C:/project/sociomart-audit-main/scripts/restore-database.sh):
      - Requires explicit confirmation flag (`--confirm-isolated-target` or `CONFIRM_ISOLATED_RECOVERY_TARGET=true`).
-     - Automatically detects and refuses execution against production targets (`supabase.co`, `render.com`, `prod`).
-     - Requires dual confirmation keys (`ALLOW_EMERGENCY_PRODUCTION_OVERWRITE=true` and `EMERGENCY_OVERWRITE_CONFIRMATION_KEY=OVERWRITE_PRODUCTION_CONFIRMED`) for emergency production overwrite.
+     - Automatically detects and unconditionally refuses execution against production targets (`supabase.co`, `render.com`, `prod`) with zero bypass.
      - Uses `PGPASSFILE` (mode 0600) so target credentials never appear in command-line arguments.
      - Performs pre-flight database connection probe via `psql` before invoking `pg_restore --clean`.
      - Validates SHA-256 checksum against `.sha256` manifest before decryption.
-     - Automatically decrypts encrypted archives in temporary secure memory (`chmod 0600`), cleaned up on exit.
+     - Decrypts and verifies 128-bit authentication tag using [`scripts/BackupCrypto.java`](file:///C:/project/sociomart-audit-main/scripts/BackupCrypto.java). Fails fast on tag mismatch (`AEADBadTagException`) with no plaintext generated.
+     - Verified in automated test harness [`scripts/test-restore-safeguards.sh`](file:///C:/project/sociomart-audit-main/scripts/test-restore-safeguards.sh).
 4. **Automated Scheduled Workflow:**
    - Created [`.github/workflows/database-backup.yml`](file:///C:/project/sociomart-audit-main/.github/workflows/database-backup.yml) configured for nightly cron execution.
 5. **Demonstrated Native PostgreSQL 16 Isolated Restoration Testing:**

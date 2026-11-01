@@ -179,7 +179,7 @@ if [[ "${FILE_SIZE}" -lt 500 ]]; then
   exit 1
 fi
 
-# Optional AES-256-CBC Encryption
+# Optional Authenticated Encryption with Associated Data (AEAD) via AES-256-GCM
 if [[ "${ENCRYPT}" == "true" ]]; then
   PASSPHRASE="${BACKUP_ENCRYPTION_PASSPHRASE:-}"
   if [[ -z "${PASSPHRASE}" ]]; then
@@ -193,10 +193,8 @@ if [[ "${ENCRYPT}" == "true" ]]; then
     exit 1
   fi
   ENCRYPTED_FILE="${RAW_BACKUP_FILE}.enc"
-  openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 \
-    -in "${RAW_BACKUP_FILE}" \
-    -out "${ENCRYPTED_FILE}" \
-    -pass env:BACKUP_ENCRYPTION_PASSPHRASE
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  java "${SCRIPT_DIR}/BackupCrypto.java" encrypt "${RAW_BACKUP_FILE}" "${ENCRYPTED_FILE}"
   rm -f "${RAW_BACKUP_FILE}"
   chmod 0600 "${ENCRYPTED_FILE}"
   FINAL_FILE="${ENCRYPTED_FILE}"
@@ -219,6 +217,7 @@ cat <<EOF > "${FINAL_FILE}.meta.json"
   "sizeBytes": ${FILE_SIZE},
   "sha256": "${CHECKSUM}",
   "encrypted": ${ENCRYPT},
+  "cipher": "AES-256-GCM-AEAD",
   "durationSeconds": ${DURATION}
 }
 EOF
