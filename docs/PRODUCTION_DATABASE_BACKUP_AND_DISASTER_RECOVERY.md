@@ -16,12 +16,17 @@ It is designed to be executable by any authorized systems engineer, database adm
 
 ---
 
-## 2. RECOVERY TARGETS (RPO & RTO)
+## 2. RECOVERY TARGETS (TARGET VS. MEASURED VALUES)
 
-| Metric | Target | Rationale & Operational Constraint |
-| :--- | :--- | :--- |
-| **Recovery Point Objective (RPO)** | **24 hours** (Daily Scheduled Backup)<br>*Target Future: <1 hour via Continuous WAL / Supabase Pro PITR* | On Supabase Free tier, continuous archiving is unavailable. Nightly automated snapshots bound maximum potential data loss to 24 hours of non-reconstructed orders. |
-| **Recovery Time Objective (RTO)** | **< 30 minutes** (from confirmed disaster decision to live restored service) | Database restoration from a verified logical backup takes <3 minutes for current data sizes (<100 MB). Spring Boot container spin-up and health verification take ~5–7 minutes. |
+> [!WARNING]
+> **RPO and RTO Separation of Target vs. Operational Reality:**
+> - Neither RPO of 24 hours nor RTO of 30 minutes may be claimed as proven operational status until end-to-end production runs are executed.
+> - The values below represent **engineering targets**; operational status remains **TARGET ONLY / NOT TESTED ON PRODUCTION** pending live execution.
+
+| Metric | Engineering Target | Measured Benchmark | Current Operational Status | Operational Rationale |
+| :--- | :--- | :--- | :--- | :--- |
+| **Recovery Point Objective (RPO)** | **24 hours** (Daily Scheduled Backup)<br>*Target Future: <1 hour via Supabase Pro PITR* | **Measured toolchain dump time: ~1.2s** | **TARGET ONLY (NOT VERIFIED ON PROD)** | On Supabase Free tier, continuous WAL archiving is unavailable. Nightly snapshots bound data loss to 24 hours. Cannot claim operational RPO until live backups are scheduled and run. |
+| **Recovery Time Objective (RTO)** | **< 30 minutes** (from confirmed disaster decision to live restored service) | **Measured engine restore time: ~1.5s** (isolated PostgreSQL target) | **TARGET ONLY (NOT VERIFIED ON PROD)** | Database restoration takes $<3$ seconds for current schema/data. However, full operational recovery (new DB provisioning, Render env updates, container cold-boot) has not been timed on live infrastructure. |
 
 ---
 
@@ -105,10 +110,19 @@ The SocioMart schema comprises **29 tables** (26 business entities, `flyway_sche
 - **Format:** PostgreSQL Custom Archive (`--format=custom`, compressed binary, supports selective table restore).
 - **Encryption:** AES-256-CBC via PBKDF2 with 100,000 iterations.
 - **Integrity:** SHA-256 hash manifest generated simultaneously.
+- **File Permissions:** Enforces `chmod 0600` on raw and encrypted backup files.
+- **Credential Protection:** Passwords are read via ephemeral `PGPASSFILE` (mode 0600) and NEVER appear in process command-line arguments.
 - **Retention Schedule:**
   - Daily backups: Retained for **14 days**.
   - Weekly snapshots (Sunday): Retained for **30 days**.
   - Monthly snapshots: Retained for **90 days**.
+
+### Cryptographic Security Review & AEAD Recommendation
+> [!NOTE]
+> **Cryptographic Limitations of AES-256-CBC + SHA-256 Sidecar:**
+> - The current backup pipeline uses **AES-256-CBC** (confidentiality) accompanied by a **SHA-256** checksum manifest.
+> - **Limitation:** AES-CBC is an unauthenticated cipher mode. It does not provide cryptographic authenticity by itself (susceptible to bit-flipping and padding oracle attacks if decrypted without prior verification). While our restore script performs pre-decryption SHA-256 verification to detect random transmission corruption or naive file tampering, the `.sha256` manifest is unauthenticated. An adversary with write access to the backup storage could alter both the `.enc` and `.sha256` files.
+> - **Recommendation:** For enhanced cryptographic defense, the storage tier should adopt Authenticated Encryption with Associated Data (AEAD) using **AES-256-GCM** or an Encrypt-then-MAC scheme using **HMAC-SHA256** with an independent signing key.
 
 ---
 
@@ -174,10 +188,18 @@ docker run --name sociomart-restore-test -e POSTGRES_PASSWORD=recoverytest -e PO
 ### Step 2: Execute Isolated Restore
 ```bash
 export TARGET_DB_URL="postgresql://postgres:recoverytest@localhost:5439/sociomart_restore"
+export CONFIRM_ISOLATED_RECOVERY_TARGET="true"
 export BACKUP_ENCRYPTION_PASSPHRASE="<passphrase-used-for-backup>"
 
 ./scripts/restore-database.sh --backup-file ./backups/exports/sociomart_backup_<timestamp>.dump.enc
 ```
+
+> [!IMPORTANT]
+> **Hardened Safeguards in `restore-database.sh`:**
+> - **Confirmation Required:** Fails with exit code 1 if `CONFIRM_ISOLATED_RECOVERY_TARGET="true"` is not provided.
+> - **Production Host Rejection:** Automatically rejects targets with hosts matching `supabase.co`, `render.com`, or database names containing `prod`.
+> - **Pre-Flight Connection Probe:** Probes the database using `psql` to check database name, user, and recovery status before any table drop or `pg_restore --clean` is attempted.
+> - **Ephemeral Credential Cleanup:** Restores without passwords in command line arguments via temporary `PGPASSFILE` mode `0600`, cleanly removed upon completion or interruption.
 
 ### Step 3: Run Post-Restore Verification Suite
 Connect to the isolated target and verify:

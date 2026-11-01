@@ -10,6 +10,10 @@ on:
         description: 'Backup retention in days'
         required: false
         default: '14'
+      confirm_run:
+        description: 'Type RUN_BACKUP to confirm manual trigger'
+        required: false
+        default: 'RUN_BACKUP'
 
 jobs:
   backup:
@@ -31,14 +35,27 @@ jobs:
           SOCIOMART_DB_URL: ${{ secrets.SOCIOMART_PROD_DB_URL }}
           BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
         run: |
+          # Enforce deliberate operator confirmation for manual execution
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.confirm_run }}" != "RUN_BACKUP" ]; then
+            echo "[-] ERROR: Manual execution requires confirm_run='RUN_BACKUP'."
+            exit 1
+          fi
+
           if [ -z "$SOCIOMART_DB_URL" ]; then
             echo "[-] ERROR: Secret SOCIOMART_PROD_DB_URL is not configured."
+            echo "    Repository administrator must configure this secret before backups can run."
             exit 1
           fi
+
           if [ -z "$BACKUP_ENCRYPTION_PASSPHRASE" ]; then
             echo "[-] ERROR: Secret BACKUP_ENCRYPTION_PASSPHRASE is not configured."
+            echo "    Repository administrator must configure this secret before backups can run."
             exit 1
           fi
+
+          # Defense-in-depth: explicitly mask secrets in runner output
+          echo "::add-mask::$SOCIOMART_DB_URL"
+          echo "::add-mask::$BACKUP_ENCRYPTION_PASSPHRASE"
 
           chmod +x scripts/backup-database.sh
           ./scripts/backup-database.sh --encrypt --output-dir ./backups/exports --retention-days ${{ github.event.inputs.retention_days || 14 }}
