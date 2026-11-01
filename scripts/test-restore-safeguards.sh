@@ -129,7 +129,45 @@ else
   exit 1
 fi
 
+# Test 6: Refusal when target matches SOCIOMART_DB_URL in environment
+echo ""
+echo "[TEST 6] Verifying refusal when target URL matches SOCIOMART_DB_URL in environment..."
+MOCK_PROD_URL="postgresql://produser:prodpass@db.custom-internal.com:5432/prod_custom"
+SOCIOMART_DB_URL="${MOCK_PROD_URL}" \
+TARGET_DB_URL="${MOCK_PROD_URL}" \
+CONFIRM_ISOLATED_RECOVERY_TARGET="true" \
+  "${SCRIPT_DIR}/restore-database.sh" --backup-file "${DUMMY_DUMP}" > "${TEST_DIR}/test6.log" 2>&1 && {
+    echo "[-] FAILED: Expected failure when target matches SOCIOMART_DB_URL!"
+    exit 1
+  } || true
+
+if grep -q "matches SOCIOMART_DB_URL in environment" "${TEST_DIR}/test6.log"; then
+  echo "[+] PASS: Direct match with SOCIOMART_DB_URL correctly triggered CRITICAL REFUSAL."
+else
+  echo "[-] FAILED: Expected critical refusal message not found in output:"
+  cat "${TEST_DIR}/test6.log"
+  exit 1
+fi
+
+# Test 7: Fail-closed on remote IP / custom hostname without positive isolation proof
+echo ""
+echo "[TEST 7] Verifying fail-closed refusal on remote host without positive isolation proof..."
+TARGET_DB_URL="postgresql://user:pass@192.0.2.10:5432/generic_app_db" \
+CONFIRM_ISOLATED_RECOVERY_TARGET="true" \
+  "${SCRIPT_DIR}/restore-database.sh" --backup-file "${DUMMY_DUMP}" > "${TEST_DIR}/test7.log" 2>&1 && {
+    echo "[-] FAILED: Expected failure when targeting remote host with generic database name!"
+    exit 1
+  } || true
+
+if grep -q "does not independently establish isolation" "${TEST_DIR}/test7.log"; then
+  echo "[+] PASS: Remote target with generic DB name correctly failed closed."
+else
+  echo "[-] FAILED: Expected positive isolation failure not found:"
+  cat "${TEST_DIR}/test7.log"
+  exit 1
+fi
+
 echo ""
 echo "================================================================================"
-echo "[+] ALL 5 RESTORE SAFEGUARDS & AEAD CRYPTO TESTS PASSED SUCCESSFULLY!"
+echo "[+] ALL 7 RESTORE SAFEGUARDS & AEAD CRYPTO TESTS PASSED SUCCESSFULLY!"
 echo "================================================================================"

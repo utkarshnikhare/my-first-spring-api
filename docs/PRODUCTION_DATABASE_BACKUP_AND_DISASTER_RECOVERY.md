@@ -243,16 +243,24 @@ SELECT last_value FROM users_id_seq;
 
 #### Step 4: Execute Restoration into Fresh Database Target
 ```bash
-export TARGET_DB_URL="postgresql://postgres:<password>@<new-isolated-host>:5432/postgres?sslmode=require"
+# Target must be an isolated recovery database (e.g. sociomart_recovery_target or using --allow-remote-isolated-target)
+export TARGET_DB_URL="postgresql://postgres:<password>@<new-isolated-host>:5432/sociomart_recovery_target?sslmode=require"
 export CONFIRM_ISOLATED_RECOVERY_TARGET=true
+export ALLOW_REMOTE_ISOLATED_TARGET=true
 export BACKUP_ENCRYPTION_PASSPHRASE="<backup-passphrase>"
 
-./scripts/restore-database.sh --backup-file sociomart_backup_<timestamp>.dump.enc
+./scripts/restore-database.sh \
+  --backup-file sociomart_backup_<timestamp>.dump.enc \
+  --confirm-isolated-target \
+  --allow-remote-isolated-target
 ```
 
 > [!CAUTION]
-> `restore-database.sh` unconditionally rejects production hostnames (`supabase.co`, `render.com`) and databases named `*prod*`.
-> If an operator must perform an exceptional, manual in-place restore directly over an existing production database, this must be executed manually using native `pg_restore` with explicit dual-operator authorization, never via automated scripts.
+> `restore-database.sh` enforces fail-closed isolation:
+> 1. Unconditionally rejects production hostnames (`supabase.co`, `render.com`) and databases named `*prod*`.
+> 2. Rejects any target URL matching `SOCIOMART_DB_URL` or `SOCIOMART_PROD_DB_URL` in the environment.
+> 3. Requires dual confirmation (`--confirm-isolated-target` AND `--allow-remote-isolated-target`) for non-local addresses with generic names.
+> If an operator must perform an exceptional in-place restore directly over an existing production database, this must be executed manually using native `pg_restore` with explicit dual-operator authorization, never via automated scripts.
 
 #### Step 5: Repoint Render Application & Restart
 1. In Render dashboard $\to$ `sociomart-demo` $\to$ **Environment**:
@@ -299,3 +307,91 @@ export BACKUP_ENCRYPTION_PASSPHRASE="<backup-passphrase>"
 - **On-Call Engineer:**
   - Executes disaster recovery runbook during an outage.
   - Verifies RPO/RTO metrics post-incident.
+
+---
+
+## 12. ENCRYPTION KEY CUSTODY, ROTATION & DISASTER RECOVERY
+
+1. **Separation of Custody:**
+   - The encryption passphrase (`BACKUP_ENCRYPTION_PASSPHRASE`) must NEVER be stored in the codebase, in GitHub Actions workflow files, in unencrypted tickets, or alongside encrypted backup artifacts.
+   - Master copies must be stored in a dedicated, access-controlled password manager (e.g., 1Password, Bitwarden, AWS Secrets Manager, or Google Cloud Secret Manager) under multi-factor authentication (MFA).
+2. **Key Rotation Protocol:**
+   - When rotating `BACKUP_ENCRYPTION_PASSPHRASE`:
+     1. Update the secret in GitHub Repository Settings.
+     2. Archive the previous passphrase in the password vault with metadata: `sociomart-backup-key-<start-date>-to-<end-date>`.
+     3. Historical backups encrypted with prior keys will require their respective historical passphrase for decryption; previous keys must NOT be discarded while their corresponding backup artifacts remain within their retention window.
+3. **No Key Exposure Rule:**
+   - Passphrases are passed strictly via memory buffers and environment variables.
+   - `BackupCrypto.java` scrubs `char[]` passphrase buffers in memory using `Arrays.fill(..., '\0')`.
+   - Never print or log encryption passphrases.
+
+---
+
+## 13. BACKUP MONITORING, TELEMETRY & FRESHNESS ALERTING
+
+1. **Failure Notification Policy:**
+   - Failed executions of the GitHub Actions workflow `Scheduled Production Database Backup` trigger an immediate failure notification to repository administrators and watch recipients.
+   - A backup is considered successful ONLY if:
+     - `pg_dump` completes with exit code 0.
+     - `BackupCrypto.java encrypt` produces a valid ciphertext and 128-bit authentication tag.
+     - SHA-256 integrity hash is computed and recorded in `.sha256`.
+     - Metadata manifest is recorded in `.meta.json`.
+     - Encrypted artifact is successfully uploaded and acknowledged by GitHub Actions artifact storage.
+2. **Freshness & Stale Backup Alerting:**
+   - **Maximum Allowable Backup Age:** 36 hours.
+   - If no successful backup artifact has been uploaded within 36 hours, an incident must be logged and investigated.
+
+---
+
+## 14. RETENTION, STORAGE LIMITS & OFF-SITE POLICY
+
+1. **GitHub Artifact Retention Limits:**
+   - Default retention for daily backups is set to **14 days**.
+   - GitHub Actions artifact quotas must be monitored to ensure storage ceilings are not exceeded.
+2. **Secondary Off-Site Storage Recommendation:**
+   - In production maturity, encrypted artifacts (`*.enc`, `*.sha256`, `*.meta.json`) should be replicated from GitHub Actions to an off-site, immutable object store (e.g., AWS S3 with Object Lock or Google Cloud Storage with Bucket Lock in a different geographic region) to protect against platform-level outages.
+
+---
+
+## 15. POSTGRESQL ENGINE COMPATIBILITY & DATABASE OBJECT SCOPING
+
+1. **Target Engine:** PostgreSQL 16.x (UTF-8 encoding, standard collation).
+2. **Extensions:** Standard PostgreSQL 16 built-ins.
+3. **Roles and Privileges:**
+   - `pg_dump` runs with `--no-owner --no-privileges` to ensure portability across different cloud hosts and container environments.
+   - `pg_restore` runs with `--clean --if-exists --no-owner --no-privileges --exit-on-error`.
+4. **Included Schema Objects:**
+   - All 21 Flyway migration versions in `flyway_schema_history`.
+   - All 26 application domain tables and 2 Spring Session tables (28 base tables total).
+   - All sequences (e.g. `orders_id_seq`, `kitchens_id_seq`), identity columns, foreign key constraints, unique constraints, check constraints (e.g. `orders_payment_status_check`), and hot-path indexes.
+
+---
+
+## 16. APPLICATION-LEVEL RECOVERY ACCEPTANCE PROCEDURE
+
+When validating a recovered database before repointing live traffic:
+
+1. **Flyway History Count:**
+   ```sql
+   SELECT count(*), max(version) FROM flyway_schema_history WHERE success = true;
+   ```
+   *Expected:* 21 migrations, latest version `21`.
+2. **Domain Table Inventory:**
+   ```sql
+   SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name;
+   ```
+   *Expected:* 29 tables total (including `flyway_schema_history`).
+3. **Entity Record Verification:**
+   ```sql
+   SELECT (SELECT count(*) FROM users) AS users,
+          (SELECT count(*) FROM kitchens) AS kitchens,
+          (SELECT count(*) FROM products) AS products,
+          (SELECT count(*) FROM orders) AS orders;
+   ```
+4. **Sequence Progression Verification:**
+   Verify `last_value` on sequences exceeds existing max IDs to prevent collision on new write transactions:
+   ```sql
+   SELECT last_value FROM orders_id_seq;
+   ```
+5. **Zero Live Database Connection:**
+   During validation, the recovery test harness must connect strictly to the isolated database. The production application on Render remains untouched until full acceptance is signed off.

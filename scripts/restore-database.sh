@@ -21,6 +21,7 @@ set -euo pipefail
 BACKUP_FILE=""
 TARGET_URL="${TARGET_DB_URL:-}"
 CONFIRM_ISOLATED="${CONFIRM_ISOLATED_RECOVERY_TARGET:-false}"
+ALLOW_REMOTE_ISOLATED="${ALLOW_REMOTE_ISOLATED_TARGET:-false}"
 SKIP_CHECKSUM=false
 
 while [[ $# -gt 0 ]]; do
@@ -35,6 +36,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --confirm-isolated-target)
       CONFIRM_ISOLATED="true"
+      shift
+      ;;
+    --allow-remote-isolated-target)
+      ALLOW_REMOTE_ISOLATED="true"
       shift
       ;;
     --skip-checksum)
@@ -126,12 +131,48 @@ if [[ "${CONFIRM_ISOLATED}" != "true" ]]; then
   exit 1
 fi
 
-# Safeguard 2: Detect and reject known production database hostnames and database identities
+# Safeguard 2: Zero-tolerance check against production connection strings in environment
+if [[ -n "${SOCIOMART_DB_URL:-}" && "${TARGET_URL}" == "${SOCIOMART_DB_URL}" ]]; then
+  echo "[-] CRITICAL REFUSAL: Target database URL identically matches SOCIOMART_DB_URL in environment." >&2
+  echo "    Restoring into the active application production database is strictly prohibited." >&2
+  exit 1
+fi
+if [[ -n "${SOCIOMART_PROD_DB_URL:-}" && "${TARGET_URL}" == "${SOCIOMART_PROD_DB_URL}" ]]; then
+  echo "[-] CRITICAL REFUSAL: Target database URL identically matches SOCIOMART_PROD_DB_URL in environment." >&2
+  echo "    Restoring into the active application production database is strictly prohibited." >&2
+  exit 1
+fi
+
+# Safeguard 3: Detect and reject known production database hostnames and database identities
 shopt -s nocasematch
 if [[ "${PGHOST}" =~ (supabase\.co|render\.com|prod|production) || "${PGDATABASE}" =~ (prod|production) ]]; then
   echo "[-] CRITICAL REFUSAL: Target database identity (${PGHOST} / ${PGDATABASE}) matches PRODUCTION patterns." >&2
   echo "    Restoration into a live production database is strictly prohibited by this tool." >&2
   echo "    For emergency disaster recovery, follow the documented manual runbook in docs/PRODUCTION_DATABASE_BACKUP_AND_DISASTER_RECOVERY.md." >&2
+  exit 1
+fi
+
+# Safeguard 4: Positive Target Isolation Establishment (Fail-Closed)
+# Host or database must independently establish isolation via at least one proven category:
+#   A. Local loopback / container / test host (localhost, 127.0.0.1, ::1, *.local, *docker*, *container*, mockhost*)
+#   B. Explicitly isolated database name (contains isolated, recovery, test, staging, dev, sandbox, temp, preview)
+#   C. Explicit dual confirmation for remote isolated hosts (--allow-remote-isolated-target / ALLOW_REMOTE_ISOLATED_TARGET=true)
+IS_LOCAL_HOST=false
+if [[ "${PGHOST}" =~ ^(localhost|127\.0\.0\.1|::1|.*\.local|.*docker.*|.*container.*|mockhost.*)$ ]]; then
+  IS_LOCAL_HOST=true
+fi
+
+IS_ISOLATED_NAMED_DB=false
+if [[ "${PGDATABASE}" =~ (isolated|recovery|test|staging|dev|sandbox|temp|preview) ]]; then
+  IS_ISOLATED_NAMED_DB=true
+fi
+
+if [[ "${IS_LOCAL_HOST}" == "false" && "${IS_ISOLATED_NAMED_DB}" == "false" && "${ALLOW_REMOTE_ISOLATED}" != "true" ]]; then
+  echo "[-] CRITICAL REFUSAL: Target (${PGHOST} / ${PGDATABASE}) does not independently establish isolation." >&2
+  echo "    Target is a remote host with a non-isolated database name." >&2
+  echo "    To prevent accidental data loss on arbitrary IP addresses or custom hostnames," >&2
+  echo "    remote isolated targets require both --confirm-isolated-target AND --allow-remote-isolated-target" >&2
+  echo "    (or export ALLOW_REMOTE_ISOLATED_TARGET=true)." >&2
   exit 1
 fi
 
@@ -169,7 +210,7 @@ cleanup() {
 }
 trap cleanup EXIT ERR INT TERM
 
-# Safeguard 3: Pre-flight target database identity and connectivity verification
+# Safeguard 5: Pre-flight target database identity and connectivity verification
 # If psql is available, verify the connection and target database identity before invoking pg_restore
 if command -v psql >/dev/null 2>&1; then
   echo "[*] Probing target database connectivity and identity..."
@@ -185,9 +226,16 @@ if command -v psql >/dev/null 2>&1; then
       echo "    pg_restore will NOT be executed. Aborting before making any modifications." >&2
       exit 1
     }
-  PROBE_DB=$(echo "${PROBE_OUT}" | awk -F'|' '{print $1}')
-  PROBE_USER=$(echo "${PROBE_OUT}" | awk -F'|' '{print $2}')
+  PROBE_DB=$(echo "${PROBE_OUT}" | awk -F'|' '{print $1}' | tr -d ' ')
+  PROBE_USER=$(echo "${PROBE_OUT}" | awk -F'|' '{print $2}' | tr -d ' ')
+  PROBE_RECOVERY=$(echo "${PROBE_OUT}" | awk -F'|' '{print $3}' | tr -d ' ')
   echo "[+] Target database verified: database='${PROBE_DB}', user='${PROBE_USER}'."
+
+  if [[ "${PROBE_RECOVERY}" == "t" ]]; then
+    echo "[-] CRITICAL REFUSAL: Target database is a read-only replica (pg_is_in_recovery=true)." >&2
+    echo "    pg_restore cannot write to a replica. Aborting." >&2
+    exit 1
+  fi
 
   # Double-check probed database name
   if [[ "${PROBE_DB}" =~ (prod|production) ]]; then
