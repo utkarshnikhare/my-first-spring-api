@@ -360,7 +360,16 @@ class SellerServiceCreateOfferingValidationTest {
         LocalTime now = LocalTime.now(AppTimeZone.ZONE);
         String amInput;
         String expectedPm;
-        if (now.isBefore(LocalTime.of(12, 0))) {
+        if (now.isBefore(LocalTime.of(4, 0))) {
+            if (now.getMinute() >= 5) {
+                int pastMin = now.getMinute() - 4;
+                amInput = String.format(java.util.Locale.ROOT, "%02d:%02d", now.getHour(), pastMin);
+                expectedPm = String.format(java.util.Locale.ROOT, "%02d:%02d", now.getHour() + 12, pastMin);
+            } else {
+                org.junit.jupiter.api.Assumptions.assumeTrue(false, "Requires an AM time on the current day that is already past");
+                return;
+            }
+        } else if (now.isBefore(LocalTime.of(12, 0))) {
             amInput = "04:00";
             expectedPm = "16:00";
         } else if (now.isBefore(LocalTime.of(22, 0))) {

@@ -288,7 +288,7 @@ public class SocioMartV1Flow1SmokeTest {
         dto1.setAvailableDate(today);
         dto1.setCategories(List.of("LUNCH"));
         dto1.setMaxQuantity(10);
-        dto1.setOrderWindowStart("06:00");
+        dto1.setOrderWindowStart("00:00");
         dto1.setOrderWindowEnd("23:59");
         dto1.setReadyByTime(tomorrow.atTime(23, 30).toString());
         ProductDto p1_lunch = sellerService.createProduct(kitchen1.getId(), dto1, seller1);
@@ -301,7 +301,7 @@ public class SocioMartV1Flow1SmokeTest {
         dto2.setAvailableDate(today);
         dto2.setCategories(List.of("DINNER"));
         dto2.setMaxQuantity(10);
-        dto2.setOrderWindowStart("06:00");
+        dto2.setOrderWindowStart("00:00");
         dto2.setOrderWindowEnd("23:59");
         dto2.setReadyByTime(tomorrow.atTime(20, 0).toString());
         ProductDto p1_dinner = sellerService.createProduct(kitchen1.getId(), dto2, seller1);
@@ -314,7 +314,7 @@ public class SocioMartV1Flow1SmokeTest {
         dto3.setAvailableDate(tomorrow);
         dto3.setCategories(List.of("LUNCH"));
         dto3.setMaxQuantity(15);
-        dto3.setOrderWindowStart("06:00");
+        dto3.setOrderWindowStart("00:00");
         dto3.setOrderWindowEnd("23:59");
         dto3.setReadyByTime(tomorrow.atTime(13, 0).toString());
         ProductDto p1_preorder = sellerService.createProduct(kitchen1.getId(), dto3, seller1);
@@ -327,7 +327,7 @@ public class SocioMartV1Flow1SmokeTest {
         dto4.setAvailableDate(today);
         dto4.setCategories(List.of("HOMEMADE"));
         dto4.setMaxQuantity(20);
-        dto4.setOrderWindowStart("06:00");
+        dto4.setOrderWindowStart("00:00");
         dto4.setOrderWindowEnd("23:59");
         dto4.setReadyByTime(tomorrow.atTime(18, 0).toString());
         ProductDto p2_pickle = sellerService.createProduct(kitchen2.getId(), dto4, seller2);
@@ -340,7 +340,7 @@ public class SocioMartV1Flow1SmokeTest {
         dto5.setAvailableDate(today);
         dto5.setCategories(List.of("HOMEMADE"));
         dto5.setMaxQuantity(15);
-        dto5.setOrderWindowStart("06:00");
+        dto5.setOrderWindowStart("00:00");
         dto5.setOrderWindowEnd("23:59");
         dto5.setReadyByTime(tomorrow.atTime(18, 0).toString());
         ProductDto p2_spices = sellerService.createProduct(kitchen2.getId(), dto5, seller2);
@@ -353,7 +353,7 @@ public class SocioMartV1Flow1SmokeTest {
         dto6.setAvailableDate(tomorrow);
         dto6.setCategories(List.of("HOMEMADE"));
         dto6.setMaxQuantity(5);
-        dto6.setOrderWindowStart("06:00");
+        dto6.setOrderWindowStart("00:00");
         dto6.setOrderWindowEnd("23:59");
         dto6.setReadyByTime(tomorrow.atTime(18, 0).toString());
         ProductDto p2_murabba = sellerService.createProduct(kitchen2.getId(), dto6, seller2);
