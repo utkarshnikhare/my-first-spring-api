@@ -95,6 +95,25 @@ Harness: `ConcurrencyLoadSimulationTest` & `MultiUserConcurrencyAndAdversarialSe
 
 ---
 
-## 5. Performance Sign-Off
+## 5. Test Methodology Limitations & Staging Constraints
 
-The application demonstrates robust concurrency handling, reliable transactional rollbacks, and stable latency well within the required thresholds (< 1 second under high load).
+### 5.1 H2 In-Memory Database Limitations
+- **Locking Granularity:** The in-memory test harness uses H2 (`jdbc:h2:mem:...`). While H2 operates in PostgreSQL compatibility mode, its locking engine uses JVM table-level synchronization rather than true multi-version concurrency control (MVCC) and PostgreSQL row-level locks (`SELECT FOR UPDATE`).
+- **Disk I/O and Fsync:** H2 in-memory operations execute entirely within volatile RAM without synchronous disk writes or WAL (Write-Ahead Logging) fsync latency. In production PostgreSQL, every committed transaction entails disk I/O latency.
+- **Connection Latency:** Local JDBC connections to in-memory H2 incur zero network transport latency, unlike production Supabase connections over TCP/TLS.
+
+### 5.2 Embedded Web Server & Network Constraints
+- **Loopback Socket Communication:** The 100-VU test harness uses Java 11 `HttpClient` executing over `127.0.0.1` loopback TCP sockets. This omits wide-area network latency, TLS handshake negotiations, proxy buffering (e.g. Render / Cloudflare / Nginx), and internet packet jitter.
+- **In-Process Contention:** Client VU threads and the Spring Boot embedded Tomcat instance execute within the same JVM process and compete for the same physical CPU cores and heap space, creating CPU scheduling effects not representative of distributed production deployments.
+- **Connection Pool Sizing:** The 100-VU test harness configured HikariCP with `maximum-pool-size=120` to prevent thread starvation under 100 concurrent threads. Production (`application-prod.properties`) is configured with `maximum-pool-size=4` for Render/Supabase free tier limits.
+
+### 5.3 Staging PostgreSQL Status
+- **Isolated Staging Environment:** NOT AVAILABLE. No isolated staging PostgreSQL database or instance exists in the local environment or repository configuration.
+- **Production Isolation:** Under strict QA and safety rules, load testing against the live production environment (`sociomart-demo.onrender.com` / Supabase) was prohibited and was NOT conducted.
+- **PostgreSQL Contention Regression:** To verify PostgreSQL-specific row-level concurrency, `PostgresStockContentionConcurrencyTest` was added using Testcontainers (`postgres:16-alpine`), executing 20 concurrent buyer transactions competing for 3 units in CI where Docker is active.
+
+---
+
+## 6. Performance Sign-Off & Open Risk Assessment
+
+The application demonstrates robust concurrency handling, zero overselling on scarce inventory, and low latency under local and in-memory test conditions. However, performance under high concurrent user load (50–100 VUs) against remote PostgreSQL over WAN with `maximum-pool-size=4` remains **NOT VERIFIED IN A LIVE STAGING ENVIRONMENT**. Production scaling limits will depend on Supabase connection limits and Render container resources.

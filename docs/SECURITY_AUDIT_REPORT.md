@@ -84,6 +84,36 @@ All identified attack vectors were thoroughly evaluated directly at the HTTP API
 
 ---
 
-## 4. Certification
+## 4. Authorization Boundaries Review & Coverage Scope
 
-The SocioMart application layer exhibits rigorous security controls with zero critical vulnerabilities detected. All endpoints correctly enforce authentication, role permissions, and tenant boundaries at the HTTP filter and controller layer.
+### 4.1 Boundaries Formally Verified in the 11 Adversarial Tests
+The test suite `DeepAdversarialSecurityAndBoundaryTest` verifies 11 distinct attack vectors at the HTTP filter and controller layer:
+1. `ADV-01`: Non-negative/non-zero price validation on product creation (`POST /api/seller/products` -> HTTP 400).
+2. `ADV-02`: Unicode, Emoji, and SQL token injection resistance on order creation (`POST /api/buyer/orders/place` -> HTTP 200, safely escaped).
+3. `ADV-03`: Cross-buyer order IDOR protection (`GET /api/buyer/orders/{id}` -> HTTP 404, `POST /api/buyer/orders/{id}/cancel` -> HTTP 404).
+4. `ADV-04`: Cross-seller order mutation IDOR protection (`PATCH /api/seller/orders/{id}/payment-status` -> HTTP 403, `PATCH /api/seller-app/orders/{id}/delivery-status` -> HTTP 403).
+5. `ADV-05`: Buyer self-verifying payment status protection (`PATCH /api/orders/{id}/payment-status` -> HTTP 400).
+6. `ADV-06`: Cross-society ordering restriction (`POST /api/buyer/orders/draft` -> HTTP 400).
+7. `ADV-07`: Unapproved seller dashboard and discovery gate (`GET /api/seller-app/dashboard` -> HTTP 403, excluded from discovery).
+8. `ADV-08`: 20-thread extreme stock contention on 3 scarce units (exactly 3 succeed with 200 OK, 17 reject with 400 Bad Request, remaining stock 0).
+9. `ADV-09`: Seller mark paid idempotency and rejection on cancelled orders (`PATCH /api/seller/orders/{id}/payment-status` -> HTTP 200 / 400).
+10. `ADV-10`: Buyer rating bounds and duplicate prevention (`POST /api/buyer/orders/{id}/rating` -> HTTP 400 on unpaid/duplicate/out-of-bounds).
+11. `ADV-11`: Delivery completion idempotency and timestamp retention (`PATCH /api/seller-app/orders/{id}/delivery-status` -> HTTP 200).
+
+### 4.2 Boundaries Outside the 11-Test Suite (Evaluated Separately or Requiring Attention)
+The following boundaries are NOT part of `DeepAdversarialSecurityAndBoundaryTest`, though protected elsewhere in the codebase:
+- **Cross-Seller Product Deletion (`DELETE /api/seller/products/{id}`):** Enforced by `SellerService` entity ownership checks and verified in unit tests, but not tested via `MockMvc` in this suite.
+- **Cross-Seller Offering Pause Toggle (`POST /api/seller/offerings/{id}/toggle-pause`):** Enforced in service layer; not explicitly tested in this suite.
+- **Buyer Reorder IDOR (`POST /api/buyer/orders/{id}/reorder`):** Enforced in `BuyerService` checking `order.getBuyer().getId().equals(buyerId)`; tested in requirements integration test.
+- **Admin/SuperAdmin Endpoints (`/api/admin/**`, `/api/superadmin/**`):** Enforced by Spring Security `ROLE_ADMIN` / `ROLE_SUPER_ADMIN` and verified in `AdminV1ScopeTest` and `SecurityAttackSimulationTest`.
+- **Application-Layer Rate Limiting on User Registration:** While `/api/auth/login` is rate-limited via `AuthRateLimiter`, `/api/auth/register/*` relies on unique constraint rejection and database protection rather than an in-memory token bucket.
+
+---
+
+## 5. Security Posture Assessment & Remaining Risks
+
+The core business boundaries and tenant isolation of SocioMart are thoroughly defended against IDOR, SQL injection, XSS, and race conditions. 
+
+**Remaining Residual Risks:**
+1. **DDoS / High-Volume Registration Flooding:** Public registration endpoints (`/api/auth/register/buyer` and `/api/auth/register/seller`) lack application-level IP rate limiting and require upstream reverse proxy / WAF rate limiting (e.g., Cloudflare) in production.
+2. **Session Storage Scaling:** Sessions are persisted in the PostgreSQL database via Spring Session JDBC. High concurrent active user volumes will increase database connection demand and row growth in `SPRING_SESSION`.

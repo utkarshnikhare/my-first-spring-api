@@ -11,14 +11,17 @@
 
 | Gate ID | Domain | Requirement | Verification Method | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| **GATE-01** | **Build & Tests** | Full Maven test suite passes cleanly with 0 failures and 0 errors | `.\mvnw.cmd test` | **PASS** |
-| **GATE-02** | **E2E Workflows** | All Playwright end-to-end browser tests pass (desktop & mobile) | `npx playwright test` | **PASS** |
+| **GATE-01** | **Build & Tests** | Full Maven test suite passes cleanly with 0 failures and 0 errors | `.\mvnw.cmd test` (849 tests) | **PASS** |
+| **GATE-02** | **E2E Workflows** | All Playwright end-to-end browser tests pass (desktop & mobile) | `npx playwright test` (24 passed) | **PASS** |
 | **GATE-03** | **Database Migrations** | Flyway migrations V1–V21 execute cleanly and idempotently on PostgreSQL 16 | `PostgresNativeMigrationTest` | **PASS** |
 | **GATE-04** | **Schema Parity** | Hibernate schema validation matches database entities exactly (26 tables) | `PostgresSchemaMigrationTest` | **PASS** |
-| **GATE-05** | **App Security** | IDOR protection, role boundaries, rate limiting, and XSS defense verified | `SECURITY_AUDIT_REPORT.md` | **PASS** |
-| **GATE-06** | **Concurrency** | Atomic inventory decrement and zero overselling verified under 50-thread load | `PERFORMANCE_TEST_REPORT.md` | **PASS** |
-| **GATE-07** | **Production Safety** | Zero modification or deletion of genuine production records | Production Read-Only Audit | **PASS** |
-| **GATE-08** | **Infrastructure Rule** | `render.yaml` maintains `autoDeploy: false` to ensure manual deployment control | Line 27 inspection | **PASS** |
+| **GATE-05** | **App Security** | IDOR protection, role boundaries, CSRF, and XSS defense verified | `SECURITY_AUDIT_REPORT.md` (11 HTTP tests) | **PASS** |
+| **GATE-06** | **Concurrency** | Atomic inventory decrement and zero overselling verified under 20-thread load | `MultiUserConcurrencyAndAdversarialSecurityTest` | **PASS** |
+| **GATE-07** | **PostgreSQL Stock Contention** | 20-buyer stock contention verified against native PostgreSQL container | `PostgresStockContentionConcurrencyTest` | **PASS (CI)** |
+| **GATE-08** | **Staging Load Test** | Controlled 10-100 VU load test against isolated staging PostgreSQL | Isolated staging DB required | **NOT VERIFIED / BLOCKED** |
+| **GATE-09** | **Production Backup & Restore**| Fresh production backup created and restored to isolated DB | Database credentials & `pg_dump` required | **NOT VERIFIED / BLOCKED** |
+| **GATE-10** | **Production Safety** | Zero modification or deletion of genuine production records | Production Read-Only Audit | **PASS** |
+| **GATE-11** | **Infrastructure Rule** | `render.yaml` maintains `autoDeploy: false` to ensure manual deployment control | Line 27 inspection | **PASS** |
 
 ---
 
@@ -57,8 +60,8 @@
 
 ## 4. Final Sign-Off Attestation
 
-- **Senior QA Architect:** Approved (All 848 unit/integration tests and 24 E2E tests pass).
-- **Application Security Engineer:** Approved (Zero IDOR or injection vulnerabilities).
-- **Performance Engineer:** Approved (Zero overselling under high concurrency contention).
-- **Database Reliability Engineer:** Approved (PostgreSQL constraint ownership OID fix verified).
-- **Production Release Engineer:** Approved (Render configuration and release checklist satisfied).
+- **Senior QA Architect:** Approved with limitations noted (All 849 unit/integration tests and 24 E2E tests pass; staging PostgreSQL load test blocked by environment absence).
+- **Application Security Engineer:** Approved (11 HTTP boundary security tests pass; zero IDOR, CSRF bypass, or injection vulnerabilities).
+- **Performance Engineer:** Approved (Zero overselling under high concurrency contention; H2 and loopback limitations documented).
+- **Database Reliability Engineer:** Approved (PostgreSQL constraint ownership OID fix verified; native PostgreSQL 20-buyer stock contention verified).
+- **Production Release Engineer:** Conditional Approval (Render configuration satisfied, autoDeploy=false preserved; production backup/restore deferred until authorized).
