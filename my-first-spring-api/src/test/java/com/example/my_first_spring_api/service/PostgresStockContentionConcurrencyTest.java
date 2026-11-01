@@ -195,7 +195,7 @@ class PostgresStockContentionConcurrencyTest {
                     Map<String, Object> placePayload = Map.of(
                             "kitchenId", kitchen.getId(),
                             "items", List.of(Map.of("productId", scarceItem.getId(), "quantity", 1)),
-                            "paymentStatus", "PAID",
+                            "paymentStatus", "AWAITING_SELLER_VERIFICATION",
                             "paymentMethod", "upi"
                     );
 
