@@ -1,0 +1,53 @@
+name: Scheduled Production Database Backup
+
+on:
+  schedule:
+    # Runs daily at 20:30 UTC (02:00 AM IST)
+    - cron: '30 20 * * *'
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: 'Backup retention in days'
+        required: false
+        default: '14'
+
+jobs:
+  backup:
+    name: Run and Verify Encrypted Database Backup
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v5
+
+      - name: Install PostgreSQL Client Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client openssl
+
+      - name: Execute Backup & Integrity Verification
+        env:
+          SOCIOMART_DB_URL: ${{ secrets.SOCIOMART_PROD_DB_URL }}
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+        run: |
+          if [ -z "$SOCIOMART_DB_URL" ]; then
+            echo "[-] ERROR: Secret SOCIOMART_PROD_DB_URL is not configured."
+            exit 1
+          fi
+          if [ -z "$BACKUP_ENCRYPTION_PASSPHRASE" ]; then
+            echo "[-] ERROR: Secret BACKUP_ENCRYPTION_PASSPHRASE is not configured."
+            exit 1
+          fi
+
+          chmod +x scripts/backup-database.sh
+          ./scripts/backup-database.sh --encrypt --output-dir ./backups/exports --retention-days ${{ github.event.inputs.retention_days || 14 }}
+
+      - name: Archive Encrypted Backup Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sociomart-encrypted-database-backup
+          path: |
+            ./backups/exports/*.enc
+            ./backups/exports/*.sha256
+            ./backups/exports/*.meta.json
+          retention-days: 14
+          if-no-files-found: error
