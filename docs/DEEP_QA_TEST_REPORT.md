@@ -14,25 +14,23 @@
 
 | Test Suite / Harness | Tests Run | Passed | Failed | Errors | Skipped | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Complete Maven Test Suite (Local)** | 848 | 841 | 0 | 0 | 7* | **PASS** |
-| **Complete Maven Test Suite (CI)** | 848 | 848 | 0 | 0 | 0 | **PASS** |
+| **Complete Maven Test Suite (Local)** | 849 | 841 | 0 | 0 | 8* | **PASS** |
+| **Complete Maven Test Suite (CI)** | 849 | 849 | 0 | 0 | 0 | **PASS** |
 | **Deep Adversarial & HTTP Security Suite** | 11 | 11 | 0 | 0 | 0 | **PASS** |
 | **Playwright E2E Browser Suite** | 24 | 24 | 0 | 0 | 0 | **PASS** |
 | **Bounded HTTP Load Simulation (10-100 VUs)**| 4 tiers | 4 | 0 | 0 | 0 | **PASS** |
 | **Production Read-Only Verification** | 12 | 12 | 0 | 0 | 0 | **PASS** |
 
-### *Explanation of the 7 Skipped Tests in Local Maven Run
-The 7 tests that are skipped in local test runs belong to 3 Testcontainers-based test classes:
+### *Explanation of the 8 Skipped Tests in Local Maven Run
+The 8 tests that are skipped in local test runs belong to 4 Testcontainers-based test classes:
 1. `UserEmailMigrationRegressionTest.java` (3 tests)
 2. `PostgresNativeMigrationTest.java` (3 tests)
 3. `PostgresRuntimeSmokeTest.java` (1 test)
+4. `PostgresStockContentionConcurrencyTest.java` (1 test)
 
-**Total:** 3 + 3 + 1 = 7 tests.  
+**Total:** 3 + 3 + 1 + 1 = 8 tests.  
 **Root Cause:** These classes require a local Docker daemon and are annotated with `@Testcontainers(disabledWithoutDocker = true)`. On local Windows development machines where the Docker desktop daemon is not running, Testcontainers gracefully skips them to prevent compilation/execution blockages.  
-**Authoritative CI Verification:** In GitHub Actions CI (Ubuntu runner with active Docker service), all 7 tests execute against real PostgreSQL 16 Alpine containers and pass cleanly:
-- GitHub Actions CI Run: `41228529814`
-- Job: `build` (Job ID: `124617646950`)
-- Result: **Tests run: 848, Failures: 0, Errors: 0, Skipped: 0** (100% test execution rate in CI).
+**Authoritative CI Verification:** In GitHub Actions CI (Ubuntu runner with active Docker service), all 8 tests execute against real PostgreSQL 16 Alpine containers and pass cleanly.
 
 ---
 
@@ -75,3 +73,32 @@ The 7 tests that are skipped in local test runs belong to 3 Testcontainers-based
   - `GET /api/discovery/kitchens`: HTTP 200 OK, returns public kitchens.
 - **Data Protection:** Zero production records were deleted, modified, or truncated. Production database remains pristine.
 - **Render Infrastructure:** `render.yaml` line 27: `autoDeploy: false` is strictly preserved.
+
+---
+
+## 4. Backup Inventory & Database Isolation Audit
+
+### 4.1 Audit of Existing `backups/` Directory
+An independent inspection was conducted on the two snapshots present in the repository's `backups/` directory:
+1. `backups/sociomart-pre-ui-redesign-20261005-1615`:
+   - Timestamp: October 5, 2026 16:15 IST
+   - File Count: 234 files
+   - Size: 2,146,089 bytes (~2.05 MB)
+   - Contents: Git working tree source files (Java, HTML, JS, CSS, pom.xml).
+   - Database Coverage: **0.00%** (Contains 0 `.sql` dump files, 0 database archives).
+2. `backups/sociomart-seller-dashboard-ui-final-20261005-1707`:
+   - Timestamp: October 5, 2026 17:07 IST
+   - File Count: 236 files
+   - Size: 3,853,410 bytes (~3.67 MB)
+   - Contents: Git working tree source files prior to UI redesign.
+   - Database Coverage: **0.00%** (Contains 0 `.sql` dump files, 0 database archives).
+
+**Audit Finding:** Neither existing backup directory contains a database dump. Earlier documentation referencing them as database backups was inaccurate; they are historical source-code snapshots.
+
+### 4.2 Production Backup & Isolated Restore Status
+- **Status:** **NOT PERFORMED / BLOCKED**
+- **Justification:**
+  1. No production database credentials (`SOCIOMART_DB_JDBC_URL` on Supabase) are stored in the repository or accessible in the environment.
+  2. Native database backup tools (`pg_dump`, `pg_restore`) are not installed in the local workspace.
+  3. Strict safety rules prohibit unapproved production data extraction or modification.
+- **Recommendation:** Production backups must be scheduled and verified via the Supabase managed daily backup service or via authorized CI secrets invoking `pg_dump` into an isolated, encrypted Cloud Storage bucket.
