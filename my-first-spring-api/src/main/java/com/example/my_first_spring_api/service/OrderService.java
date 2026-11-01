@@ -512,8 +512,21 @@ public class OrderService {
         notifyNewlySoldOut(order);
         // A buyer acknowledgement is never proof of settlement. The seller's
         // authenticated verification endpoint is the only transition to PAID.
-        order.setPaymentStatus("cod".equals(normalizedPaymentMethod)
-                ? PaymentStatus.UNPAID : PaymentStatus.AWAITING_SELLER_VERIFICATION);
+        boolean isCashOnly = "cod".equalsIgnoreCase(normalizedPaymentMethod)
+                || (order.getKitchen() != null && order.getKitchen().getAcceptedPaymentMode() == SellerPaymentMode.CASH_ONLY);
+
+        if (isCashOnly) {
+            if (paymentStatus == PaymentStatus.AWAITING_SELLER_VERIFICATION) {
+                throw new IllegalArgumentException("Cash-only kitchens do not accept digital payments. Please choose 'Pay Later'.");
+            }
+            order.setPaymentStatus(PaymentStatus.UNPAID);
+        } else {
+            if (paymentStatus == PaymentStatus.UNPAID) {
+                order.setPaymentStatus(PaymentStatus.UNPAID);
+            } else {
+                order.setPaymentStatus(PaymentStatus.AWAITING_SELLER_VERIFICATION);
+            }
+        }
         order.setOrderStatus(OrderStatus.ORDERED);
         order.recalculateTotal();
         // Server-side authoritative order timestamp: set exactly once when the draft
@@ -1422,3 +1435,4 @@ public class OrderService {
         return sb.toString();
     }
 }
+
