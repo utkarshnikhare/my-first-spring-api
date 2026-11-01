@@ -122,11 +122,11 @@ class PostgresDatabaseBackupAndRestoreTest {
         String sellerMobile = "98" + suffix + "11";
         String buyerMobile = "97" + suffix + "22";
 
-        jdbcTemplate.update("INSERT INTO users(name, mobile_number, password, role, seller_approval_status, created_at, updated_at) "
+        jdbcTemplate.update("INSERT INTO users(name, mobile_number, password_hash, role, seller_approval_status, created_at, updated_at) "
                 + "VALUES (?, ?, ?, 'SELLER', 'APPROVED', NOW(), NOW())", "Chef Ananya " + suffix, sellerMobile, "SecretP@ss1!");
         Long sellerId = jdbcTemplate.queryForObject("SELECT id FROM users WHERE mobile_number = ?", Long.class, sellerMobile);
 
-        jdbcTemplate.update("INSERT INTO users(name, mobile_number, password, role, seller_approval_status, created_at, updated_at) "
+        jdbcTemplate.update("INSERT INTO users(name, mobile_number, password_hash, role, seller_approval_status, created_at, updated_at) "
                 + "VALUES (?, ?, ?, 'BUYER', 'APPROVED', NOW(), NOW())", "Rohan Mehta " + suffix, buyerMobile, "SecretP@ss2!");
         Long buyerId = jdbcTemplate.queryForObject("SELECT id FROM users WHERE mobile_number = ?", Long.class, buyerMobile);
 
