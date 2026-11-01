@@ -66,6 +66,16 @@ mkdir -p "${OUTPUT_DIR}"
 RAW_BACKUP_FILE="${OUTPUT_DIR}/${BACKUP_NAME}.dump"
 FINAL_FILE="${RAW_BACKUP_FILE}"
 
+# Ensure partial backup files are cleaned up immediately on error or interruption
+cleanup_on_error() {
+  local exit_code=$?
+  if [[ -n "${RAW_BACKUP_FILE:-}" && -f "${RAW_BACKUP_FILE:-}" ]]; then
+    rm -f "${RAW_BACKUP_FILE}"
+  fi
+  exit $exit_code
+}
+trap cleanup_on_error ERR INT TERM
+
 echo "[*] Starting database backup at $(date -u +"%Y-%m-%dT%H:%M:%SZ")..."
 START_TIME=$(date +%s)
 

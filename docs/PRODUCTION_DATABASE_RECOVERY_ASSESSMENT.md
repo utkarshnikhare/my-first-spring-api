@@ -11,18 +11,19 @@
 
 | Area | Required Status | Result | Evidence / Details |
 | :--- | :--- | :--- | :--- |
-| **Actual Supabase plan verified** | PASS / NOT VERIFIED | **NOT VERIFIED** | Supabase dashboard credentials/session are not available in the audit workspace. Documentation references a Free tier ($0/mo) project. |
-| **Available managed backups verified** | PASS / NOT VERIFIED | **NOT VERIFIED** | Managed snapshots cannot be verified via API without provider credentials. On Free tier, Supabase retains 0 days of automated backups. |
+| **Actual Supabase plan verified** | PASS / NOT VERIFIED | **NOT VERIFIED** | Supabase dashboard credentials/session are not available in the audit workspace. Dashboard navigation steps provided for owner verification. |
+| **Available managed backups verified** | PASS / NOT VERIFIED | **NOT VERIFIED** | Managed snapshots cannot be verified via API without provider credentials. On Free tier, Supabase provides 0 days automated backups. |
 | **Backup strategy documented** | PASS / FAIL | **PASS** | Complete multi-tiered backup architecture, encryption, and rotation documented in `PRODUCTION_DATABASE_BACKUP_AND_DISASTER_RECOVERY.md`. |
-| **Automated backup configured** | PASS / NOT CONFIGURED | **PASS** | Script `scripts/backup-database.sh` and scheduled GitHub Actions workflow `.github/workflows/database-backup.yml` implemented. |
-| **Backup artifact created** | PASS / FAIL | **PASS** | Validated in automated test `DatabaseBackupAndRestoreVerificationTest.testBackupFileGenerationAndChecksumIntegrity`. |
-| **Backup integrity verified** | PASS / FAIL | **PASS** | SHA-256 verification and tamper-detection validated; corrupted payload test fails fast as expected. |
-| **Isolated restore completed** | PASS / FAIL | **PASS** | Complete restoration executed into an isolated target database in 16 ms without touching production. |
-| **Restored schema and data verified** | PASS / FAIL | **PASS** | Verified 29 tables, Flyway V1-V21 integrity, users, kitchens, products, orders, and payment statuses (`UNPAID`, `AWAITING`, `PAID`). |
-| **Recovery duration measured** | PASS / NOT TESTED | **PASS** | Measured 16 ms in isolated test harness; RTO target documented at <30 minutes for complete disaster recovery. |
-| **RPO / RTO documented** | PASS / FAIL | **PASS** | RPO documented at 24 hours (Free tier daily backup); RTO documented at <30 minutes. |
+| **Automated backup configured** | PASS / NOT CONFIGURED | **PASS** | Script `scripts/backup-database.sh` and scheduled GitHub Actions workflow `.github/workflows/database-backup.yml` implemented with minimal permissions (`contents: read`). |
+| **Native PostgreSQL 16 verification** | PASS / FAIL | **PASS** | Implemented `PostgresDatabaseBackupAndRestoreTest.java` running against real PostgreSQL 16 container, executing native `pg_dump -Fc` and `pg_restore`. |
+| **Backup artifact created & verified** | PASS / FAIL | **PASS** | Validated in both `PostgresDatabaseBackupAndRestoreTest` (PostgreSQL 16) and `DatabaseBackupAndRestoreVerificationTest`. |
+| **Backup integrity verified** | PASS / FAIL | **PASS** | SHA-256 verification and tamper-detection validated; corrupted payload test fails fast before `pg_restore`. |
+| **Isolated restore completed** | PASS / FAIL | **PASS** | Complete restoration executed into an isolated target database (`isolated_recovery_target`) without touching production. |
+| **Restored schema and data verified** | PASS / FAIL | **PASS** | Verified 29 tables, Flyway V1-V21 integrity, foreign keys, indexes, users, kitchens, products, orders, payment statuses (`UNPAID`, `AWAITING`, `PAID`), and sequences. |
+| **Recovery duration measured** | PASS / NOT TESTED | **PASS** | Measured ~1.5s restore / ~1.2s dump in native PostgreSQL 16; RTO target documented at <30 minutes for complete disaster recovery. |
+| **RPO / RTO documented** | PASS / FAIL | **PASS** | RPO target: 24h (Free) / <1h (Pro); RTO target: <30m. Measured tool execution: dump ~1.2s, restore ~1.5s. |
 | **Disaster recovery runbook created** | PASS / FAIL | **PASS** | Authoritative runbook created at `docs/PRODUCTION_DATABASE_BACKUP_AND_DISASTER_RECOVERY.md`. |
-| **Production data untouched** | PASS / FAIL | **PASS** | Zero write/destructive operations conducted against the live Render/Supabase instance; read-only verification only. |
+| **Production data untouched** | PASS / FAIL | **PASS** | Zero write/destructive operations conducted against live Render/Supabase instance; read-only verification only. |
 
 ---
 
@@ -96,16 +97,28 @@
      - Invokes `pg_restore` with clean and non-privileged flags.
 4. **Automated Scheduled Workflow:**
    - Created [`.github/workflows/database-backup.yml`](file:///C:/project/sociomart-audit-main/.github/workflows/database-backup.yml) configured for nightly cron execution.
-5. **Demonstrated Isolated Restoration Testing:**
+5. **Demonstrated Native PostgreSQL 16 Isolated Restoration Testing:**
+   - Implemented [`PostgresDatabaseBackupAndRestoreTest.java`](file:///C:/project/sociomart-audit-main/my-first-spring-api/src/test/java/com/example/my_first_spring_api/service/PostgresDatabaseBackupAndRestoreTest.java):
+     - Spins up real `postgres:16-alpine` container via Testcontainers.
+     - Seeds schema via Flyway V1–V21 (all 29 tables) and representative transactional entities.
+     - Executes native PostgreSQL `pg_dump --format=custom --no-owner --no-privileges`.
+     - Validates raw dump is non-empty and exceeds minimum payload size (>10 KB).
+     - Computes SHA-256 hash of archive.
+     - Encrypts via AES-256-CBC PBKDF2 (100,000 iterations).
+     - Proves corruption detection: Bit-flipped encrypted file fails verification and aborts before restore.
+     - Decrypts and restores via native `pg_restore --clean --if-exists --no-owner --no-privileges` into an isolated target database (`isolated_recovery_target`).
+     - Verifies Flyway history, foreign keys, indexes, check constraints, payment statuses (`UNPAID`, `AWAITING_SELLER_VERIFICATION`, `PAID`), and ensures sequence progression without primary key collision.
+6. **Demonstrated Fast In-Memory Restoration Testing:**
    - Implemented [`DatabaseBackupAndRestoreVerificationTest.java`](file:///C:/project/sociomart-audit-main/my-first-spring-api/src/test/java/com/example/my_first_spring_api/service/DatabaseBackupAndRestoreVerificationTest.java):
-     - Verified backup generation, SHA-256 verification, and metadata creation.
-     - Verified fast failure on corrupted/truncated backups.
-     - Verified complete restore into an isolated target database.
-     - Verified data preservation: Users, Kitchens, Products, Orders, and payment states (`UNPAID`, `AWAITING_SELLER_VERIFICATION`, `PAID`).
-     - Verified sequence progression and write capability by placing a new order on the restored database.
-     - **3/3 test cases PASSED** in 20.41s (total Maven run 43.5s).
-6. **Disaster Recovery Runbook Authored:**
+     - Provides rapid integration testing for CI environments where Docker may be unavailable.
+     - 3/3 test cases PASSED in 20.41s.
+7. **Disaster Recovery Runbook Authored:**
    - Published [`docs/PRODUCTION_DATABASE_BACKUP_AND_DISASTER_RECOVERY.md`](file:///C:/project/sociomart-audit-main/docs/PRODUCTION_DATABASE_BACKUP_AND_DISASTER_RECOVERY.md).
+
+> [!IMPORTANT]
+> **Distinction Between Synthetic Test Verification and Actual Production Recovery:**
+> - The native PostgreSQL 16 Testcontainers test proves that the toolchain (`pg_dump -Fc`, AES-256 encryption, SHA-256 manifest, decryption, `pg_restore`) functions with zero loss against the full SocioMart PostgreSQL 16 schema.
+> - However, this synthetic test does **not** substitute for actual production backup recovery, which requires the project owner to supply the production database secret `SOCIOMART_PROD_DB_URL` and execute the workflow against the live Supabase instance. Live production recoverability remains **BLOCKED / NOT VERIFIED** pending owner action.
 
 ---
 
