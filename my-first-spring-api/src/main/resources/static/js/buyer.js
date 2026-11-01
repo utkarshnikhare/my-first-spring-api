@@ -1129,10 +1129,10 @@ function isRecoverableOrderSessionError(err) {
 }
 
 /** Place a draft using the seller's selected payment method. */
-async function placeOrderWithStatus(paymentMethod, btnEl) {
+async function placeOrderWithStatus(paymentMethod, btnEl, requestedStatus) {
     if (state.placingOrder) return;
     if (!state.user || !state.user.authenticated || !isBuyer(state.user)) {
-        return requireAuth(function () { return placeOrderWithStatus(paymentMethod, btnEl); });
+        return requireAuth(function () { return placeOrderWithStatus(paymentMethod, btnEl, requestedStatus); });
     }
     if (!paymentMethod) {
         toast('This kitchen has no configured payment method. The seller must complete payment setup first.', 'error');
@@ -1151,8 +1151,14 @@ async function placeOrderWithStatus(paymentMethod, btnEl) {
     if (statusMessage) statusMessage.textContent = 'Placing your order…';
     try {
         await withAuthGate(async function () {
-            var submittedPaymentStatus = paymentMethod === 'cod'
-                ? 'UNPAID' : 'AWAITING_SELLER_VERIFICATION';
+            var submittedPaymentStatus;
+            if (paymentMethod === 'cod') {
+                submittedPaymentStatus = 'UNPAID';
+            } else if (requestedStatus === 'UNPAID') {
+                submittedPaymentStatus = 'UNPAID';
+            } else {
+                submittedPaymentStatus = 'AWAITING_SELLER_VERIFICATION';
+            }
             var submittedPaymentMethod = paymentMethod;
             var buyerDetails = null;
             if (state.user) {
@@ -1407,12 +1413,22 @@ async function confirmOrderView() {
     }
     h += '</div>';
 
-    if (method) h += '<div class="sticky-footer-bar"><div class="inner">' +
-        '<button class="btn btn-submit btn-block" type="button" data-action="place-order" id="placeOrderBtn">' +
-        'Place Order ✓ — ' + money(draft.totalAmount) + '</button>' +
-        '<p class="tiny muted text-center mt-1">Review everything above before submitting.</p>' +
-        '<p class="tiny muted text-center mt-1" id="placeOrderStatus" role="status" aria-live="polite"></p>' +
-        '</div></div>';
+    if (method) {
+        var isCod = method === 'cod';
+        h += '<div class="sticky-footer-bar"><div class="inner">';
+        if (isCod) {
+            h += '<button class="btn btn-submit btn-block" type="button" data-action="place-order-later" id="placeOrderBtn">' +
+                'PLACE ORDER (PAY ON DELIVERY) — ' + money(draft.totalAmount) + '</button>';
+        } else {
+            h += '<button class="btn btn-submit btn-block" type="button" data-action="place-order-paid" id="placeOrderBtn">' +
+                'I’VE PAID — PLACE ORDER — ' + money(draft.totalAmount) + '</button>' +
+                '<button class="btn btn-secondary btn-block mt-2" type="button" data-action="place-order-later" id="placeOrderLaterBtn">' +
+                'I’LL PAY LATER — PLACE ORDER — ' + money(draft.totalAmount) + '</button>';
+        }
+        h += '<p class="tiny muted text-center mt-1">Review everything above before submitting.</p>' +
+            '<p class="tiny muted text-center mt-1" id="placeOrderStatus" role="status" aria-live="polite"></p>' +
+            '</div></div>';
+    }
 
     h += '</div>';
     return h;
@@ -1524,12 +1540,20 @@ async function paymentView() {
     h += '</div>';
 
     var isCod = method === 'cod';
-    if (method) h += '<div class="sticky-footer-bar"><div class="inner">' +
-        '<button class="btn btn-primary btn-block" type="button" id="payNowBtn" data-action="confirm-payment"' +
-        (isCod ? ' data-cod="1"' : '') + '>' +
-        (isCod ? 'PLACE ORDER (PAY ON DELIVERY) — ' : 'I’VE PAID — PLACE ORDER — ') + money(draft.totalAmount) + '</button>' +
-        '<p class="tiny muted text-center mt-1" id="placeOrderStatus" role="status" aria-live="polite"></p>' +
-        '</div></div>';
+    if (method) {
+        h += '<div class="sticky-footer-bar"><div class="inner">';
+        if (isCod) {
+            h += '<button class="btn btn-primary btn-block" type="button" id="payNowBtn" data-action="confirm-payment" data-cod="1" data-payment-status="UNPAID">' +
+                'PLACE ORDER (PAY ON DELIVERY) — ' + money(draft.totalAmount) + '</button>';
+        } else {
+            h += '<button class="btn btn-primary btn-block" type="button" id="payNowBtn" data-action="confirm-payment" data-payment-status="AWAITING_SELLER_VERIFICATION">' +
+                'I’VE PAID — PLACE ORDER — ' + money(draft.totalAmount) + '</button>' +
+                '<button class="btn btn-secondary btn-block mt-2" type="button" id="payLaterBtn" data-action="confirm-payment" data-payment-status="UNPAID">' +
+                'I’LL PAY LATER — PLACE ORDER — ' + money(draft.totalAmount) + '</button>';
+        }
+        h += '<p class="tiny muted text-center mt-1" id="placeOrderStatus" role="status" aria-live="polite"></p>' +
+            '</div></div>';
+    }
 
     h += '</div>';
     return h;
@@ -1542,7 +1566,8 @@ async function confirmPayment(btnEl) {
         return requireAuth(function () { return confirmPayment(btnEl); });
     }
     var note = (state.pendingCheckout && state.pendingCheckout.note) || '';
-    var cod = btnEl && btnEl.dataset.cod === '1';
+    var cod = (btnEl && btnEl.dataset.cod === '1') || state.payMethod === 'cod';
+    var paymentChoice = btnEl ? btnEl.dataset.paymentStatus : null;
     state.placingOrder = true;
     var original = btnEl ? btnEl.innerHTML : '';
     var statusMessage = document.getElementById('placeOrderStatus');
@@ -1578,7 +1603,14 @@ async function confirmPayment(btnEl) {
                 state.user.society = soc;
             }
             var cart = getCart();
-            var submittedPaymentStatus = cod ? 'UNPAID' : 'AWAITING_SELLER_VERIFICATION';
+            var submittedPaymentStatus;
+            if (cod) {
+                submittedPaymentStatus = 'UNPAID';
+            } else if (paymentChoice === 'UNPAID') {
+                submittedPaymentStatus = 'UNPAID';
+            } else {
+                submittedPaymentStatus = 'AWAITING_SELLER_VERIFICATION';
+            }
             var placeBody = {
                 kitchenId: cart ? cart.kitchenId : null,
                 items: (cart && cart.items) ? cart.items.map(function (i) {

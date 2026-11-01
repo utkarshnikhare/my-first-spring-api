@@ -165,17 +165,18 @@ document.addEventListener('click', async function (e) {
             case 'go-payment': navigate('#/payment'); break;
             case 'place-order-paid':
                 try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
-                await placeOrderWithStatus(state.payMethod, t); break;
+                await placeOrderWithStatus(state.payMethod, t, 'AWAITING_SELLER_VERIFICATION'); break;
             case 'place-order-later':
                 try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
-                await placeOrderWithStatus(state.payMethod, t); break;
+                await placeOrderWithStatus(state.payMethod, t, 'UNPAID'); break;
             case 'select-pay-method': state.payMethod = t.dataset.method; await render(); break;
             case 'toggle-checkout-address':
                 state.editingCheckoutAddress = !state.editingCheckoutAddress;
                 await render(); break;
             case 'place-order':
                 try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
-                await placeOrderWithStatus(state.payMethod, t); break;
+                var defaultPlaceStatus = (state.payMethod === 'cod') ? 'UNPAID' : 'AWAITING_SELLER_VERIFICATION';
+                await placeOrderWithStatus(state.payMethod, t, defaultPlaceStatus); break;
             case 'confirm-payment': await confirmPayment(t); break;
             case 'logout': {
                 try { await api('/api/auth/logout', { method: 'POST' }); } catch (e5) {}

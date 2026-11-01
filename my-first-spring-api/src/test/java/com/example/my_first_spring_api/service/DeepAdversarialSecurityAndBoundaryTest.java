@@ -250,7 +250,7 @@ public class DeepAdversarialSecurityAndBoundaryTest {
         Map<String, Object> placePayload = Map.of(
                 "kitchenId", kitchenA.getId(),
                 "items", draftItems,
-                "paymentStatus", "PAID",
+                "paymentStatus", "AWAITING_SELLER_VERIFICATION",
                 "paymentMethod", "upi",
                 "customInstructions", complexInstructions
         );
@@ -297,7 +297,7 @@ public class DeepAdversarialSecurityAndBoundaryTest {
         Map<String, Object> placePayload = Map.of(
                 "kitchenId", kitchenA.getId(),
                 "items", draftItems,
-                "paymentStatus", "PAID",
+                "paymentStatus", "AWAITING_SELLER_VERIFICATION",
                 "paymentMethod", "upi",
                 "customInstructions", "No onions"
         );
@@ -502,7 +502,7 @@ public class DeepAdversarialSecurityAndBoundaryTest {
                     Map<String, Object> placePayload = Map.of(
                             "kitchenId", kitchenA.getId(),
                             "items", List.of(Map.of("productId", scarceItem.getId(), "quantity", 1)),
-                            "paymentStatus", "PAID",
+                            "paymentStatus", "AWAITING_SELLER_VERIFICATION",
                             "paymentMethod", "upi"
                     );
 
@@ -721,7 +721,7 @@ public class DeepAdversarialSecurityAndBoundaryTest {
         Map<String, Object> placePayload = Map.of(
                 "kitchenId", kitchenA.getId(),
                 "items", draftItems,
-                "paymentStatus", "PAID",
+                "paymentStatus", "AWAITING_SELLER_VERIFICATION",
                 "paymentMethod", "upi"
         );
 
@@ -791,3 +791,4 @@ public class DeepAdversarialSecurityAndBoundaryTest {
         return userRepository.saveAndFlush(buyer);
     }
 }
+

@@ -4,6 +4,7 @@ import com.example.my_first_spring_api.dto.OrderDto;
 import com.example.my_first_spring_api.dto.OrderItemRequest;
 import com.example.my_first_spring_api.dto.PlaceOrderRequest;
 import com.example.my_first_spring_api.dto.UpdatePaymentStatusRequest;
+import com.example.my_first_spring_api.model.PaymentStatus;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.service.BuyerService;
 import com.example.my_first_spring_api.service.OrderService;
@@ -55,6 +56,9 @@ public class BuyerOrderController {
     @PostMapping(path = {"", "/place"})
     public ResponseEntity<OrderDto> placeOrder(@Valid @RequestBody PlaceOrderRequest request, HttpSession session) {
         User buyer = buyerService.requireCurrentBuyer(session);
+        if (request.getPaymentStatus() == PaymentStatus.PAID) {
+            throw new IllegalArgumentException("Buyers cannot mark an order as paid directly.");
+        }
         if (request.getItems() != null && !request.getItems().isEmpty()) {
             Long kitchenId = request.getKitchenId();
             if (kitchenId == null && !request.getItems().isEmpty()) {
@@ -106,6 +110,9 @@ public class BuyerOrderController {
                                                         @Valid @RequestBody UpdatePaymentStatusRequest request,
                                                         HttpSession session) {
         User buyer = buyerService.requireCurrentBuyer(session);
+        if (request.getPaymentStatus() == PaymentStatus.PAID) {
+            throw new IllegalArgumentException("Buyers cannot mark an order as paid directly.");
+        }
         return ResponseEntity.ok(orderService.updatePaymentStatus(orderId, request.getPaymentStatus(), buyer));
     }
 }
