@@ -8,8 +8,7 @@ var state = {
     favTab: 'kitchens',       // Screen 8 favourites tabs
     ordersTab: 'orders',      // Screen 8 orders/enquiries tabs
     ordersFilter: 'all',      // Screen 8 order filter: all/active/completed/cancelled
-    payMethod: 'upi',         // Screen 6 demo payment method: upi/card/cod
-    payPreference: 'PAID',    // Confirm Order payment-status selection: PAID | PENDING
+    payMethod: '',            // Seller-configured method selected for this order
     placingOrder: false,      // idempotency guard for payment confirmation
     lastOrder: null,          // placed order for the confirmation screen
     authMobile: '',
@@ -166,21 +165,18 @@ document.addEventListener('click', async function (e) {
             case 'go-payment': navigate('#/payment'); break;
             case 'place-order-paid':
                 try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
-                await placeOrderWithStatus('PAID'); break;
+                await placeOrderWithStatus(state.payMethod, t, 'AWAITING_SELLER_VERIFICATION'); break;
             case 'place-order-later':
                 try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
-                await placeOrderWithStatus('PENDING'); break;
+                await placeOrderWithStatus(state.payMethod, t, 'UNPAID'); break;
             case 'select-pay-method': state.payMethod = t.dataset.method; await render(); break;
             case 'toggle-checkout-address':
                 state.editingCheckoutAddress = !state.editingCheckoutAddress;
                 await render(); break;
-            case 'select-pay-status': // Confirm Order: Paid / Will Pay Later (UI selection only)
-                state.payPreference = t.dataset.status === 'PENDING' || t.dataset.status === 'WILL_PAY_LATER'
-                    ? 'PENDING' : 'PAID';
-                await render(); break;
             case 'place-order':
                 try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
-                await placeOrderWithStatus(state.payPreference || 'PAID'); break;
+                var defaultPlaceStatus = (state.payMethod === 'cod') ? 'UNPAID' : 'AWAITING_SELLER_VERIFICATION';
+                await placeOrderWithStatus(state.payMethod, t, defaultPlaceStatus); break;
             case 'confirm-payment': await confirmPayment(t); break;
             case 'logout': {
                 try { await api('/api/auth/logout', { method: 'POST' }); } catch (e5) {}

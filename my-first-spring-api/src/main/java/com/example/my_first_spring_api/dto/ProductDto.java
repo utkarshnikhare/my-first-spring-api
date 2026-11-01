@@ -19,6 +19,7 @@ public class ProductDto {
     private LocalDate availableDate;
     private Boolean ordersPaused;
     private String orderWindowStart;
+    private java.time.LocalDateTime ordersOpenFrom;
     private String orderWindowEnd;
     private Integer maxQuantity;
     private Integer remainingQuantity;
@@ -58,6 +59,9 @@ public class ProductDto {
     private Long occurrenceId;
     private String sellerType;
     private Boolean isHomemade;
+    private String buyerSection;
+    private Boolean quickPost;
+    private String quickPostImageData;
 
     public ProductDto() {}
 
@@ -113,6 +117,8 @@ public class ProductDto {
     public boolean isOrdersPaused() { return Boolean.TRUE.equals(ordersPaused); }
     public String getOrderWindowStart() { return orderWindowStart; }
     public void setOrderWindowStart(String orderWindowStart) { this.orderWindowStart = orderWindowStart; }
+    public java.time.LocalDateTime getOrdersOpenFrom() { return ordersOpenFrom; }
+    public void setOrdersOpenFrom(java.time.LocalDateTime ordersOpenFrom) { this.ordersOpenFrom = ordersOpenFrom; }
     public String getOrderWindowEnd() { return orderWindowEnd; }
     public void setOrderWindowEnd(String orderWindowEnd) { this.orderWindowEnd = orderWindowEnd; }
     public Integer getMaxQuantity() { return maxQuantity; }
@@ -159,4 +165,10 @@ public class ProductDto {
         return category != null && category.toUpperCase().contains("HOMEMADE");
     }
     public void setIsHomemade(Boolean isHomemade) { this.isHomemade = isHomemade; }
+    public String getBuyerSection() { return buyerSection; }
+    public void setBuyerSection(String buyerSection) { this.buyerSection = buyerSection; }
+    public Boolean getQuickPost() { return quickPost; }
+    public void setQuickPost(Boolean quickPost) { this.quickPost = quickPost; }
+    public String getQuickPostImageData() { return quickPostImageData; }
+    public void setQuickPostImageData(String quickPostImageData) { this.quickPostImageData = quickPostImageData; }
 }

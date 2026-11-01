@@ -1,0 +1,76 @@
+name: Scheduled Production Database Backup
+
+on:
+  schedule:
+    # Runs daily at 20:30 UTC (02:00 AM IST)
+    - cron: '30 20 * * *'
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: 'Backup retention in days'
+        required: false
+        default: '14'
+      confirm_run:
+        description: 'Type RUN_BACKUP to confirm manual trigger'
+        required: false
+        default: 'RUN_BACKUP'
+
+jobs:
+  backup:
+    name: Run and Verify Encrypted Database Backup
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v5
+
+      - name: Install PostgreSQL Client Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client openssl
+
+      - name: Execute Backup & Integrity Verification
+        env:
+          SOCIOMART_DB_URL: ${{ secrets.SOCIOMART_PROD_DB_URL }}
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+          CONFIRM_RUN: ${{ github.event.inputs.confirm_run }}
+          INPUT_RETENTION_DAYS: ${{ github.event.inputs.retention_days }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          RETENTION="${INPUT_RETENTION_DAYS:-14}"
+          # Enforce deliberate operator confirmation for manual execution
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$CONFIRM_RUN" != "RUN_BACKUP" ]; then
+            echo "[-] ERROR: Manual execution requires confirm_run='RUN_BACKUP'."
+            exit 1
+          fi
+
+          if [ -z "$SOCIOMART_DB_URL" ]; then
+            echo "[-] ERROR: Secret SOCIOMART_PROD_DB_URL is not configured."
+            echo "    Repository administrator must configure this secret before backups can run."
+            exit 1
+          fi
+
+          if [ -z "$BACKUP_ENCRYPTION_PASSPHRASE" ]; then
+            echo "[-] ERROR: Secret BACKUP_ENCRYPTION_PASSPHRASE is not configured."
+            echo "    Repository administrator must configure this secret before backups can run."
+            exit 1
+          fi
+
+          # Defense-in-depth: explicitly mask secrets in runner output
+          echo "::add-mask::$SOCIOMART_DB_URL"
+          echo "::add-mask::$BACKUP_ENCRYPTION_PASSPHRASE"
+
+          chmod +x scripts/backup-database.sh
+          ./scripts/backup-database.sh --encrypt --output-dir ./backups/exports --retention-days "$RETENTION"
+
+      - name: Archive Encrypted Backup Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sociomart-encrypted-database-backup
+          path: |
+            ./backups/exports/*.enc
+            ./backups/exports/*.sha256
+            ./backups/exports/*.meta.json
+          retention-days: 14
+          if-no-files-found: error

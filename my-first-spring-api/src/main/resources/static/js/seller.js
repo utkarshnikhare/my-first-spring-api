@@ -1,7 +1,7 @@
 /**
  * SocioMart Seller App v1.0 - 6-tab SPA
  */
-var S = { user: null, kitchen: null, kitchenUrl: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFilterDelivery: '', offeringProductId: '', deliverySaving: {}, deliveryBlockRequestId: 0, bulkDelivering: false, offeringFor: 'today', quickPostRequestId: null, editOffering: null, dashFilter: 'ALL', offeringsTab: 'history', recurringSchedules: [], recurringDetail: null, offeringMode: 'today', recurringDuration: 'thisweek', dashTab: 'live', offeringSubmitting: false, editOccurrenceId: null, authMode: 'login', authOptions: null, authError: null, authServiceAreaId: '', authSlugTouched: false };
+var S = { user: null, kitchen: null, kitchenUrl: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFilterDelivery: '', offeringProductId: '', deliverySaving: {}, deliveryBlockRequestId: 0, bulkDelivering: false, offeringFor: 'today', quickPostRequestId: null, editOffering: null, dashFilter: 'ALL', offeringsTab: 'history', recurringSchedules: [], recurringDetail: null, recurringDuration: 'thisweek', dashTab: 'live', offeringSubmitting: false, editOccurrenceId: null, authMode: 'login', authOptions: null, authError: null, authServiceAreaId: '', authSlugTouched: false };
 var sellerRoutes = {
     '#/home': sellerHomeView, '#/add': sellerAddView, '#/create': sellerCreateView,
     '#/edit-offering': sellerEditOfferingView,
@@ -126,6 +126,22 @@ async function sellerAuthHtml() {
         '<option value="KITCHEN">Kitchen / Food — breakfast, lunch, dinner and snacks</option>' +
         '<option value="HOMEMADE_PRODUCTS">Homemade Products — cakes, ghee, achar, papad, sweets and other homemade products</option>' +
         '<option value="BOTH">Both — Kitchen / Food and Homemade Products</option></select></div>' +
+        '<fieldset class="seller-reg-coverage"><legend>Payment methods <span class="req">*</span></legend>' +
+        '<div class="form-group"><label for="sellerRegPaymentMode">What can buyers use?</label>' +
+        '<select class="form-input" id="sellerRegPaymentMode" name="acceptedPaymentMode" required>' +
+        '<option value="">Choose payment methods</option><option value="GPAY">Google Pay only</option>' +
+        '<option value="UPI">UPI ID only</option><option value="GPAY_AND_UPI">Google Pay and UPI ID</option>' +
+        '<option value="CASH_ONLY">Cash only</option></select></div>' +
+        '<div class="form-group" id="sellerRegUpiGroup" hidden><label for="sellerRegUpiId">UPI ID</label>' +
+        '<input class="form-input" id="sellerRegUpiId" name="upiId" autocomplete="off"></div>' +
+        '<div id="sellerRegGpayGroup" hidden><div class="form-group"><label for="sellerRegGpayType">Google Pay identifier type</label>' +
+        '<select class="form-input" id="sellerRegGpayType" name="gpayIdentifierType">' +
+        '<option value="">Choose a type</option><option value="PHONE_NUMBER">GPay-linked mobile number</option>' +
+        '<option value="UPI_ID">GPay UPI ID</option></select></div>' +
+        '<div class="form-group"><label for="sellerRegGpayIdentifier">Google Pay identifier</label>' +
+        '<input class="form-input" id="sellerRegGpayIdentifier" name="gpayIdentifier" autocomplete="off">' +
+        '<p class="muted small">Choose the identifier type explicitly; a phone number is not assumed to be a UPI ID.</p></div></div>' +
+        '</fieldset>' +
         '<div class="form-group"><label for="sellerRegShort">Short description (optional)</label><textarea class="form-input" id="sellerRegShort" name="shortDescription" maxlength="500"></textarea></div>' +
         '<div class="form-group"><label for="sellerRegInstagram">Instagram URL (optional)</label><input class="form-input" id="sellerRegInstagram" name="instagramLink" type="url" maxlength="255"></div>' +
         '<div class="form-group"><label for="sellerRegPrimaryArea">Primary area</label><select class="form-input" id="sellerRegPrimaryArea" name="primaryAreaId" required>' +
@@ -151,6 +167,11 @@ function bindSellerAuth(view) {
     var registrationForm = view.querySelector('#sellerRegistrationForm');
     if (!registrationForm) return;
     registrationForm.addEventListener('submit', sellerRegistrationSubmit);
+    var paymentMode = view.querySelector('#sellerRegPaymentMode');
+    paymentMode.addEventListener('change', function () {
+        syncSellerRegistrationPaymentFields(registrationForm);
+    });
+    syncSellerRegistrationPaymentFields(registrationForm);
     var primaryArea = view.querySelector('#sellerRegPrimaryArea');
     primaryArea.addEventListener('change', function () {
         var society = view.querySelector('#sellerRegPrimarySociety');
@@ -185,6 +206,25 @@ function bindSellerAuth(view) {
         S.authSlugTouched = true;
         if (slugHint) slugHint.textContent = 'sociomart-demo.onrender.com/kitchen/' + slug.value.trim();
     });
+}
+
+function syncSellerRegistrationPaymentFields(form) {
+    var mode = form.elements.acceptedPaymentMode.value;
+    var showUpi = mode === 'UPI' || mode === 'GPAY_AND_UPI';
+    var showGpay = mode === 'GPAY' || mode === 'GPAY_AND_UPI';
+    var upiGroup = form.querySelector('#sellerRegUpiGroup');
+    var gpayGroup = form.querySelector('#sellerRegGpayGroup');
+    var upiId = form.elements.upiId;
+    var gpayType = form.elements.gpayIdentifierType;
+    var gpayIdentifier = form.elements.gpayIdentifier;
+    upiGroup.hidden = !showUpi;
+    gpayGroup.hidden = !showGpay;
+    upiId.required = showUpi;
+    upiId.disabled = !showUpi;
+    gpayType.required = showGpay;
+    gpayType.disabled = !showGpay;
+    gpayIdentifier.required = showGpay;
+    gpayIdentifier.disabled = !showGpay;
 }
 
 async function sellerLoginSubmit(event) {
@@ -289,6 +329,10 @@ async function sellerRegistrationSubmit(event) {
             primaryAreaId: Number(form.elements.primaryAreaId.value),
             primarySocietyId: Number(form.elements.primarySocietyId.value),
             building: form.elements.building.value.trim(),
+            acceptedPaymentMode: form.elements.acceptedPaymentMode.value,
+            upiId: form.elements.upiId.disabled ? null : form.elements.upiId.value.trim(),
+            gpayIdentifierType: form.elements.gpayIdentifierType.disabled ? null : form.elements.gpayIdentifierType.value,
+            gpayIdentifier: form.elements.gpayIdentifier.disabled ? null : form.elements.gpayIdentifier.value.trim(),
             serviceAreaId: Number(form.elements.serviceAreaId.value),
             serviceSocietyIds: serviceIds
         } });
@@ -446,6 +490,7 @@ function greeting() { var h = new Date().getHours(); return h < 12 ? 'Good morni
 function offeringStatusBadge(p) {
     if (p.soldOut) return '<span class="oc-badge soldout">SOLD OUT</span>';
     if (p.ordersPaused) return '<span class="oc-badge paused">PAUSED</span>';
+    if (p.lifecycleState === 'SCHEDULED_TO_OPEN') return '<span class="oc-badge closed">SCHEDULED TO OPEN · ' + esc(prettyDateTime(p.ordersOpenFrom)) + '</span>';
     if (p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED') return '<span class="oc-badge closed">ORDERS CLOSED</span>';
     if (p.isPreorder || p.lifecycleState === 'PRE_ORDER') return '<span class="oc-badge live">PRE-ORDER • LIVE</span>';
     // V2 §7.1 / V3 §6.1: Recurring is a badge on the card, never a tab.
@@ -482,6 +527,7 @@ function applyOfferingDatePicker(picker) {
     if (hidden && picker.value) hidden.value = picker.value;
     var form = picker.closest('form');
     if (form) {
+        var readyInput = form.querySelector('input[name="readyByTime"]');
         var closeInput = form.querySelector('input[name="orderWindowEnd"]');
         if (readyInput && readyInput.value && picker.value) {
             var timePart = readyInput.value.length >= 16 ? readyInput.value.slice(11, 16) : '12:30';
@@ -514,10 +560,68 @@ function sellerDate(dateKey) {
     if (dateKey && dateKey !== 'today' && dateKey !== 'pick') return dateKey;
     return istToday;
 }
+function sellerTimeNow() {
+    var parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).formatToParts(new Date());
+    var hour = parts.find(function (p) { return p.type === 'hour'; });
+    var minute = parts.find(function (p) { return p.type === 'minute'; });
+    return (hour ? hour.value : '00') + ':' + (minute ? minute.value : '00');
+}
+function updateOrdersOpenFromSummary(form) {
+    if (!form) return;
+    var mode = form.querySelector('[name="orderOpenDateMode"]');
+    var dateInput = form.querySelector('[name="chosenOrderOpenDate"]');
+    var timeInput = form.querySelector('[name="orderOpenTime"]');
+    var date = mode && mode.value === 'tomorrow' ? sellerDate('tomorrow')
+        : (mode && mode.value === 'choose' ? (dateInput && dateInput.value || '') : sellerDate('today'));
+    var summary = form.querySelector('#ordersOpenFromSummary');
+    if (!summary) return;
+    if (!date) {
+        summary.textContent = 'Choose the date orders should begin.';
+    } else if (date === sellerDate('today') && !(timeInput && timeInput.value)) {
+        summary.textContent = 'Orders open immediately after publishing.';
+    } else {
+        summary.textContent = 'Orders open ' + (date === sellerDate('today') ? 'today' : date === sellerDate('tomorrow') ? 'tomorrow' : 'on ' + date)
+            + (timeInput && timeInput.value ? ' at ' + formatFriendlyTime12h(timeInput.value) : ' — choose a time.');
+    }
+}
+function ordersOpenFromError(openDate, openTime, offeringDate, orderWindowEnd, readyBy) {
+    var today = sellerDate('today');
+    if (openDate < today) return 'Orders Open From date cannot be in the past.';
+    if (openDate > offeringDate) return 'Orders Open From cannot be after the delivery date.';
+    if (openDate > today && !openTime) return 'Choose an opening time for tomorrow or a future date.';
+    if (openDate === today && openTime && openTime <= sellerTimeNow()) {
+        return 'Orders Open From time has passed. Leave it blank for immediate opening or choose a future time.';
+    }
+    var selectedTime = openTime || (openDate === today ? sellerTimeNow() : null);
+    if (!selectedTime) return null;
+    var readyDate = readyBy && readyBy.length >= 16 ? readyBy.slice(0, 10) : offeringDate;
+    var readyTime = readyBy && readyBy.length >= 16 ? readyBy.slice(11, 16) : null;
+    if (readyTime && (openDate > readyDate || (openDate === readyDate && selectedTime >= readyTime))) {
+        return 'Orders Open From must be before Delivery / Ready By.';
+    }
+    if (orderWindowEnd) {
+        var closeDate = offeringDate;
+        if (readyTime && orderWindowEnd >= readyTime) {
+            var dateParts = offeringDate.split('-').map(Number);
+            closeDate = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2] - 1)).toISOString().slice(0, 10);
+        }
+        if (openDate > closeDate || (openDate === closeDate && selectedTime >= orderWindowEnd)) {
+            return 'Orders Open From must be before Orders Close.';
+        }
+    }
+    return null;
+}
 function prettyDateTime(iso) {
     if (!iso) return '';
-    var d = new Date(iso);
-    return prettyDate(localDateStr(d)) + ' ' + prettyTime(d.toTimeString().slice(0,5));
+    var value = String(iso);
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) value += ':00';
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value)) value += '+05:30';
+    return new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short',
+        hour: 'numeric', minute: '2-digit', hour12: true
+    }).format(new Date(value));
 }
 function sellerImg(url) {
     if (!url) return '';
@@ -769,7 +873,7 @@ function sdOfferingFilterHtml(offerings) {
  *                   app has no figure to show (never a made-up number)
  */
 function sdOfferingCardHtml(p, orderCount) {
-    var img = sellerImg(p.imageUrl);
+    var img = sellerImg(p.quickPostImageData || p.imageUrl);
     var remaining = p.remainingQuantity;
     var maxQty = p.maxQuantity;
     var isHm = isHomemadeProduct(p);
@@ -827,8 +931,8 @@ function sdOfferingCardHtml(p, orderCount) {
             + esc(p.occurrenceId) + '">' + occSoldLabel + '</button>';
     } else if (!p.recurring) {
         h += '<button class="sd-btn sd-btn--edit" type="button" data-action="edit-offering" data-pid="' + p.id + '">Edit</button>';
-        if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--pause" type="button" data-action="pause-orders" data-pid="' + p.id + '">Pause</button>';
-        if (p.ordersPaused && !p.soldOut) h += '<button class="sd-btn sd-btn--resume" type="button" data-action="resume-orders" data-pid="' + p.id + '">Resume</button>';
+        if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--pause" type="button" data-action="pause-orders" data-pid="' + p.id + '">' + (p.quickPost ? 'Close Post' : 'Pause') + '</button>';
+        if (p.ordersPaused && !p.soldOut) h += '<button class="sd-btn sd-btn--resume" type="button" data-action="resume-orders" data-pid="' + p.id + '">' + (p.quickPost ? 'Reopen Post' : 'Resume') + '</button>';
         if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Sold Out</button>';
     }
     h += '</div></div></div>';
@@ -917,6 +1021,8 @@ async function sellerHomeView() {
         + '<button class="sd-header__avatar" type="button" data-action="toggle-theme"'
         + ' aria-label="Switch between light and dark theme" title="Switch theme">'
         + esc(avatarLetter) + '</button>'
+        + '<button class="sd-header__logout" type="button" data-action="seller-logout"'
+        + ' aria-label="Log out of seller account" title="Log out">Log out</button>'
         + '</div></header>';
     try {
         // Both requests hit endpoints that already exist and are already used
@@ -1081,7 +1187,7 @@ async function sellerRecurringHtml() {
         S.recurringSchedules = schedules;
     } catch (e) { return emptyHtml('⚠️', 'Could not load recurring schedules', e.message); }
     if (!schedules.length) {
-        return h + emptyHtml('🔁', 'No recurring schedules yet', 'Create one from an offering to repeat it weekly.');
+        return h + emptyHtml('🔁', 'No recurring schedules yet', 'New recurring schedules can no longer be created. Existing schedules remain available here.');
     }
     for (var i = 0; i < schedules.length; i++) {
         h += await sellerRecurringCardHtml(schedules[i]);
@@ -1187,46 +1293,34 @@ function updateQuickPostCounter() {
     if (btn) btn.disabled = over > 0;
 }
 
+function getQuickPostRequestId() {
+    if (!S.quickPostRequestId) {
+        S.quickPostRequestId = window.crypto && typeof window.crypto.randomUUID === 'function'
+            ? window.crypto.randomUUID()
+            : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)
+                + Math.random().toString(36).slice(2);
+    }
+    return S.quickPostRequestId;
+}
+
 async function sellerQuickPostView() {
     var h = '<div class="view-enter">';
     h += '<div class="page-head"><h1>Quick Post</h1><p class="muted small">Paste your WhatsApp message. Quick Posts are always published for Today.</p></div>';
-    h += '<div class="card pad card-purple card-mb"><div class="font-700">This becomes a real offering</div>' +
-        '<p class="small mt-1">Your post is published as an offering buyers can order from, using the same ' +
-        'price, timing and order window as Create Offering.</p></div>';
+    h += '<div class="card pad card-purple card-mb"><div class="font-700">One simple same-day offer</div>' +
+        '<p class="small mt-1">Describe one item or fixed-price combo in your message. Buyers order units of that offer ' +
+        'through the usual checkout. Include any portion size, ready time or ordering instructions in the message.</p></div>';
     h += '<form class="seller-form" id="quickPostForm">';
     h += '<div class="form-group"><label class="form-label" for="qpMessage">Paste WhatsApp message <span class="req">*</span></label>' +
         '<textarea class="form-textarea" id="qpMessage" name="message" rows="6" maxlength="' + (QUICK_POST_MAX + 1) + '" ' +
         'aria-describedby="qpCounter" placeholder="Paste your WhatsApp message here..." required></textarea>' +
         '<div class="qp-counter-row"><span id="qpCounter" class="qp-counter" role="status" aria-live="polite">' +
         QUICK_POST_MAX + ' of ' + QUICK_POST_MAX + ' characters left</span></div></div>';
-    // Minimum extra fields required by the existing Product creation architecture.
-    // These reuse the exact Create Offering controls, names and help text so the
-    // two screens stay consistent instead of inventing a parallel form.
-    h += '<div class="form-group"><label class="form-label">Item Name <span class="req">*</span></label>' +
-        '<input class="form-input" name="name" placeholder="e.g. Paneer Butter Masala" required></div>';
-    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Price (Rs) <span class="req">*</span></label>' +
-        '<input class="form-input" name="price" type="number" min="0.01" step="0.01" placeholder="100" required></div>' +
-        '<div class="form-group"><label class="form-label">Unit <span class="req">*</span></label>' +
-        '<select class="form-select" name="priceUnit"><option value="Per Piece">Per Piece</option>' +
-        '<option value="Per Plate">Per Plate</option><option value="Per Box">Per Box</option></select></div></div>';
-    h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Orders Open — Optional</label>' +
-        '<input class="form-input" name="orderWindowStart" type="time">' +
-        '<p class="muted small">Leave blank to start accepting orders immediately.</p></div>' +
-        '<div class="form-group"><label class="form-label">Orders Close <span class="req">*</span></label>' +
-        '<input class="form-input" name="orderWindowEnd" type="time" required>' +
-        '<p class="muted small">Last date/time customers can place an order. (Auto-set to 1 hour before delivery)</p></div></div>';
-    h += '<div class="form-group"><label class="form-label">Delivery / Ready By <span class="req">*</span></label>' +
-        '<input class="form-input" name="readyByTime" type="datetime-local" required>' +
-        '<p class="muted small">Date/time by which the order will be ready/delivered.</p></div>';
-    h += '<div class="form-group"><label class="form-label">Quantity Available — Optional</label>' +
-        '<input class="form-input" name="maxQuantity" type="number" min="1" step="1" placeholder="Blank for unlimited">' +
-        '<p class="muted small">Leave blank for unlimited quantity.</p></div>';
-    h += '<div class="form-group"><label class="form-label">To be listed in <span class="req">*</span></label>' +
-        '<div class="checkbox-group">' + offeringCategoryBox('BREAKFAST', 'Breakfast', []) +
-        offeringCategoryBox('LUNCH', 'Lunch', []) + offeringCategoryBox('DINNER', 'Dinner', []) +
-        offeringCategoryBox('SNACKS', 'Snacks', []) + '</div>' +
-        '<p class="muted small">Select at least one category.</p></div>';
-    h += '<button class="btn btn-primary btn-block" type="submit" id="qpSubmit">Publish Offering</button>';
+    h += '<div class="form-group"><label class="form-label" for="qpImage">Photo — Optional</label>' +
+        '<input class="form-input" id="qpImage" name="quickPostImage" type="file" accept="image/png,image/jpeg,image/gif,image/webp">' +
+        '<p class="muted small">PNG, JPEG, GIF, or WebP; maximum 2 MB.</p></div>';
+    h += '<div class="form-group"><label class="form-label" for="qpPrice">Price (₹) <span class="req">*</span></label>' +
+        '<input class="form-input" id="qpPrice" name="price" type="number" min="0.01" step="0.01" placeholder="100" required></div>';
+    h += '<button class="btn btn-primary btn-block" type="submit" id="qpSubmit">Publish Quick Post</button>';
     h += '</form>';
     // Legacy announcements already stored in quick_posts remain listed so nothing
     // that exists today disappears. NEW Quick Posts are ordinary offerings and
@@ -1720,6 +1814,63 @@ function applyMealPreset(form, presetType) {
     validateFormTiming(form);
     S.offeringFormDirty = true;
     toast('Applied ' + (targetCategory.charAt(0) + targetCategory.slice(1).toLowerCase()) + ' preset!', 'info');
+}
+
+/**
+ * Clears the active Quick Start preset selection and resets only the
+ * template-derived fields (Offering For, Delivery/Ready By, Orders Close,
+ * category) back to empty/custom defaults. Manually entered seller values
+ * (name, description, price, unit, photo) are preserved.
+ */
+function clearMealPreset(form) {
+    if (!form) return;
+    var todayIso = sellerDate('today');
+    var tomorrowIso = sellerDate('tomorrow');
+
+    // Reset Offering For to 'today' with today's date
+    S.offeringFor = 'today';
+    var availDateInput = form.querySelector('input[name="availableDate"]') || form.querySelector('#availDate');
+    if (availDateInput) availDateInput.value = todayIso;
+    var chooseDateRow = form.querySelector('#chooseDateRow');
+    if (chooseDateRow) chooseDateRow.hidden = true;
+    var radioGroup = form.querySelector('#offeringForGroup');
+    if (radioGroup) {
+        var radios = radioGroup.querySelectorAll('.radio-option');
+        radios.forEach(function (r) {
+            if (r.getAttribute('data-value') === 'today') {
+                r.classList.add('selected');
+            } else {
+                r.classList.remove('selected');
+            }
+        });
+    }
+
+    // Clear Delivery / Ready By
+    var readyInput = form.querySelector('input[name="readyByTime"]');
+    if (readyInput) readyInput.value = '';
+
+    // Clear Orders Close
+    var closeInput = form.querySelector('input[name="orderWindowEnd"]');
+    if (closeInput) closeInput.value = '';
+    var offsetSelect = form.querySelector('#orderCloseOffsetSelect');
+    if (offsetSelect) offsetSelect.value = '';
+    var customRow = form.querySelector('#customCloseTimeRow');
+    if (customRow) customRow.style.display = 'none';
+
+    // Clear category checkboxes (no preset category)
+    var catBoxes = form.querySelectorAll('input[name="categories"]');
+    catBoxes.forEach(function (cb) { cb.checked = false; });
+
+    // Clear preset button active states
+    var presetBtns = form.querySelectorAll('.btn-meal-preset');
+    presetBtns.forEach(function (btn) { btn.classList.remove('active'); });
+
+    // Re-run timing validation
+    syncOfferingFormWheels(form);
+    updateLiveTimingBadge(form);
+    validateFormTiming(form);
+    S.offeringFormDirty = true;
+    toast('Quick Start cleared — custom offering', 'info');
 }
 
 /**
@@ -2240,8 +2391,8 @@ function offeringFormHtml(t, opts) {
     var mode = opts.mode || S.offeringFor || 'today';
     var lockAttr = locked ? ' disabled' : '';
     var todayIso = sellerDate('today');
-    var chosenDate = isEdit ? (t.availableDate || todayIso) : (mode === 'tomorrow' ? sellerDate('tomorrow') : (mode === 'choose' && t.availableDate ? t.availableDate : todayIso));
-    var selectedUnit = t.priceUnit || 'Per Piece';
+    var chosenDate = isEdit ? (t.availableDate || todayIso) : (mode === 'tomorrow' ? sellerDate('tomorrow') : (mode === 'choose' ? (t.availableDate || todayIso) : todayIso));
+    var selectedUnit = t.priceUnit || 'Per Plate';
     var categoryValues = String(t.category || '').split(',').map(function (c) { return c.trim().toUpperCase(); }).filter(Boolean);
 
     if (isHomemade) {
@@ -2272,6 +2423,9 @@ function offeringFormHtml(t, opts) {
         h += '<button type="button" class="btn-meal-preset" data-action="apply-preset" data-preset="breakfast">';
         h += '<span class="preset-icon">🌅</span><div class="preset-info"><span class="preset-name">Breakfast</span><span class="preset-time">Tomorrow 9:00 AM</span></div>';
         h += '</button>';
+        h += '<button type="button" class="btn-meal-preset btn-meal-preset--clear" data-action="clear-preset">';
+        h += '<span class="preset-icon">✕</span><div class="preset-info"><span class="preset-name">Clear</span><span class="preset-time">Custom offering</span></div>';
+        h += '</button>';
         h += '</div></div>';
     }
     h += '<div class="form-group"><label class="form-label">Photos <span class="req">*</span></label><div class="photo-upload-row"><div class="photo-tile" data-action="add-photo">' + (isEdit && sellerImg(t.imageUrl) ? '<img src="' + esc(sellerImg(t.imageUrl)) + '" alt="' + esc(t.name) + '" onerror="imgFallback(this)">' : '+') + '</div></div></div>';
@@ -2284,56 +2438,16 @@ function offeringFormHtml(t, opts) {
     h += '<input type="hidden" name="availableDate" id="availDate" value="' + esc(chosenDate) + '">';
     h += '<div class="form-group" id="chooseDateRow"' + (mode === 'choose' ? '' : ' hidden') + '><label class="form-label">Offering Date <span class="req">*</span></label><input type="date" class="form-input" name="chosenOfferingDate" min="' + todayIso + '" data-action="set-availability-date" value="' + esc(chosenDate) + '"' + lockAttr + '></div>';
 
-    // REPEATING SCHEDULE section (Requirement 3.2). Create Offering only:
-    // Edit Offering never edits the repeating rule (Manage Schedule does that),
-    // so the whole block is skipped in edit mode.
-    if (!isEdit) {
-        var recurMode = S.offeringMode === 'recurring' ? 'recurring' : 'today';
-        var dur = S.recurringDuration || 'thisweek';
-        h += '<div class="form-group" id="recurringScheduleSection">';
-        h += '<div class="font-700 mt-2 mb-1">AVAILABILITY <span class="small muted">(One time, or a repeating schedule)</span></div>';
-        h += '<div class="muted small mb-2">Choose <strong>ONE TIME</strong> to keep a single offering date, or <strong>REPEATING SCHEDULE</strong> to sell this item on selected days.</div>';
-        h += '<div class="row-actions">';
-        h += '<label class="radio-option ' + (recurMode === 'recurring' ? 'selected' : '') + '" data-action="set-offering-mode" data-mode="recurring">REPEATING SCHEDULE</label>';
-        h += '<label class="radio-option ' + (recurMode !== 'recurring' ? 'selected' : '') + '" data-action="set-offering-mode" data-mode="today">ONE TIME</label>';
-        h += '</div>';
-        // No native `required` on anything inside this container: a required input
-        // in a hidden container still blocks form submission with an invisible
-        // browser error. Validation happens in buildRecurringSchedule() on submit.
-        h += '<div class="mt-2" id="recurringScheduleFields"' + (recurMode === 'recurring' ? '' : ' hidden') + '>';
-        h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Start Date <span class="req">*</span></label><input class="form-input" id="recurringStartDate" name="recurringStartDate" type="date" min="' + todayIso + '"></div>';
-        h += '<div class="form-group"><label class="form-label">End Date <span class="req">*</span></label><input class="form-input" id="recurringEndDateMain" name="recurringEndDate" type="date" min="' + todayIso + '"' + (dur === 'dated' ? '' : ' readonly') + '></div></div>';
-
-        h += '<div class="form-group"><label class="form-label">Repeat On <span class="req">*</span></label><div class="weekday-checkbox-group">' +
-            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="1"> M</label>' +
-            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="2"> T</label>' +
-            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="3"> W</label>' +
-            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="4"> T</label>' +
-            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="5"> F</label>' +
-            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="6"> S</label>' +
-            '<label class="weekday-checkbox"><input type="checkbox" name="recurringWeekday" value="7"> S</label></div></div>';
-
-        h += '<div class="form-group"><label class="form-label">Repeat Duration <span class="req">*</span></label><div class="radio-group">' +
-            '<label class="radio-option' + (dur === 'thisweek' ? ' selected' : '') + '" data-action="set-recurring-duration" data-duration="thisweek">This week</label>' +
-            '<label class="radio-option' + (dur === 'onemonth' ? ' selected' : '') + '" data-action="set-recurring-duration" data-duration="onemonth">1 month</label>' +
-            '<label class="radio-option' + (dur === 'dated' ? ' selected' : '') + '" data-action="set-recurring-duration" data-duration="dated">Until a date</label>' +
-            '<label class="radio-option' + (dur === 'ongoing' ? ' selected' : '') + '" data-action="set-recurring-duration" data-duration="ongoing">Ongoing (90 days)</label></div>' +
-            '<p class="muted small">Ongoing is internally capped at 90 days and can be extended later from Manage Schedule.</p></div>';
-        h += '<input type="hidden" name="recurringWeekdays" id="recurringWeekdays" value="">';
-        h += '<input type="hidden" name="recurringDuration" id="recurringDuration" value="' + esc(dur) + '">';
-        h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Default Quantity per Occurrence (blank for No limit)</label><input class="form-input" name="recurringDefaultQuantity" type="number" min="1" step="1" placeholder="Blank for unlimited"></div>';
-        h += '<div class="form-group"><label class="form-label">Default Orders Close (HH:mm)</label><input class="form-input" name="recurringDefaultOrderCloseTime" type="time"></div></div>';
-        h += '<div class="form-group"><label class="form-label">Default Delivery / Ready By</label><input class="form-input" name="recurringDefaultReadyByTime" type="text" placeholder="e.g. 1:00 PM"></div>';
-        h += '</div>';  // recurringScheduleFields
-        h += '</div>';  // recurringScheduleSection
-    }
-    h += '<input type="hidden" name="recurringSchedule" id="recurringScheduleHidden" value="">';
-
     var smartDefaults = computeSmartTimingDefaults(mode === 'tomorrow', chosenDate);
     var openValue = isEdit ? (t.orderWindowStart || '') : (t.orderWindowStart || '');
     var closeValue = isEdit ? (t.orderWindowEnd || '') : (t.orderWindowEnd || smartDefaults.orderWindowEnd);
     var initialReady = isEdit ? (t.readyByTime || '') : (t.readyByTime || smartDefaults.readyByTime);
     var readyIso = !!(initialReady && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(initialReady));
+    var storedOpenDate = t.ordersOpenFrom ? String(t.ordersOpenFrom).slice(0, 10) : todayIso;
+    if (storedOpenDate < todayIso) storedOpenDate = todayIso;
+    var openDateMode = storedOpenDate === todayIso ? 'today'
+        : (storedOpenDate === sellerDate('tomorrow') ? 'tomorrow' : 'choose');
+    var openingTime = t.ordersOpenFrom ? String(t.ordersOpenFrom).slice(11, 16) : '';
 
     var now = new Date();
     var currentLocalTime = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
@@ -2341,7 +2455,21 @@ function offeringFormHtml(t, opts) {
     var closeMinAttr = (!isEdit && chosenDate <= todayIso) ? ' min="' + currentLocalTime + '"' : '';
     var readyMinAttr = (!locked) ? ' min="' + currentLocalIso + '"' : '';
 
-    h += '<div class="form-group"><label class="form-label">Orders Open — Optional</label><input class="form-input" name="orderWindowStart" type="time" value="' + esc(openValue) + '"' + lockAttr + '><p class="muted small">Leave blank to start accepting orders immediately.</p></div>';
+    h += '<div id="ordersOpenFromFields">';
+    h += '<div class="form-group"><label class="form-label">Orders Open From date</label><select class="form-select" name="orderOpenDateMode" data-action="set-order-open-date-mode"' + lockAttr + '>' +
+        '<option value="today"' + (openDateMode === 'today' ? ' selected' : '') + '>Today</option>' +
+        '<option value="tomorrow"' + (openDateMode === 'tomorrow' ? ' selected' : '') + '>Tomorrow</option>' +
+        '<option value="choose"' + (openDateMode === 'choose' ? ' selected' : '') + '>Choose Date</option></select></div>';
+    h += '<div class="form-group" id="ordersOpenChooseDate"' + (openDateMode === 'choose' ? '' : ' hidden') + '>' +
+        '<label class="form-label">Opening Date</label><input class="form-input" name="chosenOrderOpenDate" type="date" min="' + todayIso + '" value="' + esc(storedOpenDate) + '"' + lockAttr + '></div>';
+    h += '<div class="form-group"><label class="form-label">Orders Open From time — Optional for Today</label>' +
+        '<input class="form-input" name="orderOpenTime" type="time" value="' + esc(openingTime) + '"' + lockAttr + '>' +
+        '<p class="muted small" id="ordersOpenFromSummary">Leave blank for today to open immediately after publishing. Tomorrow and future dates require a time.</p></div></div>';
+    h += '<input type="hidden" name="initialOrderOpenDate" value="' + esc(storedOpenDate) + '">' +
+        '<input type="hidden" name="initialOrderOpenTime" value="' + esc(openingTime) + '">';
+    if (isEdit) {
+        h += '<input type="hidden" name="orderWindowStart" value="' + esc(openValue) + '">';
+    }
 
     h += scrollingWheelPickerHtml(closeValue, initialReady, locked);
 
@@ -2390,7 +2518,6 @@ async function sellerCreateView() {
     var isLateNight = now.getHours() >= 21;
     // If the current time is past 21:00 (9:00 PM), default the offering date to tomorrow.
     S.offeringFor = isLateNight ? 'tomorrow' : 'today';
-    S.offeringMode = 'today';
     S.recurringDuration = 'thisweek';
     S.recurringScheduleConfig = null;
     try {
@@ -2604,7 +2731,26 @@ async function sellerKitchenView() {
     h += '<div class="form-group"><label class="form-label">Gallery Images (URLs, comma-separated)</label><input class="form-input" name="galleryImages" value="' + esc(kitchen && kitchen.galleryImages ? kitchen.galleryImages : '') + '"></div>';
     var waVal = (kitchen && (kitchen.whatsappNumber || kitchen.sellerWhatsappNumber || kitchen.whatsappLink)) || '';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">WhatsApp Number</label><input class="form-input" name="whatsappNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" placeholder="10-digit WhatsApp number" value="' + esc(waVal) + '"><input type="hidden" name="whatsappLink" value="' + esc(waVal) + '"></div><div class="form-group"><label class="form-label">Instagram</label><input class="form-input" name="instagramLink" value="' + esc(kitchen && kitchen.instagramLink ? kitchen.instagramLink : '') + '"></div></div>';
-    h += '<div class="form-group"><label class="form-label">UPI ID</label><input class="form-input" name="upiId" value="' + esc(kitchen && kitchen.upiId ? kitchen.upiId : '') + '"></div>';
+    var paymentMode = (kitchen && kitchen.acceptedPaymentMode) || '';
+    h += '<div class="form-group"><label class="form-label" for="acceptedPaymentMode">Payment options buyers can use</label>' +
+        '<select class="form-input" id="acceptedPaymentMode" name="acceptedPaymentMode">' +
+        '<option value=""' + (paymentMode === '' ? ' selected' : '') + '>Not set up — buyers cannot place orders</option>' +
+        '<option value="GPAY"' + (paymentMode === 'GPAY' ? ' selected' : '') + '>Google Pay only</option>' +
+        '<option value="UPI"' + (paymentMode === 'UPI' ? ' selected' : '') + '>UPI only</option>' +
+        '<option value="GPAY_AND_UPI"' + (paymentMode === 'GPAY_AND_UPI' ? ' selected' : '') + '>Google Pay and UPI</option>' +
+        '<option value="CASH_ONLY"' + (paymentMode === 'CASH_ONLY' ? ' selected' : '') + '>Cash only</option>' +
+        '</select><p class="muted small mt-1">This records payment instructions only; SocioMart does not process payments.</p></div>';
+    h += '<div class="form-group"><label class="form-label">UPI ID</label><input class="form-input" name="upiId" autocomplete="off" value="' + esc(kitchen && kitchen.upiId ? kitchen.upiId : '') + '"></div>';
+    var gpayType = (kitchen && kitchen.gpayIdentifierType) || '';
+    h += '<div class="form-row-2"><div class="form-group"><label class="form-label" for="gpayIdentifierType">Google Pay identifier type</label>' +
+        '<select class="form-input" id="gpayIdentifierType" name="gpayIdentifierType">' +
+        '<option value=""' + (gpayType === '' ? ' selected' : '') + '>Choose a type</option>' +
+        '<option value="PHONE_NUMBER"' + (gpayType === 'PHONE_NUMBER' ? ' selected' : '') + '>Mobile number</option>' +
+        '<option value="UPI_ID"' + (gpayType === 'UPI_ID' ? ' selected' : '') + '>UPI ID</option></select></div>' +
+        '<div class="form-group"><label class="form-label" for="gpayIdentifier">Google Pay identifier</label>' +
+        '<input class="form-input" id="gpayIdentifier" name="gpayIdentifier" autocomplete="off" value="' +
+        esc(kitchen && kitchen.gpayIdentifier ? kitchen.gpayIdentifier : '') + '">' +
+        '<p class="muted small mt-1">Select the identifier type explicitly; it is not inferred from your UPI ID.</p></div></div>';
     var curType = (kitchen && kitchen.sellerType) || 'KITCHEN';
     h += '<div class="form-group"><label class="form-label">Store Type / Business Category</label>'
         + '<div class="radio-group">'
@@ -3155,8 +3301,10 @@ async function sellerOrderDetailByOrderView(orderId) {
         if (order.orderStatus && ['ORDERED', 'CONFIRMED', 'READY'].indexOf(order.orderStatus) >= 0) {
             h += '<button class="btn btn-secondary btn-block mt-2 oic-act" type="button" data-action="cancel-order" data-order-id="' + esc(order.id) + '">Cancel Order</button>';
         }
-        if ((paymentStatus === 'PENDING' || paymentStatus === 'WILL_PAY_LATER') && order.orderStatus !== 'CANCELLED') {
-            h += '<button class="btn btn-primary btn-block mt-2 oic-act" type="button" data-action="mark-paid" data-oid="' + esc(order.id) + '">Mark as Paid</button>';
+        if ((paymentStatus === 'PENDING' || paymentStatus === 'UNPAID'
+                || paymentStatus === 'AWAITING_SELLER_VERIFICATION' || paymentStatus === 'WILL_PAY_LATER')
+                && order.orderStatus !== 'CANCELLED') {
+            h += '<button class="btn btn-primary btn-block mt-2 oic-act" type="button" data-action="mark-paid" data-oid="' + esc(order.id) + '">Verify receipt and mark paid</button>';
         }
         if (order.orderStatus !== 'CANCELLED') { if (isDelivered) { h += '<button class="btn btn-outline btn-block mt-2 oic-act" type="button" data-action="toggle-delivery-order" data-oid="' + esc(order.id) + '" data-status="NOT_DELIVERED">↩️ Mark as Not Delivered</button>'; } else { h += '<button class="btn btn-primary btn-block mt-2 oic-act" type="button" data-action="toggle-delivery-order" data-oid="' + esc(order.id) + '" data-status="DELIVERED">🚚 Mark as Delivered</button>'; } }
     } catch (e) {
@@ -3444,6 +3592,16 @@ async function submitOfferingEdit(form) {
         // Nothing has been ordered yet, so every timing and price field is free.
         var openVal = parseOptionalHhmm(ev.orderWindowStart, 'Orders Open');
         if ((openVal || '') !== (o.orderWindowStart || '')) payload.orderWindowStart = openVal || '';
+        var openDateMode = ev.orderOpenDateMode || 'today';
+        var openDate = openDateMode === 'tomorrow' ? sellerDate('tomorrow')
+            : (openDateMode === 'choose' ? (ev.chosenOrderOpenDate || '') : sellerDate('today'));
+        if (!openDate) { toast('Choose an Orders Open From date', 'error'); return; }
+        var openTime = parseOptionalHhmm(ev.orderOpenTime, 'Orders Open From');
+        if (openDate !== (ev.initialOrderOpenDate || sellerDate('today'))
+                || (openTime || '') !== (ev.initialOrderOpenTime || '')) {
+            payload.orderOpenDate = openDate;
+            payload.orderOpenTime = openTime;
+        }
         var offeringDate = S.offeringFor === 'choose' ? (ev.chosenOfferingDate || '') : sellerDate(S.offeringFor);
         if (!offeringDate) { toast('Choose an offering date', 'error'); return; }
         if (offeringDate !== (o.availableDate || '')) payload.availableDate = offeringDate;
@@ -3471,6 +3629,13 @@ async function submitOfferingEdit(form) {
             var timingProblem = offeringTimingError(payload.availableDate || o.availableDate,
                 effectiveOpen, closeVal, payload.readyByTime);
             if (timingProblem) { toast(timingProblem, 'error'); return; }
+        }
+        if (payload.orderOpenDate) {
+            var readyForOpeningCheck = payload.readyByTime || normalizeReadyByTime(
+                o.readyByTime, payload.availableDate || o.availableDate);
+            var openFromProblem = ordersOpenFromError(payload.orderOpenDate, payload.orderOpenTime,
+                payload.availableDate || o.availableDate, closeVal, readyForOpeningCheck);
+            if (openFromProblem) { toast(openFromProblem, 'error'); return; }
         }
     }
 
@@ -3545,26 +3710,31 @@ document.addEventListener('submit', async function (e) {
             // datetime after the offering date is known (see below).
             var readyByRaw = (vals.readyByTime || '').trim();
             if (!readyByRaw) { toast('Delivery / Ready By is required', 'error'); return; }
-            // Availability: ONE TIME keeps the existing Today/Tomorrow/Choose Date
-            // rules; REPEATING SCHEDULE replaces the single date with the schedule
-            // window (the product's date is its first occurrence). Requirement 3.
-            var recurringConfig = null;
-            if (S.offeringMode === 'recurring') {
-                recurringConfig = buildRecurringSchedule(vals, form);
-                if (!recurringConfig) return; // buildRecurringSchedule toasted
-                vals.availableDate = recurringConfig.startDate;
-            } else if (S.offeringFor === 'choose') {
+            if (S.offeringFor === 'choose') {
                 vals.availableDate = vals.chosenOfferingDate || '';
                 if (!vals.availableDate) { toast('Choose an offering date', 'error'); return; }
+                vals.orderOpenDate = vals.orderOpenDateMode === 'choose'
+                    ? (vals.chosenOrderOpenDate || '') : (vals.orderOpenDateMode === 'tomorrow' ? sellerDate('tomorrow') : sellerDate('today'));
             } else {
                 vals.availableDate = sellerDate(S.offeringFor);
+                vals.orderOpenDate = vals.orderOpenDateMode === 'choose'
+                    ? (vals.chosenOrderOpenDate || '') : (vals.orderOpenDateMode === 'tomorrow' ? sellerDate('tomorrow') : sellerDate('today'));
             }
+            if (!vals.orderOpenDate) { toast('Choose an Orders Open From date', 'error'); return; }
+            vals.orderOpenTime = parseOptionalHhmm(vals.orderOpenTime, 'Orders Open From');
             // Finalise the ready-by time. The form field is `datetime-local`, so it
             // normally already carries a full ISO datetime and is passed through
             // unchanged. Only a bare HH:mm time is combined with the offering date
             // (legacy/manual input path).
             vals.readyByTime = normalizeReadyByTime(readyByRaw, vals.availableDate);
+            var openFromError = ordersOpenFromError(vals.orderOpenDate, vals.orderOpenTime,
+                vals.availableDate, vals.orderWindowEnd, vals.readyByTime);
+            if (openFromError) { toast(openFromError, 'error'); return; }
             delete vals.chosenOfferingDate;
+            delete vals.orderOpenDateMode;
+            delete vals.chosenOrderOpenDate;
+            delete vals.initialOrderOpenDate;
+            delete vals.initialOrderOpenTime;
             if (vals.maxQuantity !== '' && vals.maxQuantity !== null && vals.maxQuantity !== undefined) {
                 var mq = Number(vals.maxQuantity);
                 if (!Number.isInteger(mq) || mq < 1) {
@@ -3599,19 +3769,6 @@ document.addEventListener('submit', async function (e) {
                 return;
             }
             vals.categories = categories;
-            // Raw schedule inputs never travel to the API; only the structured
-            // recurringSchedule object does (and only in recurring mode -- an
-            // empty string would fail Jackson's object deserialisation).
-            delete vals.recurringStartDate;
-            delete vals.recurringEndDate;
-            delete vals.recurringWeekdays;
-            delete vals.recurringDuration;
-            delete vals.recurringWeekday;
-            delete vals.recurringDefaultQuantity;
-            delete vals.recurringDefaultOrderCloseTime;
-            delete vals.recurringDefaultReadyByTime;
-            if (recurringConfig) vals.recurringSchedule = recurringConfig;
-            else delete vals.recurringSchedule;
             var saveFav = $('#favToggle') && $('#favToggle').classList.contains('on');
             if (saveFav) {
                 try {
@@ -3696,89 +3853,60 @@ document.addEventListener('submit', async function (e) {
                 return;
             }
             var submitButton = form.querySelector('#qpSubmit');
-            if (submitButton) submitButton.disabled = true;
-
-            // A Quick Post is now an ordinary Product. Rather than duplicating
-            // Product/Offerings/Order logic, the form is submitted to the SAME
-            // endpoint Create Offering already uses, so every existing rule
-            // (price, timing, categories, ownership, authorization) applies
-            // unchanged, and the result lands in Offerings + buyer discovery
-            // with the normal Order button.
-            autoClampOrderWindowEndIfInvalid(form);
-            var vals = formVals(form);
-            // The seller's post text is the offering's primary content.
-            vals.description = message;
-            delete vals.message;
-
-            vals.orderWindowStart = parseOptionalHhmm(vals.orderWindowStart, 'Orders Open');
-            vals.orderWindowEnd = parseOptionalHhmm(vals.orderWindowEnd, 'Orders Close');
-            if (!vals.orderWindowEnd) { toast('Orders Close is required', 'error'); if (submitButton) submitButton.disabled = false; return; }
-            var qpReadyBy = (vals.readyByTime || '').trim();
-            if (!qpReadyBy) { toast('Delivery / Ready By is required', 'error'); if (submitButton) submitButton.disabled = false; return; }
-            vals.readyByTime = qpReadyBy;
-
-            // Quick Posts stay a Today-only offering, exactly as before.
-            vals.availableDate = sellerDate('today');
-            vals.isPreorder = false;
-
-            var qpPrice = Number(vals.price);
-            if (!isFinite(qpPrice) || qpPrice <= 0) {
-                toast('Price must be greater than 0', 'error');
-                if (submitButton) submitButton.disabled = false;
-                return;
+            var originalLabel = submitButton ? submitButton.textContent : '';
+            var formControls = Array.prototype.slice.call(form.querySelectorAll('input, textarea, select, button'));
+            var originalDisabled = formControls.map(function (control) { return control.disabled; });
+            formControls.forEach(function (control) { control.disabled = true; });
+            if (submitButton) {
+                submitButton.setAttribute('aria-busy', 'true');
+                submitButton.textContent = 'Publishing Quick Post…';
             }
-            vals.price = qpPrice;
-
-            if (vals.maxQuantity !== '' && vals.maxQuantity !== null && vals.maxQuantity !== undefined) {
-                var qpQty = Number(vals.maxQuantity);
-                if (!Number.isInteger(qpQty) || qpQty < 1) {
-                    toast('Quantity Available must be a whole number of at least 1, or blank for unlimited', 'error');
-                    if (submitButton) submitButton.disabled = false;
+            try {
+                var price = Number(form.querySelector('[name="price"]').value);
+                if (!isFinite(price) || price <= 0) {
+                    toast('Price must be greater than 0', 'error');
                     return;
                 }
-                vals.maxQuantity = qpQty;
-            } else {
-                vals.maxQuantity = null; // blank = unlimited
-            }
-
-            // Same cross-field timing rule the Create Offering form uses.
-            var qpTimingError = offeringTimingError(vals.availableDate, vals.orderWindowStart, vals.orderWindowEnd, qpReadyBy);
-            if (qpTimingError) {
-                toast(qpTimingError, 'error');
-                if (submitButton) submitButton.disabled = false;
-                return;
-            }
-
-            var qpCategories = [];
-            $all('input[name="categories"]:checked', form).forEach(function (cb) { qpCategories.push(cb.value); });
-            if (qpCategories.length === 0) {
-                toast('Select at least one category', 'error');
-                if (submitButton) submitButton.disabled = false;
-                return;
-            }
-            vals.categories = qpCategories;
-
-            // Product has no "Offering For" chooser on this screen: it is always
-            // Today, matching the original Quick Post rule.
-            vals.imageUrl = '';
-            vals.is_available = true;
-            vals.availableToday = true;
-            vals.isVeg = true;
-            vals.unit = vals.unit || vals.priceUnit || 'portion';
-            try {
+                var imageFile = form.querySelector('[name="quickPostImage"]').files[0];
+                if (imageFile && imageFile.size > 2 * 1024 * 1024) {
+                    toast('Quick Post image must be 2 MB or smaller', 'error');
+                    return;
+                }
+                var payload = {
+                    quickPost: true,
+                    description: message,
+                    price: price,
+                    quickPostRequestId: getQuickPostRequestId()
+                };
+                if (imageFile) {
+                    payload.quickPostImageData = await new Promise(function (resolve, reject) {
+                        var reader = new FileReader();
+                        reader.onload = function () { resolve(String(reader.result || '')); };
+                        reader.onerror = function () { reject(new Error('Could not read the selected Quick Post image')); };
+                        reader.readAsDataURL(imageFile);
+                    });
+                }
                 var qpKid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
                 if (!qpKid) {
                     var qpK = await sellerApi('/api/seller/kitchen');
                     qpKid = qpK.id;
                     S.myKitchen = qpK;
                 }
-                await sellerApi('/api/seller/products?kitchenId=' + qpKid, { method: 'POST', body: vals });
+                await sellerApi('/api/seller/products?kitchenId=' + qpKid, { method: 'POST', body: payload });
                 toast('Quick Post published as an offering!', 'success');
                 S.quickPostRequestId = null;
                 S.offeringFor = 'today';
                 sellerNavigate('#/home');
+            } catch (err) {
+                toast(err.message || 'Could not publish Quick Post', 'error');
             } finally {
-                if (submitButton) submitButton.disabled = false;
+                formControls.forEach(function (control, index) {
+                    control.disabled = originalDisabled[index];
+                });
+                if (submitButton) {
+                    submitButton.removeAttribute('aria-busy');
+                    submitButton.textContent = originalLabel;
+                }
             }
         } else if (form.id === 'kitchenForm') {
             var kid = (S.myKitchen && S.myKitchen.id) || (S.kitchen && S.kitchen.id) || null;
@@ -3859,6 +3987,11 @@ document.addEventListener('click', async function (e) {
                 var presetForm = t.closest('form');
                 var presetType = t.getAttribute('data-preset');
                 applyMealPreset(presetForm, presetType);
+                break;
+            case 'clear-preset':
+                e.preventDefault();
+                var clearForm = t.closest('form');
+                clearMealPreset(clearForm);
                 break;
             case 'cancel-offering-form': {
                 e.preventDefault();
@@ -4462,12 +4595,16 @@ document.addEventListener('click', async function (e) {
             }
             case 'preview-offering': toast('Preview mode', 'info'); break;
             case 'preview-kitchen': {
-                // Opens the EXISTING buyer-facing kitchen page. seller.html and
-                // index.html are separate documents, so the buyer SPA is reached
-                // by a full page load using its own hash route "#/kitchen/{id}",
-                // which buyer.js resolves through MarketplaceController's
-                // GET /api/kitchens/id/{id}. This is the same mechanism the Admin
-                // console already uses for open-buyer (admin.js location.href).
+                // Keep seller management open while the public buyer storefront
+                // loads in a separate tab.
+                var previewWindow = window.open('about:blank', '_blank');
+                if (!previewWindow) {
+                    toast('Allow pop-ups to open the kitchen preview in a new tab.', 'error');
+                    break;
+                }
+                previewWindow.opener = null;
+                previewWindow.document.title = 'SocioMart kitchen preview';
+                previewWindow.document.body.textContent = 'Loading your public kitchen preview...';
                 var previewKitchen = S.myKitchen || S.kitchen;
                 var previewId = previewKitchen && previewKitchen.id;
                 if (!previewId) {
@@ -4480,16 +4617,18 @@ document.addEventListener('click', async function (e) {
                         S.kitchen = previewKitchen;
                         previewId = previewKitchen && previewKitchen.id;
                     } catch (previewErr) {
+                        previewWindow.close();
                         toast('Could not load your kitchen. Please retry.', 'error');
                         break;
                     }
                 }
                 if (!previewId) {
+                    previewWindow.close();
                     toast('No kitchen found to preview. Publish your kitchen first.', 'error');
                     break;
                 }
-                toast('Opening kitchen preview...', 'info');
-                location.href = '/index.html#/kitchen/' + encodeURIComponent(previewId);
+                previewWindow.location.replace('/index.html#/kitchen/' + encodeURIComponent(previewId));
+                toast('Kitchen preview opened in a new tab. Your seller dashboard stays open.', 'success');
                 break;
             }
             case 'add-photo': toast('Photo upload (demo)', 'info'); break;
@@ -4566,34 +4705,6 @@ document.addEventListener('click', async function (e) {
                  applyOfferingDatePicker(t);
                  break;
              }
-             case 'set-offering-mode': {
-                 // Availability toggle: ONE TIME vs REPEATING SCHEDULE (Req 3).
-                 // Selection is scoped to this pair so it can never clear the
-                 // Today/Tomorrow/Choose or Repeat Duration radios.
-                 S.offeringMode = t.dataset.mode === 'recurring' ? 'recurring' : 'today';
-                 $all('[data-action="set-offering-mode"]').forEach(function (el) { el.classList.remove('selected'); });
-                 t.classList.add('selected');
-                 var schedFields = $('#recurringScheduleFields');
-                 if (schedFields) schedFields.hidden = S.offeringMode !== 'recurring';
-                 // In recurring mode the schedule start date IS the offering date,
-                 // so the single-date "Offering For" chooser steps aside; in ONE
-                 // TIME mode it comes back with its previous choice intact.
-                 var forGroup = $('#offeringForGroup');
-                 if (forGroup) {
-                     forGroup.hidden = S.offeringMode === 'recurring';
-                     // Resync the single-date radios to the stored choice: the DOM
-                     // was rendered once, so a mode round-trip must not leave a
-                     // stale highlight over a different stored selection.
-                     $all('#offeringForGroup .radio-option').forEach(function (el) {
-                         el.classList.toggle('selected', (el.dataset.val || 'today') === S.offeringFor);
-                     });
-                 }
-                 var chooseRow2 = $('#chooseDateRow');
-                 if (chooseRow2 && S.offeringMode === 'recurring') chooseRow2.hidden = true;
-                 else if (chooseRow2) chooseRow2.hidden = S.offeringFor !== 'choose';
-                 if (S.offeringMode === 'recurring') syncRecurringEndDate();
-                 break;
-             }
              case 'set-recurring-duration': {
                  $all('[data-action="set-recurring-duration"]').forEach(function (el) { el.classList.remove('selected'); });
                  t.classList.add('selected');
@@ -4608,6 +4719,19 @@ document.addEventListener('click', async function (e) {
 });
 
 document.addEventListener('change', function (e) {
+    if (e.target && e.target.name === 'orderOpenDateMode') {
+        var openForm = e.target.closest('form');
+        var openDateRow = openForm && openForm.querySelector('#ordersOpenChooseDate');
+        var chosenOpenDate = openForm && openForm.querySelector('[name="chosenOrderOpenDate"]');
+        if (openDateRow) openDateRow.hidden = e.target.value !== 'choose';
+        if (chosenOpenDate && e.target.value !== 'choose') {
+            chosenOpenDate.value = e.target.value === 'tomorrow' ? sellerDate('tomorrow') : sellerDate('today');
+        }
+        updateOrdersOpenFromSummary(openForm);
+    }
+    if (e.target && (e.target.name === 'orderOpenTime' || e.target.name === 'chosenOrderOpenDate')) {
+        updateOrdersOpenFromSummary(e.target.closest('form'));
+    }
     var picker = e.target.closest('[data-action="set-availability-date"]');
     if (picker) { applyOfferingDatePicker(picker); return; }
     // REPEATING SCHEDULE: keep the aggregated weekday list and the computed
@@ -4725,6 +4849,10 @@ document.addEventListener('change', function (e) {
 // Live Quick Post character feedback. Delegated on document so it keeps working
 // across the SPA re-renders that replace #view on every navigation.
 document.addEventListener('input', function (e) {
+    if (e.target && e.target.closest && e.target.closest('#quickPostForm')
+            && (e.target.name === 'message' || e.target.name === 'price')) {
+        S.quickPostRequestId = null;
+    }
     if (e.target && e.target.id === 'qpMessage') updateQuickPostCounter();
     if (e.target && e.target.name === 'readyByTime') {
         var form = e.target.closest('form');
@@ -4751,6 +4879,13 @@ document.addEventListener('input', function (e) {
     }
     if (e.target && (e.target.name === 'orderWindowEnd' || e.target.name === 'readyByTime' || e.target.name === 'orderWindowStart')) {
         validateFormTiming(e.target.closest('form'));
+    }
+});
+
+document.addEventListener('change', function (e) {
+    if (e.target && e.target.name === 'quickPostImage'
+            && e.target.closest && e.target.closest('#quickPostForm')) {
+        S.quickPostRequestId = null;
     }
 });
 

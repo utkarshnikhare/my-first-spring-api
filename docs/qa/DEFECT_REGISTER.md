@@ -1,8 +1,10 @@
 # SocioMart QA Defect Register
 
-**Document Version:** 2.0.0  
-**Effective Date:** 2026-10-26  
-**Status:** **ALL KNOWN DEFECTS RESOLVED IN CODE; RELEASE NOT VERIFIED (deploy pending)**
+**Document Version:** 3.0.0
+**Effective Date:** 2026-10-30
+**Status:** **AUDIT CODE FIXES IMPLEMENTED; PRODUCTION RELEASE BLOCKED**
+
+Entries dated before 2026-10-30 are historical snapshots. Section 6 is the current audit disposition.
 
 ---
 
@@ -14,9 +16,8 @@
 
 ---
 
-## 2. Master Defect Ledger (SM-001 through SM-027)
 
-| Defect ID | Severity | Title & Summary | Root Cause | Implemented Fix | Regression Test & Verification Evidence | Status |
+## 2. Master Defect Ledger (SM-001 through SM-028)
 |---|---|---|---|---|---|---|
 | **SM-001** | **P0** | **Buyer order missing from seller dashboard (UK Kitchen flow)** | Disconnected query filters between seller order items and offering occurrences. | Aligned JPQL query and seller isolation checks in `OrderService.java` and `SellerAppService.java`. | `UKKitchenBuyerToSellerOrderWorkflowIntegrationTest.java` (PASS). Order persisted, amount 300.00, isolated by seller. | **PASS** |
 | **SM-002** | **P2** | **Category filter missing or incomplete** | Some categories did not match case-insensitively in discovery filter. | Standardized uppercase category matching across SQL and JavaScript. | `SellerFilterScriptStructureTest.java` (PASS). | **PASS** |
@@ -44,6 +45,65 @@
 | **SM-024** | **P0** | **Public Clean URLs `/homemade-store/**` & `/homemade` Threw HTTP 401 for Logged-Out Buyers** | `SecurityConfig.java` protected all paths except `/kitchen/**`. Logged-out buyers opening a shared link to a Homemade storefront or navigating to `/homemade` were rejected with HTTP 401 Unauthorized instead of loading the public SPA. | Added `"/homemade-store/**"` and `"/homemade"` to `SecurityConfig.java` `permitAll()`, added route mappings in `BuyerPublicController.java` forwarding to `/index.html`, and added path resolver in `app.js`. | `PublicHomemadeRoutingSecurityTest.java` (PASS), `homemade-storefront.spec.cjs` (PASS). | **PASS** |
 | **SM-025** | **P0** | **`homemadeStoreView` in `buyer.js` Crashed with HTTP 400 Bad Request on Store Slug** | In `buyer.js`, `homemadeStoreView` called `/api/kitchens/id/` + `id`. When opened from discovery (`#/homemade-store/meena-cakes`) or shared URL, non-numeric slug caused Spring Boot type mismatch (`MethodArgumentTypeMismatchException: Long`), crashing the page with HTTP 400. | Updated `homemadeStoreView` in `buyer.js` to detect whether identifier is numeric id or slug, calling `/api/kitchens/by-slug/` for slugs matching `kitchenPageView`. | `homemade-storefront.spec.cjs` (PASS). Page renders smoothly without 400 errors. | **PASS** |
 | **SM-026** | **P1** | **Mixed Seller Homemade Products with Generic Categories Leaked into Kitchen Storefront** | In `buyer.js`, `isHomemadeProduct` used a fragile keyword regex `/homemade|ghee|achar|papad|cake|sweet|jar|pack|masala/`. Homemade products from mixed sellers (`SellerType.BOTH`) categorized as "Snacks" or "Other" failed the regex, leaking into the Kitchen storefront and disappearing from Homemade storefront. | Exposed explicit `isHomemade` boolean on `ProductDto.java` derived from `product.getCategory()`, and updated `buyer.js` `isHomemadeProduct` to prioritize `p.isHomemade === true`. | `PublicHomemadeRoutingSecurityTest.java` (PASS), `HomemadeProductsTest.java` (5/5 PASS). | **PASS** |
-| **SM-027** | **P1** | **Premature Deployment Reporting While Render `autoDeploy: false` Kept Stale Commit** | Previous QA report claimed changes were deployed live on Render even though service configured with `autoDeploy: false`. | Established audit rule that commit SHAs and live endpoint telemetry must be cross-verified before declaring live deployment complete. Full limitations documented in release report. | Render live telemetry audit: health endpoint returns only {"status":"UP"}; no commit SHA exposed. Deployed version UNVERIFIED. Render API key unavailable. Manual deploy + SHA verification required. | **DOCUMENTED — NOT VERIFIED** |
+| **SM-027** | **P1** | **Premature Deployment Reporting While Render `autoDeploy: false` Kept Stale Commit** | Previous QA report claimed changes were deployed live on Render even though service configured with `autoDeploy: false`. | Established audit rule that commit SHAs and live endpoint telemetry must be cross-verified before declaring live deployment complete. Full limitations documented in release report. | Render live telemetry audit: health endpoint returns only {"status":"UP"}; no commit SHA exposed. Deployed version UNVERIFIED. Render API key unavailable. Manual deploy + SHA verification required. | **DOCUMENTED ï¿½ NOT VERIFIED** |
 
 | **SM-028** | **P1** | **Cancelled orders still counted in admin payment/revenue buckets** | Admin dashboard payment aggregates filtered only by `PaymentStatus`, so a cancelled order retained its PAID/PENDING payment status and was still counted as revenue or outstanding payment. | Added `OrderStatus.CANCELLED` exclusion to every payment-status aggregate in `AdminService.dashboard()`. | `RevenueReconciliationTest` (9/9 PASS) | **PASS** |
+
+---
+
+## 3. New Defects: DEF-01, DEF-02, DEF-03 (Batch 1 Fix)
+
+| **DEF-01** | **P2** | **Quick Start option cannot be deselected** | On Seller â†’ Add Offering, selecting a Quick Start tile populates the offering form, but the seller cannot clear the selection and return to a custom offering. | Added a `Clear` Quick Start button (`data-action="clear-preset"`) alongside the preset tiles. Added `clearMealPreset()` function that resets only template-derived fields (Offering For, Delivery/Ready By, Orders Close, category) while preserving manually entered seller values (name, description, price, unit, photo). Added `clear-preset` case in the global click handler. | `SellerDefectBatch1Test.clearPresetActionExistsInSellerJs`, `.clearMealPresetFunctionExists`, `.clearPresetHandlerExistsInClickDispatcher` | **PASS** |
+| **DEF-02** | **P2** | **Incorrect default selling unit for new kitchen/food offerings** | A new kitchen/food offering defaults to `Per Piece`, whereas the requirement specifies `Per Plate`. | Changed `offeringFormHtml()` default unit from `'Per Piece'` to `'Per Plate'` at `seller.js:2303`. Only applies when `t.priceUnit` is undefined/falsy (new offerings). Existing offerings with a saved unit, drafts, and homemade products are unaffected. | `SellerDefectBatch1Test.defaultUnitIsPerPlateForNewKitchenOfferings`, `.perPlateOptionExistsInUnitSelect` | **PASS** |
+| **DEF-03** | **P2** | **Seller logout action is missing** | A logged-in seller cannot find a dedicated logout action in the seller dashboard/app. | Added a `Log out` button (`data-action="seller-logout"`) to the seller dashboard header (`sd-header__right`). The existing `seller-logout` handler at `seller.js:3988+` already calls `POST /api/auth/logout` and clears `S.user`, `S.kitchenUrl`, and re-renders the auth screen. | `SellerDefectBatch1Test.sellerLogoutButtonExistsInDashboardHeader`, `.sellerLogoutHandlerExists`, `.logoutCallsAuthLogoutEndpoint` | **PASS** |
+
+---
+
+## 4. Adversarial Audit Note (2026-10-27)
+
+- Existing defect IDs `SM-001` through `SM-028` are preserved; no renumbering was performed.
+- No new confirmed defect was added during this documentation/adversarial pass.
+- `SM-028` status remains **PASS** after the full Maven suite run on 2026-10-27 (776 tests, 0 failures, 5 skipped).
+- Remaining risks are environmental/operational, not newly discovered code defects: PostgreSQL/Testcontainers blocked locally, Render deployed commit SHA unverified, and Playwright not rerun in this session.
+
+## 4. Final Verification Sprint Evidence (2026-10-27)
+
+- Independent SM-028 verification: AdminService.dashboard() excludes OrderStatus.CANCELLED from paidCount, paidValue, willPayLaterCount, willPayLaterValue, pendingPaymentCount, pendingPaymentValue, totalOrderValue, todayOrderValue, and monthOrderValue. Cancelled PAID, PENDING, and WILL_PAY_LATER orders are excluded. markOrderAsPaid rejects cancelled orders. cancelOrder is idempotent.
+- RevenueReconciliationTest: 9/9 PASS locally on H2.
+- Full Maven suite: 776 tests, 0 failures, 0 errors, 5 skipped (PostgreSQL/Testcontainers).
+- Playwright E2E rerun: 13 passed, 0 failed (desktop + mobile).
+- GitHub: local HEAD b69be61 on feat/deployment-verification-version-endpoint, 1 commit ahead of origin. PR #90 is OPEN at 2e13f43. b69be61 is NOT merged into main (main = 4c2ca53). Latest CI run on the branch at 2e13f43 succeeded. No CI run exists for b69be61 because it has not been pushed.
+- PostgreSQL: 5 tests skipped locally because the Docker executable is not installed and no PostgreSQL service or port 5432 is reachable. Skipped tests: PostgresNativeMigrationTest (1), PostgresRuntimeSmokeTest (1), UserEmailMigrationRegressionTest (3). CI evidence on ubuntu-latest reports these tests pass.
+- Render: https://sociomart-demo.onrender.com/api/health timed out during this session (service sleeping or unreachable). /api/version was not verified. autoDeploy remains false. No Render API key or CLI is available. Deployed commit SHA remains unverified.
+- No new defect IDs were added.
+
+## 5. Final Release Blocker Closure (2026-10-27)
+
+- GitHub: PR #90 merged into main as merge commit 07f4def8352afff7c7a1c05b113f04017f18bf7f. Approved code commit b69be619cbed34cfee2a1c5101df7b1fbd6285bd is an ancestor of main.
+- CI run 40494866078 on b69be619cbed34cfee2a1c5101df7b1fbd6285bd: conclusion success. Required checks build and e2e both passed.
+- PostgreSQL-sensitive tests executed in CI: PostgresNativeMigrationTest 1/1 PASS, PostgresRuntimeSmokeTest 1/1 PASS, UserEmailMigrationRegressionTest 3/3 PASS. No skips in CI.
+- Local Maven: 776 tests total, 5 skipped (PostgreSQL/Testcontainers unavailable), 0 failures, 0 errors.
+- CI Maven: 776 tests total, 0 skipped, 0 failures, 0 errors.
+- Playwright: local rerun 13/13 PASS; CI e2e job PASS.
+- Render: service is reachable after cold start. /api/health returned 200 {"status":"UP"} after approximately 120 seconds. Homepage returned 200. /api/version returned 401, indicating the currently deployed service is an older deployment that does not expose the public version endpoint. No Render API key, CLI, or deploy credentials are available in this environment.
+- No production code changes were made in this closure pass. No new defect IDs were added.
+- Final status: PARTIALLY VERIFIED. Remaining action: manually deploy approved main commit 07f4def8352afff7c7a1c05b113f04017f18bf7f through Render, then verify /api/health, /api/version, homepage, and non-destructive smoke tests.
+
+## 6. Current Independent Audit (2026-10-30)
+
+Nine additional actionable findings were identified. AUD-001 through AUD-009 are fixed in merged code.
+Production remains blocked for the schema repair until the database and backup gates are satisfied.
+
+| ID | Severity | Finding and root cause | Fix and evidence | Current status |
+|---|---|---|---|---|
+| AUD-001 | P1 | Render startup failed Hibernate validation because `orders.payment_method` was absent despite older migrations. | Added additive V17 `ADD COLUMN IF NOT EXISTS`; `PostgresSchemaMigrationTest.v17RepairsPaymentMethodWhenV14IsAlreadyRecorded` simulates the drift in an isolated H2 PostgreSQL-mode database. | **CODE FIXED; PROD NOT DEPLOYED** |
+| AUD-002 | P1 | Email password recovery exposed a live bearer reset link/token in the response and logs without verified delivery. | Disabled email-token recovery with HTTP 503 until secure delivery is configured; mobile/manual-admin recovery remains. `AuthForgotPasswordTest` covers the disabled flow and no token creation. | **FIXED** |
+| AUD-003 | P2 | Generic server and database-integrity errors could expose internal exception details. | Replaced client-facing database/rollback messages with fixed generic responses; `GlobalExceptionHandlerTest` covers redaction. | **FIXED** |
+| AUD-004 | P2 | Editing offering timing could leave a persisted Orders Open From timestamp invalid. | Revalidate the stored timestamp whenever its related timing changes; covered by `Requirement5LiveOfferingEditTest`. | **FIXED** |
+| AUD-005 | P2 | `/api/health` reported application availability without checking database connectivity. | Readiness now executes `SELECT 1`; tests cover healthy and unavailable database responses without exposing details. | **FIXED** |
+| AUD-006 | P2 | Render Docker builds omit `.git`, causing `/api/version` to report an unknown commit. | Prefer Render's validated 40-character `RENDER_GIT_COMMIT` at runtime; `VersionControllerTest` covers valid and malformed metadata. | **CODE FIXED; PROD NOT DEPLOYED** |
+| AUD-007 | P1 | New recurring schedules remained creatable despite the specification; removing the UI alone would permit API bypass. | Removed seller creation UI, reject recurring product creation, return HTTP 410 on schedule creation, and restrict the service method; existing schedules/history remain. Covered by service/API tests and 13 passing Playwright tests. | **FIXED** |
+| AUD-008 | P2 | Editing Orders Close after the stored opening time had elapsed failed because timing edits reused the future-only validator intended for new/changed opening timestamps. | Existing timestamps now retain their original value and are checked only against revised delivery/cutoff bounds; unchanged submitted values use the same path. `Requirement5LiveOfferingEditTest.ordersCloseCanBeExtendedAfterTheStoredOpeningTimeHasPassed` covers the regression. | **FIXED** |
+| AUD-009 | P3 | CI used deprecated `checkout@v4`, `setup-java@v4`, and `setup-node@v4` actions plus a floating `ubuntu-latest` runner, producing GitHub deprecation/migration warnings. | Pinned the runner to `ubuntu-24.04` and upgraded checkout/setup-java to v5 and setup-node to v7; PR #98 CI passed with no matching deprecation warnings. | **FIXED** |
+
+Local release evidence is recorded in `TEST_EXECUTION_REPORT.md`. PostgreSQL Testcontainers, Render deployment, production health, backups/restoration, and production data integrity remain unverified.

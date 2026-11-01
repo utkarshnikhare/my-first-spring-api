@@ -53,7 +53,9 @@ class Requirements1718IntegrationTest {
         buyer.setSociety("Society");
         buyer.setBuilding("A");
         buyer = users.saveAndFlush(buyer);
-        kitchen = kitchens.saveAndFlush(new Kitchen("k" + suffix, "Kitchen " + suffix, "", null, seller));
+        kitchen = new Kitchen("k" + suffix, "Kitchen " + suffix, "", null, seller);
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
+        kitchen = kitchens.saveAndFlush(kitchen);
     }
 
 
@@ -134,7 +136,7 @@ class Requirements1718IntegrationTest {
         product.setCutoffTime(close);
         products.saveAndFlush(product);
 
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, null, null, session))
+        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, session))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("orders for checkout are closed");
         assertThat(orders.findById(draft.getId()).orElseThrow().getOrderStatus()).isEqualTo(OrderStatus.DRAFT);
@@ -185,4 +187,3 @@ class Requirements1718IntegrationTest {
         orders.saveAndFlush(order);
     }
 }
-

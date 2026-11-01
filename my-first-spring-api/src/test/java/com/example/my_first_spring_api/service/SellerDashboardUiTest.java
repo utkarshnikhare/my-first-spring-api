@@ -212,8 +212,8 @@ class SellerDashboardUiTest {
         assertThat(sellerJs)
                 .as("View Store on the dashboard reuses the existing preview action")
                 .contains("data-action=\"preview-kitchen\"")
-                .as("the preview still opens the existing buyer kitchen route")
-                .contains("location.href = '/index.html#/kitchen/' + encodeURIComponent(previewId);")
+                .as("the preview opens the existing buyer kitchen route without replacing seller management")
+                .contains("previewWindow.location.replace('/index.html#/kitchen/' + encodeURIComponent(previewId));")
                 .as("the Kitchen screen keeps its own Preview button too")
                 .contains("data-action=\"preview-kitchen\">Preview Kitchen Page</button>");
     }

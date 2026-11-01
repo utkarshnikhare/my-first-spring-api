@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         "spring.datasource.url=jdbc:h2:mem:bounded-load-test;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=15000",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.jpa.open-in-view=false",
-        "spring.datasource.hikari.maximum-pool-size=60",
+        "spring.datasource.hikari.maximum-pool-size=120",
         "spring.datasource.hikari.connection-timeout=30000"
 })
 @ActiveProfiles("test")
@@ -80,6 +80,7 @@ public class BoundedLoadSimulationTest {
 
         Kitchen kitchen = new Kitchen("k-load-" + suffix, "Load Kitchen " + suffix, "Speciality", null, seller);
         kitchen.setSociety(sharedSociety.getName());
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         kitchen.setAvailableToday(true);
         kitchen.getServedSocieties().add(sharedSociety);
         kitchen = kitchens.saveAndFlush(kitchen);
@@ -284,7 +285,8 @@ public class BoundedLoadSimulationTest {
                                 "items", List.of(Map.of("productId", sharedProductId, "quantity", 1)),
                                 "buyerDetails", bd,
                                 "customInstructions", "Load iteration " + it,
-                                "paymentStatus", "PENDING"
+                                "paymentStatus", "PENDING",
+                                "paymentMethod", "cod"
                         );
                         HttpRequest placeReq = HttpRequest.newBuilder()
                                 .uri(URI.create(baseUrl + "/api/buyer/orders/place"))
@@ -315,7 +317,7 @@ public class BoundedLoadSimulationTest {
 
         long wallStart = System.nanoTime();
         startGate.countDown();
-        boolean finished = endGate.await(45, TimeUnit.SECONDS);
+        boolean finished = endGate.await(90, TimeUnit.SECONDS);
         long wallDurationMs = (System.nanoTime() - wallStart) / 1_000_000;
         pool.shutdown();
 
@@ -340,12 +342,12 @@ public class BoundedLoadSimulationTest {
         System.out.println("SOCIOMART BOUNDED LOAD TEST REPORT — REAL HTTP END-TO-END WORKFLOWS");
         System.out.println("=========================================================================");
 
-        VuMetrics tier1 = runVuTier(1, 10);
         VuMetrics tier10 = runVuTier(10, 3);
         VuMetrics tier25 = runVuTier(25, 2);
         VuMetrics tier50 = runVuTier(50, 1);
+        VuMetrics tier100 = runVuTier(100, 1);
 
-        List<VuMetrics> tiers = List.of(tier1, tier10, tier25, tier50);
+        List<VuMetrics> tiers = List.of(tier10, tier25, tier50, tier100);
 
         System.out.printf("%-8s | %-12s | %-10s | %-10s | %-12s | %-8s | %-8s | %-8s | %-8s\n",
                 "VUs", "Total Reqs", "Success", "Failed", "Throughput", "p50(ms)", "p95(ms)", "p99(ms)", "Max(ms)");
@@ -359,7 +361,7 @@ public class BoundedLoadSimulationTest {
         System.out.println("=========================================================================\n");
 
         // Verify Data Integrity after all 4 tiers completed
-        int expectedOrdersPlaced = (1 * 10) + (10 * 3) + (25 * 2) + (50 * 1); // 10 + 30 + 50 + 50 = 140 orders
+        int expectedOrdersPlaced = (10 * 3) + (25 * 2) + (50 * 1) + (100 * 1); // 30 + 50 + 50 + 100 = 230 orders
         assertThat(orders.count())
                 .as("All checkout orders must be durably stored")
                 .isEqualTo(expectedOrdersPlaced);

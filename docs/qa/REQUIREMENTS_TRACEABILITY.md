@@ -1,7 +1,7 @@
 # SocioMart Comprehensive Requirements Traceability Matrix (RTM)
 
 **Matrix Version:** 2.0.0  
-**Effective Date:** 2026-10-26  
+**Effective Date:** 2026-10-30
 **Auditor:** Principal Software Engineer & Senior QA Lead  
 **Audit Scope:** Full reconciliation across all 7 source documents, addendums, and visual defect artifacts. Every acceptance test is individually enumerated below.
 
@@ -189,3 +189,36 @@
   - UI/UX & Responsive: 10 criteria — verified by Playwright in CI.
   - Limitations: 5 Postgres tests pass only in CI (Docker); not run locally. Deployed commit SHA unverified. No physical-device or lint checks run.
   - Failed Requirements: 0 (in CI). Unverified locally: Postgres (environment), deployment SHA.
+
+## 11. Final Verification Sprint Evidence (2026-10-27)
+
+- SM-028 revenue/payment aggregate exclusion verified in AdminService.dashboard(); cancelled orders are excluded from all payment-status buckets and order-value totals.
+- RevenueReconciliationTest: 9/9 PASS locally.
+- Full Maven suite: 776 tests, 0 failures, 0 errors, 5 skipped.
+- Playwright E2E: 13/13 PASS on rerun.
+- GitHub: local HEAD b69be61 on feat/deployment-verification-version-endpoint; PR #90 OPEN at 2e13f43; b69be61 not merged into main. Latest branch CI succeeded.
+- PostgreSQL/Testcontainers: 5 skipped locally; Docker/PostgreSQL unavailable. CI evidence reports pass.
+- Render: health endpoint timed out; deployed commit SHA unverified; autoDeploy false; no Render API key.
+- Final status: PARTIALLY VERIFIED.
+
+## 12. Final Release Blocker Closure (2026-10-27)
+
+- PR #90 merged into main: 07f4def8352afff7c7a1c05b113f04017f18bf7f. Approved code commit b69be619cbed34cfee2a1c5101df7b1fbd6285bd is an ancestor of main.
+- CI run 40494866078: success (build and e2e).
+- PostgreSQL-sensitive tests: 5/5 PASS in CI.
+- Render: /api/health 200 after cold start; homepage 200; /api/version 401 on current deployment. Deployed commit SHA remains unverified. No Render credentials available.
+- Final status: PARTIALLY VERIFIED. Remaining action: manual Render deployment of 07f4def8352afff7c7a1c05b113f04017f18bf7f and verification of /api/health, /api/version, homepage, and smoke tests.
+
+## 13. Current Traceability — Three Attached Specifications (2026-10-30)
+
+The three supplied specifications were re-read and cross-checked against the current implementation. The existing RTM enumerates 100 acceptance criteria for its source documents; the table below records the supplied Quick Post, dynamic order/pre-order classification, and Orders Open From requirements at feature level. The application behavior is verified locally; deployment to production is not.
+
+| Specification | Requirement / expected behavior | Implementation and evidence | Status |
+|---|---|---|---|
+| Quick Post | Persist a quick post as a real, buyer-orderable offering with validated text and optional image data; preserve normal order and inventory behavior. | Quick Post persistence/API paths; `SellerQuickPostTextLimitTest`, `SellerFavouriteQuickPostIntegrationTest`, existing order-flow suite, V16 migration validation. | **IMPLEMENTED; LOCAL TESTS PASS** |
+| Dynamic order/pre-order classification | Classification follows offering date/time and availability rather than a stale seller-selected mode; checkout revalidates the live state. | `OfferingTiming`, discovery/checkout validation; `MidnightBoundaryAvailabilityRegressionTest`, `KitchenIneligibilityMessageTest`, and the marketplace E2E suite. | **IMPLEMENTED; LOCAL TESTS PASS** |
+| Orders Open From | Persist and enforce the opening timestamp at discovery/checkout; reject edits that make the stored opening time invalid; preserve an elapsed opening timestamp when a later close-time extension is made; migrate schema forward-only. | `ordersOpenFrom` entity/service/UI paths, V15 migration, bounds-only revalidation of persisted timestamps, `Requirement5LiveOfferingEditTest.ordersCloseCanBeExtendedAfterTheStoredOpeningTimeHasPassed`, and schema-migration tests. | **IMPLEMENTED; LOCAL TESTS PASS** |
+
+**Specification conflict resolved:** one supplied document requests disabling creation of new recurring schedules, while other requirements rely on recurring behavior. New schedule creation is disabled at the UI, product API, schedule API, and service boundary; existing schedules, orders, seller management, and history remain available. `RecurringScheduleCreateProductIntegrationTest`, `RecurringScheduleHttpTest`, `RecurringBuyerOrderFlowTest`, H2 runtime smoke, and Playwright provide regression evidence.
+
+**Release caveat:** the Render startup log proves the production schema lacked `orders.payment_method`. V17 is an additive repair and is tested in an isolated H2 PostgreSQL-mode schema. PostgreSQL Testcontainers are unavailable locally, and no production migration was run; backup/restore and production data integrity remain **NOT VERIFIED**.

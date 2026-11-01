@@ -65,6 +65,7 @@ public class ConcurrencyLoadSimulationTest {
 
         Kitchen kitchen = new Kitchen("k" + suffix, "Kitchen " + suffix, "", null, seller);
         kitchen.setSociety(society.getName());
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         kitchen.setAvailableToday(true);
         kitchen.getServedSocieties().add(society);
         kitchen = kitchens.saveAndFlush(kitchen);
@@ -134,7 +135,7 @@ public class ConcurrencyLoadSimulationTest {
                     bd.setBuilding(b.getBuilding());
                     bd.setFlatHouseNumber(b.getFlatHouseNumber());
 
-                    OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, bd, "concurrency test " + buyerCount, s);
+                    OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, "cod", bd, "concurrency test " + buyerCount, s);
                     if (placed != null && placed.getOrderStatus() == OrderStatus.ORDERED) {
                         successCount.incrementAndGet();
                     }
@@ -178,6 +179,7 @@ public class ConcurrencyLoadSimulationTest {
 
         Kitchen kitchenEntity = new Kitchen("k" + suffix, "Kitchen " + suffix, "", null, seller);
         kitchenEntity.setSociety(society.getName());
+        kitchenEntity.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         kitchenEntity.setAvailableToday(true);
         kitchenEntity.getServedSocieties().add(society);
         Kitchen kitchen = kitchens.saveAndFlush(kitchenEntity);
@@ -226,7 +228,7 @@ public class ConcurrencyLoadSimulationTest {
                     bd.setBuilding(buyer.getBuilding());
                     bd.setFlatHouseNumber(buyer.getFlatHouseNumber());
 
-                    OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, bd, "duplicate test", sharedSession);
+                    OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, "cod", bd, "duplicate test", sharedSession);
                     if (placed != null) successCount.incrementAndGet();
                 } catch (Exception ex) {
                     rejectedCount.incrementAndGet();
@@ -264,6 +266,7 @@ public class ConcurrencyLoadSimulationTest {
 
         Kitchen kitchen = new Kitchen("k" + suffix, "Kitchen " + suffix, "", null, seller);
         kitchen.setSociety(society.getName());
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         kitchen.setAvailableToday(true);
         kitchen.getServedSocieties().add(society);
         kitchen = kitchens.saveAndFlush(kitchen);
@@ -300,7 +303,7 @@ public class ConcurrencyLoadSimulationTest {
         bd.setBuilding(buyer.getBuilding());
         bd.setFlatHouseNumber(buyer.getFlatHouseNumber());
 
-        final OrderDto placedOrder = orderService.placeOrder(PaymentStatus.PENDING, bd, "cancel test", session);
+        final OrderDto placedOrder = orderService.placeOrder(PaymentStatus.PENDING, "cod", bd, "cancel test", session);
         assertThat(placedOrder).isNotNull();
 
         // Stock was 10, consumed 3 -> remaining is 7

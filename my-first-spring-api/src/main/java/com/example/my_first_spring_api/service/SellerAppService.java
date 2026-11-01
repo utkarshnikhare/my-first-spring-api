@@ -518,7 +518,7 @@ public class SellerAppService {
             if (o.getCreatedAt().isAfter(startOfDay)) {
                 if (o.getPaymentStatus() == PaymentStatus.PAID)
                     confirmedToday = confirmedToday.add(amt);
-                else if (o.getPaymentStatus() == PaymentStatus.PENDING)
+                else if (o.getPaymentStatus().isUnsettled())
                     pendingToday = pendingToday.add(amt);
             }
         }
@@ -560,8 +560,7 @@ public class SellerAppService {
                 continue; // cancelled orders never count towards revenue or item aggregates
             }
             if (order.getPaymentStatus() == PaymentStatus.PAID) paidCount++;
-            else if (order.getPaymentStatus() == PaymentStatus.PENDING
-                    || order.getPaymentStatus() == PaymentStatus.WILL_PAY_LATER) pendingCount++;
+            else if (order.getPaymentStatus().isUnsettled()) pendingCount++;
             BigDecimal amt = order.getItems().stream()
                     .filter(item -> itemMatchesDate(order, item, date))
                     .map(item -> item.getPrice() == null ? BigDecimal.ZERO
@@ -593,8 +592,7 @@ public class SellerAppService {
                     agg.setTotalOrders(agg.getTotalOrders() + 1);
                     if (order.getPaymentStatus() == PaymentStatus.PAID)
                         agg.setPaidCount(agg.getPaidCount() + 1);
-                    else if (order.getPaymentStatus() == PaymentStatus.PENDING
-                            || order.getPaymentStatus() == PaymentStatus.WILL_PAY_LATER)
+                    else if (order.getPaymentStatus().isUnsettled())
                         agg.setPendingCount(agg.getPendingCount() + 1);
                 }
                 int qty = item.getQuantity() != null ? item.getQuantity() : 0;
@@ -720,8 +718,7 @@ public class SellerAppService {
                     cancelledCount++;
                 } else {
                     if (paid) paidCount++;
-                    else if (order.getPaymentStatus() == PaymentStatus.PENDING
-                            || order.getPaymentStatus() == PaymentStatus.WILL_PAY_LATER) pendingCount++;
+                    else if (order.getPaymentStatus().isUnsettled()) pendingCount++;
                     totalPlates += qtyForProduct;
                     totalRevenue = totalRevenue.add(itemRevenue);
                 }
@@ -731,8 +728,7 @@ public class SellerAppService {
                         filteredCancelledCount++;
                     } else {
                         if (paid) filteredPaidCount++;
-                        else if (order.getPaymentStatus() == PaymentStatus.PENDING
-                                || order.getPaymentStatus() == PaymentStatus.WILL_PAY_LATER) filteredPendingCount++;
+                        else if (order.getPaymentStatus().isUnsettled()) filteredPendingCount++;
                         filteredTotalPlates += qtyForProduct;
                         filteredTotalRevenue = filteredTotalRevenue.add(itemRevenue);
                     }
@@ -807,8 +803,7 @@ public class SellerAppService {
             // WILL_PAY_LATER is the legacy spelling of an unpaid order, so it
             // belongs in the same bucket as PENDING. The buckets stay mutually
             // exclusive: a cancelled order is never "paid" or "pending" here.
-            boolean pending = order.getPaymentStatus() == PaymentStatus.PENDING
-                    || order.getPaymentStatus() == PaymentStatus.WILL_PAY_LATER;
+            boolean pending = order.getPaymentStatus().isUnsettled();
             // Evaluated as a constraint, NOT as an early return: an unrecognised
             // value simply imposes no constraint, so the delivery filter below
             // (or any filter added later) is still applied. Returning here would
@@ -930,7 +925,7 @@ public class SellerAppService {
             if (isToday) {
                 if (order.getPaymentStatus() == PaymentStatus.PAID)
                     confirmedToday = confirmedToday.add(amt);
-                else if (order.getPaymentStatus() == PaymentStatus.PENDING)
+                else if (order.getPaymentStatus().isUnsettled())
                     pending = pending.add(amt);
             }
 
@@ -952,7 +947,7 @@ public class SellerAppService {
                         : BigDecimal.ZERO;
                 if (order.getPaymentStatus() == PaymentStatus.PAID) {
                     ie.setConfirmedRevenue(ie.getConfirmedRevenue().add(itemRevenue));
-                } else if (order.getPaymentStatus() == PaymentStatus.PENDING) {
+                } else if (order.getPaymentStatus().isUnsettled()) {
                     ie.setPendingRevenue(ie.getPendingRevenue().add(itemRevenue));
                 }
             }
@@ -1042,6 +1037,7 @@ public class SellerAppService {
         dto.setPriceUnit(product.getPriceUnit());
         dto.setAvailableDate(product.getAvailableDate());
         dto.setOrderWindowStart(product.getOrderWindowStart());
+        dto.setOrdersOpenFrom(product.getOrdersOpenFrom());
         dto.setOrderWindowEnd(product.getOrderWindowEnd());
         dto.setMaxQuantity(product.getMaxQuantity());
         dto.setRemainingQuantity(product.getRemainingQuantity());
@@ -1056,8 +1052,11 @@ public class SellerAppService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
+        dto.setQuickPost(product.isQuickPost());
+        dto.setQuickPostImageData(product.getQuickPostImageData());
         String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
-        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle));
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle)
+                || "SCHEDULED_TO_OPEN".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
         dto.setCreatedAt(product.getCreatedAt());
         return dto;

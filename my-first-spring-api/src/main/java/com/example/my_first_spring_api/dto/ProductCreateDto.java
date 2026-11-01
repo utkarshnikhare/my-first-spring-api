@@ -1,17 +1,16 @@
 package com.example.my_first_spring_api.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonFormat;
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
-import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
 public class ProductCreateDto {
-    @NotBlank(message = "Item name is required")
     private String name;
 
     private String description;
@@ -27,23 +26,28 @@ public class ProductCreateDto {
     private String unit = "portion";
 
     private String imageUrl;
+    private Boolean quickPost;
+    private String quickPostImageData;
+    private String quickPostRequestId;
 
     @JsonAlias({"is_available", "isAvailable"})
     private Boolean availableToday = Boolean.TRUE;
 
     @JsonAlias({"is_veg", "isVeg", "veg"})
     private Boolean isVeg = Boolean.TRUE;
-    @NotNull(message = "Offering For is required")
     @JsonAlias({"offeringDate", "date"})
     private LocalDate availableDate;
 
     @JsonAlias({"ordersOpenTime", "openTime"})
     private String orderWindowStart;
 
+    private LocalDate orderOpenDate;
+
+    private String orderOpenTime;
+
     @JsonAlias({"ordersCloseTime", "closeTime", "cutoffTime"})
     private String orderWindowEnd;
 
-    @NotBlank(message = "Delivery / Ready By is required")
     @JsonAlias({"deliveryTime", "deliveryDateTime", "readyBy"})
     private String readyByTime;
 
@@ -82,6 +86,12 @@ public class ProductCreateDto {
     }
     public String getImageUrl() { return imageUrl; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+    public Boolean getQuickPost() { return quickPost; }
+    public void setQuickPost(Boolean quickPost) { this.quickPost = quickPost; }
+    public String getQuickPostImageData() { return quickPostImageData; }
+    public void setQuickPostImageData(String quickPostImageData) { this.quickPostImageData = quickPostImageData; }
+    public String getQuickPostRequestId() { return quickPostRequestId; }
+    public void setQuickPostRequestId(String quickPostRequestId) { this.quickPostRequestId = quickPostRequestId; }
     public Boolean getAvailableToday() { return availableToday != null ? availableToday : Boolean.TRUE; }
     public void setAvailableToday(Boolean availableToday) { this.availableToday = (availableToday != null) ? availableToday : Boolean.TRUE; }
     public Boolean getIsAvailable() { return getAvailableToday(); }
@@ -92,6 +102,10 @@ public class ProductCreateDto {
     public void setAvailableDate(LocalDate availableDate) { this.availableDate = availableDate; }
     public String getOrderWindowStart() { return orderWindowStart; }
     public void setOrderWindowStart(String orderWindowStart) { this.orderWindowStart = orderWindowStart; }
+    public LocalDate getOrderOpenDate() { return orderOpenDate; }
+    public void setOrderOpenDate(LocalDate orderOpenDate) { this.orderOpenDate = orderOpenDate; }
+    public String getOrderOpenTime() { return orderOpenTime; }
+    public void setOrderOpenTime(String orderOpenTime) { this.orderOpenTime = orderOpenTime; }
     public String getOrderWindowEnd() { return orderWindowEnd; }
     public void setOrderWindowEnd(String orderWindowEnd) { this.orderWindowEnd = orderWindowEnd; }
     public String getReadyByTime() { return readyByTime; }
@@ -126,4 +140,36 @@ public class ProductCreateDto {
 
     public RecurringScheduleDto getRecurringSchedule() { return recurringSchedule; }
     public void setRecurringSchedule(RecurringScheduleDto recurringSchedule) { this.recurringSchedule = recurringSchedule; }
+
+    @AssertTrue(message = "Item name is required")
+    @JsonIgnore
+    public boolean isNameValidForOffering() {
+        return Boolean.TRUE.equals(quickPost) || (name != null && !name.isBlank());
+    }
+
+    @AssertTrue(message = "Offering For is required")
+    @JsonIgnore
+    public boolean isAvailableDateValidForOffering() {
+        return Boolean.TRUE.equals(quickPost) || availableDate != null;
+    }
+
+    @AssertTrue(message = "Delivery / Ready By is required")
+    @JsonIgnore
+    public boolean isReadyByTimeValidForOffering() {
+        return Boolean.TRUE.equals(quickPost) || (readyByTime != null && !readyByTime.isBlank());
+    }
+
+    @AssertTrue(message = "Quick Post message is required")
+    @JsonIgnore
+    public boolean isQuickPostMessageValid() {
+        return !Boolean.TRUE.equals(quickPost) || (description != null && !description.isBlank());
+    }
+
+    @AssertTrue(message = "Quick Post request reference is required and must be at most 80 characters")
+    @JsonIgnore
+    public boolean isQuickPostRequestIdValid() {
+        return !Boolean.TRUE.equals(quickPost)
+                || (quickPostRequestId != null && !quickPostRequestId.isBlank()
+                    && quickPostRequestId.trim().length() <= 80);
+    }
 }

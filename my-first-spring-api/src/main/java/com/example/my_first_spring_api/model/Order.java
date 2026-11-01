@@ -31,6 +31,12 @@ public class Order {
     @Column(name = "payment_status", nullable = false)
     private PaymentStatus paymentStatus = PaymentStatus.PENDING;
 
+    @Column(name = "payment_method", length = 20)
+    private String paymentMethod;
+
+    @Column(name = "payment_configuration_snapshot", length = 20)
+    private String paymentConfigurationSnapshot;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "order_status", nullable = false)
     private OrderStatus orderStatus = OrderStatus.DRAFT;
@@ -247,6 +253,11 @@ public class Order {
     public void setId(Long id) { this.id = id; }
     public String getOrderNumber() { return orderNumber; }
     public void setOrderNumber(String orderNumber) { this.orderNumber = orderNumber; }
+    public String getPaymentMethod() { return paymentMethod; }
+    public String getPaymentConfigurationSnapshot() { return paymentConfigurationSnapshot; }
+    public void setPaymentConfigurationSnapshot(String paymentConfigurationSnapshot) {
+        this.paymentConfigurationSnapshot = paymentConfigurationSnapshot;
+    }
     public User getBuyer() { return buyer; }
     public void setBuyer(User buyer) { this.buyer = buyer; }
     public Kitchen getKitchen() { return kitchen; }
@@ -303,6 +314,10 @@ public class Order {
     public void setDeliveryAddress(String deliveryAddress) {
         this.deliveryAddress = deliveryAddress != null ? deliveryAddress : "";
     }
+    public void setPaymentMethod(String paymentMethod) {
+        this.paymentMethod = paymentMethod != null ? paymentMethod : "";
+    }
+
     @Transient
     public String getSociety() {
         return buyer != null ? buyer.getSociety() : null;

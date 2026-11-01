@@ -5,7 +5,6 @@ import com.example.my_first_spring_api.dto.BuyerRegistrationRequestDto;
 import com.example.my_first_spring_api.dto.ChangePasswordRequestDto;
 import com.example.my_first_spring_api.dto.CredentialLoginRequestDto;
 import com.example.my_first_spring_api.dto.ForgotPasswordRequestDto;
-import com.example.my_first_spring_api.dto.ResetPasswordRequestDto;
 import com.example.my_first_spring_api.dto.SellerRegistrationRequestDto;
 import com.example.my_first_spring_api.exception.InvalidCredentialsException;
 import com.example.my_first_spring_api.model.User;
@@ -13,7 +12,6 @@ import com.example.my_first_spring_api.security.AuthRateLimiter;
 import com.example.my_first_spring_api.service.AdminAuditService;
 import com.example.my_first_spring_api.service.BuyerService;
 import com.example.my_first_spring_api.service.AuthService;
-import com.example.my_first_spring_api.service.AuthService.PasswordResetResponseDto;
 import com.example.my_first_spring_api.service.OrderService;
 import com.example.my_first_spring_api.service.PasswordRecoveryService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -171,8 +169,8 @@ public class AuthController {
             throw new IllegalArgumentException(
                     "Provide the e-mail or the mobile number registered with your account.");
         }
-        PasswordResetResponseDto response = authService.requestPasswordReset(request.getEmail());
-        return ResponseEntity.ok(response);
+        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                AuthService.EMAIL_PASSWORD_RECOVERY_UNAVAILABLE);
     }
 
     /**
@@ -193,10 +191,9 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequestDto request) {
-        authService.resetPassword(request.getToken(), request.getNewPassword());
-        return ResponseEntity.ok(Map.of("message",
-                "Password has been reset. You can now log in with your new password."));
+    public ResponseEntity<?> resetPassword() {
+        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                AuthService.EMAIL_PASSWORD_RECOVERY_UNAVAILABLE);
     }
 
     @GetMapping("/me")

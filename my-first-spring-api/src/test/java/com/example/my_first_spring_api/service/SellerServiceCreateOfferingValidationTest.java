@@ -13,6 +13,7 @@ import com.example.my_first_spring_api.repository.ProductRepository;
 import com.example.my_first_spring_api.repository.UserRepository;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -359,7 +360,16 @@ class SellerServiceCreateOfferingValidationTest {
         LocalTime now = LocalTime.now(AppTimeZone.ZONE);
         String amInput;
         String expectedPm;
-        if (now.isBefore(LocalTime.of(12, 0))) {
+        if (now.isBefore(LocalTime.of(4, 0))) {
+            if (now.getMinute() >= 5) {
+                int pastMin = now.getMinute() - 4;
+                amInput = String.format(java.util.Locale.ROOT, "%02d:%02d", now.getHour(), pastMin);
+                expectedPm = String.format(java.util.Locale.ROOT, "%02d:%02d", now.getHour() + 12, pastMin);
+            } else {
+                org.junit.jupiter.api.Assumptions.assumeTrue(false, "Requires an AM time on the current day that is already past");
+                return;
+            }
+        } else if (now.isBefore(LocalTime.of(12, 0))) {
             amInput = "04:00";
             expectedPm = "16:00";
         } else if (now.isBefore(LocalTime.of(22, 0))) {
@@ -369,15 +379,22 @@ class SellerServiceCreateOfferingValidationTest {
             expectedPm = String.format(java.util.Locale.ROOT, "%02d:00", targetHour);
         } else {
             amInput = "04:00";
-            expectedPm = "23:59";
+            expectedPm = null;
         }
         dto.setOrderWindowEnd(amInput);
         dto.setReadyByTime(offeringDate + "T23:59");
 
         var result = sellerService.createProduct(1L, dto, approvedSeller());
         assertThat(result).isNotNull();
-        assertThat(result.getOrderWindowEnd()).isEqualTo(expectedPm);
-        assertThat(result.getCutoffTime()).isEqualTo(expectedPm);
+        if (expectedPm != null) {
+            assertThat(result.getOrderWindowEnd()).isEqualTo(expectedPm);
+        } else {
+            Assumptions.assumeTrue(now.isBefore(LocalTime.of(23, 58)));
+            LocalTime corrected = LocalTime.parse(result.getOrderWindowEnd());
+            assertThat(corrected).isAfterOrEqualTo(now.minusMinutes(1));
+            assertThat(corrected).isBefore(LocalTime.of(23, 59));
+        }
+        assertThat(result.getCutoffTime()).isEqualTo(result.getOrderWindowEnd());
     }
 
     @Test

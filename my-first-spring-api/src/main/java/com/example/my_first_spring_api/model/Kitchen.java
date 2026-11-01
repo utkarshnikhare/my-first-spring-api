@@ -84,6 +84,17 @@ public class Kitchen {
     @Column(name = "upi_id")
     private String upiId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "accepted_payment_mode", length = 20)
+    private SellerPaymentMode acceptedPaymentMode;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gpay_identifier_type", length = 20)
+    private GpayIdentifierType gpayIdentifierType;
+
+    @Column(name = "gpay_identifier", length = 255)
+    private String gpayIdentifier;
+
     @Column
     private Double rating = 0.0;
 
@@ -200,6 +211,12 @@ public class Kitchen {
     public void setGalleryImages(String galleryImages) { this.galleryImages = galleryImages; }
     public String getUpiId() { return upiId; }
     public void setUpiId(String upiId) { this.upiId = upiId; }
+    public SellerPaymentMode getAcceptedPaymentMode() { return acceptedPaymentMode; }
+    public void setAcceptedPaymentMode(SellerPaymentMode acceptedPaymentMode) { this.acceptedPaymentMode = acceptedPaymentMode; }
+    public GpayIdentifierType getGpayIdentifierType() { return gpayIdentifierType; }
+    public void setGpayIdentifierType(GpayIdentifierType gpayIdentifierType) { this.gpayIdentifierType = gpayIdentifierType; }
+    public String getGpayIdentifier() { return gpayIdentifier; }
+    public void setGpayIdentifier(String gpayIdentifier) { this.gpayIdentifier = gpayIdentifier; }
     public Double getRating() { return rating; }
     public void setRating(Double rating) { this.rating = rating; }
     public Boolean getAvailableToday() { return availableToday; }

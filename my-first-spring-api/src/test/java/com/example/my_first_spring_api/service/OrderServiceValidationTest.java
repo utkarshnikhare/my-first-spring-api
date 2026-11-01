@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import com.example.my_first_spring_api.dto.OrderDto;
 import com.example.my_first_spring_api.dto.OrderItemRequest;
 import com.example.my_first_spring_api.dto.PlaceOrderRequest;
@@ -17,6 +18,8 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -60,6 +63,7 @@ class OrderServiceValidationTest {
         User seller = approvedSeller();
         Kitchen kitchen = new Kitchen("k", "Kitchen", "d", null, seller);
         kitchen.setId(1L);
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         return kitchen;
     }
 
@@ -81,6 +85,31 @@ class OrderServiceValidationTest {
             req.setQuantity(0);
             orderService.createOrUpdateDraftOrder(1L, List.of(req), httpSession);
         });
+    }
+
+    @Test
+    void scheduledOfferingCannotEnterDraftBeforeOrdersOpenFrom() {
+        Kitchen kitchen = approvedKitchen();
+        when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
+
+        Product product = new Product(kitchen, "Scheduled Poha", "desc", BigDecimal.valueOf(40), null);
+        product.setId(1L);
+        product.setAvailableDate(LocalDate.now(AppTimeZone.ZONE));
+        product.setAvailableToday(true);
+        product.setIsPreorder(false);
+        product.setOrdersOpenFrom(LocalDateTime.now(AppTimeZone.ZONE).plusHours(1));
+        product.setOrderWindowEnd("23:59");
+        product.setRemainingQuantity(10);
+        product.setMaxQuantity(10);
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+
+        OrderItemRequest request = new OrderItemRequest();
+        request.setProductId(1L);
+        request.setQuantity(1);
+        assertThatThrownBy(() -> orderService.createOrUpdateDraftOrder(1L, List.of(request), httpSession))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("open on");
+        verify(orderRepository, never()).save(any(Order.class));
     }
 
     @Test
@@ -248,7 +277,7 @@ class OrderServiceValidationTest {
         when(httpSession.getAttribute(OrderService.DRAFT_ORDER_SESSION_KEY)).thenReturn(46L);
         when(orderRepository.findByIdForUpdate(46L)).thenReturn(Optional.of(foreignDraft));
 
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, null, null, httpSession))
+        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, null, null, null, httpSession))
                 .isInstanceOf(OrderNotFoundException.class);
         verify(orderRepository, never()).delete(any());
     }
@@ -305,7 +334,7 @@ class OrderServiceValidationTest {
         when(orderRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(mockOrder));
 
         assertThrows(BuyerProfileIncompleteException.class, () -> {
-            orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, null, null, httpSession);
+            orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, "cod", null, null, httpSession);
         });
     }
 
@@ -371,12 +400,12 @@ class OrderServiceValidationTest {
         details.setFlatHouseNumber("A-101");
         details.setDeliveryAddress("A-101, Tower 1, Sunshine Society");
 
-        OrderDto placedDto = orderService.placeOrder(PaymentStatus.PENDING, details, "Leave at door", httpSession);
+        OrderDto placedDto = orderService.placeOrder(PaymentStatus.PENDING, "COD", details, "Leave at door", httpSession);
 
         assertThat(placedDto).isNotNull();
         assertThat(placedDto.getId()).isEqualTo(100L);
         assertThat(placedDto.getOrderNumber()).isNotBlank();
-        assertThat(placedDto.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(placedDto.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
         assertThat(placedDto.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
 
         ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);

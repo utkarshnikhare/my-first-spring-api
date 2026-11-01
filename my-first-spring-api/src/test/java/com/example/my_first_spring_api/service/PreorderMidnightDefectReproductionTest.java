@@ -83,8 +83,8 @@ class PreorderMidnightDefectReproductionTest {
         assertThat(OfferingTiming.isWindowOpenNow(preorder, TOMORROW, LocalTime.of(10, 0)))
                 .as("Delivery day at 10:00 morning must remain open").isTrue();
         assertThat(OfferingTiming.lifecycleState(preorder, TOMORROW, LocalTime.of(10, 0)))
-                .as("Lifecycle state at 10:00 on delivery day must be PRE_ORDER, not ORDERS_CLOSED")
-                .isEqualTo("PRE_ORDER");
+                .as("Delivery-day classification follows the IST date while the cutoff remains open")
+                .isEqualTo("LIVE");
 
         // 6. Delivery Day afternoon (16:59 and 17:00): open
         assertThat(OfferingTiming.isWindowOpenNow(preorder, TOMORROW, LocalTime.of(16, 59)))
@@ -140,7 +140,7 @@ class PreorderMidnightDefectReproductionTest {
         // 1. Before cutoff (16:59):
         String stateOpen = OfferingTiming.lifecycleState(preorder, TOMORROW, LocalTime.of(16, 59));
         boolean closedFlagOpen = "ORDERS_CLOSED".equals(stateOpen) || "HISTORY".equals(stateOpen);
-        assertThat(stateOpen).isEqualTo("PRE_ORDER");
+        assertThat(stateOpen).isEqualTo("LIVE");
         assertThat(closedFlagOpen).isFalse();
         assertThatCode(() -> OfferingTiming.enforceOrderWindow(preorder, TOMORROW, "today",
                 TOMORROW, LocalTime.of(16, 59))).doesNotThrowAnyException();
@@ -174,7 +174,7 @@ class PreorderMidnightDefectReproductionTest {
         preorder.setRemainingQuantity(15);
         assertThat(OfferingTiming.isWindowOpenNow(preorder, TOMORROW, LocalTime.of(10, 0))).isTrue();
         assertThat(OfferingTiming.lifecycleState(preorder, TOMORROW, LocalTime.of(10, 0)))
-                .isEqualTo("PRE_ORDER");
+                .isEqualTo("LIVE");
     }
 
     @Test
@@ -229,7 +229,7 @@ class PreorderMidnightDefectReproductionTest {
         assertThat(OfferingTiming.isWindowOpenNow(preorder, midnight.toLocalDate(), midnight.toLocalTime()))
                 .isTrue();
         assertThat(OfferingTiming.lifecycleState(preorder, midnight.toLocalDate(), midnight.toLocalTime()))
-                .isEqualTo("PRE_ORDER");
+                .isEqualTo("LIVE");
 
         // 17:00:00 IST tomorrow (exact cutoff)
         ZonedDateTime exactCutoff = ZonedDateTime.of(TOMORROW, LocalTime.of(17, 0, 0), ist);
@@ -245,6 +245,21 @@ class PreorderMidnightDefectReproductionTest {
         ZonedDateTime nextMinute = ZonedDateTime.of(TOMORROW, LocalTime.of(17, 1, 0), ist);
         assertThat(OfferingTiming.isWindowOpenNow(preorder, nextMinute.toLocalDate(), nextMinute.toLocalTime()))
                 .isFalse();
+    }
+
+    @Test
+    @DisplayName("Buyer order/pre-order classification follows the IST delivery date")
+    void classificationFollowsDeliveryDateInsteadOfStoredFlag() {
+        Product futureDateStoredAsOrder = createSamplePreorder();
+        futureDateStoredAsOrder.setIsPreorder(false);
+        assertThat(OfferingTiming.isPreorderForOrdering(futureDateStoredAsOrder, TODAY)).isTrue();
+
+        Product todayStoredAsPreorder = createSamplePreorder();
+        todayStoredAsPreorder.setAvailableDate(TODAY);
+        todayStoredAsPreorder.setIsPreorder(true);
+        assertThat(OfferingTiming.isPreorderForOrdering(todayStoredAsPreorder, TODAY)).isFalse();
+        assertThat(OfferingTiming.lifecycleState(todayStoredAsPreorder, TODAY, LocalTime.NOON))
+                .isEqualTo("LIVE");
     }
 
     @Test

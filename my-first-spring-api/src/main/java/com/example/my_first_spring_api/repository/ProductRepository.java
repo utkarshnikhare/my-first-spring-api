@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
@@ -21,6 +22,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     List<Product> findByKitchenId(Long kitchenId);
     List<Product> findByKitchenAndCreatedAtAfterOrderByCreatedAtDesc(Kitchen kitchen, LocalDateTime after);
     List<Product> findByKitchenAndAvailableDateBeforeOrderByAvailableDateDescCreatedAtDesc(Kitchen kitchen, LocalDate date);
+    Optional<Product> findByKitchenAndQuickPostRequestId(Kitchen kitchen, String quickPostRequestId);
 
     /**
      * Atomic inventory adjustment for the live stepper. Guards are enforced inside the

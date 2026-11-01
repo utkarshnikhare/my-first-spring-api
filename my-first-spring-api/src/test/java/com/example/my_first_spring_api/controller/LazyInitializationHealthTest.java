@@ -42,7 +42,8 @@ class LazyInitializationHealthTest {
     void firstRequestUnderLazyInitializationServesTheRenderHealthCheck() throws Exception {
         mockMvc().perform(get("/api/health"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("UP"));
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(jsonPath("$.database").value("UP"));
     }
 
     private MockMvc mockMvc() {

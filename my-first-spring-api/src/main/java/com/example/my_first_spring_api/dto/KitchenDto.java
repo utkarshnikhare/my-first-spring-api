@@ -25,6 +25,9 @@ public class KitchenDto {
     private String instagramLink;
     private String galleryImages;
     private String upiId;
+    private String acceptedPaymentMode;
+    private String gpayIdentifierType;
+    private String gpayIdentifier;
     private Double rating;
     private Boolean availableToday;
     private Boolean paused;
@@ -82,6 +85,12 @@ public class KitchenDto {
     public void setGalleryImages(String galleryImages) { this.galleryImages = galleryImages; }
     public String getUpiId() { return upiId; }
     public void setUpiId(String upiId) { this.upiId = upiId; }
+    public String getAcceptedPaymentMode() { return acceptedPaymentMode; }
+    public void setAcceptedPaymentMode(String acceptedPaymentMode) { this.acceptedPaymentMode = acceptedPaymentMode; }
+    public String getGpayIdentifierType() { return gpayIdentifierType; }
+    public void setGpayIdentifierType(String gpayIdentifierType) { this.gpayIdentifierType = gpayIdentifierType; }
+    public String getGpayIdentifier() { return gpayIdentifier; }
+    public void setGpayIdentifier(String gpayIdentifier) { this.gpayIdentifier = gpayIdentifier; }
     public Double getRating() { return rating; }
     public void setRating(Double rating) { this.rating = rating; }
     public Boolean getAvailableToday() { return availableToday; }

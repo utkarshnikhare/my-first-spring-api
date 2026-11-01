@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import com.example.my_first_spring_api.dto.ProductUpdateDto;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.model.Kitchen;
@@ -22,7 +23,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -168,6 +171,24 @@ class Requirement5LiveOfferingEditTest {
     }
 
     @Test
+    void ordersCloseCanBeExtendedAfterTheStoredOpeningTimeHasPassed() {
+        Product product = productWithOrder(OrderStatus.CONFIRMED);
+        LocalDateTime openedAt = LocalDateTime.now(AppTimeZone.ZONE).minusMinutes(5);
+        product.setOrdersOpenFrom(openedAt);
+        product = products.saveAndFlush(product);
+
+        ProductUpdateDto dto = new ProductUpdateDto();
+        dto.setOrderWindowEnd("23:00");
+
+        sellerService.updateProduct(product.getId(), dto, seller);
+
+        Product reloaded = products.findById(product.getId()).orElseThrow();
+        assertThat(reloaded.getOrderWindowEnd()).isEqualTo("23:00");
+        assertThat(Duration.between(reloaded.getOrdersOpenFrom(), openedAt).abs())
+                .isLessThan(Duration.ofSeconds(1));
+    }
+
+    @Test
     void ordersCloseCannotBeShortenedAfterOrdersExist() {
         Product product = productWithOrder(OrderStatus.CONFIRMED);
 
@@ -178,6 +199,29 @@ class Requirement5LiveOfferingEditTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Orders Close can only be extended after orders exist (currently 21:00).");
         assertThat(products.findById(product.getId()).orElseThrow().getOrderWindowEnd()).isEqualTo(CLOSE);
+    }
+
+    @Test
+    void changingOrdersCloseRevalidatesTheStoredOpeningTimestamp() {
+        LocalDate offeringDate = offeringDateOf(OFFERING_DAYS_AHEAD);
+        Product product = new Product(kitchen, "Timed Poha", "Hot poha", BigDecimal.valueOf(40), null);
+        product.setAvailableDate(offeringDate);
+        product.setAvailableToday(false);
+        product.setIsPreorder(true);
+        product.setOrderWindowEnd(CLOSE);
+        product.setCutoffTime(CLOSE);
+        product.setReadyByTime(offeringDate + "T23:59");
+        product.setOrdersOpenFrom(LocalDateTime.of(offeringDate, java.time.LocalTime.NOON));
+        product = products.saveAndFlush(product);
+        Long productId = product.getId();
+
+        ProductUpdateDto shortenWindow = new ProductUpdateDto();
+        shortenWindow.setOrderWindowEnd("10:00");
+
+        assertThatThrownBy(() -> sellerService.updateProduct(productId, shortenWindow, seller))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Orders Open From must be before Orders Close.");
+        assertThat(products.findById(productId).orElseThrow().getOrderWindowEnd()).isEqualTo(CLOSE);
     }
 
     @Test

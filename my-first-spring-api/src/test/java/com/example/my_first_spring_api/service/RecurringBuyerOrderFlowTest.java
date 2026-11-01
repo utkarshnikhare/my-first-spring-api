@@ -6,11 +6,11 @@ import com.example.my_first_spring_api.dto.OrderItemDetailDto;
 import com.example.my_first_spring_api.dto.OrderItemRequest;
 import com.example.my_first_spring_api.dto.ProductCreateDto;
 import com.example.my_first_spring_api.dto.ProductDto;
-import com.example.my_first_spring_api.dto.RecurringScheduleDto;
 import com.example.my_first_spring_api.dto.SellerDashboardDto;
 import com.example.my_first_spring_api.model.Kitchen;
 import com.example.my_first_spring_api.model.Occurrence;
 import com.example.my_first_spring_api.model.PaymentStatus;
+import com.example.my_first_spring_api.model.SellerPaymentMode;
 import com.example.my_first_spring_api.model.Product;
 import com.example.my_first_spring_api.model.RecurringSchedule;
 import com.example.my_first_spring_api.model.OccurrenceStatus;
@@ -90,7 +90,9 @@ class RecurringBuyerOrderFlowTest {
         buyer.setSociety("Society");
         buyer.setBuilding("A");
         buyer = users.saveAndFlush(buyer);
-        kitchen = kitchens.saveAndFlush(new Kitchen("k" + suffix, "Kitchen " + suffix, "", null, seller));
+        kitchen = new Kitchen("k" + suffix, "Kitchen " + suffix, "", null, seller);
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
+        kitchen = kitchens.saveAndFlush(kitchen);
 
         // The "test" profile skips DataInitializer, so seed the feature
         // catalogue explicitly: future-occurrence ordering needs the same
@@ -107,21 +109,16 @@ class RecurringBuyerOrderFlowTest {
         dto.setName(name);
         dto.setPrice(BigDecimal.valueOf(25));
         dto.setCategories(List.of("BREAKFAST"));
-        dto.setAvailableDate(start);
+        dto.setAvailableDate(LocalDate.now());
         dto.setMaxQuantity(productMax);
         dto.setOrderWindowEnd("23:58");
         dto.setReadyByTime(start.atTime(23, 59).toString());
 
-        RecurringScheduleDto recurring = new RecurringScheduleDto();
-        recurring.setStartDate(start);
-        recurring.setEndDate(start.plusDays(14));
-        recurring.setRecurrenceWeekdays(EnumSet.of(start.getDayOfWeek()));
-        recurring.setDefaultQuantity(dayQty);
-        recurring.setDefaultOrderCloseTime("23:58");
-        recurring.setDefaultReadyByTime(start.atTime(18, 0).toString());
-        dto.setRecurringSchedule(recurring);
-
-        return sellerService.createProduct(kitchen.getId(), dto, seller);
+        ProductDto productDto = sellerService.createProduct(kitchen.getId(), dto, seller);
+        Product product = products.findById(productDto.getId()).orElseThrow();
+        scheduleService.createSchedule(product, start, start.plusDays(14),
+                EnumSet.of(start.getDayOfWeek()), dayQty, "23:58", start.atTime(18, 0).toString());
+        return productDto;
     }
 
     private MockHttpSession buyerSession() {
@@ -190,7 +187,7 @@ class RecurringBuyerOrderFlowTest {
         MockHttpSession session = buyerSession();
 
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request(product.getId(), 3)), session);
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, session);
 
         assertThat(placed.getItems()).hasSize(1);
         assertThat(placed.getItems().get(0).getScheduledDate()).isEqualTo(LocalDate.now());
@@ -210,7 +207,7 @@ class RecurringBuyerOrderFlowTest {
 
         // ...and separate orders may not add up past them either.
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request(product.getId(), 4)), first);
-        orderService.placeOrder(PaymentStatus.PENDING, null, null, first);
+orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, first);
 
         assertThatThrownBy(() -> orderService.createOrUpdateDraftOrder(
                 kitchen.getId(), List.of(request(product.getId(), 2)), buyerSession()))
@@ -246,7 +243,7 @@ class RecurringBuyerOrderFlowTest {
         // Ordering ahead succeeds and carries the fulfilment date.
         MockHttpSession session = buyerSession();
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request(product.getId(), 2)), session);
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, session);
         assertThat(placed.getItems().get(0).getScheduledDate()).isEqualTo(tomorrow);
         assertThat(placed.getItems().get(0).getOccurrenceId()).isEqualTo(tomorrowOccurrence.getId());
         assertThatThrownBy(() -> scheduleService.updateOccurrenceOverride(
@@ -300,7 +297,7 @@ class RecurringBuyerOrderFlowTest {
 
         MockHttpSession session = buyerSession();
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request(product.getId(), 6)), session);
-        OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, null, null, session);
+OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, session);
 
         assertThat(placed.getItems().get(0).getQuantity()).isEqualTo(6);
         assertThat(products.findById(product.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(2);

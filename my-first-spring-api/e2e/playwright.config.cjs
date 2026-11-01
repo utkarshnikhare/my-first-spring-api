@@ -29,6 +29,7 @@ module.exports = defineConfig({
   ],
   use: {
     baseURL,
+    timezoneId: 'Asia/Kolkata',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -52,8 +53,8 @@ module.exports = defineConfig({
   ],
   webServer: {
     command: process.platform === 'win32'
-      ? 'mvnw.cmd -DskipTests -Dspring-boot.run.profiles=local spring-boot:run'
-      : './mvnw -DskipTests -Dspring-boot.run.profiles=local spring-boot:run',
+      ? 'mvnw.cmd -DskipTests -Dspring-boot.run.profiles=local,e2e spring-boot:run'
+      : './mvnw -DskipTests -Dspring-boot.run.profiles=local,e2e spring-boot:run',
     cwd: backendDirectory,
     url: `${baseURL}/api/auth/config`,
     timeout: 180_000,
@@ -61,7 +62,7 @@ module.exports = defineConfig({
     stdout: 'pipe',
     stderr: 'pipe',
     env: {
-      SPRING_PROFILES_ACTIVE: 'local',
+      SPRING_PROFILES_ACTIVE: 'local,e2e',
       PORT: '18082',
       SOCIOMART_RATELIMIT_ENABLED: 'false',
       SOCIOMART_DEMO_ADMIN_PASSWORD: adminPassword,

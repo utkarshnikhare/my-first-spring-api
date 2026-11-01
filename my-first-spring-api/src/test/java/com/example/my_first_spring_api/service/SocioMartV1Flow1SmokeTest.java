@@ -98,6 +98,7 @@ public class SocioMartV1Flow1SmokeTest {
                 Map.entry("kitchenSlug", s1Slug),
                 Map.entry("speciality", "North Indian Home Cooking"),
                 Map.entry("sellerCategory", "KITCHEN"),
+                Map.entry("acceptedPaymentMode", "CASH_ONLY"),
                 Map.entry("shortDescription", "Authentic home cooked meals"),
                 Map.entry("building", "A Wing"),
                 Map.entry("primaryAreaId", area.getId()),
@@ -124,6 +125,7 @@ public class SocioMartV1Flow1SmokeTest {
                 Map.entry("kitchenSlug", s2Slug),
                 Map.entry("speciality", "Traditional Organic Pickles and Spices"),
                 Map.entry("sellerCategory", "HOMEMADE_PRODUCTS"),
+                Map.entry("acceptedPaymentMode", "CASH_ONLY"),
                 Map.entry("shortDescription", "Sun-dried pickles and handcrafted spice blends"),
                 Map.entry("building", "B Wing"),
                 Map.entry("primaryAreaId", area.getId()),
@@ -150,6 +152,7 @@ public class SocioMartV1Flow1SmokeTest {
                 Map.entry("kitchenSlug", s3Slug),
                 Map.entry("speciality", "Baking and Home Made Delicacies"),
                 Map.entry("sellerCategory", "BOTH"),
+                Map.entry("acceptedPaymentMode", "CASH_ONLY"),
                 Map.entry("shortDescription", "Fresh home bakes and seasonal sweets"),
                 Map.entry("building", "C Wing"),
                 Map.entry("primaryAreaId", area.getId()),
@@ -285,9 +288,9 @@ public class SocioMartV1Flow1SmokeTest {
         dto1.setAvailableDate(today);
         dto1.setCategories(List.of("LUNCH"));
         dto1.setMaxQuantity(10);
-        dto1.setOrderWindowStart("06:00");
+        dto1.setOrderWindowStart("00:00");
         dto1.setOrderWindowEnd("23:59");
-        dto1.setReadyByTime(today.atTime(23, 30).toString());
+        dto1.setReadyByTime(tomorrow.atTime(23, 30).toString());
         ProductDto p1_lunch = sellerService.createProduct(kitchen1.getId(), dto1, seller1);
 
         // Seller 1 Offering 2: Today's Dinner Biryani (Kitchen)
@@ -298,9 +301,9 @@ public class SocioMartV1Flow1SmokeTest {
         dto2.setAvailableDate(today);
         dto2.setCategories(List.of("DINNER"));
         dto2.setMaxQuantity(10);
-        dto2.setOrderWindowStart("06:00");
+        dto2.setOrderWindowStart("00:00");
         dto2.setOrderWindowEnd("23:59");
-        dto2.setReadyByTime(today.atTime(20, 0).toString());
+        dto2.setReadyByTime(tomorrow.atTime(20, 0).toString());
         ProductDto p1_dinner = sellerService.createProduct(kitchen1.getId(), dto2, seller1);
 
         // Seller 1 Offering 3: Tomorrow's Pre-order Rajma Chawal (Kitchen)
@@ -311,7 +314,7 @@ public class SocioMartV1Flow1SmokeTest {
         dto3.setAvailableDate(tomorrow);
         dto3.setCategories(List.of("LUNCH"));
         dto3.setMaxQuantity(15);
-        dto3.setOrderWindowStart("06:00");
+        dto3.setOrderWindowStart("00:00");
         dto3.setOrderWindowEnd("23:59");
         dto3.setReadyByTime(tomorrow.atTime(13, 0).toString());
         ProductDto p1_preorder = sellerService.createProduct(kitchen1.getId(), dto3, seller1);
@@ -324,9 +327,9 @@ public class SocioMartV1Flow1SmokeTest {
         dto4.setAvailableDate(today);
         dto4.setCategories(List.of("HOMEMADE"));
         dto4.setMaxQuantity(20);
-        dto4.setOrderWindowStart("06:00");
+        dto4.setOrderWindowStart("00:00");
         dto4.setOrderWindowEnd("23:59");
-        dto4.setReadyByTime(today.atTime(18, 0).toString());
+        dto4.setReadyByTime(tomorrow.atTime(18, 0).toString());
         ProductDto p2_pickle = sellerService.createProduct(kitchen2.getId(), dto4, seller2);
 
         // Seller 2 Offering 5: Today's Spice Mix (Homemade Product)
@@ -337,9 +340,9 @@ public class SocioMartV1Flow1SmokeTest {
         dto5.setAvailableDate(today);
         dto5.setCategories(List.of("HOMEMADE"));
         dto5.setMaxQuantity(15);
-        dto5.setOrderWindowStart("06:00");
+        dto5.setOrderWindowStart("00:00");
         dto5.setOrderWindowEnd("23:59");
-        dto5.setReadyByTime(today.atTime(18, 0).toString());
+        dto5.setReadyByTime(tomorrow.atTime(18, 0).toString());
         ProductDto p2_spices = sellerService.createProduct(kitchen2.getId(), dto5, seller2);
 
         // Seller 2 Offering 6: Tomorrow's Pre-order Amla Murabba (Homemade Product)
@@ -350,7 +353,7 @@ public class SocioMartV1Flow1SmokeTest {
         dto6.setAvailableDate(tomorrow);
         dto6.setCategories(List.of("HOMEMADE"));
         dto6.setMaxQuantity(5);
-        dto6.setOrderWindowStart("06:00");
+        dto6.setOrderWindowStart("00:00");
         dto6.setOrderWindowEnd("23:59");
         dto6.setReadyByTime(tomorrow.atTime(18, 0).toString());
         ProductDto p2_murabba = sellerService.createProduct(kitchen2.getId(), dto6, seller2);
@@ -405,10 +408,10 @@ public class SocioMartV1Flow1SmokeTest {
         bd1.setBuilding("Tower A");
         bd1.setFlatHouseNumber("101");
 
-        OrderDto order1 = orderService.placeOrder(PaymentStatus.PENDING, bd1, "Please pack separately", buyer1Session);
+        OrderDto order1 = orderService.placeOrder(PaymentStatus.PENDING, "cod", bd1, "Please pack separately", buyer1Session);
         assertThat(order1.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
-        assertThat(order1.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
-        assertThat(order1.getDisplayStatus()).isEqualTo("Confirmed · Buyer says paid");
+        assertThat(order1.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
+        assertThat(order1.getDisplayStatus()).isEqualTo("Unpaid · seller confirmation required");
         assertThat(order1.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(300));
 
         // Verify stock decremented: 10 - 2 = 8
@@ -444,10 +447,10 @@ public class SocioMartV1Flow1SmokeTest {
         bd2.setBuilding("Tower B");
         bd2.setFlatHouseNumber("202");
 
-        OrderDto order2 = orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, bd2, "Less spicy", buyer2Session);
+        OrderDto order2 = orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, "cod", bd2, "Less spicy", buyer2Session);
         assertThat(order2.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
-        assertThat(order2.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
-        assertThat(order2.getDisplayStatus()).isEqualTo("Confirmed · Buyer says paid");
+        assertThat(order2.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
+        assertThat(order2.getDisplayStatus()).isEqualTo("Unpaid · seller confirmation required");
         assertThat(order2.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(360));
 
         // Buyer 3: Amit (orders 1x Fresh Amla Murabba from Seller 2, chooses "I've paid")
@@ -479,10 +482,10 @@ public class SocioMartV1Flow1SmokeTest {
         bd3.setBuilding("Tower C");
         bd3.setFlatHouseNumber("303");
 
-        OrderDto order3 = orderService.placeOrder(PaymentStatus.PENDING, bd3, "Handle with care glass jar", buyer3Session);
+        OrderDto order3 = orderService.placeOrder(PaymentStatus.PENDING, "cod", bd3, "Handle with care glass jar", buyer3Session);
         assertThat(order3.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
-        assertThat(order3.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
-        assertThat(order3.getDisplayStatus()).isEqualTo("Confirmed · Buyer says paid");
+        assertThat(order3.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
+        assertThat(order3.getDisplayStatus()).isEqualTo("Unpaid · seller confirmation required");
 
         // Verify stock decremented: 5 - 1 = 4
         Product p2Db = productRepository.findById(p2_murabba.getId()).orElseThrow();
@@ -521,11 +524,11 @@ public class SocioMartV1Flow1SmokeTest {
                 .hasMessageContaining("already delivered");
 
         // Seller 1 delivers Order 2 while still unpaid:
-        // Order status becomes DELIVERED; payment status remains PENDING.
+        // Order status becomes DELIVERED; payment status remains UNPAID.
         OrderDto o2Delivered = sellerService.updateOrderStatus(order2.getId(), OrderStatus.DELIVERED, seller1);
         assertThat(o2Delivered.getOrderStatus()).isEqualTo(OrderStatus.DELIVERED);
-        assertThat(o2Delivered.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
-        assertThat(o2Delivered.getDisplayStatus()).isEqualTo("Delivered · Payment pending");
+        assertThat(o2Delivered.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
+        assertThat(o2Delivered.getDisplayStatus()).isEqualTo("Delivered · Payment unpaid");
 
         // Seller 1 later marks Order 2's payment received:
         // Order status remains DELIVERED; payment status becomes PAID.
@@ -588,5 +591,120 @@ public class SocioMartV1Flow1SmokeTest {
         // Idempotency check: Running midnight expiry again does not corrupt state or crash
         midnightExpiryJob.runForDate(tomorrow);
         assertThat(orderRepository.findById(order1.getId()).orElseThrow().getOrderStatus()).isEqualTo(OrderStatus.DELIVERED);
+    }
+@Test
+    @DisplayName("ONB-26-28: E2E seller resubmission flow with slug immutability guarantee")
+    void givenSellerApplication_whenAdminRequestsChanges_thenSellerResubmitsWithSameSlug_thenAdminApproves() throws Exception {
+        // PHASE 1: Seller registers and submits application
+        String initialSlug = "test-kitchen-123";
+        String newSlug = "test-kitchen-123-modified";
+
+        User seller = new User();
+        seller.setName("Test Seller");
+        seller.setMobileNumber("9876543210");
+        seller.setPasswordHash(SELLER_PASSWORD);
+        seller.setRole(UserRole.SELLER);
+        userRepository.save(seller);
+
+        User actingAdmin = userRepository.save(new User("Test Admin", "9000000001", null, UserRole.ADMIN));
+
+        Kitchen kitchen = new Kitchen();
+        kitchen.setName("Test Kitchen");
+        kitchen.setSlug(initialSlug);
+        kitchen.setDisplayName("Test Kitchen Display");
+        kitchen.setSeller(seller);
+        kitchen = kitchenRepository.save(kitchen);
+
+        ProductCreateDto createDto = new ProductCreateDto();
+        createDto.setName("Test Product");
+        createDto.setDescription("A test product");
+        createDto.setPrice(new BigDecimal("100"));
+        createDto.setMaxQuantity(50);
+        LocalDate offeringDate = LocalDate.now(AppTimeZone.ZONE).plusDays(1);
+        createDto.setAvailableDate(offeringDate);
+        createDto.setReadyByTime(offeringDate.atTime(18, 0).toString());
+        createDto.setOrderWindowStart("09:00");
+        createDto.setOrderWindowEnd("21:00");
+        createDto.setMaxQuantity(100);
+        sellerService.createProduct(kitchen.getId(), createDto, seller);
+
+        seller.setSellerApprovalStatus(SellerApprovalStatus.PENDING);
+        seller.setSellerStatusReason("Initial application");
+        userRepository.save(seller);
+
+        // PHASE 2: Admin requests changes
+        Map<String, Object> adminBody = new HashMap<>();
+        adminBody.put("reason", "Kitchen needs rebranding");
+        adminBody.put("kitchenSlug", newSlug);
+
+        assertThat(kitchen.getSlug()).isEqualTo(initialSlug);
+
+        Map<String, Object> validAdminBody = new HashMap<>();
+        validAdminBody.put("reason", "Kitchen needs rebranding - valid reason");
+        validAdminBody.put("kitchenSlug", initialSlug);
+
+        seller = adminService.requestSellerChanges(seller.getId(), "Kitchen needs rebranding - valid reason", actingAdmin);
+        // Keep a final reference for lambdas
+        final User sellerRef = seller;
+
+        assertThat(seller.getSellerApprovalStatus()).isEqualTo(SellerApprovalStatus.CHANGES_REQUESTED);
+        assertThat(seller.getSellerStatusReason()).isEqualTo("Kitchen needs rebranding - valid reason");
+
+        // PHASE 3: Seller resubmits with same slug
+        Map<String, Object> resubmitBodyChangedSlug = new HashMap<>();
+        resubmitBodyChangedSlug.put("reason", "Updated application");
+        resubmitBodyChangedSlug.put("kitchenSlug", "different-slug-value");
+
+        assertThatThrownBy(() -> sellerService.resubmitApplication(sellerRef, resubmitBodyChangedSlug))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Slug cannot be changed during resubmission");
+
+        Map<String, Object> resubmitBodySameSlug = new HashMap<>();
+        resubmitBodySameSlug.put("reason", "Updated application with same slug");
+        resubmitBodySameSlug.put("kitchenSlug", initialSlug);
+
+        AuthResponseDto resubmitResult = sellerService.resubmitApplication(seller, resubmitBodySameSlug);
+
+        User reloadedSeller = userRepository.findById(seller.getId()).orElseThrow();
+        assertThat(reloadedSeller.getSellerApprovalStatus()).isEqualTo(SellerApprovalStatus.PENDING);
+        assertThat(reloadedSeller.getSellerStatusReason()).isEqualTo("Updated application with same slug");
+
+        // PHASE 4: Admin approves the resubmitted application
+        Map<String, Object> approveBody = new HashMap<>();
+        approveBody.put("approvalStatus", "APPROVED");
+
+        User approvedSeller = adminService.approveSeller(seller.getId(), actingAdmin);
+        AuthResponseDto authResponse = new AuthResponseDto();
+        authResponse.setSellerApprovalStatus(approvedSeller.getSellerApprovalStatus());
+        authResponse.setSellerStatusReason(approvedSeller.getSellerStatusReason());
+
+        assertThat(authResponse.getSellerApprovalStatus()).isEqualTo(SellerApprovalStatus.APPROVED);
+        assertThat(authResponse.getSellerStatusReason()).isNull();
+
+        // PHASE 5: Collision behavior - duplicate slug rejection
+        Kitchen duplicateKitchen = new Kitchen();
+        duplicateKitchen.setName("Duplicate Kitchen");
+        duplicateKitchen.setSlug(initialSlug);
+        duplicateKitchen.setDisplayName("Duplicate Kitchen Display");
+
+        duplicateKitchen.setSeller(seller);
+
+        assertThatThrownBy(() -> kitchenRepository.saveAndFlush(duplicateKitchen))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+
+        Kitchen newKitchen = new Kitchen();
+        newKitchen.setName("New Kitchen");
+        newKitchen.setSlug("new-kitchen-slug-456");
+        newKitchen.setDisplayName("New Kitchen Display");
+        newKitchen.setSeller(seller);
+
+        kitchenRepository.save(newKitchen);
+
+        productRepository.deleteAll(productRepository.findByKitchen(kitchen));
+        productRepository.deleteAll(productRepository.findByKitchen(newKitchen));
+
+        kitchenRepository.delete(kitchen);
+        kitchenRepository.delete(newKitchen);
+        userRepository.delete(seller);
     }
 }

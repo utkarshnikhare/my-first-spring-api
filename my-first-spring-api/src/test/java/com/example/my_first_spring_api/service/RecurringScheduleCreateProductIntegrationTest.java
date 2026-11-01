@@ -1,11 +1,8 @@
 package com.example.my_first_spring_api.service;
 
 import com.example.my_first_spring_api.dto.ProductCreateDto;
-import com.example.my_first_spring_api.dto.ProductDto;
 import com.example.my_first_spring_api.dto.RecurringScheduleDto;
 import com.example.my_first_spring_api.model.Kitchen;
-import com.example.my_first_spring_api.model.Product;
-import com.example.my_first_spring_api.model.RecurringSchedule;
 import com.example.my_first_spring_api.model.SellerApprovalStatus;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.model.UserRole;
@@ -24,7 +21,6 @@ import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.EnumSet;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -71,58 +67,36 @@ class RecurringScheduleCreateProductIntegrationTest {
     }
 
     @Test
-    void createProductWithRecurringScheduleMaterializesScheduleAndOccurrences() {
+    void createProductRejectsNewRecurringScheduleWithoutPersistingAnything() {
         ProductCreateDto dto = productDtoBuilder();
         dto.setRecurringSchedule(recurringScheduleDto());
+        long scheduleCountBefore = schedules.count();
+        long occurrenceCountBefore = occurrences.count();
 
-        ProductDto result = sellerService.createProduct(kitchen.getId(), dto, seller);
-
-        assertThat(result.getId()).isNotNull();
-        assertThat(products.findByKitchen(kitchen))
-                .extracting(Product::getName).containsExactlyInAnyOrder("Poha");
-
-        assertThat(schedules.findByProductId(result.getId())).isPresent();
-        RecurringSchedule schedule = schedules.findByProductId(result.getId()).get();
-        assertThat(schedule.getRecurrenceDays()).isEqualTo("1,3,5");
-        assertThat(schedule.getDefaultQuantity()).isEqualTo(14);
-        assertThat(schedule.getDefaultOrderCloseTime()).isEqualTo("13:00");
-        assertThat(schedule.getDefaultReadyByTime()).isEqualTo("3:00 PM");
-
-        long expectedCount = expectedOccurrenceCount(productDtoBuilder().getAvailableDate(),
-                LocalDate.of(2026, 11, 5), EnumSet.of(DayOfWeek.MONDAY,
-                DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY));
-        assertThat(occurrences.findByScheduleIdOrderByOccurrenceDateAsc(schedule.getId()))
-                .hasSize((int) expectedCount);
+        assertThatThrownBy(() -> sellerService.createProduct(kitchen.getId(), dto, seller))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Creating new recurring schedules is no longer supported");
+        assertThat(products.findByKitchen(kitchen)).isEmpty();
+        assertThat(schedules.count()).isEqualTo(scheduleCountBefore);
+        assertThat(occurrences.count()).isEqualTo(occurrenceCountBefore);
     }
 
     @Test
-    void createProductRollsBackWhenRecurringScheduleIsInvalid() {
+    void createProductRejectsInvalidRecurringScheduleBeforePersistence() {
         ProductCreateDto dto = productDtoBuilder();
         dto.setRecurringSchedule(invalidRecurringScheduleDto());
 
         long scheduleCountBefore = schedules.count();
+        long occurrenceCountBefore = occurrences.count();
 
         assertThatThrownBy(() -> sellerService.createProduct(kitchen.getId(), dto, seller))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Creating new recurring schedules is no longer supported");
 
-        // Nothing persisted: product, schedule and occurrences all rolled back.
+        // No product, schedule, or occurrence is written for a rejected request.
         assertThat(products.findByKitchen(kitchen)).isEmpty();
         assertThat(schedules.count()).isEqualTo(scheduleCountBefore);
-    }
-
-    @Test
-    void recurringStartMayDifferFromProductAvailableDateWhenRangeHasAnOccurrence() {
-        ProductCreateDto dto = productDtoBuilder();
-        RecurringScheduleDto recurring = recurringScheduleDto();
-        recurring.setStartDate(dto.getAvailableDate().plusDays(1));
-        dto.setRecurringSchedule(recurring);
-
-        ProductDto result = sellerService.createProduct(kitchen.getId(), dto, seller);
-
-        assertThat(schedules.findByProductId(result.getId()).orElseThrow().getStartDate())
-                .isEqualTo(dto.getAvailableDate().plusDays(1));
-        assertThat(occurrences.findByScheduleId(
-                schedules.findByProductId(result.getId()).orElseThrow().getId())).isNotEmpty();
+        assertThat(occurrences.count()).isEqualTo(occurrenceCountBefore);
     }
 
     private ProductCreateDto productDtoBuilder() {
@@ -154,17 +128,5 @@ class RecurringScheduleCreateProductIntegrationTest {
         recurring.setEndDate(LocalDate.of(2026, 11, 5));
         recurring.setRecurrenceWeekdays(EnumSet.noneOf(DayOfWeek.class));
         return recurring;
-    }
-
-    private long expectedOccurrenceCount(LocalDate start, LocalDate end, Set<DayOfWeek> weekdays) {
-        long count = 0;
-        LocalDate current = start;
-        while (!current.isAfter(end)) {
-            if (weekdays.contains(current.getDayOfWeek())) {
-                count++;
-            }
-            current = current.plusDays(1);
-        }
-        return count;
     }
 }

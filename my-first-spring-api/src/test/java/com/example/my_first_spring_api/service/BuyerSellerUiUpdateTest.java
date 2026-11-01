@@ -156,9 +156,11 @@ class BuyerSellerUiUpdateTest {
     @Test
     void soldOutStillUsesTheExistingAuthoritativeRule() {
         int start = buyerJs.indexOf("function offeringCardHtml(");
-        // Window widened from 2500 when the V2 §14 next-occurrence presentation
-        // block grew the card header; the assertion itself is unchanged.
-        String card = buyerJs.substring(start, start + 3100);
+        int end = buyerJs.indexOf("// ==================== Screen 4A:", start);
+        assertThat(start).as("offeringCardHtml must exist").isGreaterThanOrEqualTo(0);
+        assertThat(end).as("offeringCardHtml must end before the ordering flow")
+                .isGreaterThan(start);
+        String card = buyerJs.substring(start, end);
         assertThat(card).contains("p.remainingQuantity != null && p.remainingQuantity <= 0");
         assertThat(card).contains("Sold out");
     }
@@ -285,4 +287,3 @@ class BuyerSellerUiUpdateTest {
         assertThat(buyerService.getSelectableSocieties(s)).contains(current);
     }
 }
-

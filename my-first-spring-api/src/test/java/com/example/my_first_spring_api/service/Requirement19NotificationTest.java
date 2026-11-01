@@ -64,6 +64,7 @@ class Requirement19NotificationTest {
         buyer.setFlatHouseNumber("A-101");
         kitchen = new Kitchen("k", "Kitchen", "d", null, seller);
         kitchen.setId(1L);
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         kitchen.setAvailableToday(true);
         when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
         when(userRepository.findById(20L)).thenReturn(Optional.of(buyer));
@@ -105,7 +106,7 @@ class Requirement19NotificationTest {
         Order draft = draftWith(p, 1);
         startDraftSession(draft);
 
-        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, null, null, httpSession))
+        assertThatThrownBy(() -> orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, httpSession))
                 .isInstanceOf(IllegalArgumentException.class);
 
         verifyNoInteractions(notificationService);
@@ -122,7 +123,7 @@ class Requirement19NotificationTest {
         Order draft = draftWith(p, 2); // same product listed twice in one draft
         startDraftSession(draft);
 
-        orderService.placeOrder(PaymentStatus.PENDING, null, null, httpSession);
+        orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, httpSession);
 
         verify(notificationService, times(1)).sendSoldOutNotification(eq(seller), eq("Poha"));
         verify(notificationService, times(1)).sendNewOrderNotification(eq(seller), any(), any());

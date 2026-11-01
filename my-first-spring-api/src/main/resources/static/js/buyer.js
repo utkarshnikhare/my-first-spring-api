@@ -15,6 +15,16 @@ function todayDate() {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
 
+function buyerOfferingSection(product) {
+    if (!product) return 'UNAVAILABLE';
+    if (product.ordersPaused || product.soldOut || product.lifecycleState === 'HISTORY') return 'UNAVAILABLE';
+    var date = product.recurring ? product.nextOccurrenceDate : product.availableDate;
+    if (!date) date = todayDate();
+    if (date < todayDate()) return 'UNAVAILABLE';
+    if (date === todayDate() && product.availableToday === false) return 'UNAVAILABLE';
+    return date > todayDate() ? 'PRE_ORDER' : 'ORDER';
+}
+
 function favSet() {
     return FAV_CACHE && FAV_CACHE.size ? FAV_CACHE : new Set();
 }
@@ -438,17 +448,18 @@ async function homemadeStoreView(hash) {
             var areas = k.serviceAreas.split(',').map(function (a) { return a.trim(); }).filter(Boolean);
             h += '<div class="mb-2"><span class="muted small">Serves: ' + esc(areas.join(', ')) + '</span></div>';
         }
-        var allProds = detail.products || [];
+        var allProds = (detail.products || []).concat(detail.preorderProducts || []);
+        var orderableQuickPosts = detail.quickPostProducts || allProds.filter(function (p) { return p.quickPost; });
+        allProds = allProds.filter(function (p) { return !p.quickPost; });
         if (k.sellerType === 'BOTH') {
             allProds = allProds.filter(isHomemadeProduct);
+            orderableQuickPosts = orderableQuickPosts.filter(isHomemadeProduct);
         }
         var today = allProds.filter(function (p) {
-            return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate()) && p.availableToday && (!p.availableDate || p.availableDate >= todayDate());
+            return buyerOfferingSection(p) === 'ORDER';
         });
         today = sortByClosingTime(today);
-        var preorder = (detail.preorderProducts && detail.preorderProducts.length)
-            ? (k.sellerType === 'BOTH' ? detail.preorderProducts.filter(isHomemadeProduct) : detail.preorderProducts)
-            : allProds.filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
+        var preorder = allProds.filter(function (p) { return buyerOfferingSection(p) === 'PRE_ORDER'; });
         preorder = sortByClosingTime(preorder);
         if (today.length) {
             h += '<h3 class="mb-2">Available Now</h3><div class="products-grid">';
@@ -464,10 +475,10 @@ async function homemadeStoreView(hash) {
             });
             h += '</div>';
         }
-        if (!today.length && !preorder.length) {
+        if (!today.length && !preorder.length && !orderableQuickPosts.length) {
             h += emptyHtml('📦', 'No products listed', 'This store has not listed any products yet.', '<a class="btn btn-primary" href="#/homemade">Back to Homemade</a>');
         }
-        h += quickPostsHtml(detail.quickPosts);
+        h += quickPostsHtml(detail.quickPosts, orderableQuickPosts, k);
         h += '</div>';
         h += '<div class="section-gap"><button class="btn btn-secondary btn-block" data-action="open-enquiry" data-kid="' + k.id + '" data-kname="' + esc(k.displayName) + '">📩 Send Enquiry</button></div>';
     } catch (err) {
@@ -534,17 +545,18 @@ async function kitchenPageView(hash) {
         // confirmed viewable, so a kitchen the buyer is not allowed to open never
         // counts as traffic. Analytics must never block or fail the page.
         recordAnalyticsView(k && k.sellerType === 'HOMEMADE_PRODUCTS' ? 'HOMEMADE_STOREFRONT_VIEW' : 'MENU_VIEW', k && k.id);
-        var allProds = detail.products || [];
+        var allProds = (detail.products || []).concat(detail.preorderProducts || []);
+        var orderableQuickPosts = detail.quickPostProducts || allProds.filter(function (p) { return p.quickPost; });
+        allProds = allProds.filter(function (p) { return !p.quickPost; });
         if (k && k.sellerType === 'BOTH') {
             allProds = allProds.filter(function (p) { return !isHomemadeProduct(p); });
+            orderableQuickPosts = orderableQuickPosts.filter(function (p) { return !isHomemadeProduct(p); });
         }
         var today = allProds.filter(function (p) {
-            return !p.isPreorder && (!p.recurring || !p.nextOccurrenceDate || p.nextOccurrenceDate <= todayDate()) && (!p.availableDate || p.availableDate >= todayDate());
+            return buyerOfferingSection(p) === 'ORDER';
         });
         today = sortByClosingTime(today);
-        var preorder = (detail.preorderProducts && detail.preorderProducts.length)
-            ? (k && k.sellerType === 'BOTH' ? detail.preorderProducts.filter(function (p) { return !isHomemadeProduct(p); }) : detail.preorderProducts)
-            : allProds.filter(function (p) { return p.isPreorder || (p.recurring && p.nextOccurrenceDate > todayDate()); });
+        var preorder = allProds.filter(function (p) { return buyerOfferingSection(p) === 'PRE_ORDER'; });
         preorder = sortByClosingTime(preorder);
 
         // Explore Other Kitchens near the top navigation.
@@ -597,8 +609,10 @@ async function kitchenPageView(hash) {
         // Section 1: Available Today
         h += '<h3 class="section-gap mb-2">🍽️ Available Today</h3>';
         h += today.length ? today.map(function (p) { return offeringCardHtml(p, k, false); }).join('')
-            : emptyHtml('🍽️', 'Nothing available today', 'This kitchen has no offerings for today — check pre-orders below.');
-        h += quickPostsHtml(detail.quickPosts);
+            : emptyHtml('🍽️', 'Nothing available today', orderableQuickPosts.length
+                ? 'This kitchen has no regular menu offerings for today — see Quick Posts below.'
+                : 'This kitchen has no offerings for today — check pre-orders below.');
+        h += quickPostsHtml(detail.quickPosts, orderableQuickPosts, k);
 
         // Section 2: Pre-order
         h += '<h3 class="section-gap mb-2">🔮 Pre-order</h3>';
@@ -677,12 +691,15 @@ function exploreOtherKitchensHtml() {
     return '<a class="btn btn-secondary btn-block btn-sm" href="#/kitchens" data-action="explore-kitchens">🧭 Explore Other Kitchens</a>';
 }
 
-function quickPostsHtml(posts) {
-    if (!posts || !posts.length) return '';
+function quickPostsHtml(posts, orderablePosts, kitchen) {
+    if ((!posts || !posts.length) && (!orderablePosts || !orderablePosts.length)) return '';
     var h = '<h3 class="section-gap mb-2">📢 Today\'s Quick Posts</h3><div class="quick-posts">';
-    posts.forEach(function (p) {
-        h += '<div class="card pad card-mb"><div>' + esc(p.message) + '</div>' +
+    (posts || []).forEach(function (p) {
+        h += '<div class="card pad card-mb"><div class="quick-post-message">' + esc(p.message) + '</div>' +
             (p.imageData ? '<img class="mt-2" style="max-width:100%;border-radius:8px" src="' + esc(p.imageData) + '" alt="Kitchen quick post" onerror="imgFallback(this)">' : '') + '</div>';
+    });
+    (orderablePosts || []).forEach(function (p) {
+        h += offeringCardHtml(p, kitchen, false);
     });
     return h + '</div>';
 }
@@ -711,17 +728,22 @@ function buyerScarcityLabel(p) {
 function offeringCardHtml(p, kitchen, isPreorderSection) {
     var soldOut = p.soldOut || (p.remainingQuantity != null && p.remainingQuantity <= 0);
     var paused = !!p.ordersPaused;
-    var isPre = !!p.isPreorder || !!isPreorderSection;
-    var nowD = new Date();
-    var todayIso = nowD.getFullYear() + '-' + String(nowD.getMonth() + 1).padStart(2, '0') + '-' + String(nowD.getDate()).padStart(2, '0');
-    var isNextOcc = !isPre && !!p.recurring && !!p.nextOccurrenceDate && p.nextOccurrenceDate !== todayIso;
+    var isQuickPost = !!p.quickPost;
+    var section = buyerOfferingSection(p);
+    var isPre = !isQuickPost && (section === 'PRE_ORDER' || !!isPreorderSection);
+    var todayIso = todayDate();
+    var isNextOcc = isPre && !!p.recurring && !!p.nextOccurrenceDate && p.nextOccurrenceDate !== todayIso;
     var isPreOrNext = isPre || isNextOcc;
-    var isPast = p.lifecycleState === 'HISTORY' || (!isPreOrNext && p.availableDate && p.availableDate < todayIso);
+    var deliveryDate = p.recurring ? p.nextOccurrenceDate : p.availableDate;
+    var isPast = p.lifecycleState === 'HISTORY' || (deliveryDate && deliveryDate < todayIso);
     var ordersClosed = !!p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED' || isPast;
     var kitchenJson = encodeURIComponent(JSON.stringify({ id: kitchen.id, displayName: kitchen.displayName }));
+    var imageUrl = p.quickPostImageData || (usableImageUrl(p.imageUrl) ? p.imageUrl : '');
     var timingHtml;
-    if (isPreOrNext) {
-        var timingDate = isPre ? p.availableDate : p.nextOccurrenceDate;
+    if (isQuickPost) {
+        timingHtml = '';
+    } else if (isPreOrNext) {
+        var timingDate = p.recurring ? p.nextOccurrenceDate : p.availableDate;
         var orderBy = timingDate ? prettyDate(timingDate) : '';
         if (p.cutoffTime) orderBy = (orderBy ? orderBy + ', ' : '') + prettyTime(p.cutoffTime);
         var deliverBy = timingDate ? prettyDate(timingDate) : '';
@@ -734,12 +756,14 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
         timingHtml = '<p class="oc-timing">⏰ ' + esc(t1 + t2) + '</p>';
     }
     return '<div class="offering-card' + (soldOut ? ' sold-out' : '') + (paused ? ' paused' : '') + (isPreOrNext ? ' is-preorder' : '') + '">' +
-        dishImg('oc-photo', emojiFor(p.name), usableImageUrl(p.imageUrl) ? p.imageUrl : '', p.name) +
+        dishImg('oc-photo', emojiFor(p.name), imageUrl, p.name) +
         '<div class="oc-body">' +
-        '<div class="oc-name-row"><span class="oc-name">' + esc(p.name) + '</span>' +
+        '<div class="oc-name-row"><span class="oc-name">' + esc(isQuickPost ? 'Quick Post' : p.name) + '</span>' +
         (isPreOrNext ? '<span class="oc-preorder-badge">🔮 Pre-order</span>' : '') + '</div>' +
-        '<p class="oc-desc">' + esc((p.description || '').slice(0, 70)) +
-        ((p.description || '').length > 70 ? '… <button class="oc-more" type="button" data-action="read-more" data-full="' + encodeURIComponent(p.description) + '">More →</button>' : '') + '</p>' +
+        (isQuickPost
+            ? '<p class="oc-desc quick-post-message">' + esc(p.description || '') + '</p>'
+            : '<p class="oc-desc">' + esc((p.description || '').slice(0, 70)) +
+              ((p.description || '').length > 70 ? '… <button class="oc-more" type="button" data-action="read-more" data-full="' + encodeURIComponent(p.description) + '">More →</button>' : '') + '</p>') +
         '<div class="oc-price">' + money(p.price) + ' <span class="unit">/ ' + esc(p.priceUnit || 'serving') + '</span></div>' +
         timingHtml +
         buyerScarcityLabel(p) +
@@ -805,8 +829,9 @@ function openOrderSheet(productJson, kitchenJson) {
     // detail, so it counts interest rather than mere scrolling of a list.
     recordAnalyticsView('PRODUCT_VIEW', k && k.id);
 
-    var flex = p.isPreorder && p.preorderType === 'FLEXIBLE';
-    var fixed = p.isPreorder && !flex;
+    var isPreorder = buyerOfferingSection(p) === 'PRE_ORDER';
+    var flex = isPreorder && p.preorderType === 'FLEXIBLE';
+    var fixed = isPreorder && !flex;
     var max = p.remainingQuantity || p.maxQuantity || 10;
 
     var h = '<h3 class="sheet-title">' + esc(p.name) + '</h3>' +
@@ -886,14 +911,15 @@ function sheetQty(dir) {
 
 function sheetAdd() {
     var p = sheet.product, k = sheet.kitchen;
+    var isPreorder = buyerOfferingSection(p) === 'PRE_ORDER';
     var item = {
         productId: p.id, name: p.name, price: p.price, unit: p.priceUnit || 'serving', qty: sheet.qty,
-        isPreorder: !!p.isPreorder, preorderType: p.preorderType || null,
+        isPreorder: isPreorder, preorderType: p.preorderType || null,
         readyBy: p.readyByTime || null, cutoff: p.cutoffTime || null,
         availableDate: p.availableDate || null,
-        scheduledDate: p.isPreorder ? (sheet.date || p.availableDate || null)
+        scheduledDate: isPreorder ? (sheet.date || p.availableDate || null)
             : (p.recurring && p.nextOccurrenceDate ? p.nextOccurrenceDate : (p.availableDate || null)),
-        scheduledSlot: p.isPreorder ? sheet.slot : null
+        scheduledSlot: isPreorder ? sheet.slot : null
     };
     addToCart(item, k, function (committed) {
         if (committed) closeSheet();
@@ -1102,17 +1128,38 @@ function isRecoverableOrderSessionError(err) {
     return err instanceof ApiError && err.status === 401;
 }
 
-/** Place the draft order directly with the selected payment status. */
-async function placeOrderWithStatus(paymentStatus) {
+/** Place a draft using the seller's selected payment method. */
+async function placeOrderWithStatus(paymentMethod, btnEl, requestedStatus) {
     if (state.placingOrder) return;
     if (!state.user || !state.user.authenticated || !isBuyer(state.user)) {
-        return requireAuth(function () { return placeOrderWithStatus(paymentStatus); });
+        return requireAuth(function () { return placeOrderWithStatus(paymentMethod, btnEl, requestedStatus); });
+    }
+    if (!paymentMethod) {
+        toast('This kitchen has no configured payment method. The seller must complete payment setup first.', 'error');
+        return;
     }
     var note = (state.pendingCheckout && state.pendingCheckout.note) || '';
+    var originalButtonHtml = btnEl ? btnEl.innerHTML : '';
+    var statusMessage = document.getElementById('placeOrderStatus');
+    var orderPlaced = false;
     state.placingOrder = true;
+    if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.setAttribute('aria-busy', 'true');
+        btnEl.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span> Placing your order…';
+    }
+    if (statusMessage) statusMessage.textContent = 'Placing your order…';
     try {
         await withAuthGate(async function () {
-            var submittedPaymentStatus = paymentStatus === 'WILL_PAY_LATER' ? 'PENDING' : paymentStatus;
+            var submittedPaymentStatus;
+            if (paymentMethod === 'cod') {
+                submittedPaymentStatus = 'UNPAID';
+            } else if (requestedStatus === 'UNPAID') {
+                submittedPaymentStatus = 'UNPAID';
+            } else {
+                submittedPaymentStatus = 'AWAITING_SELLER_VERIFICATION';
+            }
+            var submittedPaymentMethod = paymentMethod;
             var buyerDetails = null;
             if (state.user) {
                 var flatInput = document.getElementById('checkoutFlat');
@@ -1143,6 +1190,7 @@ async function placeOrderWithStatus(paymentStatus) {
                     return { productId: i.productId, quantity: i.qty, scheduledDate: i.scheduledDate || null, scheduledSlot: i.scheduledSlot || null };
                 }) : null,
                 paymentStatus: submittedPaymentStatus,
+                paymentMethod: submittedPaymentMethod,
                 customInstructions: note,
                 specialInstructions: note,
                 deliveryAddress: buyerDetails ? buyerDetails.deliveryAddress : '',
@@ -1171,20 +1219,49 @@ async function placeOrderWithStatus(paymentStatus) {
                 // attempt created nothing. Sign back in as this buyer, rebuild
                 // the order from the cart and place once more.
                 // Bounded: a single recovery, never a loop.
-                if (!isRecoverableOrderSessionError(err)) throw err;
-                if (!(await restoreBuyerSession())) throw err;
-                if (!(await rebuildDraftFromCart())) throw err;
-                placed = await api('/api/buyer/orders/place', { method: 'POST', body: placeBody });
+                if (!isRecoverableOrderSessionError(err)) {
+                    toast(err.message, 'error');
+                    state.placingOrder = false;
+                    throw err;
+                }
+                if (!(await restoreBuyerSession())) {
+                    toast(err.message, 'error');
+                    state.placingOrder = false;
+                    throw err;
+                }
+                if (!(await rebuildDraftFromCart())) {
+                    toast(err.message, 'error');
+                    state.placingOrder = false;
+                    throw err;
+                }
+                // Retry the placement after recovery
+                try {
+                    placed = await api('/api/buyer/orders/place', { method: 'POST', body: placeBody });
+                    // Server confirmed the order - show success feedback
+                    toast('Order placed successfully', 'success');
+                    clearCart();
+                    state.pendingCheckout = null;
+                    state.lastOrder = placed;
+                    orderPlaced = true;
+                    navigate('#/payment-success');
+                } catch (retryErr) {
+                    toast(retryErr.message, 'error');
+                    state.placingOrder = false;
+                    // Restore UI safely after failure so a legitimate retry is possible
+                    throw retryErr;
+                }
             }
             // Only now, with the backend's own response, is the order real.
             clearCart();
             state.pendingCheckout = null;
             state.lastOrder = placed;
+            orderPlaced = true;
             navigate('#/payment-success');
         });
     } catch (err) {
         var reason = (err && err.data && (err.data.message || err.data.error)) || (err && err.message) || 'Could not place order. Please try again.';
         if (!(err instanceof ApiError && err.status === 401)) toast(reason, 'error');
+        if (statusMessage) statusMessage.textContent = 'Order was not placed. ' + reason + ' You can review and retry.';
         // This screen is now unusable, so return the buyer to their cart, where
         // the selection is still present and the order can simply be retried.
         if (err instanceof ApiError && (err.status === 400 || err.status === 404)) {
@@ -1198,6 +1275,11 @@ async function placeOrderWithStatus(paymentStatus) {
         }
     } finally {
         state.placingOrder = false;
+        if (btnEl && btnEl.isConnected && !orderPlaced) {
+            btnEl.disabled = false;
+            btnEl.removeAttribute('aria-busy');
+            btnEl.innerHTML = originalButtonHtml;
+        }
     }
 }
 
@@ -1309,26 +1391,44 @@ async function confirmOrderView() {
             '<p class="muted small">💬 ' + esc(note) + '</p></div>';
     }
 
-    // 7: Payment-status selection (UI only — no gateway, cards or UPI) + Place Order
-    var pref = state.payPreference || 'PAID';
-    h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Payment status</h3>' +
-        '<div class="pay-status' + (pref === 'PAID' ? ' selected' : '') + '" role="radio" aria-checked="' + (pref === 'PAID' ? 'true' : 'false') + '" data-action="select-pay-status" data-status="PAID">' +
-        '<span class="ps-radio" aria-hidden="true"></span>' +
-        '<span class="ps-icon" aria-hidden="true">✅</span>' +
-        '<span class="ps-body"><span class="ps-name">Paid</span>' +
-        '<span class="ps-sub">Confirm this order as paid now. Demo selection only.</span></span></div>' +
-        '<div class="pay-status' + (pref === 'PENDING' || pref === 'WILL_PAY_LATER' ? ' selected' : '') + '" role="radio" aria-checked="' + (pref === 'PENDING' || pref === 'WILL_PAY_LATER' ? 'true' : 'false') + '" data-action="select-pay-status" data-status="PENDING">' +
-        '<span class="ps-radio" aria-hidden="true"></span>' +
-        '<span class="ps-icon" aria-hidden="true">⏳</span>' +
-        '<span class="ps-body"><span class="ps-name">I\'ll Pay Later</span>' +
-        '<span class="ps-sub">Pay when the order is delivered or picked up.</span></span></div>' +
-        '<p class="pay-status-note mt-1">🔒 This is only a payment-status selection for your order record — no payment is processed here.</p></div>';
+    var availablePaymentMethods = paymentMethodsForKitchen(draft.kitchen);
+    var method = availablePaymentMethods.some(function (item) { return item.id === state.payMethod; })
+        ? state.payMethod : (availablePaymentMethods.length ? availablePaymentMethods[0].id : '');
+    state.payMethod = method;
+    h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Payment method</h3>';
+    if (!method) {
+        h += '<p class="muted" role="status">This kitchen has not configured a supported payment method. No payment details are available and the order cannot be placed yet.</p>';
+    } else {
+        h += '<p class="tiny muted mb-2">SocioMart does not process payments. Digital payment acknowledgement is not proof of settlement; the seller must verify receipt.</p>' +
+            availablePaymentMethods.map(function (item) {
+                var selected = item.id === method;
+                return '<label class="pay-method' + (selected ? ' selected' : '') + '" role="radio" aria-checked="' + (selected ? 'true' : 'false') +
+                    '" data-action="select-pay-method" data-method="' + item.id + '">' +
+                    '<span class="pm-radio" aria-hidden="true"></span><span class="pm-icon" aria-hidden="true">' + item.icon + '</span>' +
+                    '<span class="pm-body"><span class="pm-name">' + esc(item.name) + '</span><span class="pm-sub">' + esc(item.sub) + '</span></span></label>';
+            }).join('') + paymentInstructionsHtml(draft.kitchen, method) +
+            '<p class="pay-status-note mt-1">' + (method === 'cod'
+                ? 'Cash orders remain UNPAID until the seller confirms receipt.'
+                : 'After paying the seller directly, acknowledge it here; the order will await seller verification.') + '</p>';
+    }
+    h += '</div>';
 
-    h += '<div class="sticky-footer-bar"><div class="inner">' +
-        '<button class="btn btn-submit btn-block" type="button" data-action="place-order" id="placeOrderBtn">' +
-        'Place Order ✓ — ' + money(draft.totalAmount) + '</button>' +
-        '<p class="tiny muted text-center mt-1">Review everything above before submitting.</p>' +
-        '</div></div>';
+    if (method) {
+        var isCod = method === 'cod';
+        h += '<div class="sticky-footer-bar"><div class="inner">';
+        if (isCod) {
+            h += '<button class="btn btn-submit btn-block" type="button" data-action="place-order-later" id="placeOrderBtn">' +
+                'PLACE ORDER (PAY ON DELIVERY) — ' + money(draft.totalAmount) + '</button>';
+        } else {
+            h += '<button class="btn btn-submit btn-block" type="button" data-action="place-order-paid" id="placeOrderBtn">' +
+                'I’VE PAID — PLACE ORDER — ' + money(draft.totalAmount) + '</button>' +
+                '<button class="btn btn-secondary btn-block mt-2" type="button" data-action="place-order-later" id="placeOrderLaterBtn">' +
+                'I’LL PAY LATER — PLACE ORDER — ' + money(draft.totalAmount) + '</button>';
+        }
+        h += '<p class="tiny muted text-center mt-1">Review everything above before submitting.</p>' +
+            '<p class="tiny muted text-center mt-1" id="placeOrderStatus" role="status" aria-live="polite"></p>' +
+            '</div></div>';
+    }
 
     h += '</div>';
     return h;
@@ -1337,17 +1437,48 @@ async function confirmOrderView() {
 // ==================== Screen 6: Payment & order confirmation (internal demo) ====================
 
 /**
- * Internal demo payment flow — no external gateways, no OTP, no redirects.
- * Reads the real backend DRAFT so the receipt shows true DB data.
- * Methods: UPI (Demo) · Demo Card · Cash on Delivery.
- * PAID  → backend places order as CONFIRMED (paid immediately in demo).
- * COD   → backend places order as ORDERED / payment PENDING (pay on delivery).
+ * Reads the real backend draft and shows only seller-configured instructions.
+ * SocioMart does not process payments; seller verification is required to mark paid.
  */
 var PAY_METHODS = [
-    { id: 'upi', icon: '📱', name: 'UPI (Demo)', sub: 'Simulated UPI — no real money moves' },
-    { id: 'card', icon: '💳', name: 'Demo Card', sub: 'Simulated card — no card details collected' },
+    { id: 'upi', icon: '📱', name: 'UPI ID', sub: 'Pay directly using the seller-provided UPI ID' },
+    { id: 'gpay', icon: '📱', name: 'Google Pay', sub: 'Seller-provided payment instructions — no payment is processed' },
     { id: 'cod', icon: '💵', name: 'Cash on Delivery', sub: 'Pay cash when the order arrives' }
 ];
+
+function paymentMethodsForKitchen(kitchen) {
+    var configured = kitchen && kitchen.acceptedPaymentMode;
+    if (!configured) return [];
+    var allowed = {
+        GPAY: ['gpay'],
+        UPI: ['upi'],
+        GPAY_AND_UPI: ['gpay', 'upi'],
+        CASH_ONLY: ['cod']
+    }[configured];
+    if (!allowed) return [];
+    return PAY_METHODS.filter(function (method) {
+        if (allowed.indexOf(method.id) === -1) return false;
+        if (method.id === 'upi') return Boolean(kitchen.upiId);
+        if (method.id === 'gpay') return Boolean(kitchen.gpayIdentifier && kitchen.gpayIdentifierType);
+        return true;
+    });
+}
+
+function paymentInstructionsHtml(kitchen, method) {
+    if (method === 'gpay' && kitchen && kitchen.gpayIdentifier) {
+        var typeLabel = kitchen.gpayIdentifierType === 'PHONE_NUMBER' ? 'GPay-linked mobile number' : 'GPay UPI ID';
+        return '<div class="upi-box"><div class="upi-box-title">' + esc(typeLabel) + '</div>' +
+            '<div class="upi-row"><span class="upi-id">' + esc(kitchen.gpayIdentifier) + '</span></div>' +
+            '<p class="tiny muted mt-2">Payment instructions only — no payment is processed by SocioMart.</p></div>';
+    }
+    if (method === 'upi' && kitchen && kitchen.upiId) {
+        return '<div class="upi-box"><div class="upi-box-title">Seller UPI ID</div>' +
+            '<div class="upi-row"><span class="upi-id">' + esc(kitchen.upiId) + '</span>' +
+            '<button class="btn btn-secondary btn-sm" type="button" data-action="copy-upi" data-upi="' + esc(kitchen.upiId) + '">Copy</button></div>' +
+            '<p class="tiny muted mt-2">Payment instructions only — no payment is processed by SocioMart.</p></div>';
+    }
+    return '';
+}
 
 async function paymentView() {
     var h = '<div class="view-enter">';
@@ -1379,11 +1510,19 @@ async function paymentView() {
     h += '<div class="receipt-line font-800 border-top mt-2 pt-2">' +
         '<span>Total payable</span><span>' + money(draft.totalAmount) + '</span></div></div>';
 
-    // Payment method selection (demo only)
-    var method = state.payMethod || 'upi';
-    h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Payment method</h3>' +
-        '<p class="tiny muted mb-2">This is a client demo — payments are simulated inside SocioMart. No real money, cards, OTPs or external sites are involved.</p>' +
-        PAY_METHODS.map(function (m) {
+    // Payment method selection is limited to seller-configured methods.
+    var availablePaymentMethods = paymentMethodsForKitchen(draft.kitchen);
+    var method = state.payMethod || '';
+    if (!availablePaymentMethods.some(function (item) { return item.id === method; })) {
+        method = availablePaymentMethods.length ? availablePaymentMethods[0].id : '';
+    }
+    state.payMethod = method;
+    h += '<div class="card pad card-mb"><h3 class="font-700 mb-2">Payment method</h3>';
+    if (!method) {
+        h += '<p class="muted" role="status">This kitchen has not configured a supported payment method. The order cannot be placed until setup is complete.</p>';
+    } else {
+    h += '<p class="tiny muted mb-2">SocioMart does not process payments. The seller must verify receipt before payment is marked PAID.</p>' +
+        availablePaymentMethods.map(function (m) {
             var sel = method === m.id;
             return '<label class="pay-method' + (sel ? ' selected' : '') + '" data-action="select-pay-method" data-method="' + m.id + '">' +
                 '<span class="pm-radio" aria-hidden="true"></span>' +
@@ -1393,25 +1532,28 @@ async function paymentView() {
                 '</label>';
         }).join('');
 
-    // Demo UPI details — clearly fictional, shown for the UPI method
-    if (method === 'upi') {
-        h += '<div class="upi-box">' +
-            '<div class="upi-box-title">Pay to this UPI ID</div>' +
-            '<div class="upi-row"><span class="upi-id">demo@sociomart</span>' +
-            '<button class="btn btn-secondary btn-sm" type="button" data-action="copy-upi" data-upi="demo@sociomart">Copy</button></div>' +
-            '<p class="tiny muted mt-2">Demo payment only — this UPI ID is sample data for demonstration purposes and is not connected to any real account.</p>' +
-            '</div>';
-    }
+        h += paymentInstructionsHtml(draft.kitchen, method);
 
     h += '<div class="receipt-line card-mt"><span class="muted">Payment status</span>' +
-        '<span class="pill pill-amber">Pending</span></div></div>';
+        '<span class="pill pill-amber">' + (method === 'cod' ? 'UNPAID' : 'Awaiting seller verification') + '</span></div>';
+    }
+    h += '</div>';
 
     var isCod = method === 'cod';
-    h += '<div class="sticky-footer-bar"><div class="inner">' +
-        '<button class="btn btn-primary btn-block" type="button" id="payNowBtn" data-action="confirm-payment"' +
-        (isCod ? ' data-cod="1"' : '') + '>' +
-        (isCod ? 'PLACE ORDER (PAY ON DELIVERY) — ' : 'PAY NOW — ') + money(draft.totalAmount) + '</button>' +
-        '</div></div>';
+    if (method) {
+        h += '<div class="sticky-footer-bar"><div class="inner">';
+        if (isCod) {
+            h += '<button class="btn btn-primary btn-block" type="button" id="payNowBtn" data-action="confirm-payment" data-cod="1" data-payment-status="UNPAID">' +
+                'PLACE ORDER (PAY ON DELIVERY) — ' + money(draft.totalAmount) + '</button>';
+        } else {
+            h += '<button class="btn btn-primary btn-block" type="button" id="payNowBtn" data-action="confirm-payment" data-payment-status="AWAITING_SELLER_VERIFICATION">' +
+                'I’VE PAID — PLACE ORDER — ' + money(draft.totalAmount) + '</button>' +
+                '<button class="btn btn-secondary btn-block mt-2" type="button" id="payLaterBtn" data-action="confirm-payment" data-payment-status="UNPAID">' +
+                'I’LL PAY LATER — PLACE ORDER — ' + money(draft.totalAmount) + '</button>';
+        }
+        h += '<p class="tiny muted text-center mt-1" id="placeOrderStatus" role="status" aria-live="polite"></p>' +
+            '</div></div>';
+    }
 
     h += '</div>';
     return h;
@@ -1424,13 +1566,17 @@ async function confirmPayment(btnEl) {
         return requireAuth(function () { return confirmPayment(btnEl); });
     }
     var note = (state.pendingCheckout && state.pendingCheckout.note) || '';
-    var cod = btnEl && btnEl.dataset.cod === '1';
+    var cod = (btnEl && btnEl.dataset.cod === '1') || state.payMethod === 'cod';
+    var paymentChoice = btnEl ? btnEl.dataset.paymentStatus : null;
     state.placingOrder = true;
     var original = btnEl ? btnEl.innerHTML : '';
+    var statusMessage = document.getElementById('placeOrderStatus');
     if (btnEl) {
         btnEl.disabled = true;
-        btnEl.innerHTML = '<span class="btn-spinner"></span> ' + (cod ? 'Placing order...' : 'Processing payment...');
+        btnEl.setAttribute('aria-busy', 'true');
+        btnEl.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span> Placing your order…';
     }
+    if (statusMessage) statusMessage.textContent = 'Placing your order…';
     try {
         await withAuthGate(async function () {
             var buyerDetails = null;
@@ -1457,13 +1603,21 @@ async function confirmPayment(btnEl) {
                 state.user.society = soc;
             }
             var cart = getCart();
-            var submittedPaymentStatus = cod ? 'PENDING' : 'PAID';
+            var submittedPaymentStatus;
+            if (cod) {
+                submittedPaymentStatus = 'UNPAID';
+            } else if (paymentChoice === 'UNPAID') {
+                submittedPaymentStatus = 'UNPAID';
+            } else {
+                submittedPaymentStatus = 'AWAITING_SELLER_VERIFICATION';
+            }
             var placeBody = {
                 kitchenId: cart ? cart.kitchenId : null,
                 items: (cart && cart.items) ? cart.items.map(function (i) {
                     return { productId: i.productId, quantity: i.qty, scheduledDate: i.scheduledDate || null, scheduledSlot: i.scheduledSlot || null };
                 }) : null,
                 paymentStatus: submittedPaymentStatus,
+                paymentMethod: state.payMethod,
                 customInstructions: note,
                 specialInstructions: note,
                 deliveryAddress: buyerDetails ? buyerDetails.deliveryAddress : '',
@@ -1501,8 +1655,13 @@ async function confirmPayment(btnEl) {
             navigate('#/payment-success');
         });
     } catch (err) {
-        if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = original; }
         var reason = (err && err.data && (err.data.message || err.data.error)) || (err && err.message) || 'Could not place order. Please try again.';
+        if (btnEl) {
+            btnEl.disabled = false;
+            btnEl.removeAttribute('aria-busy');
+            btnEl.innerHTML = original;
+        }
+        if (statusMessage) statusMessage.textContent = 'Order was not placed. ' + reason + ' You can review and retry.';
         if (!(err instanceof ApiError && err.status === 401)) toast(reason, 'error');
         if (err instanceof ApiError && (err.status === 400 || err.status === 404)) {
             await render();
@@ -1525,10 +1684,14 @@ function paymentSuccessView() {
             '<a class="btn btn-primary card-mt" href="#/food">Browse Food &amp; Kitchens</a>') + '</div>';
     }
     var paid = o.paymentStatus === 'PAID';
+    var awaitingSellerVerification = o.paymentStatus === 'AWAITING_SELLER_VERIFICATION';
     var h = '<div class="view-enter pt-3 text-center">';
     h += '<div class="font-size-3-2" aria-hidden="true">✅</div>' +
         '<h1 class="font-800 my-2">Order Confirmed</h1>' +
-        '<p class="muted small">' + (paid ? 'Demo payment successful — thank you!' : 'Order placed — pay cash on delivery.') + '</p>';
+        '<p class="muted small">' + (paid ? 'Payment confirmed by the seller.' :
+            (awaitingSellerVerification
+                ? 'Your payment acknowledgement was sent. The seller must verify receipt.'
+                : 'Order placed. Payment remains unpaid until the seller confirms receipt.')) + '</p>';
     h += '<div class="card pad card-mt text-left">' +
         '<div class="receipt-line"><span>Order</span><span>#' + esc(o.orderNumber || '') + '</span></div>' +
         '<div class="receipt-line"><span>Kitchen</span><span>🏪 ' + esc(o.kitchen && o.kitchen.displayName ? o.kitchen.displayName : '') + '</span></div>';
@@ -1538,7 +1701,10 @@ function paymentSuccessView() {
     h += '<div class="receipt-line font-800 border-top mt-2 pt-2">' +
         '<span>Total</span><span>' + money(o.totalAmount) + '</span></div>' +
         '<div class="flex gap-2 card-mt">' +
-        (paid ? '<span class="pill pill-green">Payment: PAID (Demo)</span>' : '<span class="pill pill-amber">Payment: Due on delivery</span>') +
+        (paid ? '<span class="pill pill-green">Payment: PAID</span>' :
+            (awaitingSellerVerification
+                ? '<span class="pill pill-amber">Awaiting seller verification</span>'
+                : '<span class="pill pill-amber">UNPAID</span>')) +
         (ORDER_BADGES[o.orderStatus] || '') + '</div></div>';
     h += '<div class="flex gap-3 card-mt">' +
         '<a class="btn btn-primary flex-1" href="#/orders">View My Orders</a>' +

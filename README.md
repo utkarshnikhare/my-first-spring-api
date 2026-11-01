@@ -1,8 +1,8 @@
-﻿# SocioMart
+# SocioMart
 
 **A society-level marketplace connecting buyers with home-kitchen and homemade sellers. The demo includes Buyer, Seller and Admin apps, recurring offerings, date-specific occurrence overrides, seller-recorded delivery, and an operations console.**
 
-> **Project status:** Recurring Offerings V2 and Seller Dashboard V3 are implemented and covered by automated tests. The `prod` profile is configured for PostgreSQL with Flyway-managed schema and JDBC session persistence. **Verified 2026-10-16:** all CI checks for the latest merge commit (`348697f`) are green (644 tests, 0 failures, 0 errors, 0 skipped in CI). **Production health is NOT verified:** the live `GET /api/health` probe returns HTTP 503 and the `V9` repair migration has not been deployed yet — the Render service must be redeployed manually (`autoDeploy: false`) before health can be confirmed.
+> **Project status (2026-10-31):** The production service is **LIVE and VERIFIED**. Render reports live commit `bbf0ece` (matching merged PR #104 on GitHub `main`). Hibernate schema validation and Flyway migrations V1–V21 succeeded against production PostgreSQL on startup. The historical `orders.payment_method` missing column error has been completely resolved by V17. Public `/api/health` (`UP`, database `UP`) and `/api/version` (`bbf0eced5f3e7fb2328308360345433cf7cb82e4`) are verified live. Render `autoDeploy: false` remains enforced (manual deployments only). Existing production kitchens and offerings remain preserved and intact. See the [production release runbook](./docs/PRODUCTION-RELEASE-RUNBOOK.md) for the release gate and exact evidence.
 
 
 ## 🔗 Quick Links
@@ -76,7 +76,8 @@ conversion rate with no recorded views), the UI says so rather than inventing a 
 - **Location-first discovery** - buyers see only storefronts serving their society
 - **Three apps** - buyer, seller, admin
 - **Storefronts** - a seller may run a Kitchen and/or a Homemade storefront, and serves multiple societies
-- **Offerings** - today's items and pre-orders, with quantity limits and cut-offs
+- **Offerings** - dynamic Order / Pre-order sections based on the live service date, with quantity limits, cut-offs, and IST opening dates/times
+- **Orderable Quick Posts** - same Product, checkout, inventory, and order lifecycle as regular offerings; optional validated photos, seller close/pause, and today-only availability
 - **Recurring offerings** - repeat schedules with independent per-date occurrences and overrides
 - **Seller Dashboard V3** - LIVE and RECURRING views with schedule-aware actions
 - **Orders** - real order lifecycle, totals, and stock reservation
@@ -111,7 +112,8 @@ requires `SUPER_ADMIN`. Hiding a menu item is never the protection.
 - **Location setup** - the buyer sets their society (and Area), which drives everything they can see
 - **Discovery** - only storefronts serving that society, with their offerings
 - **Storefront detail** - identity, service area, social links, and offerings split into
-  *Available Today* and *Pre-order*
+  *Available Today* and *Pre-order* from the current orderable service date (including recurring occurrences)
+- **Quick Posts** - orderable today-only cards that use the normal cart and checkout flow
 - **Offering detail** - price per unit, quantity limits, cut-off times, pre-order date and slot
 - **Cart and draft order** - items held as a draft, resumable
 - **Checkout** - buyer details, payment-status selection, then confirm
@@ -143,6 +145,8 @@ requires `SUPER_ADMIN`. Hiding a menu item is never the protection.
   `/#/kitchen/{id}` page, which can be shared directly
 - **Offerings / items** - create, edit, price, quantity limits, sold-out, pause/resume, and republish from
   history
+- **Opening schedule** - one-time offerings can begin accepting orders immediately or at a chosen IST date/time
+- **Quick Posts** - publish a message with an item price, optional validated photo, and quantity through the normal Product workflow; close early from the seller dashboard, or let the post expire at the end of its publication day
 - **Saved templates and quick posts** - publish a repeat offering quickly; WhatsApp quick-post parsing
 - **Orders** - grouped **offering → customer orders**, with a per-customer drill-down
 - **Payment visibility** - record whether an order is paid; independent of delivery
@@ -153,11 +157,11 @@ requires `SUPER_ADMIN`. Hiding a menu item is never the protection.
 
 ## 🔁 Recurring Offerings and Pre-orders (V2)
 
-The existing Create Offering flow supports one-time items and repeating schedules. A schedule stores its
-weekday pattern and defaults; each selling date is materialized as a separate occurrence with its own
-quantity, order window, ready/delivery time, status and order bucket.
+Existing repeating schedules store a weekday pattern and defaults; each selling date is materialized as a
+separate occurrence with its own quantity, order window, ready/delivery time, status and order bucket. New
+schedule creation is disabled in Create Offering and the schedule-create API. Existing schedules, occurrences,
+orders and history remain available for buyers and sellers; sellers can still manage existing schedules.
 
-- Choose weekdays and an end rule; **Ongoing** is capped at 90 days and can be extended.
 - Blank default quantity means **No limit**.
 - **Edit Today / Edit This Date** changes only that occurrence. **Manage Schedule** changes the rule and
   future defaults; it does not silently overwrite past or explicitly overridden dates.
@@ -501,8 +505,9 @@ Responses travel back the same way and always use the same error shape.
 
 - Session-based authentication; the acting user is resolved from the session, **never** from a request body
 - `/api/admin/**` requires `ADMIN` or `SUPER_ADMIN`; `/api/superadmin/**` requires `SUPER_ADMIN`
-- Demo/dev Buyer and Seller passwords are stored as password hashes; OTP, password recovery and production
-  identity checks are not implemented. Admin and Super Admin use separately configured passwords.
+- Demo/dev Buyer and Seller passwords are stored as password hashes; OTP and production identity checks are
+  not implemented. Email-token recovery is disabled until a verified delivery channel is configured; mobile
+  recovery requests use the manual Admin review queue. Admin and Super Admin use separately configured passwords.
 - Direct registration/login is enabled by default in every profile; the legacy passwordless demo-login endpoints are denied.
 - CSRF protection using a JS-readable cookie echoed back in `X-XSRF-TOKEN` - **enabled in every profile**
 - Ownership is re-derived server-side for every sensitive action (orders, delivery, admin operations), so a
@@ -733,8 +738,9 @@ claim otherwise:
 **Identity and access**
 
 - Authentication is for demonstration only. In the non-production demo flow, Buyers and Sellers register and
-  sign in with a mobile number and password; OTP/SMS, email verification, password recovery, MFA and production
-  account protections are not provided. Do not use real customer credentials.
+  sign in with a mobile number and password; OTP/SMS, email verification, MFA and production account protections
+  are not provided. Email-token recovery is disabled without verified email delivery; mobile recovery requires
+  manual Admin review. Do not use real customer credentials.
 - New Seller registrations create a pending account and storefront; an Admin must approve the Seller before
   approved Seller operations are available.
 - Admin and Super Admin accounts are not self-registered. Sign-in requires the role-specific configured

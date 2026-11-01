@@ -151,7 +151,7 @@ public class SecurityAttackSimulationTest {
         bd.setSociety("Society A " + suffix);
         bd.setBuilding("Tower A");
         bd.setFlatHouseNumber("A-101");
-        var placedOrder = orderService.placeOrder(PaymentStatus.PENDING, bd, "Special test", sessionA);
+        var placedOrder = orderService.placeOrder(PaymentStatus.PENDING, "cod", bd, "Special test", sessionA);
 
         // Buyer B registers
         String buyerBMobile = uniqueMobile();
@@ -188,7 +188,7 @@ public class SecurityAttackSimulationTest {
         bd.setSociety("Society A " + suffix);
         bd.setBuilding("Tower A");
         bd.setFlatHouseNumber("A-202");
-        var placedOrder = orderService.placeOrder(PaymentStatus.PENDING, bd, "Test", sessionA);
+        var placedOrder = orderService.placeOrder(PaymentStatus.PENDING, "cod", bd, "Test", sessionA);
 
         String buyerBMobile = uniqueMobile();
         MockHttpSession sessionB = registerBuyer(buyerBMobile, societyAId, areaAId);
@@ -220,7 +220,7 @@ public class SecurityAttackSimulationTest {
         bd.setSociety("Society A " + suffix);
         bd.setBuilding("Tower C");
         bd.setFlatHouseNumber("C-303");
-        var placedOrder = orderService.placeOrder(PaymentStatus.PENDING, bd, "Test", session);
+        var placedOrder = orderService.placeOrder(PaymentStatus.PENDING, "cod", bd, "Test", session);
 
         // Buyer attempts to update payment status to PAID directly via PATCH
         mvc.perform(patch("/api/buyer/orders/" + placedOrder.getId() + "/payment-status")
@@ -232,7 +232,7 @@ public class SecurityAttackSimulationTest {
 
         // Verify order in DB still has PENDING status
         Order dbOrder = orders.findById(placedOrder.getId()).orElseThrow();
-        assertThat(dbOrder.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(dbOrder.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
     }
 
     @Test
@@ -260,7 +260,7 @@ public class SecurityAttackSimulationTest {
         bd.setSociety("Society A " + suffix);
         bd.setBuilding("Tower X");
         bd.setFlatHouseNumber("X-101");
-        var placedOrder = orderService.placeOrder(PaymentStatus.PENDING, bd, "Test", sessionBuyer);
+        var placedOrder = orderService.placeOrder(PaymentStatus.PENDING, "cod", bd, "Test", sessionBuyer);
 
         // Seller Y maliciously attempts to mark Seller X's order as paid
         mvc.perform(patch("/api/seller/orders/" + placedOrder.getId() + "/payment-status")
@@ -270,7 +270,7 @@ public class SecurityAttackSimulationTest {
 
         // DB order remains PENDING
         Order dbOrder = orders.findById(placedOrder.getId()).orElseThrow();
-        assertThat(dbOrder.getPaymentStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(dbOrder.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
     }
 
     @Test
@@ -379,7 +379,8 @@ public class SecurityAttackSimulationTest {
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "buyerDetails", bd,
                                 "customInstructions", xssPayload,
-                                "paymentStatus", "PENDING"
+                                "paymentStatus", "PENDING",
+                                "paymentMethod", "cod"
                         ))))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -451,6 +452,7 @@ public class SecurityAttackSimulationTest {
                 "items", List.of(tamperedItem),
                 "totalPrice", new BigDecimal("0.02"),
                 "paymentStatus", "PENDING",
+                "paymentMethod", "cod",
                 "buyerDetails", Map.of(
                         "name", "Buyer " + suffix,
                         "mobileNumber", buyerMobile,
@@ -495,6 +497,7 @@ public class SecurityAttackSimulationTest {
                 "kitchenId", kitchen.getId(),
                 "items", List.of(Map.of("productId", product.getId(), "quantity", 1)),
                 "paymentStatus", "PENDING",
+                "paymentMethod", "cod",
                 "buyerDetails", Map.of(
                         "name", "Buyer " + suffix,
                         "mobileNumber", buyerMobile,
@@ -581,6 +584,7 @@ public class SecurityAttackSimulationTest {
             kitchen.setSociety(soc.getName());
             kitchen.getServedSocieties().add(soc);
         }
+        kitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         kitchen.setAvailableToday(true);
         return kitchens.saveAndFlush(kitchen);
     }

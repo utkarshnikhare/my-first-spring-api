@@ -7,17 +7,19 @@ import com.example.my_first_spring_api.dto.OrderDto;
 import com.example.my_first_spring_api.dto.SellerOrderSummaryRowDto;
 import com.example.my_first_spring_api.dto.ProductCreateDto;
 import com.example.my_first_spring_api.dto.ProductDto;
-import com.example.my_first_spring_api.dto.RecurringScheduleDto;
 import com.example.my_first_spring_api.dto.ProductUpdateDto;
 import com.example.my_first_spring_api.dto.SellerOfferingEditDto;
+import com.example.my_first_spring_api.dto.AuthResponseDto;
 import com.example.my_first_spring_api.exception.KitchenNotFoundException;
 import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.dto.CoverageOptionDto;
 import com.example.my_first_spring_api.model.Kitchen;
+import com.example.my_first_spring_api.model.GpayIdentifierType;
 import com.example.my_first_spring_api.model.OrderItem;
 import com.example.my_first_spring_api.model.OrderStatus;
 import com.example.my_first_spring_api.model.Product;
+import com.example.my_first_spring_api.model.SellerPaymentMode;
 import com.example.my_first_spring_api.model.SellerType;
 import com.example.my_first_spring_api.model.User;
 import com.example.my_first_spring_api.model.SellerApprovalStatus;
@@ -31,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Objects;
@@ -47,7 +50,6 @@ public class SellerService {
     private final FeatureService featureService;
     private final SocietyDirectory societyDirectory;
     private final LocationService locationService;
-    private final RecurringScheduleService recurringScheduleService;
     /** Public-URL slug authority. Field-injected so manually-constructed test instances keep working. */
     @Autowired
     private SlugService slugService;
@@ -68,8 +70,7 @@ public class SellerService {
                          OrderService orderService,
                          FeatureService featureService,
                          SocietyDirectory societyDirectory,
-                         LocationService locationService,
-                         RecurringScheduleService recurringScheduleService) {
+                         LocationService locationService) {
         this.kitchenRepository = kitchenRepository;
         this.productRepository = productRepository;
         this.orderItemRepository = orderItemRepository;
@@ -77,19 +78,6 @@ public class SellerService {
         this.featureService = featureService;
         this.societyDirectory = societyDirectory;
         this.locationService = locationService;
-        this.recurringScheduleService = recurringScheduleService;
-    }
-
-    /** Compatibility constructor for existing focused unit tests. Production uses constructor injection above. */
-    public SellerService(KitchenRepository kitchenRepository,
-                         ProductRepository productRepository,
-                         OrderItemRepository orderItemRepository,
-                         OrderService orderService,
-                         FeatureService featureService,
-                         SocietyDirectory societyDirectory,
-                         LocationService locationService) {
-        this(kitchenRepository, productRepository, orderItemRepository, orderService, featureService,
-                societyDirectory, locationService, null);
     }
 
     public KitchenDto createKitchen(KitchenCreateDto dto, User seller) {
@@ -111,7 +99,15 @@ public class SellerService {
         kitchen.setBuilding(dto.getBuilding());
         kitchen.setWhatsappLink(dto.getWhatsappLink());
         kitchen.setInstagramLink(dto.getInstagramLink());
-        kitchen.setUpiId(dto.getUpiId());
+        SellerPaymentMode paymentMode = SellerPaymentConfiguration.parseMode(dto.getAcceptedPaymentMode());
+        GpayIdentifierType gpayIdentifierType =
+                SellerPaymentConfiguration.parseGpayIdentifierType(dto.getGpayIdentifierType());
+        SellerPaymentConfiguration.validate(paymentMode, dto.getUpiId(),
+                gpayIdentifierType, dto.getGpayIdentifier());
+        kitchen.setUpiId(cleanPaymentIdentifier(dto.getUpiId()));
+        kitchen.setAcceptedPaymentMode(paymentMode);
+        kitchen.setGpayIdentifierType(gpayIdentifierType);
+        kitchen.setGpayIdentifier(cleanPaymentIdentifier(dto.getGpayIdentifier()));
         kitchen.setAvailableToday(dto.getAvailableToday() != null ? dto.getAvailableToday() : true);
         if (dto.getSellerType() != null && !dto.getSellerType().isBlank()) {
             try {
@@ -151,8 +147,8 @@ public class SellerService {
     public KitchenDto updateKitchen(Long kitchenId, KitchenUpdateDto dto, User seller) {
         Kitchen kitchen = getOwnedKitchen(kitchenId, seller);
         if (dto.getSociety() != null) throw new IllegalArgumentException("Primary Society is a protected field and cannot be changed");
-        if (dto.getBuilding() != null) throw new IllegalArgumentException("Primary Building is a protected field and cannot be changed");
-        if (dto.getName() != null) throw new IllegalArgumentException("Kitchen URL name is a protected field and cannot be changed");
+        if (dto.getName() != null) throw new IllegalArgumentException("Name is a protected field and cannot be changed");
+        if (dto.getBuilding() != null) throw new IllegalArgumentException("Building is a protected field and cannot be changed");
         if (dto.getDisplayName() != null) {
             if (dto.getDisplayName().trim().isEmpty()) {
                 throw new IllegalArgumentException("Kitchen Name cannot be blank.");
@@ -184,7 +180,23 @@ public class SellerService {
             }
         }
         if (dto.getInstagramLink() != null) kitchen.setInstagramLink(dto.getInstagramLink());
-        if (dto.getUpiId() != null) kitchen.setUpiId(dto.getUpiId());
+        SellerPaymentMode paymentMode = dto.getAcceptedPaymentMode() == null
+                ? kitchen.getAcceptedPaymentMode()
+                : SellerPaymentConfiguration.parseMode(dto.getAcceptedPaymentMode());
+        GpayIdentifierType gpayIdentifierType = dto.getGpayIdentifierType() == null
+                ? kitchen.getGpayIdentifierType()
+                : SellerPaymentConfiguration.parseGpayIdentifierType(dto.getGpayIdentifierType());
+        String upiId = dto.getUpiId() == null ? kitchen.getUpiId() : cleanPaymentIdentifier(dto.getUpiId());
+        String gpayIdentifier = dto.getGpayIdentifier() == null
+                ? kitchen.getGpayIdentifier() : cleanPaymentIdentifier(dto.getGpayIdentifier());
+        if (dto.getAcceptedPaymentMode() != null || dto.getGpayIdentifierType() != null
+                || dto.getGpayIdentifier() != null || dto.getUpiId() != null) {
+            SellerPaymentConfiguration.validate(paymentMode, upiId, gpayIdentifierType, gpayIdentifier);
+            kitchen.setAcceptedPaymentMode(paymentMode);
+            kitchen.setGpayIdentifierType(gpayIdentifierType);
+            kitchen.setGpayIdentifier(gpayIdentifier);
+            kitchen.setUpiId(upiId);
+        }
         if (dto.getGalleryImages() != null) kitchen.setGalleryImages(dto.getGalleryImages());
         if (dto.getAvailableToday() != null) kitchen.setAvailableToday(dto.getAvailableToday());
         if (dto.getSellerType() != null && !dto.getSellerType().isBlank()) {
@@ -258,12 +270,63 @@ public class SellerService {
 
     public ProductDto createProduct(Long kitchenId, ProductCreateDto dto, User seller) {
         Kitchen kitchen = resolveOfferingKitchen(kitchenId, seller);
-        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
-        LocalDate offeringDate = dto.getAvailableDate() != null ? dto.getAvailableDate() : today;
+        LocalDate today = AppTimeZone.today();
+        boolean quickPost = Boolean.TRUE.equals(dto.getQuickPost());
+        String quickPostRequestId = null;
+        if (quickPost) {
+            quickPostRequestId = dto.getQuickPostRequestId() == null
+                    ? null : dto.getQuickPostRequestId().trim();
+            if (quickPostRequestId == null || quickPostRequestId.isBlank()
+                    || quickPostRequestId.length() > 80) {
+                throw new IllegalArgumentException(
+                        "Quick Post request reference is required and must be at most 80 characters.");
+            }
+            kitchen = kitchenRepository.findByIdForUpdate(kitchen.getId())
+                    .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
+        }
         boolean recurringRequest = dto.getRecurringSchedule() != null;
-        boolean preorder = !recurringRequest && (dto.getIsPreorder() != null
-                ? dto.getIsPreorder() : offeringDate.isAfter(today));
-        if (!recurringRequest && offeringDate.isAfter(today) && !preorder) {
+        if (recurringRequest) {
+            throw new IllegalArgumentException(
+                    "Creating new recurring schedules is no longer supported. Existing schedules can still be managed.");
+        }
+        LocalDate offeringDate = quickPost ? today
+                : (dto.getAvailableDate() != null ? dto.getAvailableDate() : today);
+        if (quickPost && ((dto.getAvailableDate() != null && !today.equals(dto.getAvailableDate()))
+                || Boolean.TRUE.equals(dto.getIsPreorder()))) {
+            throw new IllegalArgumentException("Quick Posts must be one-time offerings for today.");
+        }
+        String description = dto.getDescription() == null ? ""
+                : (quickPost ? dto.getDescription().trim() : dto.getDescription());
+        if (quickPost) {
+            if (description.isBlank()) {
+                throw new IllegalArgumentException("Quick Post message is required.");
+            }
+            if (description.length() > 5000) {
+                throw new IllegalArgumentException("Quick Post message is too long.");
+            }
+            if (dto.getPrice() == null || dto.getPrice().signum() <= 0) {
+                throw new IllegalArgumentException("Price must be greater than 0.");
+            }
+        }
+        String productName = quickPost ? quickPostTitle(description) : dto.getName();
+        String quickPostImageData = quickPost
+                ? validateQuickPostImageData(dto.getQuickPostImageData()) : null;
+        if (quickPost) {
+            Product existing = productRepository.findByKitchenAndQuickPostRequestId(
+                    kitchen, quickPostRequestId).orElse(null);
+            if (existing != null) {
+                boolean sameRequest = existing.isQuickPost()
+                        && existing.getDescription().equals(description)
+                        && existing.getPrice().compareTo(dto.getPrice()) == 0
+                        && Objects.equals(existing.getQuickPostImageData(), quickPostImageData);
+                if (sameRequest) return toProductDto(existing);
+                throw new IllegalArgumentException(
+                        "Quick Post request reference is already used for a different post.");
+            }
+        }
+        boolean preorder = dto.getIsPreorder() != null
+                ? dto.getIsPreorder() : offeringDate.isAfter(today);
+        if (offeringDate.isAfter(today) && !preorder) {
             preorder = true;
         }
         if (preorder && !offeringDate.isAfter(today)) {
@@ -271,20 +334,15 @@ public class SellerService {
         }
         // Validate authoritative offering input before platform feature gating so
         // malformed requests receive the actionable field error, not a feature error.
-        String orderWindowStart = OfferingTiming.normalizeHhmm(dto.getOrderWindowStart(), "Orders Open");
-        String orderWindowEnd = dto.getOrderWindowEnd() != null && !dto.getOrderWindowEnd().isBlank()
-                ? OfferingTiming.normalizeHhmm(dto.getOrderWindowEnd(), "Orders Close")
-                : null;
-        String readyByTime = dto.getReadyByTime() == null ? null : dto.getReadyByTime().trim();
-        Integer maxQuantity = dto.getMaxQuantity();
-        if (recurringRequest) {
-            RecurringScheduleDto rule = dto.getRecurringSchedule();
-            orderWindowEnd = rule.getDefaultOrderCloseTime() != null && !rule.getDefaultOrderCloseTime().isBlank()
-                    ? OfferingTiming.normalizeHhmm(rule.getDefaultOrderCloseTime(), "Orders Close")
-                    : "23:59";
-            readyByTime = rule.getDefaultReadyByTime() == null ? null : rule.getDefaultReadyByTime().trim();
-            maxQuantity = rule.getDefaultQuantity();
-        }
+        String orderWindowStart = quickPost ? null
+                : OfferingTiming.normalizeHhmm(dto.getOrderWindowStart(), "Orders Open");
+        String orderWindowEnd = quickPost ? "23:59"
+                : dto.getOrderWindowEnd() != null && !dto.getOrderWindowEnd().isBlank()
+                    ? OfferingTiming.normalizeHhmm(dto.getOrderWindowEnd(), "Orders Close")
+                    : null;
+        String readyByTime = quickPost ? null
+                : (dto.getReadyByTime() == null ? null : dto.getReadyByTime().trim());
+        Integer maxQuantity = quickPost ? null : dto.getMaxQuantity();
         if (maxQuantity != null && maxQuantity < 0) {
             throw new IllegalArgumentException("Quantity Available cannot be negative; leave blank for unlimited.");
         }
@@ -302,11 +360,9 @@ public class SellerService {
             throw new IllegalArgumentException("Seller is only approved for Homemade products.");
         }
 
-        if (recurringRequest) {
-            OfferingTiming.validateWindowPair(orderWindowStart, orderWindowEnd);
-            if (readyByTime == null || readyByTime.isBlank()) {
-                throw new IllegalArgumentException("Default Delivery / Ready By is required.");
-            }
+        if (quickPost) {
+            // Quick Posts have no structured schedule: their server-authored
+            // publication date and end-of-day cutoff enforce same-day ordering.
         } else if (isHomemade && !Boolean.TRUE.equals(preorder) && (orderWindowEnd == null || orderWindowEnd.isBlank())) {
             // Section 8.3 & 8.4: Always Available & Made on Request do not require Orders Close.
             if (readyByTime == null || readyByTime.isBlank()) {
@@ -321,16 +377,26 @@ public class SellerService {
             orderWindowEnd = OfferingTiming.validateNewOffering(offeringDate, preorder,
                     orderWindowStart, orderWindowEnd, readyByTime);
         }
-        assertFeatureCompliance(seller, preorder, offeringDate, dto.getName());
-        String description = dto.getDescription() != null ? dto.getDescription() : "";
-        Product product = new Product(kitchen, dto.getName(), description, dto.getPrice(), dto.getImageUrl());
+        LocalDateTime ordersOpenFrom = !quickPost && dto.getOrderOpenDate() != null
+                ? OfferingTiming.validateOrdersOpenFrom(dto.getOrderOpenDate(), dto.getOrderOpenTime(),
+                        offeringDate, orderWindowEnd, readyByTime, today, AppTimeZone.time())
+                : null;
+        assertFeatureCompliance(seller, preorder, offeringDate, productName);
+        Product product = new Product(kitchen, productName, description, dto.getPrice(),
+                quickPost ? null : dto.getImageUrl());
+        product.setQuickPost(quickPost);
+        product.setQuickPostImageData(quickPostImageData);
+        product.setQuickPostRequestId(quickPostRequestId);
         product.setDescription(description);
-        product.setPriceUnit(dto.getPriceUnit() != null ? dto.getPriceUnit() : "portion");
-        product.setUnit(dto.getUnit() != null ? dto.getUnit() : "portion");
-        product.setAvailableToday(dto.getAvailableToday() != null ? dto.getAvailableToday() : Boolean.TRUE);
+        product.setPriceUnit(quickPost ? "unit"
+                : (dto.getPriceUnit() != null ? dto.getPriceUnit() : "portion"));
+        product.setUnit(quickPost ? "unit" : (dto.getUnit() != null ? dto.getUnit() : "portion"));
+        product.setAvailableToday(quickPost || dto.getAvailableToday() == null
+                ? Boolean.TRUE : dto.getAvailableToday());
         product.setIsVeg(dto.getIsVeg() != null ? dto.getIsVeg() : Boolean.TRUE);
         product.setAvailableDate(offeringDate);
         product.setOrderWindowStart(orderWindowStart);
+        product.setOrdersOpenFrom(ordersOpenFrom);
         product.setOrderWindowEnd(orderWindowEnd);
         // Keep the legacy column aligned for old clients/seeded records. Buyer
         // orderability uses orderWindowEnd first and this value only as fallback.
@@ -354,30 +420,23 @@ public class SellerService {
         }
         product.setCategory(category);
 
-        // Persist the product first so the recurring schedule's product foreign
-        // key is valid. The recurring schedule + occurrences are created in the
-        // SAME atomic transaction.
-        Product savedProduct = productRepository.save(product);
+        return toProductDto(productRepository.save(product));
+    }
 
-        RecurringScheduleDto recurring = dto.getRecurringSchedule();
-        if (recurring != null) {
-            LocalDate recurringStart = recurring.getStartDate() != null
-                    ? recurring.getStartDate() : savedProduct.getAvailableDate();
-            recurringScheduleService.createSchedule(savedProduct, recurringStart,
-                    recurring.getEndDate(),
-                    recurring.getRecurrenceWeekdays(), recurring.getDefaultQuantity(),
-                    recurring.getDefaultOrderCloseTime(), recurring.getDefaultReadyByTime(),
-                    Boolean.TRUE.equals(recurring.getOngoing()));
-        }
-
-        return toProductDto(savedProduct);
+    private String quickPostTitle(String message) {
+        return message.lines()
+                .map(String::trim)
+                .filter(line -> !line.isEmpty())
+                .findFirst()
+                .map(line -> line.length() > 160 ? line.substring(0, 160) : line)
+                .orElse("Quick Post");
     }
 
     public ProductDto updateProduct(Long productId, ProductUpdateDto dto, User seller) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
         getOwnedKitchen(product.getKitchen().getId(), seller);
-        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+        LocalDate today = AppTimeZone.today();
         boolean effectivePreorder = dto.getIsPreorder() != null
                 ? dto.getIsPreorder()
                 : (dto.getAvailableDate() != null
@@ -404,6 +463,14 @@ public class SellerService {
         String effectiveOpen = dto.getOrderWindowStart() != null
                 ? OfferingTiming.normalizeHhmm(dto.getOrderWindowStart(), "Orders Open")
                 : product.getOrderWindowStart();
+        LocalDate effectiveOpenDate = dto.getOrderOpenDate() != null
+                ? dto.getOrderOpenDate()
+                : (product.getOrdersOpenFrom() != null
+                    ? product.getOrdersOpenFrom().toLocalDate() : AppTimeZone.today());
+        String effectiveOpenTime = dto.getOrderOpenTime() != null
+                ? dto.getOrderOpenTime()
+                : (product.getOrdersOpenFrom() != null
+                    ? product.getOrdersOpenFrom().toLocalTime().toString().substring(0, 5) : null);
         String effectiveCloseInput = dto.getOrderWindowEnd() != null
                 ? dto.getOrderWindowEnd()
                 : (dto.getCutoffTime() != null ? dto.getCutoffTime() : product.getOrderWindowEnd());
@@ -427,7 +494,9 @@ public class SellerService {
         }
         boolean timingChanged = dto.getAvailableDate() != null || dto.getOrderWindowStart() != null
                 || dto.getOrderWindowEnd() != null || dto.getCutoffTime() != null
-                || dto.getReadyByTime() != null || dto.getIsPreorder() != null;
+                || dto.getReadyByTime() != null || dto.getIsPreorder() != null
+                || dto.getOrderOpenDate() != null || dto.getOrderOpenTime() != null;
+        LocalDateTime effectiveOrdersOpenFrom = product.getOrdersOpenFrom();
         if (timingChanged) {
             // Same cross-day tolerance as createProduct: rebase an early
             // client-computed readyBy onto the effective offering date so a
@@ -435,6 +504,18 @@ public class SellerService {
             effectiveReady = OfferingTiming.rebaseReadyByTimeForOffering(effectiveReady, effectiveDate);
             effectiveClose = OfferingTiming.validateNewOffering(effectiveDate, effectivePreorder,
                     effectiveOpen, effectiveClose, effectiveReady);
+            boolean ordersOpenFromChanged = (dto.getOrderOpenDate() != null || dto.getOrderOpenTime() != null)
+                    && !OfferingTiming.matchesOrdersOpenFrom(
+                            effectiveOrdersOpenFrom, effectiveOpenDate, effectiveOpenTime);
+            if (ordersOpenFromChanged) {
+                effectiveOrdersOpenFrom = OfferingTiming.validateOrdersOpenFrom(
+                        effectiveOpenDate, effectiveOpenTime, effectiveDate, effectiveClose,
+                        effectiveReady, AppTimeZone.today(), AppTimeZone.time());
+            } else if (effectiveOrdersOpenFrom != null) {
+                effectiveOrdersOpenFrom = OfferingTiming.validatePersistedOrdersOpenFrom(
+                        effectiveOrdersOpenFrom, effectiveDate, effectiveClose, effectiveReady,
+                        AppTimeZone.today());
+            }
         }
 
         if (hasOrders) {
@@ -448,6 +529,10 @@ public class SellerService {
                 throw new IllegalArgumentException("Cannot change availability date after orders exist.");
             if (dto.getOrderWindowStart() != null && !java.util.Objects.equals(effectiveOpen, product.getOrderWindowStart()))
                 throw new IllegalArgumentException("Cannot change order window start after orders exist.");
+            if ((dto.getOrderOpenDate() != null || dto.getOrderOpenTime() != null)
+                    && !java.util.Objects.equals(effectiveOrdersOpenFrom, product.getOrdersOpenFrom())) {
+                throw new IllegalArgumentException("Cannot change Orders Open From after orders exist.");
+            }
             // Orders Close is the one field that stays editable after the first
             // order, but it may only be EXTENDED (Requirement 5) so that every
             // already-accepted customer order keeps its original cutoff.
@@ -471,9 +556,12 @@ public class SellerService {
         if (dto.getRemainingQuantity() != null) product.setRemainingQuantity(dto.getRemainingQuantity());
         if (dto.getAvailableDate() != null) {
             product.setAvailableDate(dto.getAvailableDate());
-            product.setAvailableToday(dto.getAvailableDate().equals(LocalDate.now(AppTimeZone.ZONE)) && !effectivePreorder);
+            product.setAvailableToday(dto.getAvailableDate().equals(AppTimeZone.today()) && !effectivePreorder);
         }
         if (dto.getOrderWindowStart() != null) product.setOrderWindowStart(effectiveOpen);
+        if (dto.getOrderOpenDate() != null || dto.getOrderOpenTime() != null) {
+            product.setOrdersOpenFrom(effectiveOrdersOpenFrom);
+        }
         if (dto.getOrderWindowEnd() != null || dto.getCutoffTime() != null) {
             product.setOrderWindowEnd(effectiveClose);
             product.setCutoffTime(effectiveClose);
@@ -515,6 +603,7 @@ public class SellerService {
         dto.setCategory(product.getCategory());
         dto.setAvailableDate(product.getAvailableDate());
         dto.setOrderWindowStart(product.getOrderWindowStart());
+        dto.setOrdersOpenFrom(product.getOrdersOpenFrom());
         // Effective cutoff: orderWindowEnd first, legacy cutoffTime as fallback.
         dto.setOrderWindowEnd(OfferingTiming.resolveOrdersClose(product));
         dto.setReadyByTime(product.getReadyByTime());
@@ -524,7 +613,7 @@ public class SellerService {
         dto.setIsPreorder(product.getIsPreorder());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
-        dto.setLifecycleState(OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE)));
+        dto.setLifecycleState(OfferingTiming.lifecycleState(product, AppTimeZone.today(), AppTimeZone.time()));
         dto.setHasOrders(orderCount > 0);
         dto.setOrderCount((int) orderCount);
         return dto;
@@ -682,6 +771,49 @@ public class SellerService {
         return kitchen != null && kitchen.getSellerType() == SellerType.HOMEMADE_PRODUCTS;
     }
 
+    private String validateQuickPostImageData(String imageData) {
+        if (imageData == null || imageData.isBlank()) return null;
+        String normalized = imageData.trim();
+        if (!normalized.matches("(?i)^data:image/(png|jpe?g|gif|webp);base64,[a-z0-9+/=\\s]+$")) {
+            throw new IllegalArgumentException("Quick Post image must be a valid PNG, JPEG, GIF, or WebP image.");
+        }
+        try {
+            byte[] decoded = java.util.Base64.getMimeDecoder()
+                    .decode(normalized.substring(normalized.indexOf(',') + 1));
+            if (decoded.length > 2 * 1024 * 1024) {
+                throw new IllegalArgumentException("Quick Post image must be 2 MB or smaller.");
+            }
+            String mediaType = normalized.substring("data:image/".length(), normalized.indexOf(';'))
+                    .toLowerCase(java.util.Locale.ROOT);
+            if (!matchesImageSignature(mediaType, decoded)) {
+                throw new IllegalArgumentException("Quick Post image content does not match its image type.");
+            }
+        } catch (IllegalArgumentException ex) {
+            if (ex.getMessage() != null && ex.getMessage().startsWith("Quick Post image")) throw ex;
+            throw new IllegalArgumentException("Quick Post image must be valid base64 image data.");
+        }
+        return normalized;
+    }
+
+    private boolean matchesImageSignature(String mediaType, byte[] bytes) {
+        if ("png".equals(mediaType)) {
+            return bytes.length >= 8 && (bytes[0] & 0xff) == 0x89 && bytes[1] == 0x50
+                    && bytes[2] == 0x4e && bytes[3] == 0x47 && bytes[4] == 0x0d
+                    && bytes[5] == 0x0a && bytes[6] == 0x1a && bytes[7] == 0x0a;
+        }
+        if ("jpeg".equals(mediaType) || "jpg".equals(mediaType)) {
+            return bytes.length >= 3 && (bytes[0] & 0xff) == 0xff
+                    && (bytes[1] & 0xff) == 0xd8 && (bytes[2] & 0xff) == 0xff;
+        }
+        if ("gif".equals(mediaType)) {
+            return bytes.length >= 6 && bytes[0] == 'G' && bytes[1] == 'I' && bytes[2] == 'F'
+                    && bytes[3] == '8' && (bytes[4] == '7' || bytes[4] == '9') && bytes[5] == 'a';
+        }
+        return "webp".equals(mediaType) && bytes.length >= 12
+                && bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F'
+                && bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P';
+    }
+
     /**
      * Enforces the platform's configurable feature rules for seller offerings:
      *  - preorders: marking a product as pre-order requires the seller to have
@@ -695,7 +827,7 @@ public class SellerService {
             featureService.assertSellerCanUse(seller, FeatureService.KEY_PREORDERS);
         }
         if (availableDate != null) {
-            long daysAhead = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(AppTimeZone.ZONE), availableDate);
+            long daysAhead = java.time.temporal.ChronoUnit.DAYS.between(AppTimeZone.today(), availableDate);
             if (daysAhead > 0) {
                 if (!featureService.sellerHasAccess(seller, FeatureService.KEY_MENU_ADVANCE_DAYS)) {
                     throw new IllegalStateException(
@@ -734,6 +866,11 @@ public class SellerService {
         dto.setSlug(kitchen.getSlug() != null ? kitchen.getSlug() : kitchen.getName());
         dto.setInstagramLink(kitchen.getInstagramLink());
         dto.setUpiId(kitchen.getUpiId());
+        dto.setAcceptedPaymentMode(kitchen.getAcceptedPaymentMode() == null
+                ? null : kitchen.getAcceptedPaymentMode().name());
+        dto.setGpayIdentifierType(kitchen.getGpayIdentifierType() == null
+                ? null : kitchen.getGpayIdentifierType().name());
+        dto.setGpayIdentifier(kitchen.getGpayIdentifier());
         dto.setGalleryImages(kitchen.getGalleryImages());
         dto.setOrderDeadline(kitchen.getOrderDeadline());
         // The kitchen owner's name, read from the seller's own User record so the
@@ -742,6 +879,10 @@ public class SellerService {
         dto.setSellerType(kitchen.getSellerType() != null ? kitchen.getSellerType().name() : null);
         dto.setPaused(KitchenVisibility.isPaused(kitchen));
         return dto;
+    }
+
+    private static String cleanPaymentIdentifier(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private ProductDto toProductDto(Product product) {
@@ -755,6 +896,9 @@ public class SellerService {
         dto.setIsVeg(product.getIsVeg());
         dto.setAvailableDate(product.getAvailableDate());
         dto.setOrderWindowStart(product.getOrderWindowStart());
+        dto.setOrdersOpenFrom(product.getOrdersOpenFrom());
+        dto.setQuickPost(product.isQuickPost());
+        dto.setQuickPostImageData(product.getQuickPostImageData());
         dto.setOrderWindowEnd(product.getOrderWindowEnd());
         dto.setMaxQuantity(product.getMaxQuantity());
         dto.setRemainingQuantity(product.getRemainingQuantity());
@@ -770,8 +914,9 @@ public class SellerService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
         dto.setOrdersPaused(product.isOrdersPaused());
-        String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
-        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle));
+        String lifecycle = OfferingTiming.lifecycleState(product, AppTimeZone.today(), AppTimeZone.time());
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle)
+                || "SCHEDULED_TO_OPEN".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
         dto.setCreatedAt(product.getCreatedAt());
         return dto;
@@ -833,11 +978,24 @@ public class SellerService {
     public com.example.my_first_spring_api.dto.AuthResponseDto resubmitApplication(
             User seller, java.util.Map<String, Object> body) {
         if (seller == null) throw new IllegalArgumentException("Seller is required.");
+        if (body == null) body = new java.util.HashMap<>();
+        // Requirement ONB-13: Seller request-changes/resubmission
+        // Seller can resubmit their application after admin requested changes
+        // The body may contain updated application details
+        // Verify slug is NOT changed during resubmission (slug reservation guarantee)
+        String reason = (String) body.getOrDefault("reason", "");
+        Kitchen kitchen = kitchenRepository.findBySeller(seller).stream().findFirst().orElse(null);
+        String submittedSlug = (String) body.getOrDefault("kitchenSlug", kitchen != null ? kitchen.getSlug() : null);
+        if (kitchen != null && submittedSlug != null && !submittedSlug.equals(kitchen.getSlug())) {
+            throw new IllegalArgumentException("Slug cannot be changed during resubmission. The kitchen slug is reserved and immutable.");
+        }
         SellerApprovalStatus from = seller.getSellerApprovalStatus();
         if (from != SellerApprovalStatus.CHANGES_REQUESTED && from != SellerApprovalStatus.PENDING && from != SellerApprovalStatus.REJECTED) {
             throw new IllegalArgumentException("Application is not in a resubmittable state.");
         }
-        Kitchen kitchen = kitchenRepository.findBySeller(seller).stream().findFirst().orElse(null);
+        seller.setSellerStatusReason(reason != null && !reason.isBlank() ? reason : seller.getSellerStatusReason());
+        seller.setSellerApprovalStatus(SellerApprovalStatus.PENDING); // Reset to pending until admin reviews
+        seller = userRepository.save(seller);
         if (body != null) {
             if (body.get("kitchenName") != null) {
                 String kn = String.valueOf(body.get("kitchenName")).trim();
@@ -869,7 +1027,7 @@ public class SellerService {
             }
         }
         seller.setSellerApprovalStatus(SellerApprovalStatus.PENDING);
-        seller.setSellerStatusReason("Resubmitted with requested changes");
+        seller.setSellerStatusReason(reason != null && !reason.isBlank() ? reason : "Resubmitted with requested changes");
         if (kitchen != null) {
             kitchenRepository.save(kitchen);
         }
@@ -886,7 +1044,7 @@ public class SellerService {
                 saved.getId(), saved.getName(), saved.getMobileNumber(), saved.getFlatHouseNumber(),
                 saved.getRole() != null ? saved.getRole().name() : null, saved.getSellerApprovalStatus());
         authDto.setSellerApprovalStatus(saved.getSellerApprovalStatus());
-        authDto.setSellerStatusReason(saved.getSellerStatusReason());
+        authDto.setSellerStatusReason(reason != null && !reason.isBlank() ? reason : saved.getSellerStatusReason());
         if (kitchen != null) {
             authDto.setKitchenSlug(kitchen.getSlug());
             authDto.setKitchenUrl("/kitchen/" + kitchen.getSlug());

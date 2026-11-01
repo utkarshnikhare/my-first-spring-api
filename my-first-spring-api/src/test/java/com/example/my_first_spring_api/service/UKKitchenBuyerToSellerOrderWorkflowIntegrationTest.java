@@ -94,6 +94,7 @@ public class UKKitchenBuyerToSellerOrderWorkflowIntegrationTest {
         ukKitchen = new Kitchen("UK Kitchen", "UK Kitchen", "Special Home Food", null, ukSeller);
         ukKitchen.setDisplayName("UK Kitchen");
         ukKitchen.setSociety(ukSociety.getName());
+        ukKitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         ukKitchen.setAvailableToday(true);
         ukKitchen.getServedSocieties().add(ukSociety);
         ukKitchen = kitchenRepository.saveAndFlush(ukKitchen);
@@ -117,6 +118,7 @@ public class UKKitchenBuyerToSellerOrderWorkflowIntegrationTest {
 
         otherKitchen = new Kitchen("other-kitchen-" + suffix, "Other Kitchen", "Other desc", null, otherSeller);
         otherKitchen.setSociety(ukSociety.getName());
+        otherKitchen.setAcceptedPaymentMode(SellerPaymentMode.CASH_ONLY);
         otherKitchen.setAvailableToday(true);
         otherKitchen.getServedSocieties().add(ukSociety);
         otherKitchen = kitchenRepository.saveAndFlush(otherKitchen);
@@ -159,6 +161,7 @@ public class UKKitchenBuyerToSellerOrderWorkflowIntegrationTest {
 
         OrderDto placedOrder = orderService.placeOrder(
                 PaymentStatus.PAID,
+                "cod",
                 buyerDetails,
                 "Extra spicy please",
                 buyerSession
@@ -173,8 +176,8 @@ public class UKKitchenBuyerToSellerOrderWorkflowIntegrationTest {
         assertThat(order.getKitchen().getId()).isEqualTo(ukKitchen.getId());
         assertThat(order.getKitchen().getName()).isEqualTo("UK Kitchen");
         assertThat(order.getKitchen().getSeller().getId()).isEqualTo(ukSeller.getId());
-        assertThat(order.getOrderStatus()).isEqualTo(OrderStatus.CONFIRMED);
-        assertThat(order.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(order.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
+        assertThat(order.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
         assertThat(order.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(300));
 
         // Verify items and quantity
@@ -188,6 +191,9 @@ public class UKKitchenBuyerToSellerOrderWorkflowIntegrationTest {
         // Verify stock decremented by 2 (10 -> 8)
         Product refreshedProduct = productRepository.findById(ukProduct.getId()).orElseThrow();
         assertThat(refreshedProduct.getRemainingQuantity()).isEqualTo(8);
+
+        assertThat(orderService.markOrderAsPaid(order.getId(), ukSeller).getPaymentStatus())
+                .isEqualTo(PaymentStatus.PAID);
 
         // 4. Verify Owning Seller retrieval
         List<SellerOrderSummaryRowDto> sellerOrders = orderService.getSellerOrders(ukSeller);
@@ -246,6 +252,7 @@ public class UKKitchenBuyerToSellerOrderWorkflowIntegrationTest {
         // 6. Verify duplicate submission prevention
         assertThatThrownBy(() -> orderService.placeOrder(
                 PaymentStatus.PAID,
+                "cod",
                 buyerDetails,
                 "Duplicate attempt",
                 buyerSession

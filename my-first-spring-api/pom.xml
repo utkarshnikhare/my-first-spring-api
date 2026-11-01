@@ -138,7 +138,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <!-- Same business zone as production, so test results do not depend on the machine's zone. -->
-                    <argLine>-Duser.timezone=Asia/Kolkata</argLine>
+                    <argLine>-Duser.timezone=Asia/Kolkata --enable-preview</argLine>
                 </configuration>
             </plugin>
         </plugins>
