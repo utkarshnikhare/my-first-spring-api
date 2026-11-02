@@ -75,16 +75,16 @@ public class GlobalExceptionHandler {
                 general != null ? general : "The submitted data is invalid.", 400),
                 HttpStatus.BAD_REQUEST);
     }
-
-    @ExceptionHandler(HandlerMethodValidationException.class)
-    public ResponseEntity<Map<String, String>> handleHandlerMethodValidation(HandlerMethodValidationException ex) {
+@ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ApiErrorDto> handleHandlerMethodValidation(HandlerMethodValidationException ex) {
         Map<String, String> errors = new HashMap<>();
         ex.getParameterValidationResults().forEach(err -> {
             String field = err.getMethodParameter().getParameterName();
             String message = err.getResolvableErrors().isEmpty() ? "Invalid value" : err.getResolvableErrors().get(0).getDefaultMessage();
             errors.put(field != null ? field : "request", message);
         });
-        return new ResponseEntity<>(errors, HttpStatus.BAD_REQUEST);
+        return new ResponseEntity<>(new ApiErrorDto("VALIDATION_ERROR",
+                "Invalid request fields: " + errors, 400), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler({OrderNotFoundException.class, ProductNotFoundException.class,

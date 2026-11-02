@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
 import com.example.my_first_spring_api.dto.RecurringScheduleDto;
@@ -155,7 +156,7 @@ public class RecurringScheduleService {
         }
         LocalDate start = dto.getStartDate() != null ? dto.getStartDate() : schedule.getStartDate();
         if (dto.getStartDate() != null && !dto.getStartDate().equals(schedule.getStartDate())
-                && dto.getStartDate().isBefore(LocalDate.now())) {
+                && dto.getStartDate().isBefore(AppTimeZone.today())) {
             throw new IllegalArgumentException("A replacement schedule start date cannot be in the past.");
         }
         boolean ongoing = dto.getOngoing() != null ? dto.getOngoing() : schedule.isOngoing();
@@ -193,7 +194,7 @@ public class RecurringScheduleService {
         RecurringSchedule saved = schedules.save(schedule);
 
         // Reconcile materialised occurrences against the new range + weekdays.
-        LocalDate today = LocalDate.now();
+        LocalDate today = AppTimeZone.today();
         List<Occurrence> existing = new ArrayList<>(occurrences.findByScheduleId(scheduleId));
         for (Occurrence o : existing) {
             LocalDate date = o.getOccurrenceDate();
@@ -247,7 +248,7 @@ public class RecurringScheduleService {
         schedules.save(schedule);
         // ENDED stops future selling dates while preserving history: past
         // occurrences (and any orders already placed) are never deleted.
-        LocalDate today = LocalDate.now();
+        LocalDate today = AppTimeZone.today();
         for (Occurrence o : occurrences.findByScheduleId(scheduleId)) {
             if (!o.getOccurrenceDate().isBefore(today)) {
                 o.setStatus(OccurrenceStatus.ENDED);
@@ -265,7 +266,7 @@ public class RecurringScheduleService {
         if (!schedule.isOngoing()) {
             throw new IllegalStateException("Only ongoing schedules can be extended.");
         }
-        LocalDate target = LocalDate.now().plusDays(RecurringSchedule.ONGOING_INTERNAL_DAYS_CAP - 1L);
+        LocalDate target = AppTimeZone.today().plusDays(RecurringSchedule.ONGOING_INTERNAL_DAYS_CAP - 1L);
         if (target.isAfter(schedule.getEndDate())) {
             schedule.setEndDate(target);
             schedules.save(schedule);
@@ -333,7 +334,7 @@ public class RecurringScheduleService {
             card.setProductImageUrl(schedule.getProduct().getImageUrl());
         }
         occurrences.findByScheduleIdOrderByOccurrenceDateAsc(schedule.getId()).stream()
-                .filter(o -> !o.getOccurrenceDate().isBefore(LocalDate.now()))
+                .filter(o -> !o.getOccurrenceDate().isBefore(AppTimeZone.today()))
                 .filter(o -> o.getStatus() != OccurrenceStatus.ENDED)
                 .findFirst().ifPresent(next -> {
                     card.setNextOccurrenceStatus(next.getStatus());
@@ -568,7 +569,7 @@ public class RecurringScheduleService {
     public OccurrenceDto resolveTargetOccurrence(Product product) {
         RecurringSchedule schedule = findActiveScheduleForProduct(product == null ? null : product.getId());
         if (schedule == null) return null;
-        LocalDate today = LocalDate.now();
+        LocalDate today = AppTimeZone.today();
         OccurrenceDto todayOcc = resolveOccurrenceOn(schedule.getId(), today);
         if (isResolvedOrderable(todayOcc, product)) return todayOcc;
         return occurrences.findByScheduleIdOrderByOccurrenceDateAsc(schedule.getId()).stream()
@@ -642,14 +643,14 @@ public class RecurringScheduleService {
         if (occurrence.getReadyByTime() != null) dto.setReadyByTime(occurrence.getReadyByTime());
         dto.setSoldOut(Boolean.TRUE.equals(dto.getSoldOut()) || Boolean.TRUE.equals(occurrence.getSoldOut()));
         dto.setOrdersPaused(Boolean.TRUE.equals(dto.getOrdersPaused()) || Boolean.TRUE.equals(occurrence.getOrdersPaused()));
-        boolean notOpenYet = occurrence.getDate().isAfter(LocalDate.now())
+        boolean notOpenYet = occurrence.getDate().isAfter(AppTimeZone.today())
                 && parseTime(dto.getOrderWindowStart()) != null
-                && java.time.LocalTime.now().isBefore(parseTime(dto.getOrderWindowStart()));
+                && AppTimeZone.time().isBefore(parseTime(dto.getOrderWindowStart()));
         boolean closed = Boolean.TRUE.equals(dto.getSoldOut()) || Boolean.TRUE.equals(dto.getOrdersPaused())
                 || notOpenYet;
         dto.setOrdersClosed(closed);
         dto.setLifecycleState(closed ? "ORDERS_CLOSED"
-                : occurrence.getDate().isAfter(LocalDate.now()) ? "PRE_ORDER" : "LIVE");
+                : occurrence.getDate().isAfter(AppTimeZone.today()) ? "PRE_ORDER" : "LIVE");
     }
 
     private boolean hasCustomerOrders(Occurrence occurrence) {
@@ -701,10 +702,10 @@ public class RecurringScheduleService {
     private boolean isResolvedOrderable(OccurrenceDto occurrence, Product product) {
         if (occurrence == null || Boolean.TRUE.equals(occurrence.getSoldOut())
                 || Boolean.TRUE.equals(occurrence.getOrdersPaused())) return false;
-        java.time.LocalTime now = java.time.LocalTime.now();
+        java.time.LocalTime now = AppTimeZone.time();
         java.time.LocalTime open = parseTime(product == null ? null : product.getOrderWindowStart());
         if (open != null && now.isBefore(open)) return false;
-        if (LocalDate.now().equals(occurrence.getDate())) {
+        if (AppTimeZone.today().equals(occurrence.getDate())) {
             java.time.LocalTime close = parseTime(occurrence.getOrderCloseTime());
             if (close != null && now.isAfter(close)) return false;
         }

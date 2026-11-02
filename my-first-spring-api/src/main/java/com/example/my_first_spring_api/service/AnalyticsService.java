@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import com.example.my_first_spring_api.model.AnalyticsEvent;
 import com.example.my_first_spring_api.model.UserRole;
 import com.example.my_first_spring_api.model.SellerApprovalStatus;
@@ -81,7 +82,7 @@ public class AnalyticsService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> summary() {
-        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
+        LocalDateTime startOfToday = AppTimeZone.today().atStartOfDay();
         Map<String, Object> out = new LinkedHashMap<>();
 
         Map<String, Long> usersByRole = new LinkedHashMap<>();

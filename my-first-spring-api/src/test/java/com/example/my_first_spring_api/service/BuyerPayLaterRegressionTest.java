@@ -331,4 +331,29 @@ public class BuyerPayLaterRegressionTest {
         OrderDto paidB = orderService.markOrderAsPaid(orderB.getId(), seller);
         assertThat(paidB.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
     }
+
+    @Test
+    @DisplayName("Case 11: Buyer can acknowledge payment for Pay Later order (UNPAID -> AWAITING_SELLER_VERIFICATION)")
+    void buyerCanAcknowledgePaymentForPayLaterOrder() throws Exception {
+        MockHttpSession session = buyerSession();
+        draft(session);
+
+        OrderDto placed = orderService.placeOrder(
+                PaymentStatus.UNPAID, "upi", null, null, session);
+        assertThat(placed.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
+
+        UpdatePaymentStatusRequest request = new UpdatePaymentStatusRequest();
+        request.setPaymentStatus(PaymentStatus.AWAITING_SELLER_VERIFICATION);
+
+        mockMvc.perform(patch("/api/buyer/orders/" + placed.getId() + "/payment-status")
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paymentStatus").value("AWAITING_SELLER_VERIFICATION"));
+
+        Order order = orderRepository.findById(placed.getId()).orElseThrow();
+        assertThat(order.getPaymentStatus()).isEqualTo(PaymentStatus.AWAITING_SELLER_VERIFICATION);
+    }
 }

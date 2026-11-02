@@ -290,10 +290,10 @@ public class AuthController {
         }
         String forwarded = request.getHeader("X-Forwarded-For");
         if (StringUtils.hasText(forwarded)) {
-            int comma = forwarded.indexOf(',');
-            String first = (comma > 0 ? forwarded.substring(0, comma) : forwarded).trim();
-            if (StringUtils.hasText(first)) {
-                return first;
+            int lastComma = forwarded.lastIndexOf(',');
+            String client = (lastComma >= 0 ? forwarded.substring(lastComma + 1) : forwarded).trim();
+            if (StringUtils.hasText(client)) {
+                return client;
             }
         }
         return request.getRemoteAddr();

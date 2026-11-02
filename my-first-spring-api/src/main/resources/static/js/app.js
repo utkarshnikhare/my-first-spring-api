@@ -175,9 +175,11 @@ document.addEventListener('click', async function (e) {
                 await render(); break;
             case 'place-order':
                 try { await api('/api/analytics/event', { method: 'POST', body: { type: 'ORDER_NOW_CLICK' } }); } catch (e) {}
-                var defaultPlaceStatus = (state.payMethod === 'cod') ? 'UNPAID' : 'AWAITING_SELLER_VERIFICATION';
-                await placeOrderWithStatus(state.payMethod, t, defaultPlaceStatus); break;
-            case 'confirm-payment': await confirmPayment(t); break;
+                var placeStatus = t.dataset.paymentStatus || ((state.payMethod === 'cod') ? 'UNPAID' : 'AWAITING_SELLER_VERIFICATION');
+                await placeOrderWithStatus(state.payMethod, t, placeStatus); break;
+            case 'confirm-payment':
+                var confirmStatus = t.dataset.paymentStatus || ((state.payMethod === 'cod') ? 'UNPAID' : 'AWAITING_SELLER_VERIFICATION');
+                await placeOrderWithStatus(state.payMethod, t, confirmStatus); break;
             case 'logout': {
                 try { await api('/api/auth/logout', { method: 'POST' }); } catch (e5) {}
                 state.user = null;

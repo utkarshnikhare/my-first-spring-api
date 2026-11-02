@@ -315,20 +315,8 @@ public class OrderService {
      * simple - the same kitchen-scoped scan the dashboard summary performs.
      */
     private int bookedPlatesOn(Product product, Long occurrenceId) {
-        if (product.getKitchen() == null || product.getId() == null || occurrenceId == null) return 0;
-        int total = 0;
-        for (Order order : orderRepository.findByKitchenOrderByCreatedAtDesc(product.getKitchen())) {
-            if (order.getOrderStatus() == OrderStatus.DRAFT || order.getOrderStatus() == OrderStatus.CANCELLED) {
-                continue;
-            }
-            for (OrderItem item : order.getItems()) {
-                if (item.getProduct() == null || !product.getId().equals(item.getProduct().getId())) continue;
-                if (item.getOccurrence() != null && occurrenceId.equals(item.getOccurrence().getId())) {
-                    total += item.getQuantity() == null ? 0 : item.getQuantity();
-                }
-            }
-        }
-        return total;
+        if (product == null || product.getId() == null || occurrenceId == null) return 0;
+        return orderRepository.countBookedPlatesForOccurrence(product.getId(), occurrenceId);
     }
 
     private List<String> parseSlots(String timeSlots) {
@@ -498,6 +486,23 @@ public class OrderService {
                 availabilityService.assertOrderable(product, buyer, "checkout");
             }
         }
+        // Fail-fast payment mode and payment status validation before stock is consumed
+        boolean isCashOnly = "cod".equalsIgnoreCase(normalizedPaymentMethod)
+                || (order.getKitchen() != null && order.getKitchen().getAcceptedPaymentMode() == SellerPaymentMode.CASH_ONLY);
+        PaymentStatus resolvedPaymentStatus;
+        if (isCashOnly) {
+            if (paymentStatus == PaymentStatus.AWAITING_SELLER_VERIFICATION) {
+                throw new IllegalArgumentException("Cash-only kitchens do not accept digital payments. Please choose 'Pay Later'.");
+            }
+            resolvedPaymentStatus = PaymentStatus.UNPAID;
+        } else {
+            if (paymentStatus == PaymentStatus.UNPAID) {
+                resolvedPaymentStatus = PaymentStatus.UNPAID;
+            } else {
+                resolvedPaymentStatus = PaymentStatus.AWAITING_SELLER_VERIFICATION;
+            }
+        }
+
         validateOrderItemsForPlacement(order);
         consumeStock(order);
         // ProductRepository.consumeStock uses clearAutomatically=true which detaches entities.
@@ -510,23 +515,8 @@ public class OrderService {
         }
         // Notify seller if any tracked offering newly sold out as a result of this order.
         notifyNewlySoldOut(order);
-        // A buyer acknowledgement is never proof of settlement. The seller's
-        // authenticated verification endpoint is the only transition to PAID.
-        boolean isCashOnly = "cod".equalsIgnoreCase(normalizedPaymentMethod)
-                || (order.getKitchen() != null && order.getKitchen().getAcceptedPaymentMode() == SellerPaymentMode.CASH_ONLY);
 
-        if (isCashOnly) {
-            if (paymentStatus == PaymentStatus.AWAITING_SELLER_VERIFICATION) {
-                throw new IllegalArgumentException("Cash-only kitchens do not accept digital payments. Please choose 'Pay Later'.");
-            }
-            order.setPaymentStatus(PaymentStatus.UNPAID);
-        } else {
-            if (paymentStatus == PaymentStatus.UNPAID) {
-                order.setPaymentStatus(PaymentStatus.UNPAID);
-            } else {
-                order.setPaymentStatus(PaymentStatus.AWAITING_SELLER_VERIFICATION);
-            }
-        }
+        order.setPaymentStatus(resolvedPaymentStatus);
         order.setOrderStatus(OrderStatus.ORDERED);
         order.recalculateTotal();
         // Server-side authoritative order timestamp: set exactly once when the draft
@@ -657,7 +647,10 @@ public class OrderService {
         if (order.getOrderStatus() == OrderStatus.CANCELLED) {
             throw new IllegalArgumentException("A cancelled order cannot change payment status.");
         }
-        if ((order.getPaymentStatus() == PaymentStatus.UNPAID
+        boolean isBuyerPaymentAcknowledgement = order.getPaymentStatus() == PaymentStatus.UNPAID
+                && requestedStatus == PaymentStatus.AWAITING_SELLER_VERIFICATION;
+        if (!isBuyerPaymentAcknowledgement
+                && (order.getPaymentStatus() == PaymentStatus.UNPAID
                 || order.getPaymentStatus() == PaymentStatus.AWAITING_SELLER_VERIFICATION)
                 && requestedStatus != order.getPaymentStatus()) {
             throw new IllegalArgumentException("Payment status is managed by the seller.");
@@ -673,6 +666,9 @@ public class OrderService {
         if (requestedStatus == order.getPaymentStatus()) return toOrderDto(order);
         order.setPaymentStatus(requestedStatus);
         orderRepository.save(order);
+        if (isBuyerPaymentAcknowledgement && notificationService != null && order.getKitchen() != null && order.getKitchen().getSeller() != null) {
+            notificationService.sendPaymentUpdatedNotification(order.getKitchen().getSeller(), order.getOrderNumber());
+        }
         return toOrderDto(order);
     }
 
