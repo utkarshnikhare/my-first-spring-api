@@ -106,5 +106,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findOfferingOrdersOnDateWithItems(@Param("kitchen") Kitchen kitchen,
                                                   @Param("start") LocalDateTime start,
                                                   @Param("end") LocalDateTime end);
-}
 
+    @Query("SELECT COALESCE(SUM(i.quantity), 0) FROM OrderItem i JOIN i.order o " +
+            "WHERE i.product.id = :productId AND i.occurrence.id = :occurrenceId " +
+            "AND o.orderStatus NOT IN (com.example.my_first_spring_api.model.OrderStatus.DRAFT, com.example.my_first_spring_api.model.OrderStatus.CANCELLED)")
+    int countBookedPlatesForOccurrence(@Param("productId") Long productId, @Param("occurrenceId") Long occurrenceId);
+}

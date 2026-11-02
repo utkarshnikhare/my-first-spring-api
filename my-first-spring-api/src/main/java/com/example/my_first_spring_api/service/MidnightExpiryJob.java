@@ -8,6 +8,8 @@ import com.example.my_first_spring_api.model.RecurringScheduleStatus;
 import com.example.my_first_spring_api.repository.OccurrenceRepository;
 import com.example.my_first_spring_api.repository.RecurringScheduleRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,6 +61,13 @@ public class MidnightExpiryJob {
         log.info("Midnight expiry job runForDate running for date {}", date);
         expirePastOccurrences(date);
         activateScheduledOccurrences(date);
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    @Transactional
+    public void onStartup() {
+        log.info("Running startup catch-up for midnight expiry job");
+        expireAndActivateOccurrences();
     }
 
     @Scheduled(cron = "0 0 0 * * ?", zone = "Asia/Kolkata")

@@ -69,6 +69,7 @@ public class UserSessionAuthorizationFilter extends OncePerRequestFilter {
                     } else {
                         // Always derive authorities from the DB so role changes
                         // (approval, demotion, ...) apply on the very next request.
+                        request.setAttribute("CACHED_CURRENT_USER", user);
                         String role = user.getRole().name();
                         if (user.getRole() == com.example.my_first_spring_api.model.UserRole.SELLER
                                 && !user.isApprovedSeller()) {

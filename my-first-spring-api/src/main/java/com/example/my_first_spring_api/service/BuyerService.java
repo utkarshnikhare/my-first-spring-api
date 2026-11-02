@@ -49,11 +49,27 @@ public class BuyerService {
         if (session != null) {
             Object attr = session.getAttribute(BUYER_SESSION_KEY);
             if (attr instanceof Long userId) {
+                org.springframework.web.context.request.RequestAttributes requestAttributes =
+                        org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+                if (requestAttributes instanceof org.springframework.web.context.request.ServletRequestAttributes servletAttrs) {
+                    Object cached = servletAttrs.getRequest().getAttribute("CACHED_CURRENT_USER");
+                    if (cached instanceof User cachedUser && userId.equals(cachedUser.getId())) {
+                        return cachedUser;
+                    }
+                }
                 return userRepository.findById(userId).orElse(null);
             }
         }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof Long userId) {
+            org.springframework.web.context.request.RequestAttributes requestAttributes =
+                    org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+            if (requestAttributes instanceof org.springframework.web.context.request.ServletRequestAttributes servletAttrs) {
+                Object cached = servletAttrs.getRequest().getAttribute("CACHED_CURRENT_USER");
+                if (cached instanceof User cachedUser && userId.equals(cachedUser.getId())) {
+                    return cachedUser;
+                }
+            }
             return userRepository.findById(userId).orElse(null);
         }
         return null;
