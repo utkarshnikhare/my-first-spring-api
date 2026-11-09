@@ -402,7 +402,9 @@ class PostgresStockContentionConcurrencyTest {
             Future<?> checkout = executor.submit(() -> transactionTemplate.execute(status -> {
                 jdbc.execute("SET LOCAL lock_timeout = '8s'");
                 jdbc.queryForObject("SELECT set_config('application_name', ?, true)", String.class, applicationName);
-                return orderService.placeOrder(PaymentStatus.PENDING, "upi", null, null, session);
+                PlaceOrderRequest.BuyerDetails details = new PlaceOrderRequest.BuyerDetails();
+                details.setName("Updated draft lock buyer");
+                return orderService.placeOrder(PaymentStatus.PENDING, "upi", details, null, session);
             }));
             assertThat(awaitBlockedBy(applicationName, archivePid.get(), "products"))
                     .as("checkout must wait for the archive's product row lock").isTrue();
@@ -470,6 +472,7 @@ class PostgresStockContentionConcurrencyTest {
             assertThat(favouriteRepository.findByUserIdAndKitchenId(buyer.getId(), kitchen.getId())).isPresent();
             assertThat(orderRepository.findById(orderId).orElseThrow().getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
             assertThat(productRepository.findById(item.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(2);
+            assertThat(userRepository.findById(buyer.getId()).orElseThrow().getName()).isEqualTo("Updated draft lock buyer");
             assertThat(userRepository.findById(buyer.getId()).orElseThrow().getName()).isEqualTo("Updated checkout buyer");
         } finally {
             allowFavouriteInsert.countDown();
@@ -519,7 +522,9 @@ class PostgresStockContentionConcurrencyTest {
             Future<?> checkout = executor.submit(() -> transactionTemplate.execute(status -> {
                 jdbc.execute("SET LOCAL lock_timeout = '8s'");
                 jdbc.queryForObject("SELECT set_config('application_name', ?, true)", String.class, applicationName);
-                return orderService.placeOrder(PaymentStatus.PENDING, "upi", null, null, session);
+                PlaceOrderRequest.BuyerDetails details = new PlaceOrderRequest.BuyerDetails();
+                details.setName("Updated draft lock buyer");
+                return orderService.placeOrder(PaymentStatus.PENDING, "upi", details, null, session);
             }));
             assertThat(awaitBlockedBy(applicationName, draftPid.get()))
                     .as("checkout must wait for the draft's buyer foreign-key lock").isTrue();
@@ -529,6 +534,7 @@ class PostgresStockContentionConcurrencyTest {
             assertThat(orderRepository.findById(draftId).orElseThrow().getOrderStatus()).isEqualTo(OrderStatus.DRAFT);
             assertThat(orderRepository.findById(checkoutOrderId).orElseThrow().getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
             assertThat(productRepository.findById(item.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(2);
+            assertThat(userRepository.findById(buyer.getId()).orElseThrow().getName()).isEqualTo("Updated draft lock buyer");
         } finally {
             allowItemInsert.countDown();
             executor.shutdownNow();

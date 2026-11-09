@@ -135,18 +135,18 @@ class OrderPriceImmutabilityTest {
         assertThat(placed.getItems().get(0).getPrice()).isEqualByComparingTo(BigDecimal.valueOf(20));
         assertThat(placed.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
         assertThat(savedDraft.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
-        assertThat(savedDraft.getItems().get(0).getProductNameSnapshot()).isEqualTo("Poha Special");
-        assertThat(savedDraft.getItems().get(0).getPriceUnitSnapshot()).isEqualTo("Per Plate");
-        assertThat(placed.getItems().get(0).getProductName()).isEqualTo("Poha Special");
-        assertThat(placed.getItems().get(0).getPriceUnit()).isEqualTo("Per Plate");
+        assertThat(savedDraft.getItems().get(0).getProductNameSnapshot()).isEqualTo("Poha");
+        assertThat(savedDraft.getItems().get(0).getPriceUnitSnapshot()).isEqualTo("portion");
+        assertThat(placed.getItems().get(0).getProductName()).isEqualTo("Poha");
+        assertThat(placed.getItems().get(0).getPriceUnit()).isEqualTo("portion");
         assertThat(savedDraft.getOrderTime()).isNotNull();
         assertThat(placed.getOrderTime()).isNotNull();
 
         product.setPrice(BigDecimal.valueOf(30));
         product.setName("Changed name");
         product.setPriceUnit("Box");
-        assertThat(savedDraft.getItems().get(0).getProductNameSnapshot()).isEqualTo("Poha Special");
-        assertThat(savedDraft.getItems().get(0).getPriceUnitSnapshot()).isEqualTo("Per Plate");
+        assertThat(savedDraft.getItems().get(0).getProductNameSnapshot()).isEqualTo("Poha");
+        assertThat(savedDraft.getItems().get(0).getPriceUnitSnapshot()).isEqualTo("portion");
         product.setRemainingQuantity(100);
 
         when(orderRepository.findByBuyerOrderByCreatedAtDesc(buyer)).thenReturn(List.of(savedDraft));
@@ -157,8 +157,8 @@ class OrderPriceImmutabilityTest {
         OrderDto detail = orderService.getOrderDetails(100L, buyer);
         assertThat(detail.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(2000));
         assertThat(detail.getItems().get(0).getPrice()).isEqualByComparingTo(BigDecimal.valueOf(20));
-        assertThat(detail.getItems().get(0).getProductName()).isEqualTo("Poha Special");
-        assertThat(detail.getItems().get(0).getPriceUnit()).isEqualTo("Per Plate");
+        assertThat(detail.getItems().get(0).getProductName()).isEqualTo("Poha");
+        assertThat(detail.getItems().get(0).getPriceUnit()).isEqualTo("portion");
 
         product.setPrice(BigDecimal.valueOf(40));
         when(kitchenRepository.findBySeller(seller)).thenReturn(List.of(kitchen));
@@ -166,8 +166,8 @@ class OrderPriceImmutabilityTest {
         List<SellerOrderSummaryRowDto> sellerOrders = orderService.getSellerOrders(seller);
         assertThat(sellerOrders).hasSize(1);
         assertThat(sellerOrders.get(0).getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(2000));
-        assertThat(sellerOrders.get(0).getItems().get(0).getProductName()).isEqualTo("Poha Special");
-        assertThat(sellerOrders.get(0).getItems().get(0).getPriceUnit()).isEqualTo("Per Plate");
+        assertThat(sellerOrders.get(0).getItems().get(0).getProductName()).isEqualTo("Poha");
+        assertThat(sellerOrders.get(0).getItems().get(0).getPriceUnit()).isEqualTo("portion");
     }
 
     @Test
