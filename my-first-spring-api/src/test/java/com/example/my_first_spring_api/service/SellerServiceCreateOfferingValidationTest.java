@@ -502,4 +502,29 @@ class SellerServiceCreateOfferingValidationTest {
         assertThat(result.getCategory()).contains("HOMEMADE");
         assertThat(result.getReadyByTime()).isEqualTo("Usually ready in 1 day");
     }
+    @Test
+    void homemadeAlwaysAvailableWithFutureDateDefaultsToTodayAndSucceeds() {
+        Kitchen k = approvedKitchen();
+        k.setSellerType(com.example.my_first_spring_api.model.SellerType.HOMEMADE_PRODUCTS);
+        when(kitchenRepository.findById(1L)).thenReturn(Optional.of(k));
+
+        ProductCreateDto dto = new ProductCreateDto();
+        dto.setName("Previous browser offering");
+        dto.setDescription("History copy control");
+        dto.setPrice(BigDecimal.valueOf(40));
+        dto.setPriceUnit("Per Piece");
+        dto.setCategories(List.of("HOMEMADE"));
+        dto.setAvailableDate(LocalDate.now().plusDays(1));
+        dto.setAvailableToday(true);
+        dto.setIsPreorder(false);
+        dto.setReadyByTime("Usually ready in 1 day");
+        dto.setMaxQuantity(3);
+
+        var result = sellerService.createProduct(1L, dto, approvedSeller());
+        assertThat(result).isNotNull();
+        assertThat(result.getName()).isEqualTo("Previous browser offering");
+        assertThat(result.getAvailableDate()).isEqualTo(AppTimeZone.today());
+        assertThat(result.getIsPreorder()).isFalse();
+        assertThat(result.getReadyByTime()).isEqualTo("Usually ready in 1 day");
+    }
 }
