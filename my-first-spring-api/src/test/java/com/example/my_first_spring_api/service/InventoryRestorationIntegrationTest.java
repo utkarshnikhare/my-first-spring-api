@@ -122,7 +122,7 @@ class InventoryRestorationIntegrationTest {
 
     @Test
     @Transactional
-    void manualSoldOutPreservesStockAndRequiresExplicitReactivationAfterRestock() {
+    void manualSoldOutIsTerminalForOccurrenceAndCannotBeReopened() {
         Product product = offering(false);
         product.setRemainingQuantity(2);
         product = products.saveAndFlush(product);
@@ -138,10 +138,21 @@ class InventoryRestorationIntegrationTest {
         assertThat(replenished.getSoldOutManually()).isTrue();
         assertThat(replenished.getAvailableToday()).isFalse();
 
-        ProductDto available = sellerAppService.markAvailable(product.getId(), seller);
-        assertThat(available.getSoldOut()).isFalse();
-        assertThat(available.getSoldOutManually()).isFalse();
-        assertThat(available.getAvailableToday()).isTrue();
+        // Terminal policy: markAvailable and resumeOrders cannot reopen the same manually sold-out occurrence
+        final Long pId = product.getId();
+        final User sUser = seller;
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> sellerAppService.markAvailable(pId, sUser))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("manually sold-out");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> sellerAppService.resumeOrders(pId, sUser))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("manually sold-out");
+
+        // The occurrence remains strictly sold out
+        Product current = products.findById(product.getId()).orElseThrow();
+        assertThat(current.isSoldOutManually()).isTrue();
+        assertThat(current.getAvailableToday()).isFalse();
     }
 
     @Test

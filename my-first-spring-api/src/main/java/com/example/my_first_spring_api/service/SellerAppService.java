@@ -186,6 +186,9 @@ public class SellerAppService {
                 || !product.getKitchen().getSeller().isApprovedSeller()) {
             throw new IllegalArgumentException("This offering cannot be made available while its seller or storefront is suspended.");
         }
+        if (product.isSoldOutManually()) {
+            throw new IllegalArgumentException("A manually sold-out offering cannot be reopened. Create a new offering occurrence instead.");
+        }
         if (OfferingTiming.isExpired(product, AppTimeZone.today())) {
             throw new IllegalArgumentException("An expired offering cannot be reopened. Create a future offering instead.");
         }
@@ -213,6 +216,9 @@ public class SellerAppService {
         refreshStorefrontForUpdate(kitchen);
         if (!KitchenVisibility.isPubliclyVisible(kitchen)) {
             throw new IllegalArgumentException("Resume is unavailable while the seller or storefront is inactive.");
+        }
+        if (product.isSoldOutManually()) {
+            throw new IllegalArgumentException("A manually sold-out offering cannot be reopened. Create a new offering occurrence instead.");
         }
         if (OfferingTiming.isExpired(product, AppTimeZone.today())) {
             throw new IllegalArgumentException("An expired offering cannot be resumed. Create a future offering instead.");
