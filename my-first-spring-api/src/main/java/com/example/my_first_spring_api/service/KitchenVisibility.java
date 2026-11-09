@@ -21,6 +21,9 @@ public final class KitchenVisibility {
         return seller != null
                 && seller.getRole() == UserRole.SELLER
                 && seller.isApprovedSeller()
+                && !seller.isBlocked()
+                && !seller.isStorefrontRemoved()
+                && !isAdminSuspended(kitchen)
                 && Boolean.TRUE.equals(kitchen.getAvailableToday());
     }
 
@@ -44,8 +47,9 @@ public final class KitchenVisibility {
         if (kitchen == null) return false;
         User seller = kitchen.getSeller();
         if (kitchen.isStorefrontPaused()) return true;
-        return seller != null
-                && seller.getSellerApprovalStatus() == com.example.my_first_spring_api.model.SellerApprovalStatus.SUSPENDED;
+        return seller != null && (seller.isBlocked() || seller.isStorefrontRemoved()
+                || seller.getSellerApprovalStatus()
+                == com.example.my_first_spring_api.model.SellerApprovalStatus.SUSPENDED);
     }
 
     public static boolean isHomemadeStore(Kitchen kitchen) {

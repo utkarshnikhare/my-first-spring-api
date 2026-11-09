@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import com.example.my_first_spring_api.dto.CoverageOptionDto;
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
@@ -134,10 +135,10 @@ public class AdminService {
                 liveOfferings++;
                 liveKitchenIds.add(p.getKitchen().getId());
             }
-            if (p.getIsPreorder() != null && p.getIsPreorder()) {
+            if (!p.isArchived() && p.getIsPreorder() != null && p.getIsPreorder()) {
                 preorderOfferings++;
             }
-            if (p.isSoldOut()) {
+            if (!p.isArchived() && p.isSoldOut()) {
                 soldOutOfferings++;
             }
         }
@@ -356,6 +357,7 @@ public class AdminService {
     }
 
     private boolean isLiveProduct(Product p) {
+        if (p.isArchived()) return false;
         if (p.getAvailableToday() == null || !p.getAvailableToday()) return false;
         if (p.isSoldOut()) return false;
         return true;
@@ -689,6 +691,8 @@ public class AdminService {
             m.put("remainingQuantity", p.getRemainingQuantity());
             m.put("bookedQuantity", p.getBookedQuantity());
             m.put("soldOut", p.isSoldOut());
+            m.put("soldOutManually", p.isSoldOutManually());
+            m.put("manualReactivationRequired", p.isManualReactivationRequired());
             m.put("category", p.getCategory());
             m.put("status", classifyProductStatus(p));
             return m;
@@ -696,10 +700,12 @@ public class AdminService {
     }
 
     private String classifyProductStatus(Product p) {
-        if (p.isSoldOut()) return "SOLD_OUT";
-        if (p.getIsPreorder() != null && p.getIsPreorder()) return "PRE_ORDER";
-        if (p.getAvailableToday() == null || !p.getAvailableToday()) return "CLOSED";
-        return "LIVE";
+        String state = OfferingTiming.lifecycleState(p, AppTimeZone.today(), AppTimeZone.time());
+        return switch (state) {
+            case "PRE_ORDER" -> "PRE_ORDER";
+            case "LIVE", "PAUSED", "SOLD_OUT", "EXPIRED", "ADMIN_SUSPENDED", "ARCHIVED" -> state;
+            default -> "CLOSED";
+        };
     }
 
     // ==================== Orders ====================
@@ -1404,7 +1410,12 @@ public class AdminService {
         List<Map<String, Object>> items = o.getItems().stream().map(it -> {
             Map<String, Object> im = new LinkedHashMap<>();
             im.put("productId", it.getProduct() != null ? it.getProduct().getId() : null);
-            im.put("productName", it.getProduct() != null ? it.getProduct().getName() : null);
+            im.put("productName", o.getOrderStatus() != OrderStatus.DRAFT && it.getProductNameSnapshot() != null
+                    ? it.getProductNameSnapshot()
+                    : (it.getProduct() != null ? it.getProduct().getName() : null));
+            im.put("priceUnit", o.getOrderStatus() != OrderStatus.DRAFT && it.getPriceUnitSnapshot() != null
+                    ? it.getPriceUnitSnapshot()
+                    : (it.getProduct() != null ? it.getProduct().getPriceUnit() : null));
             im.put("quantity", it.getQuantity());
             im.put("price", it.getPrice());
             im.put("total", it.getPrice() != null && it.getQuantity() != null ? it.getPrice().multiply(BigDecimal.valueOf(it.getQuantity())) : BigDecimal.ZERO);
@@ -1530,7 +1541,12 @@ public class AdminService {
         List<Map<String, Object>> items = order.getItems().stream().map(it -> {
             Map<String, Object> im = new LinkedHashMap<>();
             im.put("productId", it.getProduct() != null ? it.getProduct().getId() : null);
-            im.put("productName", it.getProduct() != null ? it.getProduct().getName() : null);
+            im.put("productName", order.getOrderStatus() != OrderStatus.DRAFT && it.getProductNameSnapshot() != null
+                    ? it.getProductNameSnapshot()
+                    : (it.getProduct() != null ? it.getProduct().getName() : null));
+            im.put("priceUnit", order.getOrderStatus() != OrderStatus.DRAFT && it.getPriceUnitSnapshot() != null
+                    ? it.getPriceUnitSnapshot()
+                    : (it.getProduct() != null ? it.getProduct().getPriceUnit() : null));
             im.put("quantity", it.getQuantity());
             im.put("price", it.getPrice());
                          im.put("lineTotal", it.getPrice() != null && it.getQuantity() != null ? it.getPrice().multiply(BigDecimal.valueOf(it.getQuantity())) : BigDecimal.ZERO);

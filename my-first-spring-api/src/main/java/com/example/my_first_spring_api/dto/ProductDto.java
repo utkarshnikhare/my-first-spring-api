@@ -34,6 +34,8 @@ public class ProductDto {
     private String timeSlots;
     private Integer bookedQuantity;
     private Boolean soldOut;
+    private Boolean soldOutManually;
+    private Boolean manualReactivationRequired;
     private Boolean ordersClosed;
     private String lifecycleState;
     private java.time.LocalDateTime createdAt;
@@ -145,6 +147,12 @@ public class ProductDto {
     public void setBookedQuantity(Integer bookedQuantity) { this.bookedQuantity = bookedQuantity; }
     public Boolean getSoldOut() { return soldOut; }
     public void setSoldOut(Boolean soldOut) { this.soldOut = soldOut; }
+    public Boolean getSoldOutManually() { return soldOutManually; }
+    public void setSoldOutManually(Boolean soldOutManually) { this.soldOutManually = soldOutManually; }
+    public Boolean getManualReactivationRequired() { return manualReactivationRequired; }
+    public void setManualReactivationRequired(Boolean manualReactivationRequired) {
+        this.manualReactivationRequired = manualReactivationRequired;
+    }
     public Boolean getOrdersClosed() { return ordersClosed; }
     public void setOrdersClosed(Boolean ordersClosed) { this.ordersClosed = ordersClosed; }
     public String getLifecycleState() { return lifecycleState; }

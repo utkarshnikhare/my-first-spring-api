@@ -2,12 +2,14 @@ package com.example.my_first_spring_api.service;
 
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
+import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -32,6 +34,7 @@ class Requirement19NotificationTest {
     @Mock NotificationService notificationService;
     @Mock RetentionService retentionService;
     @Mock HttpSession httpSession;
+    @Mock EntityManager entityManager;
 
     @InjectMocks OrderService orderService;
 
@@ -44,6 +47,7 @@ class Requirement19NotificationTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        ReflectionTestUtils.setField(orderService, "entityManager", entityManager);
         when(httpSession.getAttribute(any(String.class))).thenAnswer(inv -> sessionMap.get(inv.getArgument(0)));
         doAnswer(inv -> {
             sessionMap.put(inv.getArgument(0), inv.getArgument(1));
@@ -68,6 +72,7 @@ class Requirement19NotificationTest {
         kitchen.setAvailableToday(true);
         when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
         when(userRepository.findById(20L)).thenReturn(Optional.of(buyer));
+        when(userRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(buyer));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -96,6 +101,10 @@ class Requirement19NotificationTest {
         sessionMap.put(OrderService.DRAFT_ORDER_SESSION_KEY, draft.getId());
         sessionMap.put("BUYER_USER", buyer.getId());
         when(orderRepository.findByIdForUpdate(draft.getId())).thenReturn(Optional.of(draft));
+        when(productRepository.findByIdForUpdate(draft.getItems().get(0).getProduct().getId()))
+                .thenReturn(Optional.of(draft.getItems().get(0).getProduct()));
+        when(kitchenRepository.findByIdForUpdate(kitchen.getId())).thenReturn(Optional.of(kitchen));
+        when(userRepository.findByIdForUpdate(seller.getId())).thenReturn(Optional.of(seller));
     }
 
     @Test

@@ -488,6 +488,11 @@ function parseServiceAreas(val) {
 function sellerNavigate(hash) { if (location.hash === hash) sellerRender(); else location.hash = hash; }
 function greeting() { var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
 function offeringStatusBadge(p) {
+    if (p.lifecycleState === 'DRAFT') return '<span class="oc-badge closed">DRAFT</span>';
+    if (p.lifecycleState === 'ADMIN_SUSPENDED') return '<span class="oc-badge closed">ADMIN SUSPENDED</span>';
+    if (p.lifecycleState === 'EXPIRED') return '<span class="oc-badge closed">EXPIRED</span>';
+    if (p.lifecycleState === 'SOLD_OUT') return '<span class="oc-badge soldout">SOLD OUT</span>';
+    if (p.lifecycleState === 'UNAVAILABLE') return '<span class="oc-badge closed">UNAVAILABLE</span>';
     if (p.soldOut) return '<span class="oc-badge soldout">SOLD OUT</span>';
     if (p.ordersPaused) return '<span class="oc-badge paused">PAUSED</span>';
     if (p.lifecycleState === 'SCHEDULED_TO_OPEN') return '<span class="oc-badge closed">SCHEDULED TO OPEN · ' + esc(prettyDateTime(p.ordersOpenFrom)) + '</span>';
@@ -931,9 +936,13 @@ function sdOfferingCardHtml(p, orderCount) {
             + esc(p.occurrenceId) + '">' + occSoldLabel + '</button>';
     } else if (!p.recurring) {
         h += '<button class="sd-btn sd-btn--edit" type="button" data-action="edit-offering" data-pid="' + p.id + '">Edit</button>';
-        if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--pause" type="button" data-action="pause-orders" data-pid="' + p.id + '">' + (p.quickPost ? 'Close Post' : 'Pause') + '</button>';
-        if (p.ordersPaused && !p.soldOut) h += '<button class="sd-btn sd-btn--resume" type="button" data-action="resume-orders" data-pid="' + p.id + '">' + (p.quickPost ? 'Reopen Post' : 'Resume') + '</button>';
-        if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Sold Out</button>';
+        var suspended = p.lifecycleState === 'ADMIN_SUSPENDED';
+        var expired = p.lifecycleState === 'EXPIRED';
+        var soldOut = p.soldOut || p.lifecycleState === 'SOLD_OUT';
+        if (p.lifecycleState !== 'DRAFT' && soldOut && !suspended && !expired) h += '<button class="sd-btn sd-btn--resume" type="button" data-action="mark-available" data-pid="' + p.id + '">Mark Available</button>';
+        if (p.lifecycleState !== 'DRAFT' && !suspended && !expired && !soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--pause" type="button" data-action="pause-orders" data-pid="' + p.id + '">' + (p.quickPost ? 'Close Post' : 'Pause') + '</button>';
+        if (p.lifecycleState !== 'DRAFT' && !suspended && !expired && p.ordersPaused && !soldOut) h += '<button class="sd-btn sd-btn--resume" type="button" data-action="resume-orders" data-pid="' + p.id + '">' + (p.quickPost ? 'Reopen Post' : 'Resume') + '</button>';
+        if (p.lifecycleState !== 'DRAFT' && !suspended && !expired && !soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Sold Out</button>';
     }
     h += '</div></div></div>';
     return h;
@@ -1151,11 +1160,16 @@ async function sellerHistoryView() {
                 var isHm = isHomemadeProduct(p);
                 var catBadge = '<span class="badge ' + (isHm ? 'badge-hm' : 'badge-kt') + '">' + (isHm ? 'Homemade' : 'Kitchen') + '</span>';
                 var isDraft = p.availableToday === false;
-                var statusBadge = isDraft ? '<span class="pill pill-amber">Draft</span>' : '';
+                var explicitDraft = p.lifecycleState === 'DRAFT';
+                var archived = p.lifecycleState === 'ARCHIVED';
+                var statusBadge = archived ? '<span class="pill pill-amber">Archived</span>'
+                    : isDraft ? '<span class="pill pill-amber">Draft</span>' : '';
                 h += '<div class="history-card"><span class="hc-body"><span class="hc-name">' + esc(p.name) + ' ' + catBadge + (statusBadge ? ' ' + statusBadge : '') + '</span>' +
                     '<span class="hc-meta">' + esc(offeringDate) + ' · ' + esc(p.category || 'Uncategorised') + '</span></span>' +
                     '<span class="hc-price">' + money(p.price) + '</span>' +
-                    '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="republish-history" data-pid="' + esc(p.id) + '">' + (isDraft ? 'Publish' : 'Republish') + '</button></div>';
+                    (archived ? '' : explicitDraft
+                        ? '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="edit-offering" data-pid="' + esc(p.id) + '">Edit Draft</button>'
+                        : '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="republish-history" data-pid="' + esc(p.id) + '">' + (isDraft ? 'Publish' : 'Republish') + '</button>') + '</div>';
             });
         }
     } catch (e) { h += emptyHtml('⚠️', 'Could not load history', e.message); }
@@ -2263,8 +2277,8 @@ function homemadeOfferingFormHtml(t, opts, ctx) {
     var chosenDate = ctx.chosenDate;
     var selectedUnit = ctx.selectedUnit || 'Per Piece';
     var categoryValues = ctx.categoryValues || [];
-    var availType = t.availType || S.hmAvailType || (t.isPreorder ? 'SPECIFIC_DATE' : (t.readyByTime && t.readyByTime.indexOf('Request') !== -1 ? 'MADE_ON_REQUEST' : 'ALWAYS_AVAILABLE'));
-    var stockMode = (t.maxQuantity != null || S.hmStockMode === 'limited') ? 'limited' : 'unlimited';
+    var availType = t.availType || (!isEdit && S.hmAvailType) || (t.isPreorder ? 'SPECIFIC_DATE' : (t.readyByTime && t.readyByTime.indexOf('Request') !== -1 ? 'MADE_ON_REQUEST' : 'ALWAYS_AVAILABLE'));
+    var stockMode = (t.maxQuantity != null || (!isEdit && S.hmStockMode === 'limited')) ? 'limited' : 'unlimited';
 
     var h = '<form class="seller-form hm-offering-form" id="' + (opts.formId || 'createOfferingForm') + '">';
     h += '<input type="hidden" name="isHomemade" value="true">';
@@ -2344,9 +2358,10 @@ function homemadeOfferingFormHtml(t, opts, ctx) {
     // Subfields for SPECIFIC_DATE
     h += '<div id="hmDateFields"' + (availType === 'SPECIFIC_DATE' ? '' : ' style="display:none;"') + '>';
     h += '<div class="form-row-2">'
-        + '<div class="form-group"><label class="form-label">Offering / Delivery Date <span class="req">*</span></label><input type="date" class="form-input" name="chosenOfferingDate" min="' + todayIso + '" value="' + esc(chosenDate) + '"></div>'
+        + '<div class="form-group"><label class="form-label">Offering / Delivery Date <span class="req">*</span></label><input type="date" class="form-input" name="chosenOfferingDate" min="' + todayIso + '" value="' + esc(chosenDate) + '"' + (availType === 'SPECIFIC_DATE' ? '' : ' disabled') + '></div>'
         + '<div class="form-group"><label class="form-label">Orders Close (Order By)</label><input class="form-input" name="orderWindowEnd" type="time" value="' + esc(t.orderWindowEnd || t.cutoffTime || '20:00') + '"></div>'
         + '</div>'
+        + '<div class="form-group"><label class="form-label">Delivery / Ready By Date</label><input class="form-input" name="hmReadyDate" type="date" min="' + todayIso + '" value="' + esc(t.readyByTime && t.readyByTime.indexOf('T') !== -1 ? t.readyByTime.slice(0, 10) : chosenDate) + '"' + (availType === 'SPECIFIC_DATE' ? '' : ' disabled') + '></div>'
         + '<div class="form-group"><label class="form-label">Delivery / Ready By Time</label><input class="form-input" name="readyByTime" type="time" value="' + esc(t.readyByTime && t.readyByTime.indexOf('T') !== -1 ? t.readyByTime.slice(11, 16) : '21:00') + '"></div>'
         + '</div>';
 
@@ -3402,7 +3417,7 @@ async function submitHomemadeProduct(form, isDraft) {
         availDate = vals.chosenOfferingDate || vals.availableDate || sellerDate('today');
         orderEnd = parseOptionalHhmm(vals.orderWindowEnd, 'Orders Close') || '20:00';
         var rTime = vals.readyByTime || '21:00';
-        readyBy = availDate + 'T' + (rTime.indexOf(':') !== -1 ? rTime.slice(0, 5) : '21:00');
+        readyBy = (vals.hmReadyDate || availDate) + 'T' + (rTime.indexOf(':') !== -1 ? rTime.slice(0, 5) : '21:00');
     }
 
     var maxQty = null;
@@ -3426,6 +3441,7 @@ async function submitHomemadeProduct(form, isDraft) {
         imageUrl: vals.imageUrl || '',
         isHomemade: true,
         availableToday: !isDraft,
+        saveAsDraft: isDraft,
         isVeg: true,
         availableDate: availDate,
         orderWindowStart: null,
@@ -3436,10 +3452,15 @@ async function submitHomemadeProduct(form, isDraft) {
     };
 
     var isEdit = form.id === 'editOfferingForm' && S.editOffering && S.editOffering.id;
+    if (isEdit && isDraft) {
+        payload.clearDraftCutoff = orderEnd === null;
+        payload.draftUnlimitedStock = stockMode === 'unlimited';
+    }
+    if (isDraft) payload.availType = availType;
     var prodUrl = isEdit ? ('/api/seller/products/' + S.editOffering.id) : (kid ? ('/api/seller/products?kitchenId=' + kid) : '/api/seller/products');
     var res = await sellerApi(prodUrl, { method: isEdit ? 'PUT' : 'POST', body: payload });
     if (isDraft) {
-        toast('Draft saved successfully! You can publish it anytime from My Offerings.', 'success');
+        toast('Draft saved successfully. Publishing saved drafts is not yet available.', 'success');
         S.draftOffering = null;
         S.offeringCategory = null;
         sellerNavigate('#/my-offerings');
@@ -3523,7 +3544,13 @@ function openProductPreviewModal(vals) {
  */
 async function submitOfferingEdit(form) {
     if (form.elements.isHomemade && form.elements.isHomemade.value === 'true') {
-        await submitHomemadeProduct(form, false);
+        if (S.editOffering && S.editOffering.lifecycleState === 'DRAFT'
+                && !S.editOffering.availType && !S.editOffering.isPreorder
+                && (S.editOffering.orderWindowEnd || S.editOffering.cutoffTime)) {
+            toast('This draft needs its availability type preserved before it can be edited safely.', 'error');
+            return;
+        }
+        await submitHomemadeProduct(form, !!(S.editOffering && S.editOffering.lifecycleState === 'DRAFT'));
         return;
     }
     var o = S.editOffering;
@@ -4037,6 +4064,10 @@ document.addEventListener('click', async function (e) {
                     var alwaysF = form.querySelector('#hmAlwaysFields');
                     var reqF = form.querySelector('#hmRequestFields');
                     var dateF = form.querySelector('#hmDateFields');
+                    var dateInput = form.elements.chosenOfferingDate;
+                    if (dateInput) dateInput.disabled = avail !== 'SPECIFIC_DATE';
+                    var readyDateInput = form.elements.hmReadyDate;
+                    if (readyDateInput) readyDateInput.disabled = avail !== 'SPECIFIC_DATE';
                     if (alwaysF) alwaysF.style.display = (avail === 'ALWAYS_AVAILABLE' ? 'block' : 'none');
                     if (reqF) reqF.style.display = (avail === 'MADE_ON_REQUEST' ? 'block' : 'none');
                     if (dateF) dateF.style.display = (avail === 'SPECIFIC_DATE' ? 'block' : 'none');
@@ -4368,6 +4399,19 @@ document.addEventListener('click', async function (e) {
                 });
                 break;
             }
+            case 'mark-available': {
+                var availablePid = Number(t.dataset.pid);
+                t.disabled = true;
+                try {
+                    await sellerApi('/api/seller-app/products/' + availablePid + '/available', { method: 'POST' });
+                    toast('Offering marked available', 'success');
+                    await sellerRender();
+                } catch (err) {
+                    toast(err.message || 'Could not mark offering available', 'error');
+                    t.disabled = false;
+                }
+                break;
+            }
             case 'pause-orders': {
                 var pausePid = Number(t.dataset.pid);
                 await sellerApi('/api/seller-app/products/' + pausePid + '/pause', { method: 'POST' });
@@ -4542,10 +4586,23 @@ document.addEventListener('click', async function (e) {
                 var historyItem = (S.historyItems || []).find(function (item) { return item.id === historyId; });
                 if (!historyItem) { toast('This history item is no longer available', 'error'); return; }
                 t.disabled = true;
-                S.draftOffering = historyItem;
-                S.republishSourceId = historyItem.id;
-                S.offeringFor = 'today';
-                sellerNavigate('#/create');
+                try {
+                    var currentHistoryItem = await sellerApi('/api/seller/products/' + historyId);
+                    if (currentHistoryItem.lifecycleState === 'DRAFT' || currentHistoryItem.lifecycleState === 'ARCHIVED') {
+                        toast(currentHistoryItem.lifecycleState === 'DRAFT'
+                            ? 'Edit this draft; publishing drafts is not available yet.'
+                            : 'Archived offerings cannot be republished.', 'error');
+                        t.disabled = false;
+                        break;
+                    }
+                    S.draftOffering = historyItem;
+                    S.republishSourceId = historyItem.id;
+                    S.offeringFor = 'today';
+                    sellerNavigate('#/create');
+                } catch (err) {
+                    t.disabled = false;
+                    toast(err.message || 'Could not load this offering', 'error');
+                }
                 break;
             }
             case 'batch-republish': {

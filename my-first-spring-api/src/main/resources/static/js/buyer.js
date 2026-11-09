@@ -17,7 +17,8 @@ function todayDate() {
 
 function buyerOfferingSection(product) {
     if (!product) return 'UNAVAILABLE';
-    if (product.ordersPaused || product.soldOut || product.lifecycleState === 'HISTORY') return 'UNAVAILABLE';
+    if (product.ordersPaused || product.soldOut || product.lifecycleState === 'SOLD_OUT'
+        || product.lifecycleState === 'EXPIRED' || product.lifecycleState === 'ADMIN_SUSPENDED') return 'UNAVAILABLE';
     var date = product.recurring ? product.nextOccurrenceDate : product.availableDate;
     if (!date) date = todayDate();
     if (date < todayDate()) return 'UNAVAILABLE';
@@ -726,7 +727,8 @@ function buyerScarcityLabel(p) {
 }
 
 function offeringCardHtml(p, kitchen, isPreorderSection) {
-    var soldOut = p.soldOut || (p.remainingQuantity != null && p.remainingQuantity <= 0);
+    var soldOut = p.soldOut || p.lifecycleState === 'SOLD_OUT'
+        || (p.remainingQuantity != null && p.remainingQuantity <= 0);
     var paused = !!p.ordersPaused;
     var isQuickPost = !!p.quickPost;
     var section = buyerOfferingSection(p);
@@ -735,7 +737,8 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
     var isNextOcc = isPre && !!p.recurring && !!p.nextOccurrenceDate && p.nextOccurrenceDate !== todayIso;
     var isPreOrNext = isPre || isNextOcc;
     var deliveryDate = p.recurring ? p.nextOccurrenceDate : p.availableDate;
-    var isPast = p.lifecycleState === 'HISTORY' || (deliveryDate && deliveryDate < todayIso);
+    var isPast = p.lifecycleState === 'EXPIRED' || p.lifecycleState === 'HISTORY'
+        || (deliveryDate && deliveryDate < todayIso);
     var ordersClosed = !!p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED' || isPast;
     var kitchenJson = encodeURIComponent(JSON.stringify({ id: kitchen.id, displayName: kitchen.displayName }));
     var imageUrl = p.quickPostImageData || (usableImageUrl(p.imageUrl) ? p.imageUrl : '');
@@ -819,7 +822,9 @@ function openOrderSheet(productJson, kitchenJson) {
         toast('Orders are paused for this offering', 'error');
         return;
     }
-    if (p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED' || p.lifecycleState === 'HISTORY') {
+    if (p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED' || p.lifecycleState === 'SOLD_OUT'
+        || p.lifecycleState === 'EXPIRED' || p.lifecycleState === 'ADMIN_SUSPENDED'
+        || p.lifecycleState === 'HISTORY') {
         closeSheet();
         toast('ORDERS CLOSED — this offering can no longer be ordered', 'error');
         return;

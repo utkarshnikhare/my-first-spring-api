@@ -5,12 +5,14 @@ import com.example.my_first_spring_api.dto.SellerOrderSummaryRowDto;
 import com.example.my_first_spring_api.dto.OrderItemRequest;
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
+import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -32,6 +34,7 @@ class OrderPriceImmutabilityTest {
     @Mock NotificationService notificationService;
     @Mock RetentionService retentionService;
     @Mock HttpSession httpSession;
+    @Mock EntityManager entityManager;
 
     @InjectMocks OrderService orderService;
 
@@ -40,6 +43,7 @@ class OrderPriceImmutabilityTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        ReflectionTestUtils.setField(orderService, "entityManager", entityManager);
         when(httpSession.getAttribute(any(String.class))).thenAnswer(inv -> sessionMap.get(inv.getArgument(0)));
         doAnswer(inv -> {
             sessionMap.put(inv.getArgument(0), inv.getArgument(1));
@@ -86,6 +90,7 @@ class OrderPriceImmutabilityTest {
         buyer.setBuilding("Building A");
         buyer.setFlatHouseNumber("A-101");
         when(userRepository.findById(20L)).thenReturn(Optional.of(buyer));
+        when(userRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(buyer));
 
         OrderItemRequest req = new OrderItemRequest();
         req.setProductId(1L);
@@ -100,6 +105,8 @@ class OrderPriceImmutabilityTest {
 
         OrderDto draft = orderService.createOrUpdateDraftOrder(1L, List.of(req), httpSession);
         assertThat(draft.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(2000));
+        assertThat(draft.getItems().get(0).getProductName()).isEqualTo("Poha");
+        assertThat(draft.getItems().get(0).getPriceUnit()).isEqualTo("portion");
 
         Order savedDraft = new Order();
         savedDraft.setId(100L);
@@ -110,9 +117,17 @@ class OrderPriceImmutabilityTest {
         when(orderRepository.findById(100L)).thenReturn(Optional.of(savedDraft));
         when(orderRepository.findByIdWithItems(100L)).thenReturn(Optional.of(savedDraft));
         when(orderRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(savedDraft));
+        when(productRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(product));
+        when(kitchenRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(kitchen));
+        when(userRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(seller));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         sessionMap.put("BUYER_USER", buyer.getId());
+        product.setName("Poha Special");
+        product.setPriceUnit("Per Plate");
+        OrderDto refreshedDraft = orderService.getOrderDetails(100L, buyer);
+        assertThat(refreshedDraft.getItems().get(0).getProductName()).isEqualTo("Poha Special");
+        assertThat(refreshedDraft.getItems().get(0).getPriceUnit()).isEqualTo("Per Plate");
 
         OrderDto placed = orderService.placeOrder(PaymentStatus.PAID, "cod", null, null, httpSession);
         assertThat(placed.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(2000));
@@ -120,10 +135,18 @@ class OrderPriceImmutabilityTest {
         assertThat(placed.getItems().get(0).getPrice()).isEqualByComparingTo(BigDecimal.valueOf(20));
         assertThat(placed.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
         assertThat(savedDraft.getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
+        assertThat(savedDraft.getItems().get(0).getProductNameSnapshot()).isEqualTo("Poha Special");
+        assertThat(savedDraft.getItems().get(0).getPriceUnitSnapshot()).isEqualTo("Per Plate");
+        assertThat(placed.getItems().get(0).getProductName()).isEqualTo("Poha Special");
+        assertThat(placed.getItems().get(0).getPriceUnit()).isEqualTo("Per Plate");
         assertThat(savedDraft.getOrderTime()).isNotNull();
         assertThat(placed.getOrderTime()).isNotNull();
 
         product.setPrice(BigDecimal.valueOf(30));
+        product.setName("Changed name");
+        product.setPriceUnit("Box");
+        assertThat(savedDraft.getItems().get(0).getProductNameSnapshot()).isEqualTo("Poha Special");
+        assertThat(savedDraft.getItems().get(0).getPriceUnitSnapshot()).isEqualTo("Per Plate");
         product.setRemainingQuantity(100);
 
         when(orderRepository.findByBuyerOrderByCreatedAtDesc(buyer)).thenReturn(List.of(savedDraft));
@@ -134,6 +157,8 @@ class OrderPriceImmutabilityTest {
         OrderDto detail = orderService.getOrderDetails(100L, buyer);
         assertThat(detail.getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(2000));
         assertThat(detail.getItems().get(0).getPrice()).isEqualByComparingTo(BigDecimal.valueOf(20));
+        assertThat(detail.getItems().get(0).getProductName()).isEqualTo("Poha Special");
+        assertThat(detail.getItems().get(0).getPriceUnit()).isEqualTo("Per Plate");
 
         product.setPrice(BigDecimal.valueOf(40));
         when(kitchenRepository.findBySeller(seller)).thenReturn(List.of(kitchen));
@@ -141,6 +166,8 @@ class OrderPriceImmutabilityTest {
         List<SellerOrderSummaryRowDto> sellerOrders = orderService.getSellerOrders(seller);
         assertThat(sellerOrders).hasSize(1);
         assertThat(sellerOrders.get(0).getTotalAmount()).isEqualByComparingTo(BigDecimal.valueOf(2000));
+        assertThat(sellerOrders.get(0).getItems().get(0).getProductName()).isEqualTo("Poha Special");
+        assertThat(sellerOrders.get(0).getItems().get(0).getPriceUnit()).isEqualTo("Per Plate");
     }
 
     @Test

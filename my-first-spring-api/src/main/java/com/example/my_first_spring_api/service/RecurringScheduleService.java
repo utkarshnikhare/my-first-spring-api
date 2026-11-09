@@ -608,7 +608,7 @@ public class RecurringScheduleService {
      */
     @Transactional(readOnly = true)
     public void decorateProductDto(Product product, com.example.my_first_spring_api.dto.ProductDto dto) {
-        if (product == null || product.getId() == null || dto == null) return;
+        if (product == null || product.isArchived() || product.getId() == null || dto == null) return;
         RecurringSchedule schedule = schedules.findByProductId(product.getId()).orElse(null);
         if (schedule == null) return; // one-time offering: nothing to project
         dto.setRecurring(true);

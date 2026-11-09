@@ -6,6 +6,9 @@ import com.example.my_first_spring_api.exception.*;
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
 import jakarta.servlet.http.HttpSession;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -33,6 +36,8 @@ public class OrderService {
     private final AnalyticsService analyticsService;
     private final NotificationService notificationService;
     private final RetentionService retentionService;
+    @PersistenceContext
+    private EntityManager entityManager;
     /**
      * Recurring engine (V2): occurrence-aware ordering. Injected as a field so
      * the manually-constructed OrderService used by one unit test keeps
@@ -124,6 +129,9 @@ public class OrderService {
                         .orElseThrow(() -> new ProductNotFoundException(itemReq.getProductId()));
                 if (product.getKitchen() == null || !product.getKitchen().getId().equals(kitchen.getId())) {
                     throw new IllegalArgumentException("The selected offering does not belong to this kitchen.");
+                }
+                if (product.isArchived() || product.isPublicationDraft()) {
+                    throw new IllegalArgumentException("The selected offering is not available for ordering.");
                 }
                 OfferingTiming.enforceQuickPostPublicationDate(product, AppTimeZone.today());
                 int qty = itemReq.getQuantity() == null ? 0 : itemReq.getQuantity();
@@ -399,6 +407,14 @@ public class OrderService {
         if (order.getItems() == null || order.getItems().isEmpty()) {
             throw new IllegalArgumentException("Your order is empty. Please add items before placing it.");
         }
+        lockCheckoutRows(order, buyer);
+        if (order.getKitchen() == null
+                || !KitchenVisibility.isPubliclyVisible(order.getKitchen())
+                || !KitchenVisibility.isServiceAreaVisible(order.getKitchen(), buyer)) {
+            session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
+            throw new InvalidKitchenSelectionException(
+                    "This kitchen is no longer accepting orders. Refresh and try again.");
+        }
         if (paymentMethod == null || paymentMethod.isBlank()) {
             throw new IllegalArgumentException("Choose a payment method accepted by this kitchen.");
         }
@@ -525,6 +541,13 @@ public class OrderService {
         if (order.getOrderTime() == null) {
             order.setOrderTime(AppTimeZone.now());
         }
+        for (OrderItem item : order.getItems()) {
+            Product product = item.getProduct();
+            if (product != null) {
+                item.setProductNameSnapshot(product.getName());
+                item.setPriceUnitSnapshot(product.getPriceUnit());
+            }
+        }
         order = orderRepository.save(order);
         orderRepository.flush();
         session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
@@ -545,7 +568,8 @@ public class OrderService {
             log.warn("Retention record failed for order {}: {}", order.getOrderNumber(), ex.getMessage());
         }
         String productSummary = order.getItems() == null ? "items" : order.getItems().stream()
-                .map(item -> item.getProduct() != null ? item.getProduct().getName() : "item")
+                .map(item -> item.getProductNameSnapshot() != null ? item.getProductNameSnapshot()
+                        : (item.getProduct() != null ? item.getProduct().getName() : "item"))
                 .collect(Collectors.joining(", "));
         try {
             if (order.getKitchen() != null && order.getKitchen().getSeller() != null) {
@@ -604,8 +628,9 @@ public class OrderService {
         if (product != null) {
             double oldRating = product.getRating() == null ? 0 : product.getRating();
             double newRating = oldRating == 0 ? rating : (oldRating + rating) / 2.0;
-            product.setRating(Math.round(newRating * 10.0) / 10.0);
-            productRepository.save(product);
+            if (productRepository.updateRating(product.getId(), Math.round(newRating * 10.0) / 10.0) != 1) {
+                throw new IllegalStateException("Could not update the offering rating.");
+            }
         }
         return toOrderDto(order);
     }
@@ -627,6 +652,9 @@ public class OrderService {
         newDraft.setOrderNumber(generateOrderNumber());
         orderRepository.save(newDraft);
         for (OrderItem item : originalOrder.getItems()) {
+            if (item.getProduct() == null || item.getProduct().isArchived()) {
+                throw new IllegalArgumentException("One of the selected offerings is no longer available.");
+            }
             OrderItem newItem = new OrderItem(item.getProduct(), item.getQuantity(), item.getProduct().getPrice());
             newDraft.addItem(newItem);
         }
@@ -1108,11 +1136,16 @@ public class OrderService {
                 dto.setBuyer(buyerSummary);
             }
         if (order.getItems() != null) {
+            boolean placedOrder = order.getOrderStatus() != OrderStatus.DRAFT;
             dto.setItems(order.getItems().stream()
                     .map(item -> {
                         OrderItemDto itemDto = new OrderItemDto(item.getId(), item.getProduct().getId(),
-                                item.getProduct().getName(), item.getProduct().getImageUrl(),
+                                placedOrder && item.getProductNameSnapshot() != null ? item.getProductNameSnapshot()
+                                        : item.getProduct().getName(),
+                                item.getProduct().getImageUrl(),
                                 item.getQuantity(), item.getPrice());
+                        itemDto.setPriceUnit(placedOrder && item.getPriceUnitSnapshot() != null ? item.getPriceUnitSnapshot()
+                                : item.getProduct().getPriceUnit());
                         itemDto.setScheduledDate(item.getScheduledDate());
                         itemDto.setScheduledSlot(item.getScheduledSlot());
                         itemDto.setOccurrenceId(item.getOccurrence() == null ? null : item.getOccurrence().getId());
@@ -1163,14 +1196,21 @@ public class OrderService {
             }
             Product product = productRepository.findById(item.getProduct().getId())
                     .orElseThrow(() -> new ProductNotFoundException(item.getProduct().getId()));
+            if (product.isArchived() || product.isPublicationDraft()) {
+                throw new IllegalArgumentException("The selected offering is not available for ordering.");
+            }
             if (product.getKitchen() == null || !product.getKitchen().getId().equals(order.getKitchen().getId())) {
                 throw new IllegalArgumentException("One of the selected offerings no longer belongs to this kitchen.");
             }
-            if (!Boolean.TRUE.equals(product.getKitchen().getAvailableToday())) {
+            if (!KitchenVisibility.isPubliclyVisible(product.getKitchen())
+                    || !KitchenVisibility.isServiceAreaVisible(product.getKitchen(), order.getBuyer())) {
                 throw new IllegalArgumentException("The kitchen '" + product.getKitchen().getDisplayName() + "' is not currently accepting orders.");
             }
             if (Boolean.TRUE.equals(product.getOrdersPaused())) {
                 throw new IllegalArgumentException("Orders are paused for '" + product.getName() + "'.");
+            }
+            if (product.isSoldOutManually() || product.isManualReactivationRequired()) {
+                throw new IllegalArgumentException("'" + product.getName() + "' is sold out.");
             }
             int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
             // Recurring lines re-validate against the occurrence the draft
@@ -1197,6 +1237,9 @@ public class OrderService {
                 continue;
             }
             boolean preorder = OfferingTiming.isPreorderForOrdering(product, AppTimeZone.today());
+            if (OfferingTiming.isExpired(product, AppTimeZone.today())) {
+                throw new IllegalArgumentException("'" + product.getName() + "' has expired and can no longer be ordered.");
+            }
             LocalDate fulfillmentDate = AppTimeZone.today();
             if (preorder) {
                 if (item.getScheduledDate() == null) {
@@ -1240,6 +1283,35 @@ public class OrderService {
                 }
             }
         }
+    }
+
+    private void lockCheckoutRows(Order order, User buyer) {
+        User lockedBuyer = userRepository.findByIdForUpdate(buyer.getId())
+                .orElseThrow(() -> new BuyerNotAuthenticatedException("Buyer not found."));
+        entityManager.refresh(lockedBuyer, LockModeType.PESSIMISTIC_WRITE);
+
+        Set<Long> productIds = order.getItems().stream()
+                .map(item -> item.getProduct() != null ? item.getProduct().getId() : null)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(TreeSet::new));
+        for (Long productId : productIds) {
+            Product product = productRepository.findByIdForUpdate(productId)
+                    .orElseThrow(() -> new ProductNotFoundException(productId));
+            entityManager.refresh(product, LockModeType.PESSIMISTIC_WRITE);
+        }
+
+        Long kitchenId = order.getKitchen() != null ? order.getKitchen().getId() : null;
+        if (kitchenId == null) return;
+        Long sellerId = order.getKitchen().getSeller() != null ? order.getKitchen().getSeller().getId() : null;
+        if (sellerId != null) {
+            User seller = userRepository.findByIdForUpdate(sellerId)
+                    .orElseThrow(() -> new SellerNotAuthorizedException("The offering's seller is unavailable."));
+            entityManager.refresh(seller, LockModeType.PESSIMISTIC_WRITE);
+        }
+        Kitchen kitchen = kitchenRepository.findByIdForUpdate(kitchenId)
+                .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
+        entityManager.refresh(kitchen, LockModeType.PESSIMISTIC_WRITE);
+        order.setKitchen(kitchen);
     }
 
     private void consumeStock(Order order) {
@@ -1293,12 +1365,13 @@ public class OrderService {
             if (product == null) continue;
             if (recurringScheduleService != null && recurringScheduleService.hasSchedule(product.getId())) continue;
             if (product.getRemainingQuantity() != null) {
-                int restored = productRepository.restoreStock(e.getKey(), quantity);
+                LocalDate today = AppTimeZone.today();
+                int restored = productRepository.restoreStock(e.getKey(), quantity, today);
                 if (restored == 0) {
                     throw new IllegalArgumentException("Could not restore inventory for '"
                             + product.getName() + "'. Please try again.");
                 }
-                productRepository.reopenAfterRestore(e.getKey());
+                productRepository.reopenAfterRestore(e.getKey(), today);
             } else {
                 productRepository.decrementBookedQuantity(e.getKey(), quantity);
             }
@@ -1431,4 +1504,3 @@ public class OrderService {
         return sb.toString();
     }
 }
-

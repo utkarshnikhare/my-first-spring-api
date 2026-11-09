@@ -9,13 +9,16 @@ import com.example.my_first_spring_api.exception.OrderNotFoundException;
 import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
+import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -39,17 +42,20 @@ class OrderServiceValidationTest {
     @Mock NotificationService notificationService;
     @Mock RetentionService retentionService;
     @Mock HttpSession httpSession;
+    @Mock EntityManager entityManager;
 
     @InjectMocks OrderService orderService;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        ReflectionTestUtils.setField(orderService, "entityManager", entityManager);
         User buyer = new User("Buyer", "9876543210", "A-101", UserRole.BUYER);
         buyer.setId(20L);
         when(httpSession.getAttribute(any(String.class))).thenAnswer(invocation ->
                 "BUYER_USER".equals(invocation.getArgument(0)) ? 20L : null);
         when(userRepository.findById(20L)).thenReturn(Optional.of(buyer));
+        when(userRepository.findByIdForUpdate(20L)).thenAnswer(inv -> userRepository.findById(20L));
     }
 
     private User approvedSeller() {
@@ -283,6 +289,50 @@ class OrderServiceValidationTest {
     }
 
     @Test
+    void manuallySoldOutPreorderCannotBePlacedFromStaleDraft() {
+        Kitchen kitchen = approvedKitchen();
+        kitchen.setId(1L);
+        kitchen.setSociety("Sunshine Society");
+        kitchen.setAvailableToday(true);
+
+        Product product = new Product(kitchen, "Sold-out preorder", "desc", BigDecimal.valueOf(40), null);
+        product.setId(1L);
+        product.setAvailableDate(AppTimeZone.today().plusDays(1));
+        product.setIsPreorder(true);
+        product.setAvailableToday(true);
+        product.setRemainingQuantity(5);
+        product.setMaxQuantity(5);
+        product.setSoldOutManually(true);
+
+        User buyer = new User("Buyer", "9876543210", "A-101", UserRole.BUYER);
+        buyer.setId(20L);
+        buyer.setSociety("Sunshine Society");
+        buyer.setBuilding("Tower 1");
+        buyer.setFlatHouseNumber("A-101");
+
+        Order draft = new Order(buyer, kitchen);
+        draft.setId(100L);
+        draft.setOrderStatus(OrderStatus.DRAFT);
+        OrderItem item = new OrderItem(product, 1, product.getPrice());
+        draft.addItem(item);
+
+        when(httpSession.getAttribute(OrderService.DRAFT_ORDER_SESSION_KEY)).thenReturn(100L);
+        when(userRepository.findById(20L)).thenReturn(Optional.of(buyer));
+        when(orderRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(draft));
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(productRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(product));
+        when(kitchenRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(kitchen));
+        when(userRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(kitchen.getSeller()));
+
+        assertThatThrownBy(() -> orderService.placeOrder(
+                PaymentStatus.WILL_PAY_LATER, "cod", null, null, httpSession))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("sold out");
+
+        verify(productRepository, never()).consumeStock(anyLong(), anyInt());
+    }
+
+    @Test
     void incompleteProfileBlocksOrderPlacement() {
         User seller = approvedSeller();
         Kitchen kitchen = approvedKitchen();
@@ -332,6 +382,9 @@ class OrderServiceValidationTest {
         item.setPrice(product.getPrice());
         mockOrder.setItems(List.of(item));
         when(orderRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(mockOrder));
+        when(productRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(product));
+        when(kitchenRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(kitchen));
+        when(userRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(kitchen.getSeller()));
 
         assertThrows(BuyerProfileIncompleteException.class, () -> {
             orderService.placeOrder(PaymentStatus.WILL_PAY_LATER, "cod", null, null, httpSession);
@@ -391,6 +444,9 @@ class OrderServiceValidationTest {
 
         when(httpSession.getAttribute(OrderService.DRAFT_ORDER_SESSION_KEY)).thenReturn(100L);
         when(orderRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(draftOrder));
+        when(productRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(product));
+        when(kitchenRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(kitchen));
+        when(userRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(kitchen.getSeller()));
 
         PlaceOrderRequest.BuyerDetails details = new PlaceOrderRequest.BuyerDetails();
         details.setName("Rahul Sharma");
@@ -402,6 +458,11 @@ class OrderServiceValidationTest {
 
         OrderDto placedDto = orderService.placeOrder(PaymentStatus.PENDING, "COD", details, "Leave at door", httpSession);
 
+        InOrder locks = inOrder(productRepository, userRepository, kitchenRepository);
+        locks.verify(userRepository).findByIdForUpdate(20L);
+        locks.verify(productRepository).findByIdForUpdate(1L);
+        locks.verify(userRepository).findByIdForUpdate(10L);
+        locks.verify(kitchenRepository).findByIdForUpdate(1L);
         assertThat(placedDto).isNotNull();
         assertThat(placedDto.getId()).isEqualTo(100L);
         assertThat(placedDto.getOrderNumber()).isNotBlank();

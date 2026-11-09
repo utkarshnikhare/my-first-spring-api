@@ -40,6 +40,16 @@ public class Product {
     @Column(name = "available_today")
     private Boolean availableToday = Boolean.TRUE;
 
+    @Column(name = "publication_draft")
+    private Boolean publicationDraft;
+
+    @Column(name = "archived", nullable = false)
+    private boolean archived;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "homemade_availability_type", length = 32)
+    private HomemadeAvailabilityType homemadeAvailabilityType;
+
     @Transient
     private Boolean isVeg = Boolean.TRUE;
 
@@ -48,6 +58,12 @@ public class Product {
 
     @Column(name = "orders_paused")
     private Boolean ordersPaused = false;
+
+    @Column(name = "sold_out_manually", nullable = false)
+    private boolean soldOutManually = false;
+
+    @Column(name = "manual_reactivation_required", nullable = false)
+    private boolean manualReactivationRequired = false;
 
     @Column(name = "order_window_start")
     private String orderWindowStart;
@@ -178,6 +194,14 @@ public class Product {
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
     public Boolean getAvailableToday() { return availableToday != null ? availableToday : Boolean.TRUE; }
     public void setAvailableToday(Boolean availableToday) { this.availableToday = (availableToday != null) ? availableToday : Boolean.TRUE; }
+    public Boolean getPublicationDraft() { return publicationDraft; }
+    public void setPublicationDraft(Boolean publicationDraft) { this.publicationDraft = publicationDraft; }
+    public boolean isArchived() { return archived; }
+    public void setArchived(boolean archived) { this.archived = archived; }
+    public HomemadeAvailabilityType getHomemadeAvailabilityType() { return homemadeAvailabilityType; }
+    public void setHomemadeAvailabilityType(HomemadeAvailabilityType type) { this.homemadeAvailabilityType = type; }
+    @Transient
+    public boolean isPublicationDraft() { return Boolean.TRUE.equals(publicationDraft); }
     @Transient
     public Boolean getIsAvailable() { return getAvailableToday(); }
     public void setIsAvailable(Boolean isAvailable) { setAvailableToday(isAvailable); }
@@ -186,6 +210,12 @@ public class Product {
     public Boolean getOrdersPaused() { return ordersPaused; }
     public void setOrdersPaused(Boolean ordersPaused) { this.ordersPaused = ordersPaused; }
     public boolean isOrdersPaused() { return Boolean.TRUE.equals(ordersPaused); }
+    public boolean isSoldOutManually() { return soldOutManually; }
+    public void setSoldOutManually(boolean soldOutManually) { this.soldOutManually = soldOutManually; }
+    public boolean isManualReactivationRequired() { return manualReactivationRequired; }
+    public void setManualReactivationRequired(boolean manualReactivationRequired) {
+        this.manualReactivationRequired = manualReactivationRequired;
+    }
     public LocalDate getAvailableDate() { return availableDate; }
     public void setAvailableDate(LocalDate availableDate) { this.availableDate = availableDate; }
     public String getOrderWindowStart() { return orderWindowStart; }
@@ -223,10 +253,11 @@ public class Product {
     public Integer getBookedQuantity() { return bookedQuantity; }
     public void setBookedQuantity(Integer bookedQuantity) { this.bookedQuantity = bookedQuantity; }
 
-    /** Sold out when stock tracking is on and nothing remains. */
+    /** Sold out when the seller marks it unavailable or stock requires explicit reactivation. */
     @Transient
     public boolean isSoldOut() {
-        return remainingQuantity != null && remainingQuantity <= 0;
+        return soldOutManually || manualReactivationRequired
+                || (remainingQuantity != null && remainingQuantity <= 0);
     }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
