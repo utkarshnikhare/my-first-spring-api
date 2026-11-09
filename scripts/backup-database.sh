@@ -9,7 +9,7 @@
 #
 # Options:
 #   --output-dir <path>     Directory to save the backup (default: ./backups/exports)
-#   --encrypt               Encrypt backup file using AES-256-CBC via OpenSSL
+#   --encrypt               Encrypt backup file using AES-256-GCM AEAD via BackupCrypto.java
 #   --retention-days <days> Retain local backups for N days (default: 7)
 #   --help                  Display this help message
 # ==============================================================================

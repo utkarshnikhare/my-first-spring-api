@@ -101,7 +101,7 @@ fi
 
 # Test 5: Cryptographic Tampering Rejection
 echo ""
-echo "[TEST 5] Verifying that flipped bit in AEAD archive causes AEADBadTagException..."
+echo "[TEST 5A] Verifying that flipped bit in AEAD ciphertext causes AEADBadTagException..."
 TAMPERED_ENC="${TEST_DIR}/tampered.dump.enc"
 cp "${ENC_FILE}" "${TAMPERED_ENC}"
 # Invert one byte in the ciphertext payload
@@ -126,6 +126,77 @@ if [ ! -f "${TAMPERED_DEC}" ]; then
   echo "[+] PASS: No plaintext file was created or persisted on tamper failure."
 else
   echo "[-] FAILED: Tampered output file was not cleaned up!"
+  exit 1
+fi
+
+# Test 5B: Wrong Passphrase Rejection
+echo ""
+echo "[TEST 5B] Verifying that incorrect passphrase fails authentication tag verification..."
+WRONG_DEC="${TEST_DIR}/wrong_decrypted.dump"
+BACKUP_ENCRYPTION_PASSPHRASE="CompletelyWrongPassphrase2026!" \
+  java "${SCRIPT_DIR}/BackupCrypto.java" decrypt "${ENC_FILE}" "${WRONG_DEC}" > "${TEST_DIR}/wrongpass.log" 2>&1 && {
+    echo "[-] FAILED: Expected decryption failure on wrong passphrase!"
+    exit 1
+  } || true
+
+if grep -q "Authentication tag mismatch" "${TEST_DIR}/wrongpass.log"; then
+  echo "[+] PASS: Wrong passphrase rejected via authentication tag mismatch."
+else
+  echo "[-] FAILED: Wrong passphrase tag mismatch not detected:"
+  cat "${TEST_DIR}/wrongpass.log"
+  exit 1
+fi
+
+if [ ! -f "${WRONG_DEC}" ]; then
+  echo "[+] PASS: No plaintext file was created or persisted on wrong passphrase."
+else
+  echo "[-] FAILED: Plaintext file persisted after wrong passphrase!"
+  exit 1
+fi
+
+# Test 5C: Tampered Header (Salt / Nonce) Rejection
+echo ""
+echo "[TEST 5C] Verifying that tampered header (salt/IV) causes authentication failure..."
+HEADER_TAMPERED_ENC="${TEST_DIR}/header_tampered.dump.enc"
+cp "${ENC_FILE}" "${HEADER_TAMPERED_ENC}"
+printf '\x5A' | dd of="${HEADER_TAMPERED_ENC}" bs=1 seek=5 count=1 conv=notrunc 2>/dev/null
+HEADER_TAMPERED_DEC="${TEST_DIR}/header_tampered_dec.dump"
+
+BACKUP_ENCRYPTION_PASSPHRASE="StrictAEADPassphrase2026!Protected" \
+  java "${SCRIPT_DIR}/BackupCrypto.java" decrypt "${HEADER_TAMPERED_ENC}" "${HEADER_TAMPERED_DEC}" > "${TEST_DIR}/headertamper.log" 2>&1 && {
+    echo "[-] FAILED: Expected decryption failure on tampered header!"
+    exit 1
+  } || true
+
+if grep -q "Authentication tag mismatch" "${TEST_DIR}/headertamper.log"; then
+  echo "[+] PASS: Tampered salt/IV detected via authentication tag verification."
+else
+  echo "[-] FAILED: Header tampering not caught by tag verification:"
+  cat "${TEST_DIR}/headertamper.log"
+  exit 1
+fi
+
+if [ ! -f "${HEADER_TAMPERED_DEC}" ]; then
+  echo "[+] PASS: No plaintext file was created or persisted on header tamper."
+else
+  echo "[-] FAILED: Plaintext file persisted after header tamper!"
+  exit 1
+fi
+
+# Test 5D: Passphrase Length Enforcement (<16 characters rejected)
+echo ""
+echo "[TEST 5D] Verifying enforcement of minimum passphrase length (16 chars)..."
+BACKUP_ENCRYPTION_PASSPHRASE="TooShort123" \
+  java "${SCRIPT_DIR}/BackupCrypto.java" decrypt "${ENC_FILE}" "${TEST_DIR}/short.dump" > "${TEST_DIR}/short.log" 2>&1 && {
+    echo "[-] FAILED: Expected failure for short passphrase!"
+    exit 1
+  } || true
+
+if grep -q "must be set and at least 16 characters long" "${TEST_DIR}/short.log"; then
+  echo "[+] PASS: Short passphrase correctly rejected."
+else
+  echo "[-] FAILED: Expected short passphrase rejection message:"
+  cat "${TEST_DIR}/short.log"
   exit 1
 fi
 
@@ -167,7 +238,56 @@ else
   exit 1
 fi
 
+# Test 8: End-to-end Checksum Mismatch Refusal via restore-database.sh
+echo ""
+echo "[TEST 8] Verifying that corrupted/mismatched checksum triggers INTEGRITY VIOLATION in restore script..."
+CORRUPTED_ENC="${TEST_DIR}/corrupted.dump.enc"
+cp "${ENC_FILE}" "${CORRUPTED_ENC}"
+# Write valid checksum for original file
+sha256sum "${CORRUPTED_ENC}" | awk '{print $1}' > "${CORRUPTED_ENC}.sha256"
+# Corrupt the file after checksum was written
+printf '\xDE\xAD' >> "${CORRUPTED_ENC}"
+
+TARGET_DB_URL="postgresql://user:pass@localhost:5432/isolated_recovery_target" \
+CONFIRM_ISOLATED_RECOVERY_TARGET="true" \
+BACKUP_ENCRYPTION_PASSPHRASE="StrictAEADPassphrase2026!Protected" \
+  "${SCRIPT_DIR}/restore-database.sh" --backup-file "${CORRUPTED_ENC}" > "${TEST_DIR}/test8.log" 2>&1 && {
+    echo "[-] FAILED: Expected failure when checksum mismatched!"
+    exit 1
+  } || true
+
+if grep -q "INTEGRITY VIOLATION: Computed hash" "${TEST_DIR}/test8.log"; then
+  echo "[+] PASS: Mismatched checksum correctly aborted restoration with INTEGRITY VIOLATION."
+else
+  echo "[-] FAILED: Expected integrity violation message not found:"
+  cat "${TEST_DIR}/test8.log"
+  exit 1
+fi
+
+# Test 9: End-to-end Authenticated Decryption Failure via restore-database.sh
+echo ""
+echo "[TEST 9] Verifying that restore-database.sh refuses restoration on wrong decryption passphrase..."
+RESTORE_ENC="${TEST_DIR}/restore_test.dump.enc"
+cp "${ENC_FILE}" "${RESTORE_ENC}"
+sha256sum "${RESTORE_ENC}" | awk '{print $1}' > "${RESTORE_ENC}.sha256"
+
+TARGET_DB_URL="postgresql://user:pass@localhost:5432/isolated_recovery_target" \
+CONFIRM_ISOLATED_RECOVERY_TARGET="true" \
+BACKUP_ENCRYPTION_PASSPHRASE="WrongPassphraseForRestoreScript2026!" \
+  "${SCRIPT_DIR}/restore-database.sh" --backup-file "${RESTORE_ENC}" > "${TEST_DIR}/test9.log" 2>&1 && {
+    echo "[-] FAILED: Expected failure when restore passphrase was wrong!"
+    exit 1
+  } || true
+
+if grep -q "CRITICAL REFUSAL: Authenticated decryption failed" "${TEST_DIR}/test9.log"; then
+  echo "[+] PASS: restore-database.sh correctly aborted with CRITICAL REFUSAL on wrong passphrase."
+else
+  echo "[-] FAILED: Expected authenticated decryption refusal message not found:"
+  cat "${TEST_DIR}/test9.log"
+  exit 1
+fi
+
 echo ""
 echo "================================================================================"
-echo "[+] ALL 7 RESTORE SAFEGUARDS & AEAD CRYPTO TESTS PASSED SUCCESSFULLY!"
+echo "[+] ALL 11 RESTORE SAFEGUARDS & AEAD CRYPTO TESTS PASSED SUCCESSFULLY!"
 echo "================================================================================"

@@ -176,12 +176,6 @@ if [[ "${IS_LOCAL_HOST}" == "false" && "${IS_ISOLATED_NAMED_DB}" == "false" && "
   exit 1
 fi
 
-# Ensure pg_restore utility is available
-if ! command -v pg_restore >/dev/null 2>&1; then
-  echo "[-] ERROR: pg_restore utility not found. Please install postgresql-client." >&2
-  exit 1
-fi
-
 # Create temporary permission-restricted pgpass file (mode 0600)
 SECURE_PGPASS=$(mktemp "${TMPDIR:-/tmp}/sociomart_restore_pgpass_XXXXXX" 2>/dev/null || mktemp)
 chmod 0600 "${SECURE_PGPASS}"
@@ -209,40 +203,6 @@ cleanup() {
   exit "$exit_code"
 }
 trap cleanup EXIT ERR INT TERM
-
-# Safeguard 5: Pre-flight target database identity and connectivity verification
-# If psql is available, verify the connection and target database identity before invoking pg_restore
-if command -v psql >/dev/null 2>&1; then
-  echo "[*] Probing target database connectivity and identity..."
-  PROBE_OUT=$(psql \
-    --host="${PGHOST}" \
-    --port="${PGPORT}" \
-    --username="${PGUSER}" \
-    --dbname="${PGDATABASE}" \
-    --tuples-only \
-    --no-align \
-    --command="SELECT current_database(), current_user, pg_is_in_recovery();" 2>&1) || {
-      echo "[-] ERROR: Target database pre-flight probe failed: ${PROBE_OUT}" >&2
-      echo "    pg_restore will NOT be executed. Aborting before making any modifications." >&2
-      exit 1
-    }
-  PROBE_DB=$(echo "${PROBE_OUT}" | awk -F'|' '{print $1}' | tr -d ' ')
-  PROBE_USER=$(echo "${PROBE_OUT}" | awk -F'|' '{print $2}' | tr -d ' ')
-  PROBE_RECOVERY=$(echo "${PROBE_OUT}" | awk -F'|' '{print $3}' | tr -d ' ')
-  echo "[+] Target database verified: database='${PROBE_DB}', user='${PROBE_USER}'."
-
-  if [[ "${PROBE_RECOVERY}" == "t" ]]; then
-    echo "[-] CRITICAL REFUSAL: Target database is a read-only replica (pg_is_in_recovery=true)." >&2
-    echo "    pg_restore cannot write to a replica. Aborting." >&2
-    exit 1
-  fi
-
-  # Double-check probed database name
-  if [[ "${PROBE_DB}" =~ (prod|production) ]]; then
-    echo "[-] CRITICAL REFUSAL: Probed database name '${PROBE_DB}' appears to be a production database." >&2
-    exit 1
-  fi
-fi
 
 # Step 1: Checksum verification
 if [[ "${SKIP_CHECKSUM}" == "false" ]]; then
@@ -278,6 +238,46 @@ if [[ "${BACKUP_FILE}" =~ \.enc$ ]]; then
     exit 1
   }
   RESTORE_INPUT="${TEMP_DECRYPTED}"
+fi
+
+# Safeguard 5: Pre-flight target database identity and connectivity verification
+# If psql is available, verify the connection and target database identity before invoking pg_restore
+if command -v psql >/dev/null 2>&1; then
+  echo "[*] Probing target database connectivity and identity..."
+  PROBE_OUT=$(psql \
+    --host="${PGHOST}" \
+    --port="${PGPORT}" \
+    --username="${PGUSER}" \
+    --dbname="${PGDATABASE}" \
+    --tuples-only \
+    --no-align \
+    --command="SELECT current_database(), current_user, pg_is_in_recovery();" 2>&1) || {
+      echo "[-] ERROR: Target database pre-flight probe failed: ${PROBE_OUT}" >&2
+      echo "    pg_restore will NOT be executed. Aborting before making any modifications." >&2
+      exit 1
+    }
+  PROBE_DB=$(echo "${PROBE_OUT}" | awk -F'|' '{print $1}' | tr -d ' ')
+  PROBE_USER=$(echo "${PROBE_OUT}" | awk -F'|' '{print $2}' | tr -d ' ')
+  PROBE_RECOVERY=$(echo "${PROBE_OUT}" | awk -F'|' '{print $3}' | tr -d ' ')
+  echo "[+] Target database verified: database='${PROBE_DB}', user='${PROBE_USER}'."
+
+  if [[ "${PROBE_RECOVERY}" == "t" ]]; then
+    echo "[-] CRITICAL REFUSAL: Target database is a read-only replica (pg_is_in_recovery=true)." >&2
+    echo "    pg_restore cannot write to a replica. Aborting." >&2
+    exit 1
+  fi
+
+  # Double-check probed database name
+  if [[ "${PROBE_DB}" =~ (prod|production) ]]; then
+    echo "[-] CRITICAL REFUSAL: Probed database name '${PROBE_DB}' appears to be a production database." >&2
+    exit 1
+  fi
+fi
+
+# Ensure pg_restore utility is available before invoking restore
+if ! command -v pg_restore >/dev/null 2>&1; then
+  echo "[-] ERROR: pg_restore utility not found. Please install postgresql-client." >&2
+  exit 1
 fi
 
 echo "[*] Executing database restore into target database at $(date -u +"%Y-%m-%dT%H:%M:%SZ")..."
