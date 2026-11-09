@@ -2,12 +2,14 @@ package com.example.my_first_spring_api.service;
 
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
+import jakarta.persistence.EntityManager;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -28,6 +30,7 @@ class OrderServiceNotificationTest {
     @Mock NotificationService notificationService;
     @Mock RetentionService retentionService;
     @Mock HttpSession httpSession;
+    @Mock EntityManager entityManager;
 
     @InjectMocks OrderService orderService;
 
@@ -36,6 +39,7 @@ class OrderServiceNotificationTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        ReflectionTestUtils.setField(orderService, "entityManager", entityManager);
         when(httpSession.getAttribute(any(String.class))).thenAnswer(inv -> sessionMap.get(inv.getArgument(0)));
         doAnswer(inv -> {
             sessionMap.put(inv.getArgument(0), inv.getArgument(1));
@@ -72,6 +76,7 @@ class OrderServiceNotificationTest {
         buyer.setBuilding("Building A");
         buyer.setFlatHouseNumber("A-101");
         when(userRepository.findById(20L)).thenReturn(Optional.of(buyer));
+        when(userRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(buyer));
 
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
             Order o = inv.getArgument(0);
@@ -94,6 +99,9 @@ class OrderServiceNotificationTest {
         savedDraft.setItems(List.of(new OrderItem(product, 1, BigDecimal.valueOf(20))));
         savedDraft.recalculateTotal();
         when(orderRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(savedDraft));
+        when(productRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(product));
+        when(kitchenRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(kitchen));
+        when(userRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(seller));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         orderService.placeOrder(PaymentStatus.PAID, "cod", null, null, httpSession);
@@ -125,6 +133,7 @@ class OrderServiceNotificationTest {
         buyer.setBuilding("Building A");
         buyer.setFlatHouseNumber("A-101");
         when(userRepository.findById(21L)).thenReturn(Optional.of(buyer));
+        when(userRepository.findByIdForUpdate(21L)).thenReturn(Optional.of(buyer));
 
         Order savedDraft = new Order();
         savedDraft.setId(200L);
@@ -133,6 +142,9 @@ class OrderServiceNotificationTest {
         savedDraft.setItems(List.of(new OrderItem(product, 2, BigDecimal.valueOf(50))));
         savedDraft.recalculateTotal();
         when(orderRepository.findByIdForUpdate(200L)).thenReturn(Optional.of(savedDraft));
+        when(productRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(product));
+        when(kitchenRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(kitchen));
+        when(userRepository.findByIdForUpdate(11L)).thenReturn(Optional.of(seller));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
         sessionMap.put(OrderService.DRAFT_ORDER_SESSION_KEY, 200L);
         sessionMap.put("BUYER_USER", buyer.getId());

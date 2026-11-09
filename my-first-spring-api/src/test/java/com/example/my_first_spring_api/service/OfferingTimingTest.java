@@ -276,13 +276,50 @@ class OfferingTimingTest {
     }
 
     @Test
-    void yesterdayOfferingIsHistoryWhileCurrentAndFutureRemainOutOfHistory() {
+    void pastOfferingIsExpiredWhileCurrentAndFutureRemainOrderable() {
         assertThat(OfferingTiming.lifecycleState(product(TODAY.minusDays(1), false, null, "12:00", 10),
-                TODAY, LocalTime.NOON)).isEqualTo("HISTORY");
+                TODAY, LocalTime.NOON)).isEqualTo("EXPIRED");
         assertThat(OfferingTiming.lifecycleState(product(TODAY, false, null, "23:58", 10),
                 TODAY, LocalTime.NOON)).isEqualTo("LIVE");
         assertThat(OfferingTiming.lifecycleState(product(TODAY.plusDays(1), true, null, "23:58", 10),
                 TODAY, LocalTime.NOON)).isEqualTo("PRE_ORDER");
+    }
+
+    @Test
+    void manuallySoldOutAndAdminSuspendedStatesRemainDistinct() {
+        Product manuallySoldOut = product(TODAY, false, null, "23:58", 10);
+        manuallySoldOut.setSoldOutManually(true);
+        assertThat(manuallySoldOut.getRemainingQuantity()).isEqualTo(10);
+        assertThat(OfferingTiming.lifecycleState(manuallySoldOut, TODAY, LocalTime.NOON))
+                .isEqualTo("SOLD_OUT");
+
+        Product suspended = product(TODAY, false, null, "23:58", 10);
+        suspended.getKitchen().getSeller().setSellerApprovalStatus(SellerApprovalStatus.SUSPENDED);
+        assertThat(OfferingTiming.lifecycleState(suspended, TODAY, LocalTime.NOON))
+                .isEqualTo("ADMIN_SUSPENDED");
+    }
+
+    @Test
+    void legacyUnavailableStateDoesNotImplySoldOutOrOrderability() {
+        Product legacy = product(TODAY, false, null, "23:58", 10);
+        legacy.setAvailableToday(false);
+        String state = OfferingTiming.lifecycleState(legacy, TODAY, LocalTime.NOON);
+        assertThat(state).isEqualTo("UNAVAILABLE");
+        ProductDto dto = buyerDto(legacy, state, false);
+        assertThat(OfferingTiming.buyerSection(dto, legacy, TODAY)).isEqualTo("UNAVAILABLE");
+        assertThat(OfferingTiming.isBuyerOrderableNow(dto, legacy, TODAY)).isFalse();
+    }
+
+    @Test
+    void explicitFutureDraftIsNeverInABuyerSection() {
+        Product draft = product(TODAY.plusDays(1), true, null, "23:58", 10);
+        draft.setPublicationDraft(true);
+        draft.setAvailableToday(false);
+        String state = OfferingTiming.lifecycleState(draft, TODAY, LocalTime.NOON);
+        ProductDto dto = buyerDto(draft, state, false);
+        assertThat(state).isEqualTo("DRAFT");
+        assertThat(OfferingTiming.buyerSection(dto, draft, TODAY)).isEqualTo("UNAVAILABLE");
+        assertThat(OfferingTiming.isBuyerOrderableNow(dto, draft, TODAY)).isFalse();
     }
 
     @Test

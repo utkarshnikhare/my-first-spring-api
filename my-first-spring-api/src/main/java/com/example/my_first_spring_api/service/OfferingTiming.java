@@ -324,11 +324,20 @@ final class OfferingTiming {
 
     /** Query-time lifecycle state used consistently by Buyer and Seller DTOs. */
     static String lifecycleState(Product product, LocalDate today, LocalTime now) {
+        if (product == null) return "UNAVAILABLE";
+        if (product.isArchived()) return "ARCHIVED";
+        if (product.isPublicationDraft()) return "DRAFT";
+        if (KitchenVisibility.isAdminSuspended(product.getKitchen())) return "ADMIN_SUSPENDED";
+        if (isExpired(product, today)) return "EXPIRED";
         if (product.isOrdersPaused()) return "PAUSED";
         if (product.isSoldOut()) return "SOLD_OUT";
+        if (!Boolean.TRUE.equals(product.getAvailableToday())
+                && !Boolean.TRUE.equals(product.getIsPreorder())
+                && (product.getAvailableDate() == null || !product.getAvailableDate().isAfter(today))) {
+            return "UNAVAILABLE";
+        }
         LocalDate offeringDate = product.getAvailableDate() != null
                 ? product.getAvailableDate() : today;
-        if (offeringDate.isBefore(today)) return "HISTORY";
         if (product.getOrdersOpenFrom() != null
                 && LocalDateTime.of(today, now).isBefore(product.getOrdersOpenFrom())) {
             return "SCHEDULED_TO_OPEN";
@@ -337,10 +346,28 @@ final class OfferingTiming {
         return offeringDate.isAfter(today) ? "PRE_ORDER" : "LIVE";
     }
 
+    static boolean isExpired(Product product, LocalDate today) {
+        LocalDate lastAvailableDate = product.getAvailableUntilDate() != null
+                ? product.getAvailableUntilDate() : product.getAvailableDate();
+        return lastAvailableDate != null && lastAvailableDate.isBefore(today);
+    }
+
+    static boolean needsManualReactivation(Product product, LocalDate today) {
+        return product.isManualReactivationRequired()
+                || (!Boolean.TRUE.equals(product.getAvailableToday())
+                && !Boolean.TRUE.equals(product.getIsPreorder())
+                && (product.getAvailableDate() == null || !product.getAvailableDate().isAfter(today)));
+    }
+
     static String buyerSection(ProductDto dto, Product product, LocalDate today) {
         if (dto == null || product == null) return "UNAVAILABLE";
+        if (product.isArchived()) return "UNAVAILABLE";
+        if (product.isPublicationDraft()) return "UNAVAILABLE";
         if (Boolean.TRUE.equals(dto.getOrdersPaused()) || Boolean.TRUE.equals(dto.getSoldOut())
-                || "HISTORY".equals(dto.getLifecycleState())) return "UNAVAILABLE";
+                || "EXPIRED".equals(dto.getLifecycleState())
+                || "ADMIN_SUSPENDED".equals(dto.getLifecycleState())
+                || "UNAVAILABLE".equals(dto.getLifecycleState())
+                || "SOLD_OUT".equals(dto.getLifecycleState())) return "UNAVAILABLE";
         LocalDate deliveryDate = Boolean.TRUE.equals(dto.getRecurring())
                 ? dto.getNextOccurrenceDate() : product.getAvailableDate();
         if (deliveryDate == null) deliveryDate = today;
@@ -358,7 +385,9 @@ final class OfferingTiming {
                 || Boolean.TRUE.equals(dto.getSoldOut())
                 || "SCHEDULED_TO_OPEN".equals(dto.getLifecycleState())
                 || "ORDERS_CLOSED".equals(dto.getLifecycleState())
-                || "HISTORY".equals(dto.getLifecycleState())) {
+                || "EXPIRED".equals(dto.getLifecycleState())
+                || "ADMIN_SUSPENDED".equals(dto.getLifecycleState())
+                || "SOLD_OUT".equals(dto.getLifecycleState())) {
             return false;
         }
         return !"ORDER".equals(section) || Boolean.TRUE.equals(dto.getAvailableToday());

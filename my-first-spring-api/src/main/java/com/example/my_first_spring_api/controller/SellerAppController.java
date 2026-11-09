@@ -74,6 +74,11 @@ public class SellerAppController {
         return ResponseEntity.ok(sellerAppService.markSoldOut(productId, requireSeller(session)));
     }
 
+    @PostMapping("/products/{productId}/available")
+    public ResponseEntity<ProductDto> markAvailable(@PathVariable Long productId, HttpSession session) {
+        return ResponseEntity.ok(sellerAppService.markAvailable(productId, requireSeller(session)));
+    }
+
     @PostMapping("/products/{productId}/pause")
     public ResponseEntity<ProductDto> pauseOrders(@PathVariable Long productId, HttpSession session) {
         return ResponseEntity.ok(sellerAppService.pauseOrders(productId, requireSeller(session)));

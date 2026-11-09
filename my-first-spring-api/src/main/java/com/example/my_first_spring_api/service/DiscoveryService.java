@@ -69,12 +69,13 @@ public class DiscoveryService {
     private List<Product> visibleProducts(User buyer) {
         LocalDate today = AppTimeZone.today();
         return productRepository.findAll().stream()
+                .filter(p -> !p.isArchived())
                 .filter(p -> p.getKitchen() != null && KitchenVisibility.isKitchenStore(p.getKitchen())
                         && KitchenVisibility.isKitchenProduct(p)
                         && KitchenVisibility.isPubliclyVisible(p.getKitchen())
                         && KitchenVisibility.isServiceAreaVisible(p.getKitchen(), buyer))
                 .filter(p -> !p.isOrdersPaused())
-                .filter(p -> p.getAvailableDate() == null || !p.getAvailableDate().isBefore(today))
+                .filter(p -> !OfferingTiming.isExpired(p, today))
                 .collect(Collectors.toList());
     }
 
@@ -85,10 +86,12 @@ public class DiscoveryService {
         dto.setAvailableToday(product.getAvailableToday());
         dto.setOrdersPaused(product.isOrdersPaused());
         dto.setSoldOut(product.isSoldOut());
+        dto.setSoldOutManually(product.isSoldOutManually());
+        dto.setManualReactivationRequired(product.isManualReactivationRequired());
         String lifecycle = OfferingTiming.lifecycleState(
                 product, today, AppTimeZone.time());
         dto.setLifecycleState(lifecycle);
-        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle)
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "EXPIRED".equals(lifecycle)
                 || "SCHEDULED_TO_OPEN".equals(lifecycle));
         if (recurringScheduleService != null) recurringScheduleService.decorateProductDto(product, dto);
         dto.setBuyerSection(OfferingTiming.buyerSection(dto, product, today));
@@ -250,6 +253,7 @@ public class DiscoveryService {
         Map<String, List<Product>> byName = visibleProducts(buyer).stream()
                 .filter(p -> !p.isSoldOut())
                 .filter(p -> !p.isOrdersPaused())
+                .filter(p -> orderableToday(p) || openPreorder(p))
                 .filter(p -> category == null || hasCategory(p, category))
                 .collect(Collectors.groupingBy(p -> p.getName(), LinkedHashMap::new, Collectors.toList()));
 
@@ -272,6 +276,7 @@ public class DiscoveryService {
         Map<Long, List<Product>> byKitchen = visibleProducts(buyer).stream()
                 .filter(p -> !p.isSoldOut())
                 .filter(p -> !p.isOrdersPaused())
+                .filter(p -> orderableToday(p) || openPreorder(p))
                 .filter(p -> category == null || hasCategory(p, category))
                 .collect(Collectors.groupingBy(p -> p.getKitchen().getId()));
         Set<Long> ordered = buyerKitchenIds(buyer);
@@ -285,6 +290,7 @@ public class DiscoveryService {
         return visibleProducts(buyer).stream()
                 .filter(p -> !p.isSoldOut())
                 .filter(p -> !p.isOrdersPaused())
+                .filter(p -> orderableToday(p) || openPreorder(p))
                 .filter(p -> category == null || hasCategory(p, category))
                 .count();
     }
@@ -396,8 +402,13 @@ public class DiscoveryService {
         card.setImageUrl(k.getImageUrl());
         card.setShortDescription(k.getShortDescription() != null ? k.getShortDescription() : k.getDescription());
         card.setStatus("AVAILABLE");
-        card.setOrderableItemCount((int) items.stream().filter(p -> !p.isSoldOut()).filter(p -> !p.isOrdersPaused()).count());
-        card.setItemNames(items.stream().filter(p -> !p.isSoldOut()).filter(p -> !p.isOrdersPaused()).map(Product::getName).collect(Collectors.toList()));
+        List<Product> orderableItems = items.stream()
+                .filter(p -> !p.isSoldOut())
+                .filter(p -> !p.isOrdersPaused())
+                .filter(p -> orderableToday(p) || openPreorder(p))
+                .collect(Collectors.toList());
+        card.setOrderableItemCount(orderableItems.size());
+        card.setItemNames(orderableItems.stream().map(Product::getName).collect(Collectors.toList()));
         card.setPreviouslyOrdered(false);
         card.setRating(k.getRating());
         return card;

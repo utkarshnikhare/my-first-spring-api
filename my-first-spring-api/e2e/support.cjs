@@ -172,7 +172,7 @@ async function registerSeller(page, payment = {}) {
   await page.locator('#sellerRegKitchen').fill(seller.kitchenName);
   await page.locator('#sellerRegSlug').fill(seller.slug);
   await page.locator('#sellerRegSpeciality').fill('E2E home-cooked meals');
-  await page.locator('#sellerRegCategory').selectOption('KITCHEN');
+  await page.locator('#sellerRegCategory').selectOption(payment.sellerType || 'KITCHEN');
   await page.locator('#sellerRegPaymentMode').selectOption(seller.paymentMode);
   if (seller.paymentMode === 'UPI' || seller.paymentMode === 'GPAY_AND_UPI') {
     await page.locator('#sellerRegUpiId').fill(seller.upiId);

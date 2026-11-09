@@ -2,6 +2,7 @@ package com.example.my_first_spring_api.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import com.example.my_first_spring_api.model.HomemadeAvailabilityType;
 
 /**
  * Authoritative read model for the Seller "Edit Offering" screen (Requirement 5).
@@ -27,10 +28,13 @@ public class SellerOfferingEditDto {
     private Integer maxQuantity;
     private Integer remainingQuantity;
     private Integer bookedQuantity;
+    private boolean soldOutManually;
+    private boolean manualReactivationRequired;
     private Boolean isPreorder;
     private Boolean soldOut;
     private Boolean ordersPaused;
     private String lifecycleState;
+    private HomemadeAvailabilityType availType;
     private Boolean hasOrders;
     private Integer orderCount;
 
@@ -64,6 +68,12 @@ public class SellerOfferingEditDto {
     public void setRemainingQuantity(Integer remainingQuantity) { this.remainingQuantity = remainingQuantity; }
     public Integer getBookedQuantity() { return bookedQuantity; }
     public void setBookedQuantity(Integer bookedQuantity) { this.bookedQuantity = bookedQuantity; }
+    public boolean isSoldOutManually() { return soldOutManually; }
+    public void setSoldOutManually(boolean soldOutManually) { this.soldOutManually = soldOutManually; }
+    public boolean isManualReactivationRequired() { return manualReactivationRequired; }
+    public void setManualReactivationRequired(boolean manualReactivationRequired) {
+        this.manualReactivationRequired = manualReactivationRequired;
+    }
     public Boolean getIsPreorder() { return isPreorder; }
     public void setIsPreorder(Boolean isPreorder) { this.isPreorder = isPreorder; }
     public Boolean getSoldOut() { return soldOut; }
@@ -72,6 +82,8 @@ public class SellerOfferingEditDto {
     public void setOrdersPaused(Boolean ordersPaused) { this.ordersPaused = ordersPaused; }
     public String getLifecycleState() { return lifecycleState; }
     public void setLifecycleState(String lifecycleState) { this.lifecycleState = lifecycleState; }
+    public HomemadeAvailabilityType getAvailType() { return availType; }
+    public void setAvailType(HomemadeAvailabilityType availType) { this.availType = availType; }
     public Boolean getHasOrders() { return hasOrders; }
     public void setHasOrders(Boolean hasOrders) { this.hasOrders = hasOrders; }
     public Integer getOrderCount() { return orderCount; }

@@ -109,7 +109,7 @@ class SellerServiceCategoryTest {
         Product product = new Product(kitchen, "Poha", "desc", BigDecimal.valueOf(40), null);
         product.setId(1L);
         product.setCategory("BREAKFAST");
-        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(productRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(product));
         when(kitchenRepository.findBySeller(seller)).thenReturn(List.of(kitchen));
         when(orderItemRepository.findByProductIdAndOrderOrderStatusNot(1L, OrderStatus.DRAFT)).thenReturn(List.of());
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -119,5 +119,59 @@ class SellerServiceCategoryTest {
 
         var result = sellerService.updateProduct(1L, dto, seller);
         assertThat(result.getCategory()).isEqualTo("BREAKFAST,LUNCH,DINNER");
+    }
+
+    @Test
+    void homemadeDraftEditsPreserveCategoryAndTextFulfilment() {
+        User seller = approvedSeller();
+        Kitchen kitchen = approvedKitchen();
+        kitchen.setSellerType(SellerType.BOTH);
+        Product product = new Product(kitchen, "Snack", "desc", BigDecimal.valueOf(40), null);
+        product.setId(1L);
+        product.setCategory("HOMEMADE,SNACKS");
+        product.setPublicationDraft(true);
+        product.setAvailableToday(false);
+        product.setAvailableDate(com.example.my_first_spring_api.AppTimeZone.today());
+        when(productRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(product));
+        when(kitchenRepository.findBySeller(seller)).thenReturn(List.of(kitchen));
+        when(orderItemRepository.findByProductIdAndOrderOrderStatusNot(1L, OrderStatus.DRAFT)).thenReturn(List.of());
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        for (String ready : List.of("Usually ready in 1 day", "Made on Request - Order at least 2 Days in advance")) {
+            ProductUpdateDto dto = new ProductUpdateDto();
+            dto.setAvailableDate(com.example.my_first_spring_api.AppTimeZone.today());
+            dto.setAvailableToday(false);
+            dto.setReadyByTime(ready);
+            dto.setCategories(List.of("OTHER"));
+            var result = sellerService.updateProduct(1L, dto, seller);
+            assertThat(result.getCategory()).isEqualTo("HOMEMADE,OTHER");
+            assertThat(result.getReadyByTime()).isEqualTo(ready);
+            assertThat(result.getLifecycleState()).isEqualTo("DRAFT");
+            assertThat(result.getAvailableToday()).isFalse();
+        }
+    }
+
+    @Test
+    void createSameDaySpecificDraftStoresExplicitMode() {
+        User seller = approvedSeller();
+        Kitchen kitchen = approvedKitchen();
+        kitchen.setSellerType(SellerType.BOTH);
+        when(kitchenRepository.findById(1L)).thenReturn(Optional.of(kitchen));
+        when(kitchenRepository.findBySeller(seller)).thenReturn(List.of(kitchen));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+        ProductCreateDto dto = new ProductCreateDto();
+        dto.setName("Snack");
+        dto.setPrice(BigDecimal.valueOf(40));
+        dto.setIsHomemade(true);
+        dto.setSaveAsDraft(true);
+        dto.setAvailType(HomemadeAvailabilityType.SPECIFIC_DATE);
+        dto.setAvailableDate(com.example.my_first_spring_api.AppTimeZone.today());
+        dto.setOrderWindowEnd("23:58");
+        dto.setReadyByTime(com.example.my_first_spring_api.AppTimeZone.today() + "T23:59");
+        dto.setCategories(List.of("SNACKS"));
+        sellerService.createProduct(1L, dto, seller);
+        verify(productRepository).save(argThat(p -> p.isPublicationDraft()
+                && p.getHomemadeAvailabilityType() == HomemadeAvailabilityType.SPECIFIC_DATE
+                && !Boolean.TRUE.equals(p.getAvailableToday())));
     }
 }

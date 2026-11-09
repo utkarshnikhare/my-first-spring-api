@@ -488,6 +488,11 @@ function parseServiceAreas(val) {
 function sellerNavigate(hash) { if (location.hash === hash) sellerRender(); else location.hash = hash; }
 function greeting() { var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
 function offeringStatusBadge(p) {
+    if (p.lifecycleState === 'DRAFT') return '<span class="oc-badge closed">DRAFT</span>';
+    if (p.lifecycleState === 'ADMIN_SUSPENDED') return '<span class="oc-badge closed">ADMIN SUSPENDED</span>';
+    if (p.lifecycleState === 'EXPIRED') return '<span class="oc-badge closed">EXPIRED</span>';
+    if (p.lifecycleState === 'SOLD_OUT') return '<span class="oc-badge soldout">SOLD OUT</span>';
+    if (p.lifecycleState === 'UNAVAILABLE') return '<span class="oc-badge closed">UNAVAILABLE</span>';
     if (p.soldOut) return '<span class="oc-badge soldout">SOLD OUT</span>';
     if (p.ordersPaused) return '<span class="oc-badge paused">PAUSED</span>';
     if (p.lifecycleState === 'SCHEDULED_TO_OPEN') return '<span class="oc-badge closed">SCHEDULED TO OPEN · ' + esc(prettyDateTime(p.ordersOpenFrom)) + '</span>';
@@ -497,23 +502,132 @@ function offeringStatusBadge(p) {
     if (p.recurring) return '<span class="oc-badge live">RECURRING • LIVE</span>';
     return '<span class="oc-badge live">LIVE</span>';
 }
-/** "Orders close" value for a dashboard offering card: pretty time, plus the
- *  offering day/date for future (pre-order) offerings so the seller knows
- *  which date the cutoff belongs to. Uses the existing prettyTime/prettyDate. */
-function sellerOrdersCloseLabel(p) {
-    if (!p.cutoffTime) return '--';
-    var time = prettyTime(p.cutoffTime);
-    var day = p.availableDate ? prettyDate(p.availableDate) : '';
-    if (day && day !== 'Today' && day !== 'Invalid Date') return day + ', ' + time;
-    return time;
+function sellerCardDateParts(date) {
+    var parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(date);
+    var values = {};
+    parts.forEach(function (part) { values[part.type] = part.value; });
+    return values.year + '-' + values.month + '-' + values.day;
 }
-/** "Delivery" value for a dashboard offering card: the persisted ready-by text.
- *  Pure 24-hour times are prettified; free-text values that already carry their
- *  own day context (e.g. "1:30 PM Monday", "1:00 PM today") are shown as-is. */
-function sellerDeliveryLabel(p) {
-    var v = (p.readyByTime || '').trim();
+
+function sellerCardDateNumber(date) {
+    var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || '');
+    if (!match || Number(match[1]) < 1000) return null;
+    var value = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    var parsed = new Date(value);
+    if (parsed.getUTCFullYear() !== Number(match[1]) || parsed.getUTCMonth() + 1 !== Number(match[2])
+            || parsed.getUTCDate() !== Number(match[3])) return null;
+    return value;
+}
+
+// Unzoned API date-times are Kolkata wall times, not browser-local times.
+function sellerCardTimestamp(value) {
+    if (typeof value !== 'string') return null;
+    var match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(Z|[+-]\d{2}:\d{2})?$/.exec(value.trim());
+    if (!match || sellerCardDateNumber(match[1]) === null || Number(match[2]) > 23
+            || Number(match[3]) > 59 || Number(match[4] || 0) > 59) return null;
+    if (match[6] && match[6] !== 'Z'
+            && (Number(match[6].slice(1, 3)) > 23 || Number(match[6].slice(4, 6)) > 59)) return null;
+    var normalized = match[1] + 'T' + match[2] + ':' + match[3] + ':' + (match[4] || '00')
+        + (match[5] ? '.' + match[5].slice(0, 3) : '') + (match[6] || '+05:30');
+    var date = new Date(normalized);
+    return isNaN(date.getTime()) ? null : date;
+}
+
+function sellerCardTime(date) {
+    var parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit', hour12: true
+    }).formatToParts(date);
+    var values = {};
+    parts.forEach(function (part) { values[part.type] = part.value; });
+    return values.hour + ':' + values.minute + ' ' + values.dayPeriod.toUpperCase();
+}
+
+function sellerCardDateTime(date, now, separator) {
+    var day = sellerCardDateNumber(sellerCardDateParts(date));
+    var today = sellerCardDateNumber(sellerCardDateParts(now || new Date()));
+    var days = (day - today) / 86400000;
+    var label;
+    if (days === 0) label = 'Today';
+    else if (days === 1) label = 'Tomorrow';
+    else {
+        var options = { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' };
+        if (days > 1 && days <= 7) {
+            var weekday = new Intl.DateTimeFormat('en-GB', {
+                timeZone: 'Asia/Kolkata', weekday: 'long'
+            }).format(date);
+            label = weekday + ', ' + new Intl.DateTimeFormat('en-GB', options).format(date);
+        } else {
+            options.year = 'numeric';
+            label = new Intl.DateTimeFormat('en-GB', options).format(date);
+        }
+    }
+    return label + separator + sellerCardTime(date);
+}
+
+function sellerCardTimeOnDate(date, time) {
+    if (typeof time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return null;
+    return sellerCardTimestamp(date + 'T' + time);
+}
+
+// Legacy ready-by text is resolved relative to the offering date by the API.
+function sellerCardLegacyDelivery(value, date) {
+    if (typeof value !== 'string') return null;
+    var base = sellerCardDateNumber(date);
+    if (base === null) return null;
+    var text = value.trim();
+    var match = /^(\d{1,2}):(\d{2})\s*(AM|PM)?\s*(today|tomorrow|tmr)?\s*$/i.exec(text);
+    var weekday = null;
+    if (!match) {
+        weekday = /(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i.exec(text);
+        match = weekday && /^(\d{1,2}):(\d{2})\s*(AM|PM)?/i.exec(text);
+    }
+    if (!match) return null;
+    var hour = Number(match[1]), minute = Number(match[2]);
+    if (minute > 59 || (match[3] && (hour < 1 || hour > 12)) || (!match[3] && hour > 23)) return null;
+    if (match[3]) hour = hour % 12 + (match[3].toUpperCase() === 'PM' ? 12 : 0);
+    if (weekday) {
+        var days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        var difference = (days.indexOf(weekday[1].toLowerCase()) - new Date(base).getUTCDay() + 7) % 7;
+        base += (difference || 7) * 86400000;
+    } else if (match[4] && /^(tomorrow|tmr)$/i.test(match[4])) {
+        base += 86400000;
+    }
+    var day = new Date(base).toISOString().slice(0, 10);
+    return sellerCardTimeOnDate(day, ('0' + hour).slice(-2) + ':' + ('0' + minute).slice(-2));
+}
+
+function sellerOrdersCloseLabel(p, now) {
+    var close = p.orderWindowEnd || p.cutoffTime;
+    if (typeof close !== 'string') return '--';
+    close = close.trim();
+    var date = p.recurring && p.nextOccurrenceDate ? p.nextOccurrenceDate : p.availableDate;
+    var cutoff = sellerCardTimeOnDate(date, close);
+    if (!cutoff) {
+        var timeOnly = sellerCardTimeOnDate('2000-01-01', close);
+        return timeOnly && !date ? 'at ' + sellerCardTime(timeOnly) : '--';
+    }
+    var delivery = sellerCardTimestamp(p.readyByTime) || sellerCardLegacyDelivery(p.readyByTime, date);
+    if (delivery && cutoff > delivery) {
+        var previousDay = new Date(sellerCardDateNumber(date) - 86400000).toISOString().slice(0, 10);
+        var previousCutoff = sellerCardTimeOnDate(previousDay, close);
+        var today = sellerCardDateParts(now || new Date());
+        cutoff = previousDay >= today && previousCutoff < delivery ? previousCutoff : delivery;
+    }
+    var label = sellerCardDateTime(cutoff, now, ' at ');
+    return label.replace(/^(Today|Tomorrow)/, function (day) { return day.toLowerCase(); });
+}
+
+function sellerDeliveryLabel(p, now) {
+    var v = typeof p.readyByTime === 'string' ? p.readyByTime.trim() : '';
     if (!v) return '--';
-    return /^([01]?\d|2[0-3]):[0-5]\d$/.test(v) ? prettyTime(v) : v;
+    var date = sellerCardTimestamp(v);
+    if (date) return sellerCardDateTime(date, now, ' · ');
+    var offeringDate = p.recurring && p.nextOccurrenceDate ? p.nextOccurrenceDate : p.availableDate;
+    var time = sellerCardTimeOnDate(offeringDate || '2000-01-01', v);
+    if (time) return offeringDate ? sellerCardDateTime(time, now, ' · ') : sellerCardTime(time);
+    return /^\d{4}-\d{2}-\d{2}|^\d{1,2}:\d{1,2}$/.test(v) ? '--' : v;
 }
 function statusDot(paid, cancelled) { return cancelled ? '<span class="status-dot red"></span>' : paid ? '<span class="status-dot green"></span>' : '<span class="status-dot orange"></span>'; }
 function localDateStr(d) { var y = d.getFullYear(), m = ('0' + (d.getMonth() + 1)).slice(-2), day = ('0' + d.getDate()).slice(-2); return y + '-' + m + '-' + day; }
@@ -888,7 +1002,7 @@ function sdOfferingCardHtml(p, orderCount) {
         + (remaining != null ? '<strong>' + remaining + ' available</strong>' : 'No limit') + '</div>';
     if (isHm && (!p.orderWindowEnd && !p.cutoffTime)) {
         h += '<div class="sd-card__times">'
-            + '<span class="sd-card__time">⏱ Availability <span class="sd-tv">' + esc(p.readyByTime || 'Always Available') + '</span></span>'
+            + '<span class="sd-card__time">⏱ Availability <span class="sd-tv">' + esc(p.readyByTime ? sellerDeliveryLabel(p) : 'Always Available') + '</span></span>'
             + '</div>';
     } else {
         h += '<div class="sd-card__times">'
@@ -931,6 +1045,10 @@ function sdOfferingCardHtml(p, orderCount) {
             + esc(p.occurrenceId) + '">' + occSoldLabel + '</button>';
     } else if (!p.recurring) {
         h += '<button class="sd-btn sd-btn--edit" type="button" data-action="edit-offering" data-pid="' + p.id + '">Edit</button>';
+        var suspended = p.lifecycleState === 'ADMIN_SUSPENDED';
+        var expired = p.lifecycleState === 'EXPIRED';
+        var soldOut = p.soldOut || p.lifecycleState === 'SOLD_OUT';
+        if (p.lifecycleState !== 'DRAFT' && soldOut && !suspended && !expired) h += '<button class="sd-btn sd-btn--resume" type="button" data-action="mark-available" data-pid="' + p.id + '">Mark Available</button>';
         if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--pause" type="button" data-action="pause-orders" data-pid="' + p.id + '">' + (p.quickPost ? 'Close Post' : 'Pause') + '</button>';
         if (p.ordersPaused && !p.soldOut) h += '<button class="sd-btn sd-btn--resume" type="button" data-action="resume-orders" data-pid="' + p.id + '">' + (p.quickPost ? 'Reopen Post' : 'Resume') + '</button>';
         if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Sold Out</button>';
@@ -1151,11 +1269,16 @@ async function sellerHistoryView() {
                 var isHm = isHomemadeProduct(p);
                 var catBadge = '<span class="badge ' + (isHm ? 'badge-hm' : 'badge-kt') + '">' + (isHm ? 'Homemade' : 'Kitchen') + '</span>';
                 var isDraft = p.availableToday === false;
-                var statusBadge = isDraft ? '<span class="pill pill-amber">Draft</span>' : '';
+                var explicitDraft = p.lifecycleState === 'DRAFT';
+                var archived = p.lifecycleState === 'ARCHIVED';
+                var statusBadge = archived ? '<span class="pill pill-amber">Archived</span>'
+                    : isDraft ? '<span class="pill pill-amber">Draft</span>' : '';
                 h += '<div class="history-card"><span class="hc-body"><span class="hc-name">' + esc(p.name) + ' ' + catBadge + (statusBadge ? ' ' + statusBadge : '') + '</span>' +
                     '<span class="hc-meta">' + esc(offeringDate) + ' · ' + esc(p.category || 'Uncategorised') + '</span></span>' +
                     '<span class="hc-price">' + money(p.price) + '</span>' +
-                    '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="republish-history" data-pid="' + esc(p.id) + '">' + (isDraft ? 'Publish' : 'Republish') + '</button></div>';
+                    (archived ? '' : explicitDraft
+                        ? '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="edit-offering" data-pid="' + esc(p.id) + '">Edit Draft</button>'
+                        : '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="republish-history" data-pid="' + esc(p.id) + '">' + (isDraft ? 'Publish' : 'Republish') + '</button>') + '</div>';
             });
         }
     } catch (e) { h += emptyHtml('⚠️', 'Could not load history', e.message); }
@@ -2263,8 +2386,8 @@ function homemadeOfferingFormHtml(t, opts, ctx) {
     var chosenDate = ctx.chosenDate;
     var selectedUnit = ctx.selectedUnit || 'Per Piece';
     var categoryValues = ctx.categoryValues || [];
-    var availType = t.availType || S.hmAvailType || (t.isPreorder ? 'SPECIFIC_DATE' : (t.readyByTime && t.readyByTime.indexOf('Request') !== -1 ? 'MADE_ON_REQUEST' : 'ALWAYS_AVAILABLE'));
-    var stockMode = (t.maxQuantity != null || S.hmStockMode === 'limited') ? 'limited' : 'unlimited';
+    var availType = t.availType || (!isEdit && S.hmAvailType) || (t.isPreorder ? 'SPECIFIC_DATE' : (t.readyByTime && t.readyByTime.indexOf('Request') !== -1 ? 'MADE_ON_REQUEST' : 'ALWAYS_AVAILABLE'));
+    var stockMode = (t.maxQuantity != null || (!isEdit && S.hmStockMode === 'limited')) ? 'limited' : 'unlimited';
 
     var h = '<form class="seller-form hm-offering-form" id="' + (opts.formId || 'createOfferingForm') + '">';
     h += '<input type="hidden" name="isHomemade" value="true">';
@@ -2344,9 +2467,10 @@ function homemadeOfferingFormHtml(t, opts, ctx) {
     // Subfields for SPECIFIC_DATE
     h += '<div id="hmDateFields"' + (availType === 'SPECIFIC_DATE' ? '' : ' style="display:none;"') + '>';
     h += '<div class="form-row-2">'
-        + '<div class="form-group"><label class="form-label">Offering / Delivery Date <span class="req">*</span></label><input type="date" class="form-input" name="chosenOfferingDate" min="' + todayIso + '" value="' + esc(chosenDate) + '"></div>'
+        + '<div class="form-group"><label class="form-label">Offering / Delivery Date <span class="req">*</span></label><input type="date" class="form-input" name="chosenOfferingDate" min="' + todayIso + '" value="' + esc(chosenDate) + '"' + (availType === 'SPECIFIC_DATE' ? '' : ' disabled') + '></div>'
         + '<div class="form-group"><label class="form-label">Orders Close (Order By)</label><input class="form-input" name="orderWindowEnd" type="time" value="' + esc(t.orderWindowEnd || t.cutoffTime || '20:00') + '"></div>'
         + '</div>'
+        + '<div class="form-group"><label class="form-label">Delivery / Ready By Date</label><input class="form-input" name="hmReadyDate" type="date" min="' + todayIso + '" value="' + esc(t.readyByTime && t.readyByTime.indexOf('T') !== -1 ? t.readyByTime.slice(0, 10) : chosenDate) + '"' + (availType === 'SPECIFIC_DATE' ? '' : ' disabled') + '></div>'
         + '<div class="form-group"><label class="form-label">Delivery / Ready By Time</label><input class="form-input" name="readyByTime" type="time" value="' + esc(t.readyByTime && t.readyByTime.indexOf('T') !== -1 ? t.readyByTime.slice(11, 16) : '21:00') + '"></div>'
         + '</div>';
 
@@ -3402,7 +3526,7 @@ async function submitHomemadeProduct(form, isDraft) {
         availDate = vals.chosenOfferingDate || vals.availableDate || sellerDate('today');
         orderEnd = parseOptionalHhmm(vals.orderWindowEnd, 'Orders Close') || '20:00';
         var rTime = vals.readyByTime || '21:00';
-        readyBy = availDate + 'T' + (rTime.indexOf(':') !== -1 ? rTime.slice(0, 5) : '21:00');
+        readyBy = (vals.hmReadyDate || availDate) + 'T' + (rTime.indexOf(':') !== -1 ? rTime.slice(0, 5) : '21:00');
     }
 
     var maxQty = null;
@@ -3426,6 +3550,7 @@ async function submitHomemadeProduct(form, isDraft) {
         imageUrl: vals.imageUrl || '',
         isHomemade: true,
         availableToday: !isDraft,
+        saveAsDraft: isDraft,
         isVeg: true,
         availableDate: availDate,
         orderWindowStart: null,
@@ -3436,10 +3561,15 @@ async function submitHomemadeProduct(form, isDraft) {
     };
 
     var isEdit = form.id === 'editOfferingForm' && S.editOffering && S.editOffering.id;
+    if (isEdit && isDraft) {
+        payload.clearDraftCutoff = orderEnd === null;
+        payload.draftUnlimitedStock = stockMode === 'unlimited';
+    }
+    if (isDraft) payload.availType = availType;
     var prodUrl = isEdit ? ('/api/seller/products/' + S.editOffering.id) : (kid ? ('/api/seller/products?kitchenId=' + kid) : '/api/seller/products');
     var res = await sellerApi(prodUrl, { method: isEdit ? 'PUT' : 'POST', body: payload });
     if (isDraft) {
-        toast('Draft saved successfully! You can publish it anytime from My Offerings.', 'success');
+        toast('Draft saved successfully. Publishing saved drafts is not yet available.', 'success');
         S.draftOffering = null;
         S.offeringCategory = null;
         sellerNavigate('#/my-offerings');
@@ -3523,7 +3653,13 @@ function openProductPreviewModal(vals) {
  */
 async function submitOfferingEdit(form) {
     if (form.elements.isHomemade && form.elements.isHomemade.value === 'true') {
-        await submitHomemadeProduct(form, false);
+        if (S.editOffering && S.editOffering.lifecycleState === 'DRAFT'
+                && !S.editOffering.availType && !S.editOffering.isPreorder
+                && (S.editOffering.orderWindowEnd || S.editOffering.cutoffTime)) {
+            toast('This draft needs its availability type preserved before it can be edited safely.', 'error');
+            return;
+        }
+        await submitHomemadeProduct(form, !!(S.editOffering && S.editOffering.lifecycleState === 'DRAFT'));
         return;
     }
     var o = S.editOffering;
@@ -4037,6 +4173,10 @@ document.addEventListener('click', async function (e) {
                     var alwaysF = form.querySelector('#hmAlwaysFields');
                     var reqF = form.querySelector('#hmRequestFields');
                     var dateF = form.querySelector('#hmDateFields');
+                    var dateInput = form.elements.chosenOfferingDate;
+                    if (dateInput) dateInput.disabled = avail !== 'SPECIFIC_DATE';
+                    var readyDateInput = form.elements.hmReadyDate;
+                    if (readyDateInput) readyDateInput.disabled = avail !== 'SPECIFIC_DATE';
                     if (alwaysF) alwaysF.style.display = (avail === 'ALWAYS_AVAILABLE' ? 'block' : 'none');
                     if (reqF) reqF.style.display = (avail === 'MADE_ON_REQUEST' ? 'block' : 'none');
                     if (dateF) dateF.style.display = (avail === 'SPECIFIC_DATE' ? 'block' : 'none');
@@ -4368,6 +4508,19 @@ document.addEventListener('click', async function (e) {
                 });
                 break;
             }
+            case 'mark-available': {
+                var availablePid = Number(t.dataset.pid);
+                t.disabled = true;
+                try {
+                    await sellerApi('/api/seller-app/products/' + availablePid + '/available', { method: 'POST' });
+                    toast('Offering marked available', 'success');
+                    await sellerRender();
+                } catch (err) {
+                    toast(err.message || 'Could not mark offering available', 'error');
+                    t.disabled = false;
+                }
+                break;
+            }
             case 'pause-orders': {
                 var pausePid = Number(t.dataset.pid);
                 await sellerApi('/api/seller-app/products/' + pausePid + '/pause', { method: 'POST' });
@@ -4542,10 +4695,23 @@ document.addEventListener('click', async function (e) {
                 var historyItem = (S.historyItems || []).find(function (item) { return item.id === historyId; });
                 if (!historyItem) { toast('This history item is no longer available', 'error'); return; }
                 t.disabled = true;
-                S.draftOffering = historyItem;
-                S.republishSourceId = historyItem.id;
-                S.offeringFor = 'today';
-                sellerNavigate('#/create');
+                try {
+                    var currentHistoryItem = await sellerApi('/api/seller/products/' + historyId);
+                    if (currentHistoryItem.lifecycleState === 'DRAFT' || currentHistoryItem.lifecycleState === 'ARCHIVED') {
+                        toast(currentHistoryItem.lifecycleState === 'DRAFT'
+                            ? 'Edit this draft; publishing drafts is not available yet.'
+                            : 'Archived offerings cannot be republished.', 'error');
+                        t.disabled = false;
+                        break;
+                    }
+                    S.draftOffering = historyItem;
+                    S.republishSourceId = historyItem.id;
+                    S.offeringFor = 'today';
+                    sellerNavigate('#/create');
+                } catch (err) {
+                    t.disabled = false;
+                    toast(err.message || 'Could not load this offering', 'error');
+                }
                 break;
             }
             case 'batch-republish': {

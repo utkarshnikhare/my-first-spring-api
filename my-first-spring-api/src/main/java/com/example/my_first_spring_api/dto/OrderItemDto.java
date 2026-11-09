@@ -7,6 +7,7 @@ public class OrderItemDto {
     private Long id;
     private Long productId;
     private String productName;
+    private String priceUnit;
     private String imageUrl;
     private Integer quantity;
     private BigDecimal price;
@@ -32,6 +33,8 @@ public class OrderItemDto {
     public void setProductId(Long productId) { this.productId = productId; }
     public String getProductName() { return productName; }
     public void setProductName(String productName) { this.productName = productName; }
+    public String getPriceUnit() { return priceUnit; }
+    public void setPriceUnit(String priceUnit) { this.priceUnit = priceUnit; }
     public String getImageUrl() { return imageUrl; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
     public Integer getQuantity() { return quantity; }
@@ -45,4 +48,3 @@ public class OrderItemDto {
     public Long getOccurrenceId() { return occurrenceId; }
     public void setOccurrenceId(Long occurrenceId) { this.occurrenceId = occurrenceId; }
 }
-

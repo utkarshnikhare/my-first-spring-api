@@ -168,7 +168,7 @@ public class SellerController {
     public ResponseEntity<Map<String, String>> deleteProduct(@PathVariable Long productId, HttpSession session) {
         User seller = requireSeller(session);
         sellerService.deleteProduct(productId, seller);
-        return ResponseEntity.ok(Map.of("message", "Product deleted successfully"));
+        return ResponseEntity.ok(Map.of("message", "Product archived successfully"));
     }
 
     @GetMapping("/orders")

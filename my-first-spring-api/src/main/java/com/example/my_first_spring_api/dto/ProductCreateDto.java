@@ -3,6 +3,7 @@ package com.example.my_first_spring_api.dto;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.example.my_first_spring_api.model.HomemadeAvailabilityType;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -32,6 +33,9 @@ public class ProductCreateDto {
 
     @JsonAlias({"is_available", "isAvailable"})
     private Boolean availableToday = Boolean.TRUE;
+
+    private Boolean saveAsDraft;
+    private HomemadeAvailabilityType availType;
 
     @JsonAlias({"is_veg", "isVeg", "veg"})
     private Boolean isVeg = Boolean.TRUE;
@@ -93,6 +97,10 @@ public class ProductCreateDto {
     public String getQuickPostRequestId() { return quickPostRequestId; }
     public void setQuickPostRequestId(String quickPostRequestId) { this.quickPostRequestId = quickPostRequestId; }
     public Boolean getAvailableToday() { return availableToday != null ? availableToday : Boolean.TRUE; }
+    public Boolean getSaveAsDraft() { return saveAsDraft; }
+    public void setSaveAsDraft(Boolean saveAsDraft) { this.saveAsDraft = saveAsDraft; }
+    public HomemadeAvailabilityType getAvailType() { return availType; }
+    public void setAvailType(HomemadeAvailabilityType availType) { this.availType = availType; }
     public void setAvailableToday(Boolean availableToday) { this.availableToday = (availableToday != null) ? availableToday : Boolean.TRUE; }
     public Boolean getIsAvailable() { return getAvailableToday(); }
     public void setIsAvailable(Boolean isAvailable) { setAvailableToday(isAvailable); }

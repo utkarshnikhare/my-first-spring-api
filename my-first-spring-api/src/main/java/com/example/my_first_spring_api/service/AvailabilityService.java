@@ -42,6 +42,7 @@ public class AvailabilityService {
 
     public boolean isAvailableToday(Product product, User buyer) {
         if (product == null) return false;
+        if (OfferingTiming.isPreorderForOrdering(product, AppTimeZone.today())) return false;
         if (!isProductActive(product)) return false;
         if (!isKitchenEligible(product.getKitchen(), buyer)) return false;
         if (!isServiceDateValid(product)) return false;
@@ -60,7 +61,9 @@ public class AvailabilityService {
     }
 
     private boolean isProductActive(Product product) {
-        return Boolean.TRUE.equals(product.getAvailableToday())
+        return !product.isArchived() && !product.isPublicationDraft()
+                && (Boolean.TRUE.equals(product.getAvailableToday())
+                || OfferingTiming.isPreorderForOrdering(product, AppTimeZone.today()))
                 && !Boolean.TRUE.equals(product.getOrdersPaused())
                 && !isSoldOut(product);
     }
@@ -72,10 +75,10 @@ public class AvailabilityService {
     }
 
     private boolean isServiceDateValid(Product product) {
-        LocalDate availableDate = product.getAvailableDate();
-        if (availableDate == null) return true;
         LocalDate today = AppTimeZone.today();
-        return !availableDate.isBefore(today);
+        LocalDate lastAvailableDate = product.getAvailableUntilDate() != null
+                ? product.getAvailableUntilDate() : product.getAvailableDate();
+        return lastAvailableDate == null || !lastAvailableDate.isBefore(today);
     }
 
     private boolean isOrderWindowOpen(Product product, LocalDate today, LocalTime now) {
@@ -83,7 +86,7 @@ public class AvailabilityService {
     }
 
     private boolean isSoldOut(Product product) {
-        return product.getRemainingQuantity() != null && product.getRemainingQuantity() <= 0;
+        return product != null && product.isSoldOut();
     }
 
     public List<Product> filterOrderableNow(List<Product> products, User buyer) {
