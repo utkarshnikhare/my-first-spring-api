@@ -45,11 +45,15 @@ public final class KitchenVisibility {
      */
     public static boolean isAdminSuspended(Kitchen kitchen) {
         if (kitchen == null) return false;
-        User seller = kitchen.getSeller();
-        if (kitchen.isStorefrontPaused()) return true;
-        return seller != null && (seller.isBlocked() || seller.isStorefrontRemoved()
-                || seller.getSellerApprovalStatus()
-                == com.example.my_first_spring_api.model.SellerApprovalStatus.SUSPENDED);
+        try {
+            if (kitchen.isStorefrontPaused()) return true;
+            User seller = kitchen.getSeller();
+            return seller != null && (seller.isBlocked() || seller.isStorefrontRemoved()
+                    || seller.getSellerApprovalStatus()
+                    == com.example.my_first_spring_api.model.SellerApprovalStatus.SUSPENDED);
+        } catch (org.hibernate.LazyInitializationException ex) {
+            return false;
+        }
     }
 
     public static boolean isHomemadeStore(Kitchen kitchen) {

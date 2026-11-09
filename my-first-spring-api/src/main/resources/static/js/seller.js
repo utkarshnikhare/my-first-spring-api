@@ -1049,9 +1049,9 @@ function sdOfferingCardHtml(p, orderCount) {
         var expired = p.lifecycleState === 'EXPIRED';
         var soldOut = p.soldOut || p.lifecycleState === 'SOLD_OUT';
         if (p.lifecycleState !== 'DRAFT' && soldOut && !suspended && !expired) h += '<button class="sd-btn sd-btn--resume" type="button" data-action="mark-available" data-pid="' + p.id + '">Mark Available</button>';
-        if (p.lifecycleState !== 'DRAFT' && !suspended && !expired && !soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--pause" type="button" data-action="pause-orders" data-pid="' + p.id + '">' + (p.quickPost ? 'Close Post' : 'Pause') + '</button>';
-        if (p.lifecycleState !== 'DRAFT' && !suspended && !expired && p.ordersPaused && !soldOut) h += '<button class="sd-btn sd-btn--resume" type="button" data-action="resume-orders" data-pid="' + p.id + '">' + (p.quickPost ? 'Reopen Post' : 'Resume') + '</button>';
-        if (p.lifecycleState !== 'DRAFT' && !suspended && !expired && !soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Sold Out</button>';
+        if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--pause" type="button" data-action="pause-orders" data-pid="' + p.id + '">' + (p.quickPost ? 'Close Post' : 'Pause') + '</button>';
+        if (p.ordersPaused && !p.soldOut) h += '<button class="sd-btn sd-btn--resume" type="button" data-action="resume-orders" data-pid="' + p.id + '">' + (p.quickPost ? 'Reopen Post' : 'Resume') + '</button>';
+        if (!p.soldOut && !p.ordersPaused) h += '<button class="sd-btn sd-btn--soldout" type="button" data-action="mark-soldout" data-pid="' + p.id + '">Sold Out</button>';
     }
     h += '</div></div></div>';
     return h;

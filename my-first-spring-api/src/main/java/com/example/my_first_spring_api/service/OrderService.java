@@ -408,9 +408,7 @@ public class OrderService {
             throw new IllegalArgumentException("Your order is empty. Please add items before placing it.");
         }
         lockCheckoutRows(order, buyer);
-        if (order.getKitchen() == null
-                || !KitchenVisibility.isPubliclyVisible(order.getKitchen())
-                || !KitchenVisibility.isServiceAreaVisible(order.getKitchen(), buyer)) {
+        if (order.getKitchen() == null || !KitchenVisibility.isPubliclyVisible(order.getKitchen())) {
             session.removeAttribute(DRAFT_ORDER_SESSION_KEY);
             throw new InvalidKitchenSelectionException(
                     "This kitchen is no longer accepting orders. Refresh and try again.");
@@ -540,13 +538,6 @@ public class OrderService {
         // time — NOT the draft creation time (createdAt). Never overwritten on updates.
         if (order.getOrderTime() == null) {
             order.setOrderTime(AppTimeZone.now());
-        }
-        for (OrderItem item : order.getItems()) {
-            Product product = item.getProduct();
-            if (product != null) {
-                item.setProductNameSnapshot(product.getName());
-                item.setPriceUnitSnapshot(product.getPriceUnit());
-            }
         }
         order = orderRepository.save(order);
         orderRepository.flush();
