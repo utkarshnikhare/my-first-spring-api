@@ -328,13 +328,27 @@ public class SellerService {
                         "Quick Post request reference is already used for a different post.");
             }
         }
-        boolean preorder = dto.getIsPreorder() != null
-                ? dto.getIsPreorder() : offeringDate.isAfter(today);
-        if (offeringDate.isAfter(today) && !preorder) {
-            preorder = true;
-        }
-        if (preorder && !offeringDate.isAfter(today)) {
+        String readyByTime = quickPost ? null
+                : (dto.getReadyByTime() == null ? null : dto.getReadyByTime().trim());
+        boolean isHomemade = isHomemadeProductDto(dto, kitchen);
+        boolean isHomemadeEstimate = isHomemade && (
+                dto.getAvailType() == HomemadeAvailabilityType.ALWAYS_AVAILABLE
+                || dto.getAvailType() == HomemadeAvailabilityType.MADE_ON_REQUEST
+                || (readyByTime != null && (readyByTime.startsWith("Usually ready") || readyByTime.startsWith("Same day") || readyByTime.startsWith("Made on Request")))
+        );
+        boolean preorder;
+        if (isHomemadeEstimate) {
+            offeringDate = today;
             preorder = false;
+        } else {
+            preorder = dto.getIsPreorder() != null
+                    ? dto.getIsPreorder() : offeringDate.isAfter(today);
+            if (offeringDate.isAfter(today) && !preorder) {
+                preorder = true;
+            }
+            if (preorder && !offeringDate.isAfter(today)) {
+                preorder = false;
+            }
         }
         // Validate authoritative offering input before platform feature gating so
         // malformed requests receive the actionable field error, not a feature error.
@@ -344,8 +358,6 @@ public class SellerService {
                 : dto.getOrderWindowEnd() != null && !dto.getOrderWindowEnd().isBlank()
                     ? OfferingTiming.normalizeHhmm(dto.getOrderWindowEnd(), "Orders Close")
                     : null;
-        String readyByTime = quickPost ? null
-                : (dto.getReadyByTime() == null ? null : dto.getReadyByTime().trim());
         Integer maxQuantity = quickPost ? null : dto.getMaxQuantity();
         if (maxQuantity != null && maxQuantity < 0) {
             throw new IllegalArgumentException("Quantity Available cannot be negative; leave blank for unlimited.");
@@ -356,7 +368,6 @@ public class SellerService {
         // Server-side enforcement of the Create Offering timing rules so
         // impossible combinations are never persisted, even if the client
         // validation is bypassed.
-        boolean isHomemade = isHomemadeProductDto(dto, kitchen);
         if (dto.getAvailType() != null
                 && (!Boolean.TRUE.equals(dto.getSaveAsDraft()) || !isHomemade)) {
             throw new IllegalArgumentException("Availability type is supported only for homemade drafts.");
@@ -467,15 +478,32 @@ public class SellerService {
             throw new IllegalArgumentException("Delivery / Ready By is required when changing availability type.");
         }
         LocalDate today = AppTimeZone.today();
-        boolean effectivePreorder = dto.getIsPreorder() != null
-                ? dto.getIsPreorder()
-                : (dto.getAvailableDate() != null
-                    ? dto.getAvailableDate().isAfter(today)
-                    : Boolean.TRUE.equals(product.getIsPreorder()));
-        java.time.LocalDate effectiveDate = dto.getAvailableDate() != null
-                ? dto.getAvailableDate() : (product.getAvailableDate() != null
-                    ? product.getAvailableDate()
-                    : (effectivePreorder ? today.plusDays(1) : today));
+        boolean isHomemade = KitchenVisibility.isHomemadeProduct(product);
+        String updateReady = dto.getReadyByTime() != null
+                ? dto.getReadyByTime().trim() : product.getReadyByTime();
+        boolean isHomemadeEstimate = isHomemade && (
+                dto.getAvailType() == HomemadeAvailabilityType.ALWAYS_AVAILABLE
+                || dto.getAvailType() == HomemadeAvailabilityType.MADE_ON_REQUEST
+                || (product.getHomemadeAvailabilityType() == HomemadeAvailabilityType.ALWAYS_AVAILABLE && dto.getAvailType() == null)
+                || (product.getHomemadeAvailabilityType() == HomemadeAvailabilityType.MADE_ON_REQUEST && dto.getAvailType() == null)
+                || (updateReady != null && (updateReady.startsWith("Usually ready") || updateReady.startsWith("Same day") || updateReady.startsWith("Made on Request")))
+        );
+        boolean effectivePreorder;
+        java.time.LocalDate effectiveDate;
+        if (isHomemadeEstimate) {
+            effectiveDate = today;
+            effectivePreorder = false;
+        } else {
+            effectivePreorder = dto.getIsPreorder() != null
+                    ? dto.getIsPreorder()
+                    : (dto.getAvailableDate() != null
+                        ? dto.getAvailableDate().isAfter(today)
+                        : Boolean.TRUE.equals(product.getIsPreorder()));
+            effectiveDate = dto.getAvailableDate() != null
+                    ? dto.getAvailableDate() : (product.getAvailableDate() != null
+                        ? product.getAvailableDate()
+                        : (effectivePreorder ? today.plusDays(1) : today));
+        }
         if (effectiveDate != null && effectiveDate.isAfter(today) && !effectivePreorder) {
             throw new IllegalArgumentException("Future offerings must be pre-orders.");
         }

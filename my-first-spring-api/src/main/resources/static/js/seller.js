@@ -2638,10 +2638,12 @@ function offeringFormHtml(t, opts) {
 
 // SCREEN 3: CREATE OFFERING (MANUAL FORM)
 async function sellerCreateView() {
+    var t = S.draftOffering || {};
+    var isHm = S.offeringCategory === 'HOMEMADE' || isHomemadeProduct(t);
     var now = new Date();
     var isLateNight = now.getHours() >= 21;
-    // If the current time is past 21:00 (9:00 PM), default the offering date to tomorrow.
-    S.offeringFor = isLateNight ? 'tomorrow' : 'today';
+    // For standard kitchen meals, default past 21:00 to tomorrow. For homemade specialties, default to today.
+    S.offeringFor = (!isHm && isLateNight) ? 'tomorrow' : 'today';
     S.recurringDuration = 'thisweek';
     S.recurringScheduleConfig = null;
     try {
@@ -2649,8 +2651,6 @@ async function sellerCreateView() {
     } catch (e) {
         S.favTemplates = S.favTemplates || [];
     }
-    var t = S.draftOffering || {};
-    var isHm = S.offeringCategory === 'HOMEMADE' || isHomemadeProduct(t);
     var h = '<div class="view-enter">';
     h += '<div class="page-head"><h1>' + (isHm ? 'Add Homemade Product' : 'Create Offering') + '</h1><p class="muted small">' +
         (isHm ? 'List your homemade treats, bakes, ghee, pickles or packaged specialties.' :
