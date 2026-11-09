@@ -2,7 +2,7 @@
   "name": "sociomart-demo-e2e",
   "private": true,
   "scripts": {
-    "test": "playwright test"
+    "test": "node --test seller-card-date.test.cjs admin-render-race.test.cjs && playwright test"
   },
   "devDependencies": {
     "@playwright/test": "1.64.0"

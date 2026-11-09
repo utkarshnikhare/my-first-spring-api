@@ -502,23 +502,132 @@ function offeringStatusBadge(p) {
     if (p.recurring) return '<span class="oc-badge live">RECURRING • LIVE</span>';
     return '<span class="oc-badge live">LIVE</span>';
 }
-/** "Orders close" value for a dashboard offering card: pretty time, plus the
- *  offering day/date for future (pre-order) offerings so the seller knows
- *  which date the cutoff belongs to. Uses the existing prettyTime/prettyDate. */
-function sellerOrdersCloseLabel(p) {
-    if (!p.cutoffTime) return '--';
-    var time = prettyTime(p.cutoffTime);
-    var day = p.availableDate ? prettyDate(p.availableDate) : '';
-    if (day && day !== 'Today' && day !== 'Invalid Date') return day + ', ' + time;
-    return time;
+function sellerCardDateParts(date) {
+    var parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(date);
+    var values = {};
+    parts.forEach(function (part) { values[part.type] = part.value; });
+    return values.year + '-' + values.month + '-' + values.day;
 }
-/** "Delivery" value for a dashboard offering card: the persisted ready-by text.
- *  Pure 24-hour times are prettified; free-text values that already carry their
- *  own day context (e.g. "1:30 PM Monday", "1:00 PM today") are shown as-is. */
-function sellerDeliveryLabel(p) {
-    var v = (p.readyByTime || '').trim();
+
+function sellerCardDateNumber(date) {
+    var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || '');
+    if (!match || Number(match[1]) < 1000) return null;
+    var value = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    var parsed = new Date(value);
+    if (parsed.getUTCFullYear() !== Number(match[1]) || parsed.getUTCMonth() + 1 !== Number(match[2])
+            || parsed.getUTCDate() !== Number(match[3])) return null;
+    return value;
+}
+
+// Unzoned API date-times are Kolkata wall times, not browser-local times.
+function sellerCardTimestamp(value) {
+    if (typeof value !== 'string') return null;
+    var match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(Z|[+-]\d{2}:\d{2})?$/.exec(value.trim());
+    if (!match || sellerCardDateNumber(match[1]) === null || Number(match[2]) > 23
+            || Number(match[3]) > 59 || Number(match[4] || 0) > 59) return null;
+    if (match[6] && match[6] !== 'Z'
+            && (Number(match[6].slice(1, 3)) > 23 || Number(match[6].slice(4, 6)) > 59)) return null;
+    var normalized = match[1] + 'T' + match[2] + ':' + match[3] + ':' + (match[4] || '00')
+        + (match[5] ? '.' + match[5].slice(0, 3) : '') + (match[6] || '+05:30');
+    var date = new Date(normalized);
+    return isNaN(date.getTime()) ? null : date;
+}
+
+function sellerCardTime(date) {
+    var parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit', hour12: true
+    }).formatToParts(date);
+    var values = {};
+    parts.forEach(function (part) { values[part.type] = part.value; });
+    return values.hour + ':' + values.minute + ' ' + values.dayPeriod.toUpperCase();
+}
+
+function sellerCardDateTime(date, now, separator) {
+    var day = sellerCardDateNumber(sellerCardDateParts(date));
+    var today = sellerCardDateNumber(sellerCardDateParts(now || new Date()));
+    var days = (day - today) / 86400000;
+    var label;
+    if (days === 0) label = 'Today';
+    else if (days === 1) label = 'Tomorrow';
+    else {
+        var options = { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' };
+        if (days > 1 && days <= 7) {
+            var weekday = new Intl.DateTimeFormat('en-GB', {
+                timeZone: 'Asia/Kolkata', weekday: 'long'
+            }).format(date);
+            label = weekday + ', ' + new Intl.DateTimeFormat('en-GB', options).format(date);
+        } else {
+            options.year = 'numeric';
+            label = new Intl.DateTimeFormat('en-GB', options).format(date);
+        }
+    }
+    return label + separator + sellerCardTime(date);
+}
+
+function sellerCardTimeOnDate(date, time) {
+    if (typeof time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return null;
+    return sellerCardTimestamp(date + 'T' + time);
+}
+
+// Legacy ready-by text is resolved relative to the offering date by the API.
+function sellerCardLegacyDelivery(value, date) {
+    if (typeof value !== 'string') return null;
+    var base = sellerCardDateNumber(date);
+    if (base === null) return null;
+    var text = value.trim();
+    var match = /^(\d{1,2}):(\d{2})\s*(AM|PM)?\s*(today|tomorrow|tmr)?\s*$/i.exec(text);
+    var weekday = null;
+    if (!match) {
+        weekday = /(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i.exec(text);
+        match = weekday && /^(\d{1,2}):(\d{2})\s*(AM|PM)?/i.exec(text);
+    }
+    if (!match) return null;
+    var hour = Number(match[1]), minute = Number(match[2]);
+    if (minute > 59 || (match[3] && (hour < 1 || hour > 12)) || (!match[3] && hour > 23)) return null;
+    if (match[3]) hour = hour % 12 + (match[3].toUpperCase() === 'PM' ? 12 : 0);
+    if (weekday) {
+        var days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        var difference = (days.indexOf(weekday[1].toLowerCase()) - new Date(base).getUTCDay() + 7) % 7;
+        base += (difference || 7) * 86400000;
+    } else if (match[4] && /^(tomorrow|tmr)$/i.test(match[4])) {
+        base += 86400000;
+    }
+    var day = new Date(base).toISOString().slice(0, 10);
+    return sellerCardTimeOnDate(day, ('0' + hour).slice(-2) + ':' + ('0' + minute).slice(-2));
+}
+
+function sellerOrdersCloseLabel(p, now) {
+    var close = p.orderWindowEnd || p.cutoffTime;
+    if (typeof close !== 'string') return '--';
+    close = close.trim();
+    var date = p.recurring && p.nextOccurrenceDate ? p.nextOccurrenceDate : p.availableDate;
+    var cutoff = sellerCardTimeOnDate(date, close);
+    if (!cutoff) {
+        var timeOnly = sellerCardTimeOnDate('2000-01-01', close);
+        return timeOnly && !date ? 'at ' + sellerCardTime(timeOnly) : '--';
+    }
+    var delivery = sellerCardTimestamp(p.readyByTime) || sellerCardLegacyDelivery(p.readyByTime, date);
+    if (delivery && cutoff > delivery) {
+        var previousDay = new Date(sellerCardDateNumber(date) - 86400000).toISOString().slice(0, 10);
+        var previousCutoff = sellerCardTimeOnDate(previousDay, close);
+        var today = sellerCardDateParts(now || new Date());
+        cutoff = previousDay >= today && previousCutoff < delivery ? previousCutoff : delivery;
+    }
+    var label = sellerCardDateTime(cutoff, now, ' at ');
+    return label.replace(/^(Today|Tomorrow)/, function (day) { return day.toLowerCase(); });
+}
+
+function sellerDeliveryLabel(p, now) {
+    var v = typeof p.readyByTime === 'string' ? p.readyByTime.trim() : '';
     if (!v) return '--';
-    return /^([01]?\d|2[0-3]):[0-5]\d$/.test(v) ? prettyTime(v) : v;
+    var date = sellerCardTimestamp(v);
+    if (date) return sellerCardDateTime(date, now, ' · ');
+    var offeringDate = p.recurring && p.nextOccurrenceDate ? p.nextOccurrenceDate : p.availableDate;
+    var time = sellerCardTimeOnDate(offeringDate || '2000-01-01', v);
+    if (time) return offeringDate ? sellerCardDateTime(time, now, ' · ') : sellerCardTime(time);
+    return /^\d{4}-\d{2}-\d{2}|^\d{1,2}:\d{1,2}$/.test(v) ? '--' : v;
 }
 function statusDot(paid, cancelled) { return cancelled ? '<span class="status-dot red"></span>' : paid ? '<span class="status-dot green"></span>' : '<span class="status-dot orange"></span>'; }
 function localDateStr(d) { var y = d.getFullYear(), m = ('0' + (d.getMonth() + 1)).slice(-2), day = ('0' + d.getDate()).slice(-2); return y + '-' + m + '-' + day; }
@@ -893,7 +1002,7 @@ function sdOfferingCardHtml(p, orderCount) {
         + (remaining != null ? '<strong>' + remaining + ' available</strong>' : 'No limit') + '</div>';
     if (isHm && (!p.orderWindowEnd && !p.cutoffTime)) {
         h += '<div class="sd-card__times">'
-            + '<span class="sd-card__time">⏱ Availability <span class="sd-tv">' + esc(p.readyByTime || 'Always Available') + '</span></span>'
+            + '<span class="sd-card__time">⏱ Availability <span class="sd-tv">' + esc(p.readyByTime ? sellerDeliveryLabel(p) : 'Always Available') + '</span></span>'
             + '</div>';
     } else {
         h += '<div class="sd-card__times">'

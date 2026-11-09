@@ -60,18 +60,26 @@ function adminNormaliseHash() {
     if (adminRoutes[hash]) return hash;
     return '#/home';
 }
+var adminRenderGeneration = 0;
 async function adminRender() {
+    var generation = ++adminRenderGeneration;
     if (!A.role) { await adminGate(); return; }
+    var requestedHash = location.hash;
+    function isCurrentRender() {
+        return generation === adminRenderGeneration && requestedHash === location.hash && !!A.role;
+    }
     var identity;
     try {
         identity = await api('/api/auth/me');
     } catch (err) {
+        if (!isCurrentRender()) return;
         A.me = null;
         A.role = null;
         var errorContainer = viewEl();
         if (errorContainer) errorContainer.innerHTML = adminErrorView(err);
         return;
     }
+    if (!isCurrentRender()) return;
     if (!identity || !identity.authenticated) {
         A.me = null;
         A.role = null;
@@ -91,16 +99,20 @@ async function adminRender() {
     if (location.hash !== hash) {
         // replaceState avoids pushing a bogus entry onto the history stack.
         history.replaceState(null, '', hash);
+        requestedHash = location.hash;
     }
     var route = adminResolveRoute(hash);
     var view = viewEl();
     view.innerHTML = '<div class="page-loading"><div class="spinner"></div></div>';
     try {
-        view.innerHTML = await route.fn(route.arg) || '';
+        var content = await route.fn(route.arg);
+        if (!isCurrentRender()) return;
+        view.innerHTML = content || '';
         adminUpdateNav(hash);
         window.scrollTo(0, 0);
         adminRestoreFocus();
     } catch (err) {
+        if (!isCurrentRender()) return;
         view.innerHTML = adminErrorView(err);
     }
 }
