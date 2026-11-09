@@ -207,6 +207,44 @@ class AuthRateLimitSecurityTest {
     }
 
     @Test
+    void spoofedCfConnectingIpCannotBypassRateLimitWhenProxyForwardedForIsPresent() throws Exception {
+        String realProxyIp = uniqueIp("real-proxy");
+        // Exhaust the 5 allowed registrations for this real IP while attempting to spoof CF-Connecting-IP
+        for (int i = 0; i < AuthRateLimiter.REGISTRATION_MAX; i++) {
+            mvc.perform(post("/api/auth/register/buyer")
+                    .with(csrf())
+                    .header("X-Forwarded-For", realProxyIp)
+                    .header("CF-Connecting-IP", uniqueIp("spoofed-cf-" + i))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(Map.of(
+                            "name", "Attacker " + i,
+                            "mobileNumber", uniqueMobile(),
+                            "password", BUYER_PASSWORD,
+                            "flatHouseNumber", "AT-" + i,
+                            "building", "Wing A",
+                            "areaId", areaId,
+                            "societyId", societyId))))
+                    .andExpect(status().isCreated());
+        }
+
+        // The 6th attempt from the same proxy-verified IP must be rejected (HTTP 429) despite different CF-Connecting-IP
+        mvc.perform(post("/api/auth/register/buyer")
+                .with(csrf())
+                .header("X-Forwarded-For", realProxyIp)
+                .header("CF-Connecting-IP", uniqueIp("spoofed-cf-bypass"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(Map.of(
+                        "name", "Attacker 6",
+                        "mobileNumber", uniqueMobile(),
+                        "password", BUYER_PASSWORD,
+                        "flatHouseNumber", "AT-6",
+                        "building", "Wing A",
+                        "areaId", areaId,
+                        "societyId", societyId))))
+                .andExpect(status().isTooManyRequests());
+    }
+
+    @Test
     void adminLoginEndpointsPermitGenerousAttempts() throws Exception {
         String adminIp = uniqueIp("admin");
         // /admin/login endpoint is open and allows past normal 20-attempt threshold

@@ -35,6 +35,8 @@ import java.time.LocalDate;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -72,6 +74,7 @@ class RecurringBuyerOrderFlowTest {
     @Autowired private KitchenService kitchenService;
     @Autowired private MarketplaceService marketplaceService;
     @Autowired private OrderService orderService;
+    @Autowired private com.example.my_first_spring_api.repository.OrderRepository orderRepository;
 
     private User seller;
     private User buyer;
@@ -329,5 +332,53 @@ OrderDto placed = orderService.placeOrder(PaymentStatus.PENDING, "cod", null, nu
         if (closedShown != null) {
             assertThat(closedShown.getOrdersClosed()).isTrue();
         }
+    }
+    @Test
+    void concurrentBuyersCannotOversellRecurringOccurrenceCapacity() throws Exception {
+        // Occurrence capacity capped at 3 plates
+        ProductDto product = createRecurring("LimitedPoha", LocalDate.now(), 50, 3);
+        Occurrence today = occurrenceOf(product.getId(), LocalDate.now());
+
+        int buyerCount = 10;
+        ExecutorService pool = Executors.newFixedThreadPool(buyerCount);
+        CountDownLatch startSignal = new CountDownLatch(1);
+        AtomicInteger successCount = new AtomicInteger();
+        AtomicInteger rejectedCount = new AtomicInteger();
+
+        List<Future<?>> futures = new java.util.ArrayList<>();
+        for (int i = 0; i < buyerCount; i++) {
+            final int idx = i;
+            futures.add(pool.submit(() -> {
+                User u = new User("CBuyer" + idx + "_" + UUID.randomUUID().toString().substring(0, 6),
+                        "9500" + String.format("%06d", idx), "Flat-" + idx, UserRole.BUYER);
+                u.setSociety("Society");
+                u.setBuilding("Building A");
+                                User concurrentBuyer = users.saveAndFlush(u);
+                MockHttpSession session = new MockHttpSession();
+                session.setAttribute(BuyerService.BUYER_SESSION_KEY, concurrentBuyer.getId());
+
+                try {
+                    startSignal.await(5, TimeUnit.SECONDS);
+                    orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request(product.getId(), 1)), session);
+                    orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, session);
+                    successCount.incrementAndGet();
+                } catch (IllegalArgumentException expected) {
+                    rejectedCount.incrementAndGet();
+                } catch (Exception unexpected) {
+                    throw new RuntimeException(unexpected);
+                }
+            }));
+        }
+
+        startSignal.countDown();
+        for (Future<?> f : futures) {
+            f.get(10, TimeUnit.SECONDS);
+        }
+        pool.shutdown();
+
+        // Exactly 3 orders succeed, 7 are rejected, and booked count in DB is exactly 3
+        assertThat(successCount.get()).isEqualTo(3);
+        assertThat(rejectedCount.get()).isEqualTo(7);
+        assertThat(orderRepository.countBookedPlatesForOccurrence(product.getId(), today.getId())).isEqualTo(3);
     }
 }
