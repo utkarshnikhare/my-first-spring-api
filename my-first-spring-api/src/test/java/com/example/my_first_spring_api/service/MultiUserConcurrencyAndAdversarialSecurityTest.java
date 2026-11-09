@@ -595,4 +595,98 @@ public class MultiUserConcurrencyAndAdversarialSecurityTest {
         buyer.setFlatHouseNumber("Flat " + suffix);
         return userRepository.saveAndFlush(buyer);
     }
+    @Test
+    @DisplayName("WEAK-10: Concurrent multi-item checkouts with reversed item order acquire locks deterministically without deadlock")
+    void concurrentMultiItemCheckoutsWithReversedItemOrderDoNotDeadlock() throws Exception {
+        Product p1 = new Product(kitchen, "Meal 1 " + UUID.randomUUID().toString().substring(0, 4), "desc", BigDecimal.valueOf(100), null);
+        p1.setAvailableToday(true);
+        p1.setAvailableDate(LocalDate.now());
+        p1.setRemainingQuantity(10);
+        p1.setMaxQuantity(10);
+        p1.setCutoffTime("23:59");
+        p1.setOrderWindowEnd("23:59");
+        p1.setReadyByTime(LocalDate.now().atTime(23, 59).toString());
+        p1 = productRepository.saveAndFlush(p1);
+
+        Product p2 = new Product(kitchen, "Meal 2 " + UUID.randomUUID().toString().substring(0, 4), "desc", BigDecimal.valueOf(150), null);
+        p2.setAvailableToday(true);
+        p2.setAvailableDate(LocalDate.now());
+        p2.setRemainingQuantity(10);
+        p2.setMaxQuantity(10);
+        p2.setCutoffTime("23:59");
+        p2.setOrderWindowEnd("23:59");
+        p2.setReadyByTime(LocalDate.now().atTime(23, 59).toString());
+        p2 = productRepository.saveAndFlush(p2);
+
+        final Product lowerIdProduct = p1.getId() < p2.getId() ? p1 : p2;
+        final Product higherIdProduct = p1.getId() < p2.getId() ? p2 : p1;
+
+        int pairs = 5;
+        int totalBuyers = pairs * 2;
+        ExecutorService pool = Executors.newFixedThreadPool(totalBuyers);
+        CountDownLatch startSignal = new CountDownLatch(1);
+        AtomicInteger completedCount = new AtomicInteger();
+
+        List<Future<?>> futures = new java.util.ArrayList<>();
+        for (int i = 0; i < pairs; i++) {
+            final int pairIdx = i;
+            // Buyer A requests items in order [lower, higher]
+            futures.add(pool.submit(() -> {
+                User buyerA = createBuyer("BuyerAsc" + pairIdx);
+                MockHttpSession sessionA = new MockHttpSession();
+                sessionA.setAttribute(BuyerService.BUYER_SESSION_KEY, buyerA.getId());
+
+                OrderItemRequest req1 = new OrderItemRequest();
+                req1.setProductId(lowerIdProduct.getId());
+                req1.setQuantity(1);
+
+                OrderItemRequest req2 = new OrderItemRequest();
+                req2.setProductId(higherIdProduct.getId());
+                req2.setQuantity(1);
+
+                orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(req1, req2), sessionA);
+                try {
+                    startSignal.await(5, TimeUnit.SECONDS);
+                    orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, sessionA);
+                    completedCount.incrementAndGet();
+                } catch (Exception ex) {
+                    throw new RuntimeException(ex);
+                }
+            }));
+
+            // Buyer B requests items in reverse order [higher, lower]
+            futures.add(pool.submit(() -> {
+                User buyerB = createBuyer("BuyerDesc" + pairIdx);
+                MockHttpSession sessionB = new MockHttpSession();
+                sessionB.setAttribute(BuyerService.BUYER_SESSION_KEY, buyerB.getId());
+
+                OrderItemRequest req1 = new OrderItemRequest();
+                req1.setProductId(higherIdProduct.getId());
+                req1.setQuantity(1);
+
+                OrderItemRequest req2 = new OrderItemRequest();
+                req2.setProductId(lowerIdProduct.getId());
+                req2.setQuantity(1);
+
+                orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(req1, req2), sessionB);
+                try {
+                    startSignal.await(5, TimeUnit.SECONDS);
+                    orderService.placeOrder(PaymentStatus.PENDING, "cod", null, null, sessionB);
+                    completedCount.incrementAndGet();
+                } catch (Exception ex) {
+                    throw new RuntimeException(ex);
+                }
+            }));
+        }
+
+        startSignal.countDown();
+        for (Future<?> f : futures) {
+            f.get(15, TimeUnit.SECONDS);
+        }
+        pool.shutdown();
+
+        assertThat(completedCount.get()).isEqualTo(totalBuyers);
+        assertThat(productRepository.findById(lowerIdProduct.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(10 - totalBuyers);
+        assertThat(productRepository.findById(higherIdProduct.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(10 - totalBuyers);
+    }
 }

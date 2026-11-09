@@ -280,14 +280,6 @@ public class AuthController {
         if (request == null) {
             return "unknown";
         }
-        String cfConnectingIp = request.getHeader("CF-Connecting-IP");
-        if (StringUtils.hasText(cfConnectingIp)) {
-            return cfConnectingIp.trim();
-        }
-        String xRealIp = request.getHeader("X-Real-IP");
-        if (StringUtils.hasText(xRealIp)) {
-            return xRealIp.trim();
-        }
         String forwarded = request.getHeader("X-Forwarded-For");
         if (StringUtils.hasText(forwarded)) {
             int lastComma = forwarded.lastIndexOf(',');
@@ -295,6 +287,14 @@ public class AuthController {
             if (StringUtils.hasText(client)) {
                 return client;
             }
+        }
+        String cfConnectingIp = request.getHeader("CF-Connecting-IP");
+        if (StringUtils.hasText(cfConnectingIp)) {
+            return cfConnectingIp.trim();
+        }
+        String xRealIp = request.getHeader("X-Real-IP");
+        if (StringUtils.hasText(xRealIp)) {
+            return xRealIp.trim();
         }
         return request.getRemoteAddr();
     }

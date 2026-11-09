@@ -1306,7 +1306,7 @@ public class OrderService {
     }
 
     private void consumeStock(Order order) {
-        Map<Long, Integer> totals = new HashMap<>();
+        Map<Long, Integer> totals = new TreeMap<>();
         for (OrderItem item : order.getItems()) {
             Long productId = item.getProduct().getId();
             int quantity = item.getQuantity() == null ? 0 : item.getQuantity();
@@ -1338,7 +1338,7 @@ public class OrderService {
     }
 
     private void restoreStock(Order order) {
-        Map<Long, Integer> totals = new HashMap<>();
+        Map<Long, Integer> totals = new TreeMap<>();
         for (OrderItem item : order.getItems()) {
             if (item == null || item.getProduct() == null || item.getProduct().getId() == null) continue;
             Long productId = item.getProduct().getId();
