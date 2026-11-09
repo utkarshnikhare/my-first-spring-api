@@ -375,16 +375,16 @@ final class OfferingTiming {
         if (dto == null || product == null) return "UNAVAILABLE";
         if (product.isArchived()) return "UNAVAILABLE";
         if (product.isPublicationDraft()) return "UNAVAILABLE";
-        if (Boolean.TRUE.equals(dto.getOrdersPaused())
+        if (Boolean.TRUE.equals(dto.getOrdersPaused()) || Boolean.TRUE.equals(dto.getSoldOut())
                 || "EXPIRED".equals(dto.getLifecycleState())
                 || "ADMIN_SUSPENDED".equals(dto.getLifecycleState())
-                || "UNAVAILABLE".equals(dto.getLifecycleState())) return "UNAVAILABLE";
+                || "UNAVAILABLE".equals(dto.getLifecycleState())
+                || "SOLD_OUT".equals(dto.getLifecycleState())) return "UNAVAILABLE";
         LocalDate deliveryDate = Boolean.TRUE.equals(dto.getRecurring())
                 ? dto.getNextOccurrenceDate() : product.getAvailableDate();
         if (deliveryDate == null) deliveryDate = today;
         if (deliveryDate.isBefore(today)) return "UNAVAILABLE";
-        if (!deliveryDate.isAfter(today) && !Boolean.TRUE.equals(dto.getAvailableToday())
-                && !Boolean.TRUE.equals(dto.getSoldOut()) && !"SOLD_OUT".equals(dto.getLifecycleState())) {
+        if (!deliveryDate.isAfter(today) && !Boolean.TRUE.equals(dto.getAvailableToday())) {
             return "UNAVAILABLE";
         }
         return deliveryDate.isAfter(today) ? "PRE_ORDER" : "ORDER";

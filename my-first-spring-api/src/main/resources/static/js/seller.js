@@ -4568,6 +4568,18 @@ document.addEventListener('click', async function (e) {
             }
             case 'pause-orders': {
                 var pausePid = Number(t.dataset.pid);
+                if (t.textContent && t.textContent.trim() === 'Close Post') {
+                    try {
+                        t.disabled = true;
+                        await sellerApi('/api/seller-app/products/' + pausePid + '/pause', { method: 'POST' });
+                        toast('Orders closed', 'success');
+                        await sellerRender();
+                    } catch (err) {
+                        toast(err.message || 'Could not close post', 'error');
+                        t.disabled = false;
+                    }
+                    break;
+                }
                 confirmModal({
                     icon: '⏸️',
                     title: 'Pause orders?',
