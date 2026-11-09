@@ -176,12 +176,6 @@ if [[ "${IS_LOCAL_HOST}" == "false" && "${IS_ISOLATED_NAMED_DB}" == "false" && "
   exit 1
 fi
 
-# Ensure pg_restore utility is available
-if ! command -v pg_restore >/dev/null 2>&1; then
-  echo "[-] ERROR: pg_restore utility not found. Please install postgresql-client." >&2
-  exit 1
-fi
-
 # Create temporary permission-restricted pgpass file (mode 0600)
 SECURE_PGPASS=$(mktemp "${TMPDIR:-/tmp}/sociomart_restore_pgpass_XXXXXX" 2>/dev/null || mktemp)
 chmod 0600 "${SECURE_PGPASS}"
@@ -278,6 +272,12 @@ if [[ "${BACKUP_FILE}" =~ \.enc$ ]]; then
     exit 1
   }
   RESTORE_INPUT="${TEMP_DECRYPTED}"
+fi
+
+# Ensure pg_restore utility is available before invoking restore
+if ! command -v pg_restore >/dev/null 2>&1; then
+  echo "[-] ERROR: pg_restore utility not found. Please install postgresql-client." >&2
+  exit 1
 fi
 
 echo "[*] Executing database restore into target database at $(date -u +"%Y-%m-%dT%H:%M:%SZ")..."
