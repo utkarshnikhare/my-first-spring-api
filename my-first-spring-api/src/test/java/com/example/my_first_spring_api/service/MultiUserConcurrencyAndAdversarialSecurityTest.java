@@ -31,6 +31,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:concurrency-security-test;DB_CLOSE_DELAY=-1;DEFAULT_LOCK_TIMEOUT=10000",
+        "spring.datasource.hikari.maximum-pool-size=10",
+        "spring.datasource.hikari.connection-timeout=10000",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.jpa.open-in-view=false",
         "sociomart.bootstrap.enabled=false"
@@ -45,6 +47,10 @@ public class MultiUserConcurrencyAndAdversarialSecurityTest {
     @Autowired private ProductRepository productRepository;
     @Autowired private OrderRepository orderRepository;
     @Autowired private OrderItemRepository orderItemRepository;
+    @Autowired private AnalyticsEventRepository analyticsEventRepository;
+    @Autowired private NotificationEventRepository notificationEventRepository;
+    @Autowired private OrderDailyAggregateRepository orderDailyAggregateRepository;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     @Autowired private OrderService orderService;
     @Autowired private SellerService sellerService;
@@ -322,6 +328,7 @@ public class MultiUserConcurrencyAndAdversarialSecurityTest {
             CountDownLatch doneLatch = new CountDownLatch(stage);
 
             AtomicInteger successes = new AtomicInteger(0);
+            Queue<Throwable> failures = new ConcurrentLinkedQueue<>();
 
             for (int i = 0; i < stage; i++) {
                 final int userIndex = i;
@@ -342,27 +349,148 @@ public class MultiUserConcurrencyAndAdversarialSecurityTest {
                         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(req), session);
                         orderService.placeOrder(PaymentStatus.PAID, "cod", null, null, session);
                         successes.incrementAndGet();
-                    } catch (Exception ignored) {
+                    } catch (Exception ex) {
+                        failures.add(ex);
                     } finally {
                         doneLatch.countDown();
                     }
+
                 });
             }
 
             long startTime = System.currentTimeMillis();
             startLatch.countDown();
-            doneLatch.await(20, TimeUnit.SECONDS);
+            boolean completed = false;
+            boolean terminated;
+            try {
+                completed = doneLatch.await(20, TimeUnit.SECONDS);
+            } finally {
+                if (completed) executor.shutdown();
+                else executor.shutdownNow();
+                terminated = executor.awaitTermination(30, TimeUnit.SECONDS);
+            }
             long elapsed = System.currentTimeMillis() - startTime;
-            executor.shutdown();
+            String failureDetails = failures.stream()
+                    .map(ex -> ex.getClass().getName() + ": " + ex.getMessage())
+                    .distinct().collect(java.util.stream.Collectors.joining("; "));
+            assertThat(terminated).as("stage %s executor terminated", stage).isTrue();
+            assertThat(completed).as("stage %s completed; failures: %s", stage, failureDetails).isTrue();
 
             // Under burst load, transactions either commit or rollback cleanly without data corruption
             Product refreshed = productRepository.findById(stageProduct.getId()).orElseThrow();
             assertThat(refreshed.getRemainingQuantity()).isEqualTo(stage - successes.get());
 
             // High concurrency throughput: high success rate and fast execution
-            assertThat(successes.get()).isGreaterThanOrEqualTo(stage * 8 / 10);
+            assertThat(successes.get()).as("stage %s failures: %s", stage, failureDetails)
+                    .isGreaterThanOrEqualTo(stage * 8 / 10);
             assertThat(elapsed).isLessThan(15000); // 15 seconds max for concurrent stage
         }
+    }
+
+    @Test
+    @DisplayName("CON-003: Nested independent transactions retain headroom under competing root traffic")
+    void nestedTransactionsKeepHeadroomUnderCompetingRootTraffic() throws Exception {
+        int requestCount = 25;
+        int rootTransactionCapacity = 3;
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String nestedEventType = "NESTED_TX_" + suffix;
+        String outerNotificationTitle = "Outer transaction " + suffix;
+        long notificationsBefore = notificationEventRepository.count();
+
+        TransactionTemplate requiresNew = new TransactionTemplate(transactionTemplate.getTransactionManager());
+        requiresNew.setPropagationBehavior(
+                org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch startCompetingRoots = new CountDownLatch(1);
+        CountDownLatch competingRootsReady = new CountDownLatch(requestCount - rootTransactionCapacity);
+        CountDownLatch initialRootsHoldingConnections = new CountDownLatch(rootTransactionCapacity);
+        CountDownLatch competingRootEntered = new CountDownLatch(1);
+        CountDownLatch allowNestedTransactions = new CountDownLatch(1);
+        CountDownLatch completed = new CountDownLatch(requestCount);
+        Queue<Throwable> failures = new ConcurrentLinkedQueue<>();
+        ExecutorService executor = Executors.newFixedThreadPool(requestCount);
+        List<Future<?>> tasks = new ArrayList<>();
+
+        for (int i = 0; i < requestCount; i++) {
+            final int request = i;
+            tasks.add(executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    if (request >= rootTransactionCapacity) {
+                        awaitLatch(startCompetingRoots, "competing root transactions");
+                        competingRootsReady.countDown();
+                    }
+                    transactionTemplate.executeWithoutResult(outerStatus -> {
+                        if (request < rootTransactionCapacity) {
+                            analyticsEventRepository.count();
+                            initialRootsHoldingConnections.countDown();
+                            awaitLatch(allowNestedTransactions, "nested transaction start");
+                        } else {
+                            analyticsEventRepository.count();
+                            competingRootEntered.countDown();
+                        }
+
+                        requiresNew.executeWithoutResult(innerStatus ->
+                                analyticsEventRepository.save(new AnalyticsEvent(
+                                        nestedEventType, null, null, null, "Nested commit " + request)));
+
+                        NotificationEvent outerEvent = new NotificationEvent();
+                        outerEvent.setTitle(outerNotificationTitle);
+                        outerEvent.setBody("Outer transaction " + request);
+                        notificationEventRepository.save(outerEvent);
+
+                        if (request % 2 == 1) {
+                            outerStatus.setRollbackOnly();
+                        }
+                    });
+                } catch (Exception ex) {
+                    failures.add(ex);
+                } finally {
+                    completed.countDown();
+                }
+            }));
+        }
+
+        boolean reachedRootCapacity;
+        boolean allCompetingRootsReady;
+        boolean competitorStartedBeforeNested;
+        boolean allCompleted;
+        boolean terminated;
+        try {
+            startLatch.countDown();
+            reachedRootCapacity = initialRootsHoldingConnections.await(5, TimeUnit.SECONDS);
+            startCompetingRoots.countDown();
+            allCompetingRootsReady = competingRootsReady.await(5, TimeUnit.SECONDS);
+            competitorStartedBeforeNested = competingRootEntered.await(500, TimeUnit.MILLISECONDS);
+        } finally {
+            allowNestedTransactions.countDown();
+            executor.shutdown();
+        }
+        allCompleted = completed.await(30, TimeUnit.SECONDS);
+        if (!allCompleted) {
+            executor.shutdownNow();
+        }
+        terminated = executor.awaitTermination(10, TimeUnit.SECONDS);
+        if (allCompleted) {
+            for (Future<?> task : tasks) {
+                try {
+                    task.get();
+                } catch (java.util.concurrent.ExecutionException ex) {
+                    failures.add(ex.getCause());
+                }
+            }
+        }
+
+        assertThat(reachedRootCapacity).isTrue();
+        assertThat(allCompetingRootsReady).isTrue();
+        assertThat(competitorStartedBeforeNested).isFalse();
+        assertThat(allCompleted).isTrue();
+        assertThat(terminated).isTrue();
+        assertThat(failures).isEmpty();
+        assertThat(analyticsEventRepository.countByEventType(nestedEventType)).isEqualTo(requestCount);
+        assertThat(notificationEventRepository.count()).isEqualTo(
+                notificationsBefore + (requestCount + 1L) / 2L);
     }
 
     @Test
@@ -428,6 +556,9 @@ public class MultiUserConcurrencyAndAdversarialSecurityTest {
         OrderDto draft = orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request), session);
         Long orderId = draft.getId();
         Long productId = product.getId();
+        long orderEventsBefore = analyticsEventRepository.countByEventType(AnalyticsService.EV_ORDER_PLACED);
+        long notificationsBefore = notificationEventRepository.count();
+        long aggregatesBefore = orderDailyAggregateRepository.count();
 
         assertThatThrownBy(() -> transactionTemplate.execute(status -> {
             orderService.placeOrder(PaymentStatus.PENDING, "cod", null, "injected transaction failure", session);
@@ -437,6 +568,21 @@ public class MultiUserConcurrencyAndAdversarialSecurityTest {
 
         assertThat(productRepository.findById(productId).orElseThrow().getRemainingQuantity()).isEqualTo(10);
         assertThat(orderRepository.findById(orderId).orElseThrow().getOrderStatus()).isEqualTo(OrderStatus.DRAFT);
+        assertThat(analyticsEventRepository.countByEventType(AnalyticsService.EV_ORDER_PLACED))
+                .isEqualTo(orderEventsBefore + 1);
+        assertThat(notificationEventRepository.count()).isEqualTo(notificationsBefore + 1);
+        assertThat(orderDailyAggregateRepository.count()).isEqualTo(aggregatesBefore + 1);
+    }
+
+    private static void awaitLatch(CountDownLatch latch, String operation) {
+        try {
+            if (!latch.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Timed out waiting for " + operation + ".");
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for " + operation + ".", ex);
+        }
     }
 
     private User createBuyer(String name) {
