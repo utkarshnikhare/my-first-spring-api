@@ -1,9 +1,19 @@
 # SocioMart Production Database Recovery Assessment
 
-**Date:** 2026-11-01  
+**Date:** 2026-11-09
 **Target Environment:** Render Live Web Service (`sociomart-demo.onrender.com`) + Supabase PostgreSQL  
 **Assessor:** Senior Data Reliability & Release Engineering Audit Team  
 **Audit Scope:** Production data safety, backup artifacts, isolated restoration proof, and disaster recovery readiness  
+
+## CURRENT RELEASE-GATE RESULT — 2026-11-09
+
+**Status: BLOCKED / NOT VERIFIED.** The required production backup and restoration of that backup into an isolated PostgreSQL target have not been completed. No production connection was attempted and no production data was read or written during this verification.
+
+- GitHub CLI reports `ADMIN` permission for `utkarshnikhare/my-first-spring-api`. The repository Actions secret-name listing returned no entries; secret values were neither requested nor accessed.
+- The latest scheduled backup run, [run 42537104064](https://github.com/utkarshnikhare/my-first-spring-api/actions/runs/42537104064), failed at **Execute Backup & Integrity Verification** with `Secret SOCIOMART_PROD_DB_URL is not configured`. The artifact-upload step was skipped. The latest eight listed scheduled runs all concluded with failure.
+- No production backup artifact was produced by the latest run, and none was retrieved during this verification. The GitHub Actions workflow requires both `SOCIOMART_PROD_DB_URL` and `BACKUP_ENCRYPTION_PASSPHRASE`; without them, triggering another production run cannot succeed.
+- `scripts/test-restore-safeguards.sh` passed all seven local safeguard and encryption checks. The focused Maven run passed all three H2 tests, but skipped `PostgresDatabaseBackupAndRestoreTest` because this host has no Docker environment. The H2 test is a synthetic in-memory data-copy exercise; it does not run `pg_dump`, `pg_restore`, or restore a production backup.
+- No Render or Supabase access was used or verified. The native PostgreSQL restore remains unverified, so the backup release gate remains **BLOCKED**.
 
 ---
 
@@ -14,18 +24,18 @@
 | **Actual Supabase plan verified** | PASS / NOT VERIFIED | **NOT VERIFIED** | Supabase dashboard credentials/session are not available in the audit workspace. Dashboard navigation steps provided for owner verification. |
 | **Available managed backups verified** | PASS / NOT VERIFIED | **NOT VERIFIED** | Managed snapshots cannot be verified via API without provider credentials. On Free tier, Supabase provides 0 days automated backups. |
 | **Backup strategy documented** | PASS / FAIL | **PASS** | Complete multi-tiered backup architecture, encryption, and rotation documented in `PRODUCTION_DATABASE_BACKUP_AND_DISASTER_RECOVERY.md`. |
-| **Automated backup configured** | PASS / NOT CONFIGURED | **PASS** | Script `scripts/backup-database.sh` and scheduled GitHub Actions workflow `.github/workflows/database-backup.yml` implemented with minimal permissions (`contents: read`). |
+| **Automated backup operation** | PASS / BLOCKED | **BLOCKED** | The workflow is configured with `contents: read`, but the latest scheduled run failed because `SOCIOMART_PROD_DB_URL` is not configured; no artifact was uploaded. |
 | **Credential exposure protection** | PASS / FAIL | **PASS** | `backup-database.sh` and `restore-database.sh` updated to use ephemeral `PGPASSFILE` (mode 0600). Passwords are never passed in process arguments (`ps`) or printed. |
 | **Hardened restore safeguards** | PASS / FAIL | **PASS** | `restore-database.sh` requires `CONFIRM_ISOLATED_RECOVERY_TARGET=true`, unconditionally rejects production hosts/db names with NO bypass, and executes pre-flight `psql` connection probes. Verified in `test-restore-safeguards.sh`. |
 | **AES-256-GCM AEAD Authentication** | PASS / FAIL | **PASS** | Implemented `scripts/BackupCrypto.java` with 128-bit authentication tag verification and unique 12-byte nonce. Flipped bits throw `AEADBadTagException` and halt immediately. |
-| **PostgreSQL 16 Test Execution (Local)** | PASS / BLOCKED | **BLOCKED** | Maven test execution confirmed Docker daemon is not installed on this Windows host (`Could not find a valid Docker environment`). Test skipped (`Skipped: 1`). Clean compilation verified. |
-| **Backup integrity verified** | PASS / FAIL | **PASS** | SHA-256 verification and tamper-detection validated; corrupted payload test fails fast before `pg_restore`. |
-| **Isolated restore verification** | PASS / FAIL | **PASS** | Complete restoration executed into an isolated target database in automated test suite without touching production. |
-| **Restored schema and data verified** | PASS / FAIL | **PASS** | Verified 29 tables, Flyway V1-V21 integrity, foreign keys, indexes, users, kitchens, products, orders, payment statuses (`UNPAID`, `AWAITING`, `PAID`), and sequences. |
+| **PostgreSQL 16 Test Execution (Local)** | PASS / BLOCKED | **BLOCKED** | Focused Maven run compiled the native PostgreSQL Testcontainers test but skipped its execution because this Windows host has no Docker environment. |
+| **Production backup integrity verified** | PASS / NOT VERIFIED | **NOT VERIFIED** | No production backup artifact exists in the accessible workflow evidence. Local checksum and encryption checks use synthetic test data only. |
+| **Restore of production backup into isolated PostgreSQL** | PASS / BLOCKED | **BLOCKED** | No production backup was restored; the native PostgreSQL test was skipped because Docker is unavailable. |
+| **Production backup schema and data verified after restore** | PASS / NOT VERIFIED | **NOT VERIFIED** | No production backup was restored. The passing H2 test does not use a PostgreSQL dump or restore. |
 | **RPO Status** | PASS / TARGET ONLY | **TARGET ONLY** | RPO target: 24h (Free tier nightly automated) / <1h (Pro tier PITR). Cannot claim 24h operational RPO until live backups are scheduled and run. |
 | **RTO Status** | PASS / TARGET ONLY | **TARGET ONLY** | RTO target: <30m. Measured toolchain speed: dump ~1.2s, restore ~1.5s in isolated test. Full operational failover unmeasured on production. |
 | **Disaster recovery runbook created** | PASS / FAIL | **PASS** | Authoritative runbook created at `docs/PRODUCTION_DATABASE_BACKUP_AND_DISASTER_RECOVERY.md`. |
-| **Production data untouched** | PASS / FAIL | **PASS** | Zero write/destructive operations conducted against live Render/Supabase instance; read-only verification only (`{"database":"UP","status":"UP"}`). |
+| **Production data untouched (this verification)** | PASS / FAIL | **PASS** | No connection to Render or Supabase was attempted; no production reads or writes were performed. |
 
 ---
 
@@ -44,9 +54,9 @@
      - Automated Daily Backups: **7 days retention**.
      - Point-in-Time Recovery (PITR): **Optional add-on ($100/mo)** for continuous WAL archiving.
      - Inactivity Pausing: **Disabled**.
-3. **Workspace State:**
+3. **Workspace State (as recorded on 2026-11-01):**
    - The repository's `backups/` directory contained source-code snapshots from 2026-10-05, not SQL database dumps.
-   - Prior to this audit, no automated script or scheduled job existed to capture off-site database backups.
+   - At that assessment date, no automated script or scheduled job had yet been implemented to capture off-site database backups; the script and workflow were added afterward, but are not currently producing artifacts.
 
 ---
 
@@ -65,7 +75,7 @@
 
 ### Tier 1: Minimum Viable Approach (Zero Additional Cost — ₹0 / $0/mo)
 - **Mechanism:** Scheduled GitHub Actions workflow (`.github/workflows/database-backup.yml`) executing nightly at 02:00 AM IST.
-- **Process:** Runs `pg_dump` over TLS, encrypts using AES-256-CBC, verifies SHA-256 hash, and stores encrypted artifacts in GitHub Actions with 14-day retention.
+- **Process:** Runs `pg_dump` over TLS, encrypts using AES-256-GCM AEAD, verifies SHA-256 hash, and stores encrypted artifacts in GitHub Actions with 14-day retention.
 - **RPO:** 24 hours.
 - **RTO:** < 30 minutes.
 - **Estimated Cost:** **$0/month** (runs on free GitHub Actions runner minutes and free artifact quota).
@@ -104,28 +114,30 @@
      - Verified in automated test harness [`scripts/test-restore-safeguards.sh`](file:///C:/project/sociomart-audit-main/scripts/test-restore-safeguards.sh).
 4. **Automated Scheduled Workflow:**
    - Created [`.github/workflows/database-backup.yml`](file:///C:/project/sociomart-audit-main/.github/workflows/database-backup.yml) configured for nightly cron execution.
-5. **Demonstrated Native PostgreSQL 16 Isolated Restoration Testing:**
+5. **Native PostgreSQL 16 Isolated Restoration Test (Execution Blocked on This Host):**
    - Implemented [`PostgresDatabaseBackupAndRestoreTest.java`](file:///C:/project/sociomart-audit-main/my-first-spring-api/src/test/java/com/example/my_first_spring_api/service/PostgresDatabaseBackupAndRestoreTest.java):
      - Spins up real `postgres:16-alpine` container via Testcontainers.
      - Seeds schema via Flyway V1–V21 (all 29 tables) and representative transactional entities.
      - Executes native PostgreSQL `pg_dump --format=custom --no-owner --no-privileges`.
      - Validates raw dump is non-empty and exceeds minimum payload size (>10 KB).
      - Computes SHA-256 hash of archive.
-     - Encrypts via AES-256-CBC PBKDF2 (100,000 iterations).
+     - Encrypts via AES-256-GCM AEAD with PBKDF2 (100,000 iterations).
      - Proves corruption detection: Bit-flipped encrypted file fails verification and aborts before restore.
      - Decrypts and restores via native `pg_restore --clean --if-exists --no-owner --no-privileges` into an isolated target database (`isolated_recovery_target`).
-     - Verifies Flyway history, foreign keys, indexes, check constraints, payment statuses (`UNPAID`, `AWAITING_SELLER_VERIFICATION`, `PAID`), and ensures sequence progression without primary key collision.
-6. **Demonstrated Fast In-Memory Restoration Testing:**
+     - Verifies Flyway history, foreign keys, indexes, check constraints, payment statuses, and sequence progression.
+     - The test was compiled but skipped in this verification because Docker is unavailable; its presence is not evidence that a production backup was restored.
+6. **Synthetic H2 Backup/Restore-Shaped Test:**
    - Implemented [`DatabaseBackupAndRestoreVerificationTest.java`](file:///C:/project/sociomart-audit-main/my-first-spring-api/src/test/java/com/example/my_first_spring_api/service/DatabaseBackupAndRestoreVerificationTest.java):
-     - Provides rapid integration testing for CI environments where Docker may be unavailable.
-     - 3/3 test cases PASSED in 20.41s.
+     - Exercises hand-built SQL and direct H2-to-H2 data copying, not `pg_dump`, `pg_restore`, or the production backup scripts.
+     - 3/3 tests passed in the focused Maven run on 2026-11-09; this is synthetic evidence only.
 7. **Disaster Recovery Runbook Authored:**
    - Published [`docs/PRODUCTION_DATABASE_BACKUP_AND_DISASTER_RECOVERY.md`](file:///C:/project/sociomart-audit-main/docs/PRODUCTION_DATABASE_BACKUP_AND_DISASTER_RECOVERY.md).
 
 > [!IMPORTANT]
-> **Distinction Between Synthetic Test Verification and Actual Production Recovery:**
-> - The native PostgreSQL 16 Testcontainers test proves that the toolchain (`pg_dump -Fc`, AES-256 encryption, SHA-256 manifest, decryption, `pg_restore`) functions with zero loss against the full SocioMart PostgreSQL 16 schema.
-> - However, this synthetic test does **not** substitute for actual production backup recovery, which requires the project owner to supply the production database secret `SOCIOMART_PROD_DB_URL` and execute the workflow against the live Supabase instance. Live production recoverability remains **BLOCKED / NOT VERIFIED** pending owner action.
+> **Distinction Between Test Evidence and Production Recovery:**
+> - The passing H2 suite is synthetic and does not prove that the PostgreSQL dump/restore pipeline works.
+> - The PostgreSQL 16 Testcontainers test is designed to exercise native PostgreSQL dump/restore, but was skipped on this host because Docker is unavailable.
+> - Neither test substitutes for restoring a genuine production backup. Production recoverability remains **BLOCKED / NOT VERIFIED** until a backup artifact is successfully created and restored into an isolated PostgreSQL target.
 
 ---
 
@@ -149,25 +161,21 @@ To activate live automated production backups immediately without incurring cost
 
 ---
 
-## 7. EVIDENCE OF SUCCESSFUL ISOLATED RESTORATION
+## 7. SYNTHETIC H2 TEST EVIDENCE (NOT A POSTGRESQL RESTORE)
 
-From `DatabaseBackupAndRestoreVerificationTest` execution log:
+The focused Maven run on 2026-11-09 reported three passing `DatabaseBackupAndRestoreVerificationTest` cases and one skipped `PostgresDatabaseBackupAndRestoreTest` case. The H2 test manually builds sample SQL and copies selected rows between in-memory H2 databases. It does not create or restore a PostgreSQL archive, verify a production backup, or prove restoration of the full schema.
 ```
-[INFO] Running com.example.my_first_spring_api.service.DatabaseBackupAndRestoreVerificationTest
-...
-Restoration completed in 16 ms into isolated target jdbc:h2:mem:isolated-recovery-target-25b53e76;DB_CLOSE_DELAY=-1
-[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 20.41 s
-[INFO] Results:
-[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0 -- DatabaseBackupAndRestoreVerificationTest
+[WARNING] Tests run: 1, Failures: 0, Errors: 0, Skipped: 1 -- PostgresDatabaseBackupAndRestoreTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 1
 [INFO] BUILD SUCCESS
 ```
-- **Integrity Validation:** Recorded SHA-256 checksum matched byte-for-byte; tampered payload threw `IllegalStateException` and aborted before execution.
-- **Data Preservation:** Orders, items, payment statuses, and kitchen configurations were 100% intact after restoration.
-- **Sequence Continuity:** Restored database accepted new order insertion without primary key collision.
+- `scripts/test-restore-safeguards.sh` separately passed all seven checks, including AEAD round-trip/tamper rejection and restore-target refusals. These local checks use synthetic inputs and do not establish production backup or PostgreSQL restore evidence.
 
 ---
 
 ## 8. REMAINING BLOCKERS
 
-1. **Owner Secrets Entry:** The GitHub repository requires `SOCIOMART_PROD_DB_URL` and `BACKUP_ENCRYPTION_PASSPHRASE` to run backups against live Supabase.
-2. **Supabase Plan Confirmation:** Must be verified in the Supabase web console by the project owner.
+1. **Production backup credentials:** The repository Actions secret listing is empty, and the latest scheduled run failed because `SOCIOMART_PROD_DB_URL` is not configured. Both required secrets must be set through GitHub's secure secret-management interface; do not put their values in code, logs, or messages.
+2. **Isolated PostgreSQL restore environment:** The native test needs a working Docker runtime or another approved isolated PostgreSQL target. This host has no Docker environment, and no production backup artifact is available.
+3. **Provider access and plan:** Render/Supabase permissions and the Supabase plan were not verified in this workspace.

@@ -40,7 +40,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Native PostgreSQL 16 Disaster Recovery & Backup Restoration Test.
  *
  * Exercises the genuine native PostgreSQL 16 utilities (pg_dump, pg_restore, psql),
- * AES-256-CBC encryption/decryption, SHA-256 tamper-detection, and complete
+ * AES-256-GCM encryption/decryption, SHA-256 tamper-detection, and complete
  * schema/data/sequence verification on an isolated PostgreSQL recovery database.
  */
 @SpringBootTest(
@@ -258,11 +258,12 @@ class PostgresDatabaseBackupAndRestoreTest {
                 "--if-exists",
                 "--no-owner",
                 "--no-privileges",
+                "--exit-on-error",
                 "/tmp/restored_pg16.dump"
         );
         long restoreDuration = System.currentTimeMillis() - restoreStart;
-        // pg_restore returns 0 on success (or occasionally non-zero if DROP IF EXISTS issues warnings on fresh DB)
-        assertThat(restoreResult.getExitCode()).isLessThanOrEqualTo(1);
+        assertThat(restoreResult.getExitCode())
+                .as("pg_restore must succeed: " + restoreResult.getStderr()).isEqualTo(0);
 
         // ---------------------------------------------------------------------
         // STEP 8: Independent Verification of Restored Isolated PostgreSQL DB
