@@ -139,7 +139,7 @@ class PreorderMidnightDefectReproductionTest {
 
         // 1. Before cutoff (16:59):
         String stateOpen = OfferingTiming.lifecycleState(preorder, TOMORROW, LocalTime.of(16, 59));
-        boolean closedFlagOpen = "ORDERS_CLOSED".equals(stateOpen) || "HISTORY".equals(stateOpen);
+        boolean closedFlagOpen = "ORDERS_CLOSED".equals(stateOpen) || "EXPIRED".equals(stateOpen);
         assertThat(stateOpen).isEqualTo("LIVE");
         assertThat(closedFlagOpen).isFalse();
         assertThatCode(() -> OfferingTiming.enforceOrderWindow(preorder, TOMORROW, "today",
@@ -147,7 +147,7 @@ class PreorderMidnightDefectReproductionTest {
 
         // 2. After cutoff (17:01):
         String stateClosed = OfferingTiming.lifecycleState(preorder, TOMORROW, LocalTime.of(17, 1));
-        boolean closedFlagClosed = "ORDERS_CLOSED".equals(stateClosed) || "HISTORY".equals(stateClosed);
+        boolean closedFlagClosed = "ORDERS_CLOSED".equals(stateClosed) || "EXPIRED".equals(stateClosed);
         assertThat(stateClosed).isEqualTo("ORDERS_CLOSED");
         assertThat(closedFlagClosed).isTrue();
         assertThatThrownBy(() -> OfferingTiming.enforceOrderWindow(preorder, TOMORROW, "today",
@@ -170,8 +170,14 @@ class PreorderMidnightDefectReproductionTest {
         assertThat(OfferingTiming.lifecycleState(preorder, TOMORROW, LocalTime.of(10, 0)))
                 .isEqualTo("SOLD_OUT");
 
-        // When stock is replenished, it becomes open again across midnight
+        // Replenishment alone does not reopen a sold-out offering.
         preorder.setRemainingQuantity(15);
+        preorder.setManualReactivationRequired(true);
+        preorder.setAvailableToday(false);
+        assertThat(OfferingTiming.lifecycleState(preorder, TOMORROW, LocalTime.of(10, 0)))
+                .isEqualTo("SOLD_OUT");
+        preorder.setAvailableToday(true);
+        preorder.setManualReactivationRequired(false);
         assertThat(OfferingTiming.isWindowOpenNow(preorder, TOMORROW, LocalTime.of(10, 0))).isTrue();
         assertThat(OfferingTiming.lifecycleState(preorder, TOMORROW, LocalTime.of(10, 0)))
                 .isEqualTo("LIVE");
@@ -190,7 +196,7 @@ class PreorderMidnightDefectReproductionTest {
 
         assertThat(OfferingTiming.lifecycleState(sameDay, TODAY, LocalTime.of(14, 0))).isEqualTo("LIVE");
         assertThat(OfferingTiming.lifecycleState(sameDay, TODAY, LocalTime.of(17, 5))).isEqualTo("ORDERS_CLOSED");
-        assertThat(OfferingTiming.lifecycleState(sameDay, TOMORROW, LocalTime.of(10, 0))).isEqualTo("HISTORY");
+        assertThat(OfferingTiming.lifecycleState(sameDay, TOMORROW, LocalTime.of(10, 0))).isEqualTo("EXPIRED");
 
         // 2. Future pre-order 3 days out
         Product multiDayPreorder = createSamplePreorder();
@@ -270,9 +276,9 @@ class PreorderMidnightDefectReproductionTest {
         historical.setReadyByTime(TODAY.minusDays(2) + "T18:00");
         historical.setOrderWindowEnd("17:00");
 
-        // Historical offerings must cleanly resolve to HISTORY
+        // Historical offerings must cleanly resolve to EXPIRED
         assertThat(OfferingTiming.lifecycleState(historical, TODAY, LocalTime.NOON))
-                .isEqualTo("HISTORY");
+                .isEqualTo("EXPIRED");
 
         // Direct attempt to order historical offering must fail
         assertThat(OfferingTiming.isWindowOpenNow(historical, TODAY, LocalTime.NOON))

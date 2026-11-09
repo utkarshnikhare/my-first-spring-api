@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -194,7 +195,7 @@ public class RetentionService {
     @Transactional(readOnly = true)
     public Map<String, Object> retentionStatus() {
         int days = retentionDays();
-        LocalDateTime cutoffAt = LocalDate.now().minusDays(days).atStartOfDay();
+        LocalDateTime cutoffAt = AppTimeZone.today().minusDays(days).atStartOfDay();
 
         long wouldPurge = orders.findAll().stream()
                 .filter(o -> o.getOrderStatus() != OrderStatus.DRAFT)
@@ -215,9 +216,9 @@ public class RetentionService {
                 + "export the affected rows, confirm the server-calculated count and give a reason. "
                 + "Daily aggregates and the audit trail always outlive any purge.");
         m.put("aggregatedOrderCount",
-                aggregates.sumOrderCount(LocalDate.now().minusDays(365), LocalDate.now()));
+                aggregates.sumOrderCount(AppTimeZone.today().minusDays(365), AppTimeZone.today()));
         m.put("aggregatedRecordedOrderValue",
-                aggregates.sumValue(LocalDate.now().minusDays(365), LocalDate.now()));
+                aggregates.sumValue(AppTimeZone.today().minusDays(365), AppTimeZone.today()));
         return m;
     }
 
@@ -255,7 +256,7 @@ public class RetentionService {
     @Transactional(readOnly = true)
     public List<Order> purgeCandidates() {
         int days = retentionDays();
-        LocalDateTime cutoffAt = LocalDate.now().minusDays(days).atStartOfDay();
+        LocalDateTime cutoffAt = AppTimeZone.today().minusDays(days).atStartOfDay();
         List<Order> out = new ArrayList<>();
         for (Order o : orders.findAll()) {
             if (o.getOrderStatus() == OrderStatus.DRAFT) continue;
@@ -319,12 +320,12 @@ public class RetentionService {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("purgedOrderCount", ids.size());
         m.put("retentionDays", retentionDays());
-        m.put("purgeCutoffDate", LocalDate.now().minusDays(retentionDays()));
+        m.put("purgeCutoffDate", AppTimeZone.today().minusDays(retentionDays()));
         m.put("reason", reason.trim());
         m.put("aggregatesRetained", true);
         m.put("auditTrailRetained", true);
         m.put("aggregatedOrderCount",
-                aggregates.sumOrderCount(LocalDate.now().minusDays(365), LocalDate.now()));
+                aggregates.sumOrderCount(AppTimeZone.today().minusDays(365), AppTimeZone.today()));
         return m;
     }
 

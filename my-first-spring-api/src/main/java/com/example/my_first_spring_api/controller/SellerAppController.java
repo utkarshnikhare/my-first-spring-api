@@ -1,5 +1,6 @@
 package com.example.my_first_spring_api.controller;
 
+import com.example.my_first_spring_api.AppTimeZone;
 import com.example.my_first_spring_api.dto.*;
 import com.example.my_first_spring_api.exception.BuyerNotAuthenticatedException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
@@ -42,16 +43,16 @@ public class SellerAppController {
 
     /** Parses a date parameter accepting human aliases; falls back to today when absent. */
     private LocalDate parseDate(String date) {
-        if (date == null || date.isBlank()) return LocalDate.now();
+        if (date == null || date.isBlank()) return AppTimeZone.today();
         String d = date.trim().toLowerCase();
         if ("all".equals(d)) return null;
-        if ("today".equals(d)) return LocalDate.now();
-        if ("tomorrow".equals(d)) return LocalDate.now().plusDays(1);
-        if ("yesterday".equals(d)) return LocalDate.now().minusDays(1);
+        if ("today".equals(d)) return AppTimeZone.today();
+        if ("tomorrow".equals(d)) return AppTimeZone.today().plusDays(1);
+        if ("yesterday".equals(d)) return AppTimeZone.today().minusDays(1);
         try {
             return LocalDate.parse(d);
         } catch (Exception e) {
-            return LocalDate.now();
+            return AppTimeZone.today();
         }
     }
 
@@ -71,6 +72,11 @@ public class SellerAppController {
     @PostMapping("/products/{productId}/sold-out")
     public ResponseEntity<ProductDto> markSoldOut(@PathVariable Long productId, HttpSession session) {
         return ResponseEntity.ok(sellerAppService.markSoldOut(productId, requireSeller(session)));
+    }
+
+    @PostMapping("/products/{productId}/available")
+    public ResponseEntity<ProductDto> markAvailable(@PathVariable Long productId, HttpSession session) {
+        return ResponseEntity.ok(sellerAppService.markAvailable(productId, requireSeller(session)));
     }
 
     @PostMapping("/products/{productId}/pause")

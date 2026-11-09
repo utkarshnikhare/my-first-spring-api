@@ -197,6 +197,160 @@ public class DeepAdversarialSecurityAndBoundaryTest {
     // =========================================================================
 
     @Test
+    void archivePreservesOrdersAndRejectsStaleCheckoutAndSellerActions() throws Exception {
+        Product product = createProduct(kitchenA, "Archive control", BigDecimal.valueOf(50), 5);
+        long id = product.getId();
+        List<Map<String, Object>> items = List.of(Map.of("productId", id, "quantity", 1));
+        mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchenA.getId())
+                        .session(sessionBuyerA).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(items)))
+                .andExpect(status().isOk());
+        mvc.perform(delete("/api/seller/products/" + id).session(sessionSellerB).with(csrf()))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/seller/products/" + id).session(sessionSellerA).with(csrf()))
+                .andExpect(status().isOk());
+        mvc.perform(delete("/api/seller/products/" + id).session(sessionSellerA).with(csrf()))
+                .andExpect(status().isOk());
+        assertThat(productRepository.findById(id).orElseThrow().isArchived()).isTrue();
+        assertThat(orderItemRepository.findByProductId(id)).hasSize(1);
+        mvc.perform(get("/api/seller/products/" + id).session(sessionSellerA))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lifecycleState").value("ARCHIVED"));
+        mvc.perform(get("/api/seller-app/history").session(sessionSellerA))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].lifecycleState").value("ARCHIVED"));
+        mvc.perform(get("/api/products/" + id).session(sessionBuyerA)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/search").param("q", "Archive control").session(sessionBuyerA))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.products.length()").value(0));
+        mvc.perform(get("/api/kitchens/" + kitchenA.getName() + "/products").session(sessionBuyerA))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(post("/api/seller-app/products/" + id + "/available").session(sessionSellerA).with(csrf()))
+                .andExpect(status().isBadRequest());
+        mvc.perform(put("/api/seller/products/" + id).session(sessionSellerA).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"description\":\"changed\"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/buyer/orders/place").session(sessionBuyerA).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(Map.of("kitchenId", kitchenA.getId(), "items", items,
+                                "paymentStatus", "AWAITING_SELLER_VERIFICATION", "paymentMethod", "upi"))))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchenA.getId())
+                        .session(sessionBuyerA).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(items)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void cancellingAnExistingOrderRestoresStockWithoutReactivatingArchivedOffering() throws Exception {
+        Product product = createProduct(kitchenA, "Archive cancellation", BigDecimal.valueOf(50), 1);
+        long id = product.getId();
+        List<Map<String, Object>> items = List.of(Map.of("productId", id, "quantity", 1));
+        mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchenA.getId())
+                        .session(sessionBuyerA).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(items)))
+                .andExpect(status().isOk());
+        MvcResult placed = mvc.perform(post("/api/buyer/orders/place").session(sessionBuyerA).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(Map.of("kitchenId", kitchenA.getId(), "items", items,
+                                "paymentStatus", "AWAITING_SELLER_VERIFICATION", "paymentMethod", "upi"))))
+                .andExpect(status().isOk()).andReturn();
+        long orderId = mapper.readTree(placed.getResponse().getContentAsByteArray()).get("id").asLong();
+        mvc.perform(delete("/api/seller/products/" + id).session(sessionSellerA).with(csrf()))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/buyer/orders/" + orderId + "/cancel").session(sessionBuyerA).with(csrf()))
+                .andExpect(status().isOk());
+        Product restored = productRepository.findById(id).orElseThrow();
+        assertThat(restored.isArchived()).isTrue();
+        assertThat(restored.getRemainingQuantity()).isEqualTo(1);
+        assertThat(restored.getAvailableToday()).isFalse();
+        assertThat(orderItemRepository.findByProductId(id)).hasSize(1);
+        mvc.perform(get("/api/products/" + id).session(sessionBuyerA)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void ratingAnExistingOrderDoesNotUnarchiveTheOffering() throws Exception {
+        Product product = createProduct(kitchenA, "Archive rating", BigDecimal.valueOf(50), 2);
+        long id = product.getId();
+        List<Map<String, Object>> items = List.of(Map.of("productId", id, "quantity", 1));
+        mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchenA.getId())
+                        .session(sessionBuyerA).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(items)))
+                .andExpect(status().isOk());
+        MvcResult placed = mvc.perform(post("/api/buyer/orders/place").session(sessionBuyerA).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(Map.of("kitchenId", kitchenA.getId(), "items", items,
+                                "paymentStatus", "AWAITING_SELLER_VERIFICATION", "paymentMethod", "upi"))))
+                .andExpect(status().isOk()).andReturn();
+        long orderId = mapper.readTree(placed.getResponse().getContentAsByteArray()).get("id").asLong();
+        mvc.perform(patch("/api/seller/orders/" + orderId + "/payment-status").session(sessionSellerA).with(csrf()))
+                .andExpect(status().isOk());
+        mvc.perform(delete("/api/seller/products/" + id).session(sessionSellerA).with(csrf()))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/buyer/orders/" + orderId + "/rate?rating=5").session(sessionBuyerA).with(csrf()))
+                .andExpect(status().isOk());
+        Product rated = productRepository.findById(id).orElseThrow();
+        assertThat(rated.isArchived()).isTrue();
+        assertThat(rated.getRating()).isEqualTo(5.0);
+        assertThat(orderItemRepository.findByProductId(id)).hasSize(1);
+        mvc.perform(get("/api/products/" + id).session(sessionBuyerA)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void explicitDraftRemainsPrivateAcrossBuyerAndSellerEndpoints() throws Exception {
+        String name = "PrivateDraft" + UUID.randomUUID().toString().substring(0, 8);
+        var request = Map.of(
+                "name", name,
+                "price", 50,
+                "saveAsDraft", true,
+                "availableToday", true,
+                "availableDate", com.example.my_first_spring_api.AppTimeZone.today().toString(),
+                "orderWindowEnd", "23:58",
+                "readyByTime", com.example.my_first_spring_api.AppTimeZone.today() + "T23:59"
+        );
+        var response = mvc.perform(post("/api/seller/products?kitchenId=" + kitchenA.getId())
+                        .session(sessionSellerA).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsBytes(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lifecycleState").value("DRAFT"))
+                .andReturn();
+        long productId = mapper.readTree(response.getResponse().getContentAsByteArray()).get("id").asLong();
+        Product draft = productRepository.findById(productId).orElseThrow();
+        assertThat(draft.getPublicationDraft()).isTrue();
+        assertThat(draft.getAvailableToday()).isFalse();
+        mvc.perform(get("/api/seller/products/" + productId).session(sessionSellerA))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lifecycleState").value("DRAFT"));
+        mvc.perform(get("/api/seller/products/" + productId).session(sessionSellerB))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/seller/products/" + productId).session(sessionSellerA).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"description\":\"Draft edit\",\"availableToday\":false}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lifecycleState").value("DRAFT"))
+                .andExpect(jsonPath("$.description").value("Draft edit"));
+        draft = productRepository.findById(productId).orElseThrow();
+        draft.setAvailableDate(com.example.my_first_spring_api.AppTimeZone.today().plusDays(1));
+        draft.setIsPreorder(true);
+        productRepository.saveAndFlush(draft);
+        mvc.perform(get("/api/products/" + productId).session(sessionBuyerA))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/search").param("q", name).session(sessionBuyerA))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.products.length()").value(0));
+        mvc.perform(get("/api/kitchens/" + kitchenA.getName() + "/products").session(sessionBuyerA))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchenA.getId())
+                        .session(sessionBuyerA).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(List.of(Map.of("productId", productId, "quantity", 1)))))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/seller-app/products/" + productId + "/available")
+                        .session(sessionSellerA).with(csrf()))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/seller-app/products/" + productId + "/sold-out")
+                        .session(sessionSellerA).with(csrf()))
+                .andExpect(status().isBadRequest());
+        mvc.perform(put("/api/seller/products/" + productId).session(sessionSellerA).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"availableToday\":true}"))
+                .andExpect(status().isBadRequest());
+        assertThat(productRepository.findById(productId).orElseThrow().isPublicationDraft()).isTrue();
+    }
+
+    @Test
     @DisplayName("ADV-01: Product creation rejects negative or zero prices via HTTP boundary")
     void productCreationRejectsNegativeOrZeroPrice() throws Exception {
         Map<String, Object> negativePriceDto = Map.of(
@@ -638,6 +792,8 @@ public class DeepAdversarialSecurityAndBoundaryTest {
     @DisplayName("ADV-10: Rating validation bounds via HTTP - rejected if unpaid, invalid star range, or duplicate")
     void ratingValidationBoundsEnforced() throws Exception {
         Product meal = createProduct(kitchenA, "Paneer Tikka", BigDecimal.valueOf(200), 5);
+        meal.setRating(3.0);
+        productRepository.saveAndFlush(meal);
 
         List<Map<String, Object>> draftItems = List.of(Map.of("productId", meal.getId(), "quantity", 1));
         mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchenA.getId())
@@ -697,12 +853,14 @@ public class DeepAdversarialSecurityAndBoundaryTest {
 
         Order ratedOrder = orderRepository.findById(placed.getId()).orElseThrow();
         assertThat(ratedOrder.getRating()).isEqualTo(5);
+        assertThat(productRepository.findById(meal.getId()).orElseThrow().getRating()).isEqualTo(4.0);
 
         // Duplicate rating -> HTTP 400 Bad Request
         mvc.perform(post("/api/buyer/orders/" + placed.getId() + "/rate?rating=4")
                         .session(sessionBuyerA)
                         .with(csrf()))
                 .andExpect(status().isBadRequest());
+        assertThat(productRepository.findById(meal.getId()).orElseThrow().getRating()).isEqualTo(4.0);
     }
 
     @Test
@@ -791,4 +949,3 @@ public class DeepAdversarialSecurityAndBoundaryTest {
         return userRepository.saveAndFlush(buyer);
     }
 }
-

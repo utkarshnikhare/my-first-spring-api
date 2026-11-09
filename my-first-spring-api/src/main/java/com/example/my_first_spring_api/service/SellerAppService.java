@@ -25,6 +25,9 @@ import com.example.my_first_spring_api.repository.QuickPostRepository;
 import com.example.my_first_spring_api.repository.RecurringScheduleRepository;
 import com.example.my_first_spring_api.repository.SellerTemplateRepository;
 import com.example.my_first_spring_api.repository.UserRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,6 +62,8 @@ public class SellerAppService {
     private final SellerTemplateRepository sellerTemplateRepository;
     private final QuickPostRepository quickPostRepository;
     private final UserRepository userRepository;
+    @PersistenceContext
+    private EntityManager entityManager;
     private final FavouriteRepository favouriteRepository;
     private final AnalyticsEventRepository analyticsEventRepository;
     private final FeatureService featureService;
@@ -114,61 +119,112 @@ public class SellerAppService {
 
     // ==================== INVENTORY CONTROL ====================
 
+    private Product requireOwnedProductForUpdate(Long productId, User seller) {
+        Product product = productRepository.findByIdForUpdate(productId)
+                .orElseThrow(() -> new ProductNotFoundException(productId));
+        if (product.getKitchen() == null || product.getKitchen().getSeller() == null
+                || !product.getKitchen().getSeller().getId().equals(seller.getId())) {
+            throw new SellerNotAuthorizedException("Not your product");
+        }
+        if (product.isArchived()) throw new IllegalArgumentException("Archived offerings cannot be changed.");
+        return product;
+    }
+
+    private void refreshStorefrontForUpdate(Kitchen kitchen) {
+        User owner = kitchen.getSeller();
+        if (owner != null && owner.getId() != null) {
+            User lockedOwner = userRepository.findByIdForUpdate(owner.getId())
+                    .orElseThrow(() -> new SellerNotAuthorizedException("The offering's seller is unavailable."));
+            entityManager.refresh(lockedOwner, LockModeType.PESSIMISTIC_WRITE);
+        }
+        Kitchen lockedKitchen = kitchenRepository.findByIdForUpdate(kitchen.getId())
+                .orElseThrow(() -> new KitchenNotFoundException(kitchen.getId()));
+        entityManager.refresh(lockedKitchen, LockModeType.PESSIMISTIC_WRITE);
+    }
+
     @Transactional
     public ProductDto updateInventory(Long productId, int delta, User seller) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new ProductNotFoundException(productId));
-        if (!product.getKitchen().getSeller().getId().equals(seller.getId()))
-            throw new SellerNotAuthorizedException("Not your product");
+        Product product = requireOwnedProductForUpdate(productId, seller);
         if (product.getRemainingQuantity() == null)
             throw new IllegalArgumentException("This item has no quantity limit");
+        boolean replenishingSoldOutStock = product.getRemainingQuantity() <= 0 && delta > 0;
         int updated = productRepository.adjustRemainingQuantity(productId, delta);
         if (updated == 0)
             throw new IllegalArgumentException(
                     "Adjustment rejected: quantity cannot go below 0 or above the maximum available");
         Product fresh = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
+        if (replenishingSoldOutStock) {
+            fresh.setManualReactivationRequired(true);
+        }
         if (fresh.getRemainingQuantity() != null && fresh.getRemainingQuantity() <= 0) {
             fresh.setAvailableToday(false);
-        } else if (fresh.getRemainingQuantity() != null && fresh.getRemainingQuantity() > 0
-                && !fresh.getAvailableToday()
-                && !Boolean.TRUE.equals(fresh.getIsPreorder())
-                && (fresh.getAvailableDate() == null || fresh.getAvailableDate().equals(java.time.LocalDate.now()))) {
-            // Restocking restores same-day availability, but must not turn a
-            // future pre-order into a same-day offering.
-            fresh.setAvailableToday(true);
         }
         return toProductDto(productRepository.save(fresh));
     }
 
     @Transactional
     public ProductDto markSoldOut(Long productId, User seller) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new ProductNotFoundException(productId));
-        if (!product.getKitchen().getSeller().getId().equals(seller.getId()))
-            throw new SellerNotAuthorizedException("Not your product");
-        product.setRemainingQuantity(0);
+        Product product = requireOwnedProductForUpdate(productId, seller);
+        if (product.isPublicationDraft()) {
+            throw new IllegalArgumentException("A draft cannot be marked sold out.");
+        }
+        product.setSoldOutManually(true);
         product.setAvailableToday(false);
         return toProductDto(productRepository.save(product));
     }
 
     @Transactional
+    public ProductDto markAvailable(Long productId, User seller) {
+        Product product = requireOwnedProductForUpdate(productId, seller);
+        if (product.isPublicationDraft()) {
+            throw new IllegalArgumentException("A draft cannot be marked available.");
+        }
+        refreshStorefrontForUpdate(product.getKitchen());
+        if (KitchenVisibility.isAdminSuspended(product.getKitchen())
+                || product.getKitchen().getSeller() == null
+                || !product.getKitchen().getSeller().isApprovedSeller()) {
+            throw new IllegalArgumentException("This offering cannot be made available while its seller or storefront is suspended.");
+        }
+        if (OfferingTiming.isExpired(product, AppTimeZone.today())) {
+            throw new IllegalArgumentException("An expired offering cannot be reopened. Create a future offering instead.");
+        }
+        if (product.isSoldOut() && product.getRemainingQuantity() != null
+                && product.getRemainingQuantity() <= 0) {
+            throw new IllegalArgumentException("Replenish the stock before marking this offering available.");
+        }
+        product.setSoldOutManually(false);
+        product.setManualReactivationRequired(false);
+        product.setAvailableToday(true);
+        return toProductDto(productRepository.save(product));
+    }
+
+    @Transactional
     public ProductDto pauseOrders(Long productId, User seller) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new ProductNotFoundException(productId));
-        if (!product.getKitchen().getSeller().getId().equals(seller.getId()))
-            throw new SellerNotAuthorizedException("Not your product");
+        Product product = requireOwnedProductForUpdate(productId, seller);
         product.setOrdersPaused(true);
         return toProductDto(productRepository.save(product));
     }
 
     @Transactional
     public ProductDto resumeOrders(Long productId, User seller) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new ProductNotFoundException(productId));
-        if (!product.getKitchen().getSeller().getId().equals(seller.getId()))
-            throw new SellerNotAuthorizedException("Not your product");
+        Product product = requireOwnedProductForUpdate(productId, seller);
+        Kitchen kitchen = product.getKitchen();
+        refreshStorefrontForUpdate(kitchen);
+        if (!KitchenVisibility.isPubliclyVisible(kitchen)) {
+            throw new IllegalArgumentException("Resume is unavailable while the seller or storefront is inactive.");
+        }
+        if (OfferingTiming.isExpired(product, AppTimeZone.today())) {
+            throw new IllegalArgumentException("An expired offering cannot be resumed. Create a future offering instead.");
+        }
+        if (product.isSoldOut() || OfferingTiming.needsManualReactivation(product, AppTimeZone.today())) {
+            throw new IllegalArgumentException("Mark the offering available and replenish its stock before resuming.");
+        }
         product.setOrdersPaused(false);
+        if ("ORDERS_CLOSED".equals(OfferingTiming.lifecycleState(
+                product, AppTimeZone.today(), AppTimeZone.time()))) {
+            throw new IllegalArgumentException("The order window has closed and this offering cannot be resumed.");
+        }
         return toProductDto(productRepository.save(product));
     }
     @Transactional
@@ -245,7 +301,7 @@ public class SellerAppService {
             throw new SellerNotAuthorizedException("Not your template");
         List<Kitchen> kitchens = kitchenRepository.findBySeller(seller);
         Kitchen kitchen = !kitchens.isEmpty() ? kitchens.get(0) : bootstrapDefaultKitchen(seller);
-        boolean preorder = date != null && date.isAfter(java.time.LocalDate.now());
+        boolean preorder = date != null && date.isAfter(AppTimeZone.today());
         assertFeatureCompliance(seller, preorder, date);
         Product product = templateToProduct(template, kitchen, date);
         return toProductDto(productRepository.save(product));
@@ -376,7 +432,7 @@ public class SellerAppService {
         } else {
             imageData = null;
         }
-        LocalDate today = LocalDate.now();
+        LocalDate today = AppTimeZone.today();
         if (requestedDate != null && !today.equals(requestedDate)) {
             throw new IllegalArgumentException("Quick Post is available for Today only.");
         }
@@ -400,7 +456,7 @@ public class SellerAppService {
     @Transactional(readOnly = true)
     public List<QuickPostDto> getQuickPosts(User seller) {
         Kitchen kitchen = getOwnedKitchen(seller);
-        return quickPostRepository.findByKitchenAndPostedDateOrderByCreatedAtDesc(kitchen, LocalDate.now())
+        return quickPostRepository.findByKitchenAndPostedDateOrderByCreatedAtDesc(kitchen, AppTimeZone.today())
                 .stream().map(this::toQuickPostDto).toList();
     }
 
@@ -417,7 +473,7 @@ public class SellerAppService {
         // History is defined by the authoritative offering date, not creation age.
         // Active today and future offerings remain on the seller dashboard.
         return productRepository
-                .findByKitchenAndAvailableDateBeforeOrderByAvailableDateDescCreatedAtDesc(kitchen, LocalDate.now()).stream()
+                .findHistoryIncludingArchived(kitchen, AppTimeZone.today()).stream()
                 .map(this::toProductDto)
                 .collect(Collectors.toList());
     }
@@ -436,11 +492,13 @@ public class SellerAppService {
         List<Long> deduped = new ArrayList<>(new LinkedHashSet<>(productIds));
         List<ProductDto> result = new ArrayList<>();
         for (Long productId : deduped) {
-            assertFeatureCompliance(seller, date != null && date.isAfter(java.time.LocalDate.now()), date);
+            assertFeatureCompliance(seller, date != null && date.isAfter(AppTimeZone.today()), date);
             Product original = productRepository.findById(productId)
                     .orElseThrow(() -> new ProductNotFoundException(productId));
             if (!original.getKitchen().getSeller().getId().equals(seller.getId()))
                 throw new SellerNotAuthorizedException("Not your product: " + productId);
+            if (original.isArchived() || original.isPublicationDraft())
+                throw new IllegalArgumentException("An archived offering or draft cannot be republished.");
             Product clone = cloneProduct(original, kitchen, date);
             result.add(toProductDto(productRepository.save(clone)));
         }
@@ -464,7 +522,7 @@ public class SellerAppService {
         dto.setTotalOrders((int) allOrders.stream()
                 .filter(o -> o.getOrderStatus() != OrderStatus.DRAFT).count());
         dto.setFollowers((int) favouriteRepository.countByKitchen(kitchen));
-        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
+        LocalDateTime todayStart = AppTimeZone.today().atStartOfDay();
         long viewsToday = analyticsEventRepository.countByEventTypeAndKitchenIdAndCreatedAtAfter(
                 AnalyticsService.EV_MENU_VIEW, kitchen.getId(), todayStart)
                 + analyticsEventRepository.countByEventTypeAndKitchenIdAndCreatedAtAfter(
@@ -474,7 +532,7 @@ public class SellerAppService {
         dto.setViewsToday((int) viewsToday);
 
         List<Product> products = productRepository.findByKitchen(kitchen);
-        LocalDate now = LocalDate.now();
+        LocalDate now = AppTimeZone.today();
         // Recurring offerings stay on the dashboard while their schedule is
         // ACTIVE and still has selling dates, even though their original
         // availableDate (the schedule start) has passed.
@@ -493,7 +551,8 @@ public class SellerAppService {
         }
         final Set<Long> recurringIds = recurringProductIds;
         dto.setOfferings(products.stream()
-                .filter(p -> p.getAvailableDate() == null || !p.getAvailableDate().isBefore(now)
+                .filter(p -> !p.isArchived())
+                .filter(p -> p.isPublicationDraft() || p.getAvailableDate() == null || !p.getAvailableDate().isBefore(now)
                         || (p.getId() != null && recurringIds.contains(p.getId())))
                 .map(p -> {
                     ProductDto productDto = toProductDto(p);
@@ -504,8 +563,8 @@ public class SellerAppService {
                     return productDto;
                 }).collect(Collectors.toList()));
 
-        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-        LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        LocalDateTime startOfDay = AppTimeZone.today().atStartOfDay();
+        LocalDateTime startOfMonth = AppTimeZone.today().withDayOfMonth(1).atStartOfDay();
         BigDecimal confirmedToday = BigDecimal.ZERO;
         BigDecimal pendingToday = BigDecimal.ZERO;
         BigDecimal monthRevenue = BigDecimal.ZERO;
@@ -906,8 +965,8 @@ public class SellerAppService {
         List<Order> allOrders = orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen);
 
         SellerEarningsDto dto = new SellerEarningsDto();
-        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-        LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        LocalDateTime startOfDay = AppTimeZone.today().atStartOfDay();
+        LocalDateTime startOfMonth = AppTimeZone.today().withDayOfMonth(1).atStartOfDay();
         BigDecimal confirmedToday = BigDecimal.ZERO;
         BigDecimal pending = BigDecimal.ZERO;
         BigDecimal thisMonth = BigDecimal.ZERO;
@@ -1008,7 +1067,7 @@ public class SellerAppService {
             featureService.assertSellerCanUse(seller, FeatureService.KEY_PREORDERS);
         }
         if (availableDate == null) return;
-        long daysAhead = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), availableDate);
+        long daysAhead = java.time.temporal.ChronoUnit.DAYS.between(AppTimeZone.today(), availableDate);
         if (daysAhead <= 0) return;
         if (!featureService.sellerHasAccess(seller, FeatureService.KEY_MENU_ADVANCE_DAYS)) {
             throw new IllegalStateException("Publishing menus in advance is currently disabled on the platform.");
@@ -1051,11 +1110,13 @@ public class SellerAppService {
         dto.setTimeSlots(product.getTimeSlots());
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
+        dto.setSoldOutManually(product.isSoldOutManually());
+        dto.setManualReactivationRequired(product.isManualReactivationRequired());
         dto.setOrdersPaused(product.isOrdersPaused());
         dto.setQuickPost(product.isQuickPost());
         dto.setQuickPostImageData(product.getQuickPostImageData());
         String lifecycle = OfferingTiming.lifecycleState(product, LocalDate.now(AppTimeZone.ZONE), LocalTime.now(AppTimeZone.ZONE));
-        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle)
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "EXPIRED".equals(lifecycle)
                 || "SCHEDULED_TO_OPEN".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
         dto.setCreatedAt(product.getCreatedAt());
@@ -1082,7 +1143,7 @@ public class SellerAppService {
     /** Converts a template into a brand-new Product for the given date. */
     private Product templateToProduct(SellerTemplate template, Kitchen kitchen, LocalDate date) {
         LocalDate offeringDate = requirePublicationDate(date);
-        boolean preorder = offeringDate.isAfter(LocalDate.now());
+        boolean preorder = offeringDate.isAfter(AppTimeZone.today());
         if (preorder) {
             // Future template/clone publications use the shared Product pre-order path.
         }
@@ -1111,7 +1172,7 @@ public class SellerAppService {
 
     private LocalDate requirePublicationDate(LocalDate date) {
         if (date == null) throw new IllegalArgumentException("Offering date is required.");
-        if (date.isBefore(LocalDate.now())) throw new IllegalArgumentException("Offering date cannot be in the past.");
+        if (date.isBefore(AppTimeZone.today())) throw new IllegalArgumentException("Offering date cannot be in the past.");
         return date;
     }
 
@@ -1128,7 +1189,7 @@ public class SellerAppService {
     /** Clones an existing product into a brand-new independent offering for the given date. */
     private Product cloneProduct(Product original, Kitchen kitchen, LocalDate date) {
         LocalDate offeringDate = requirePublicationDate(date);
-        boolean preorder = offeringDate.isAfter(LocalDate.now());
+        boolean preorder = offeringDate.isAfter(AppTimeZone.today());
         String close = requirePublicationClose(original.getOrderWindowEnd(), original.getCutoffTime());
         boolean flexible = original.getPreorderType() == com.example.my_first_spring_api.model.PreorderType.FLEXIBLE;
         String readyBy = flexible

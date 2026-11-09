@@ -187,7 +187,7 @@ public class KitchenService {
     public ProductDto getProductById(Long id, User buyer) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new com.example.my_first_spring_api.exception.ProductNotFoundException(id));
-        if (product.getKitchen() != null && (!KitchenVisibility.isPubliclyVisible(product.getKitchen()) || !KitchenVisibility.isServiceAreaVisible(product.getKitchen(), buyer))) {
+        if (product.isArchived() || product.isPublicationDraft() || (product.getKitchen() != null && (!KitchenVisibility.isPubliclyVisible(product.getKitchen()) || !KitchenVisibility.isServiceAreaVisible(product.getKitchen(), buyer)))) {
             throw new com.example.my_first_spring_api.exception.ProductNotFoundException(id);
         }
         return toProductDto(product);
@@ -200,11 +200,13 @@ public class KitchenService {
             throw new KitchenNotFoundException(kitchenName);
         }
         return productRepository.findByKitchen(kitchen).stream()
+                .filter(p -> !p.isArchived() && !p.isPublicationDraft())
                 .map(this::toProductDto).collect(Collectors.toList());
     }
 
     public SearchResultDto search(String query, User buyer) {
         List<ProductDto> products = productRepository.findByNameContainingIgnoreCase(query).stream()
+                .filter(p -> !p.isArchived() && !p.isPublicationDraft())
                 .map(this::toProductDto)
                 .filter(p -> !p.isOrdersPaused())
                 .filter(p -> p.getKitchenId() == null
@@ -290,11 +292,13 @@ public class KitchenService {
         dto.setTimeSlots(product.getTimeSlots());
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
+        dto.setSoldOutManually(product.isSoldOutManually());
+        dto.setManualReactivationRequired(product.isManualReactivationRequired());
         dto.setOrdersPaused(product.isOrdersPaused());
         dto.setQuickPost(product.isQuickPost());
         dto.setQuickPostImageData(product.getQuickPostImageData());
         String lifecycle = OfferingTiming.lifecycleState(product, AppTimeZone.today(), AppTimeZone.time());
-        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle)
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "EXPIRED".equals(lifecycle)
                 || "SCHEDULED_TO_OPEN".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
         // Recurring: project today's resolved occurrence (or the next

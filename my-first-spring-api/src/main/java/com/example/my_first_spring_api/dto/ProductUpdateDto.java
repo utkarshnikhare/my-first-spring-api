@@ -2,6 +2,7 @@ package com.example.my_first_spring_api.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.example.my_first_spring_api.model.HomemadeAvailabilityType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -32,6 +33,9 @@ public class ProductUpdateDto {
     private Integer maxQuantity;
     private Integer remainingQuantity;
     private Boolean isPreorder;
+    private Boolean clearDraftCutoff;
+    private Boolean draftUnlimitedStock;
+    private HomemadeAvailabilityType availType;
     @JsonAlias({"category"})
     @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY)
     private List<String> categories;
@@ -68,6 +72,12 @@ public class ProductUpdateDto {
     public void setRemainingQuantity(Integer remainingQuantity) { this.remainingQuantity = remainingQuantity; }
     public Boolean getIsPreorder() { return isPreorder; }
     public void setIsPreorder(Boolean isPreorder) { this.isPreorder = isPreorder; }
+    public Boolean getClearDraftCutoff() { return clearDraftCutoff; }
+    public void setClearDraftCutoff(Boolean clearDraftCutoff) { this.clearDraftCutoff = clearDraftCutoff; }
+    public Boolean getDraftUnlimitedStock() { return draftUnlimitedStock; }
+    public void setDraftUnlimitedStock(Boolean draftUnlimitedStock) { this.draftUnlimitedStock = draftUnlimitedStock; }
+    public HomemadeAvailabilityType getAvailType() { return availType; }
+    public void setAvailType(HomemadeAvailabilityType availType) { this.availType = availType; }
     public List<String> getCategories() { return categories; }
     public void setCategories(List<String> categories) {
         if (categories == null) {

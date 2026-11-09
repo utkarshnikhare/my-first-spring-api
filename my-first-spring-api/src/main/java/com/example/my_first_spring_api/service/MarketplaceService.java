@@ -111,11 +111,13 @@ public class MarketplaceService {
         dto.setTimeSlots(product.getTimeSlots());
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
+        dto.setSoldOutManually(product.isSoldOutManually());
+        dto.setManualReactivationRequired(product.isManualReactivationRequired());
         dto.setOrdersPaused(product.isOrdersPaused());
         dto.setQuickPost(product.isQuickPost());
         dto.setQuickPostImageData(product.getQuickPostImageData());
         String lifecycle = OfferingTiming.lifecycleState(product, AppTimeZone.today(), AppTimeZone.time());
-        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle)
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "EXPIRED".equals(lifecycle)
                 || "SCHEDULED_TO_OPEN".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
         // Recurring projection (V2 §14): today's resolved occurrence values,

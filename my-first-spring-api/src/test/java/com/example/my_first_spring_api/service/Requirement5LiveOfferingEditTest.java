@@ -4,6 +4,7 @@ import com.example.my_first_spring_api.AppTimeZone;
 import com.example.my_first_spring_api.dto.ProductUpdateDto;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.model.Kitchen;
+import com.example.my_first_spring_api.model.HomemadeAvailabilityType;
 import com.example.my_first_spring_api.model.Order;
 import com.example.my_first_spring_api.model.OrderItem;
 import com.example.my_first_spring_api.model.OrderStatus;
@@ -53,6 +54,7 @@ class Requirement5LiveOfferingEditTest {
     private static final String CLOSE = "21:00";
 
     @Autowired SellerService sellerService;
+    @Autowired SellerAppService sellerAppService;
     @Autowired FeatureService featureService;
     @Autowired UserRepository users;
     @Autowired KitchenRepository kitchens;
@@ -84,6 +86,183 @@ class Requirement5LiveOfferingEditTest {
     }
 
     // ==================== "has orders" is decided by confirmed orders only ====================
+
+    @Test
+    void explicitDraftUpdatesPreserveModeAndStockTransitions() {
+        Product draft = new Product(kitchen, "Homemade snack", "desc", BigDecimal.valueOf(40), null);
+        draft.setCategory("HOMEMADE,SNACKS");
+        draft.setPublicationDraft(true);
+        draft.setHomemadeAvailabilityType(HomemadeAvailabilityType.SPECIFIC_DATE);
+        draft.setAvailableToday(false);
+        draft.setAvailableDate(AppTimeZone.today().plusDays(1));
+        draft.setIsPreorder(true);
+        draft.setOrderWindowEnd("21:00");
+        draft.setCutoffTime("21:00");
+        draft.setReadyByTime(AppTimeZone.today().plusDays(1) + "T22:00");
+        draft.setMaxQuantity(4);
+        draft.setRemainingQuantity(4);
+        draft = products.saveAndFlush(draft);
+
+        ProductUpdateDto always = new ProductUpdateDto();
+        always.setAvailableDate(AppTimeZone.today());
+        always.setAvailableToday(false);
+        always.setReadyByTime("Usually ready in 1 day");
+        always.setClearDraftCutoff(true);
+        always.setAvailType(HomemadeAvailabilityType.ALWAYS_AVAILABLE);
+        always.setDraftUnlimitedStock(true);
+        always.setCategories(java.util.List.of("OTHER"));
+        sellerService.updateProduct(draft.getId(), always, seller);
+
+        Product stored = products.findById(draft.getId()).orElseThrow();
+        assertThat(stored.getOrderWindowEnd()).isNull();
+        assertThat(stored.getCutoffTime()).isNull();
+        assertThat(stored.getIsPreorder()).isFalse();
+        assertThat(stored.getMaxQuantity()).isNull();
+        assertThat(stored.getRemainingQuantity()).isNull();
+        assertThat(stored.getCategory()).isEqualTo("HOMEMADE,OTHER");
+        assertThat(sellerService.getOfferingForEdit(draft.getId(), seller).getAvailType())
+                .isEqualTo(HomemadeAvailabilityType.ALWAYS_AVAILABLE);
+        assertThat(stored.isPublicationDraft()).isTrue();
+        assertThat(stored.getAvailableToday()).isFalse();
+
+        ProductUpdateDto specific = new ProductUpdateDto();
+        specific.setAvailableDate(AppTimeZone.today().plusDays(1));
+        specific.setAvailableToday(false);
+        specific.setOrderWindowEnd("21:00");
+        specific.setAvailType(HomemadeAvailabilityType.SPECIFIC_DATE);
+        specific.setReadyByTime(AppTimeZone.today().plusDays(1) + "T22:00");
+        specific.setDraftUnlimitedStock(false);
+        specific.setMaxQuantity(7);
+        sellerService.updateProduct(draft.getId(), specific, seller);
+
+        stored = products.findById(draft.getId()).orElseThrow();
+        assertThat(stored.getIsPreorder()).isTrue();
+        assertThat(sellerService.getOfferingForEdit(draft.getId(), seller).getAvailType())
+                .isEqualTo(HomemadeAvailabilityType.SPECIFIC_DATE);
+        assertThat(stored.getMaxQuantity()).isEqualTo(7);
+        assertThat(stored.getRemainingQuantity()).isEqualTo(7);
+        assertThat(stored.isPublicationDraft()).isTrue();
+        assertThat(stored.getAvailableToday()).isFalse();
+
+        ProductUpdateDto request = new ProductUpdateDto();
+        request.setAvailableDate(AppTimeZone.today());
+        request.setAvailableToday(false);
+        request.setReadyByTime("Made on Request - Order at least 2 Days in advance");
+        request.setClearDraftCutoff(true);
+        request.setAvailType(HomemadeAvailabilityType.MADE_ON_REQUEST);
+        request.setDraftUnlimitedStock(false);
+        request.setMaxQuantity(3);
+        sellerService.updateProduct(draft.getId(), request, seller);
+        stored = products.findById(draft.getId()).orElseThrow();
+        assertThat(stored.getOrderWindowEnd()).isNull();
+        assertThat(stored.getCutoffTime()).isNull();
+        assertThat(stored.getIsPreorder()).isFalse();
+        assertThat(stored.getMaxQuantity()).isEqualTo(3);
+        assertThat(stored.getRemainingQuantity()).isEqualTo(3);
+        assertThat(sellerService.getOfferingForEdit(draft.getId(), seller).getAvailType())
+                .isEqualTo(HomemadeAvailabilityType.MADE_ON_REQUEST);
+
+        ProductUpdateDto unsupportedOpening = new ProductUpdateDto();
+        unsupportedOpening.setOrderOpenDate(AppTimeZone.today());
+        unsupportedOpening.setOrderOpenTime("23:00");
+        Long draftId = draft.getId();
+        assertThatThrownBy(() -> sellerService.updateProduct(draftId, unsupportedOpening, seller))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("requires an Orders Close");
+    }
+
+    @Test
+    void sameDaySpecificDraftRetainsExplicitModeOnReopen() {
+        Product draft = new Product(kitchen, "Specific day", "desc", BigDecimal.valueOf(40), null);
+        draft.setCategory("HOMEMADE,SNACKS");
+        draft.setPublicationDraft(true);
+        draft.setHomemadeAvailabilityType(HomemadeAvailabilityType.SPECIFIC_DATE);
+        draft.setAvailableToday(false);
+        draft.setAvailableDate(AppTimeZone.today());
+        draft.setIsPreorder(false);
+        draft.setOrderWindowEnd("23:58");
+        draft.setCutoffTime("23:58");
+        draft.setReadyByTime(AppTimeZone.today() + "T23:59");
+        draft = products.saveAndFlush(draft);
+
+        assertThat(sellerService.getOfferingForEdit(draft.getId(), seller).getAvailType())
+                .isEqualTo(HomemadeAvailabilityType.SPECIFIC_DATE);
+        ProductUpdateDto edit = new ProductUpdateDto();
+        edit.setDescription("Edited");
+        sellerService.updateProduct(draft.getId(), edit, seller);
+        Product stored = products.findById(draft.getId()).orElseThrow();
+        assertThat(stored.getHomemadeAvailabilityType()).isEqualTo(HomemadeAvailabilityType.SPECIFIC_DATE);
+        assertThat(stored.getOrderWindowEnd()).isEqualTo("23:58");
+        assertThat(stored.getReadyByTime()).isEqualTo(AppTimeZone.today() + "T23:59");
+    }
+
+    @Test
+    void pastDatedDraftRemainsOnSellerDashboard() {
+        Product draft = new Product(kitchen, "Saved draft", "desc", BigDecimal.valueOf(40), null);
+        draft.setPublicationDraft(true);
+        draft.setAvailableToday(false);
+        draft.setAvailableDate(AppTimeZone.today().minusDays(1));
+        draft = products.saveAndFlush(draft);
+        Long draftId = draft.getId();
+        assertThat(sellerAppService.getDashboard(seller).getOfferings())
+                .anySatisfy(p -> {
+                    assertThat(p.getId()).isEqualTo(draftId);
+                    assertThat(p.getLifecycleState()).isEqualTo("DRAFT");
+                });
+    }
+
+    @Test
+    void changingDraftModeRequiresMatchingFulfilment() {
+        Product draft = new Product(kitchen, "Snack", "desc", BigDecimal.valueOf(40), null);
+        draft.setCategory("HOMEMADE,SNACKS");
+        draft.setPublicationDraft(true);
+        draft.setAvailableToday(false);
+        draft.setAvailableDate(AppTimeZone.today());
+        draft.setHomemadeAvailabilityType(HomemadeAvailabilityType.ALWAYS_AVAILABLE);
+        draft.setReadyByTime("Usually ready in 1 day");
+        draft = products.saveAndFlush(draft);
+        Long id = draft.getId();
+        ProductUpdateDto change = new ProductUpdateDto();
+        change.setAvailType(HomemadeAvailabilityType.MADE_ON_REQUEST);
+        assertThatThrownBy(() -> sellerService.updateProduct(id, change, seller))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("required when changing");
+        change.setReadyByTime("Usually ready in 1 day");
+        assertThatThrownBy(() -> sellerService.updateProduct(id, change, seller))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("preparation time");
+        assertThat(products.findById(id).orElseThrow().getHomemadeAvailabilityType())
+                .isEqualTo(HomemadeAvailabilityType.ALWAYS_AVAILABLE);
+        change.setAvailType(HomemadeAvailabilityType.SPECIFIC_DATE);
+        change.setOrderWindowEnd("21:00");
+        change.setReadyByTime("23:59 today");
+        assertThatThrownBy(() -> sellerService.updateProduct(id, change, seller))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("YYYY-MM-DDTHH:mm");
+        change.setReadyByTime(AppTimeZone.today().plusDays(1) + "T23:59");
+        sellerService.updateProduct(id, change, seller);
+        assertThat(sellerService.getOfferingForEdit(id, seller).getReadyByTime())
+                .isEqualTo(AppTimeZone.today().plusDays(1) + "T23:59");
+    }
+
+    @Test
+    void draftOnlyUpdateIntentsCannotChangeLegacyOrOrderedProducts() {
+        Product legacy = new Product(kitchen, "Legacy", "desc", BigDecimal.valueOf(40), null);
+        legacy.setMaxQuantity(4);
+        legacy.setRemainingQuantity(4);
+        legacy = products.saveAndFlush(legacy);
+        ProductUpdateDto update = new ProductUpdateDto();
+        update.setDraftUnlimitedStock(true);
+        Long legacyId = legacy.getId();
+        assertThatThrownBy(() -> sellerService.updateProduct(legacyId, update, seller))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Draft-only");
+        Product stored = products.findById(legacyId).orElseThrow();
+        assertThat(stored.getPublicationDraft()).isNull();
+        assertThat(stored.getRemainingQuantity()).isEqualTo(4);
+
+        Product ordered = productWithOrder(OrderStatus.CONFIRMED);
+        ordered.setPublicationDraft(true);
+        products.saveAndFlush(ordered);
+        Long orderedId = ordered.getId();
+        assertThatThrownBy(() -> sellerService.updateProduct(orderedId, update, seller))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("after orders exist");
+    }
 
     @Test
     void abandonedDraftCartDoesNotLockTheOffering() {

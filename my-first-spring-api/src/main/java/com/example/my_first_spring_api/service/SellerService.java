@@ -15,6 +15,7 @@ import com.example.my_first_spring_api.exception.ProductNotFoundException;
 import com.example.my_first_spring_api.exception.SellerNotAuthorizedException;
 import com.example.my_first_spring_api.dto.CoverageOptionDto;
 import com.example.my_first_spring_api.model.Kitchen;
+import com.example.my_first_spring_api.model.HomemadeAvailabilityType;
 import com.example.my_first_spring_api.model.GpayIdentifierType;
 import com.example.my_first_spring_api.model.OrderItem;
 import com.example.my_first_spring_api.model.OrderStatus;
@@ -272,6 +273,9 @@ public class SellerService {
         Kitchen kitchen = resolveOfferingKitchen(kitchenId, seller);
         LocalDate today = AppTimeZone.today();
         boolean quickPost = Boolean.TRUE.equals(dto.getQuickPost());
+        if (quickPost && Boolean.TRUE.equals(dto.getSaveAsDraft())) {
+            throw new IllegalArgumentException("Quick Posts cannot be saved as product drafts.");
+        }
         String quickPostRequestId = null;
         if (quickPost) {
             quickPostRequestId = dto.getQuickPostRequestId() == null
@@ -353,6 +357,10 @@ public class SellerService {
         // impossible combinations are never persisted, even if the client
         // validation is bypassed.
         boolean isHomemade = isHomemadeProductDto(dto, kitchen);
+        if (dto.getAvailType() != null
+                && (!Boolean.TRUE.equals(dto.getSaveAsDraft()) || !isHomemade)) {
+            throw new IllegalArgumentException("Availability type is supported only for homemade drafts.");
+        }
         if (kitchen.getSellerType() == SellerType.KITCHEN && isHomemade) {
             throw new IllegalArgumentException("Seller is only approved for Kitchen offerings.");
         }
@@ -381,9 +389,14 @@ public class SellerService {
                 ? OfferingTiming.validateOrdersOpenFrom(dto.getOrderOpenDate(), dto.getOrderOpenTime(),
                         offeringDate, orderWindowEnd, readyByTime, today, AppTimeZone.time())
                 : null;
+        validateDraftAvailabilityType(dto.getAvailType(), preorder, orderWindowEnd, readyByTime);
         assertFeatureCompliance(seller, preorder, offeringDate, productName);
         Product product = new Product(kitchen, productName, description, dto.getPrice(),
                 quickPost ? null : dto.getImageUrl());
+        if (Boolean.TRUE.equals(dto.getSaveAsDraft())) {
+            product.setPublicationDraft(true);
+            product.setHomemadeAvailabilityType(dto.getAvailType());
+        }
         product.setQuickPost(quickPost);
         product.setQuickPostImageData(quickPostImageData);
         product.setQuickPostRequestId(quickPostRequestId);
@@ -391,7 +404,7 @@ public class SellerService {
         product.setPriceUnit(quickPost ? "unit"
                 : (dto.getPriceUnit() != null ? dto.getPriceUnit() : "portion"));
         product.setUnit(quickPost ? "unit" : (dto.getUnit() != null ? dto.getUnit() : "portion"));
-        product.setAvailableToday(quickPost || dto.getAvailableToday() == null
+        product.setAvailableToday(product.isPublicationDraft() ? Boolean.FALSE : quickPost || dto.getAvailableToday() == null
                 ? Boolean.TRUE : dto.getAvailableToday());
         product.setIsVeg(dto.getIsVeg() != null ? dto.getIsVeg() : Boolean.TRUE);
         product.setAvailableDate(offeringDate);
@@ -433,9 +446,26 @@ public class SellerService {
     }
 
     public ProductDto updateProduct(Long productId, ProductUpdateDto dto, User seller) {
-        Product product = productRepository.findById(productId)
+        Product product = productRepository.findByIdForUpdate(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
         getOwnedKitchen(product.getKitchen().getId(), seller);
+        if (product.isArchived()) throw new IllegalArgumentException("Archived offerings cannot be edited.");
+        if (product.isPublicationDraft() && Boolean.TRUE.equals(dto.getAvailableToday())) {
+            throw new IllegalArgumentException("Publishing a saved draft is not yet available.");
+        }
+        if (!product.isPublicationDraft()
+                && (dto.getClearDraftCutoff() != null || dto.getDraftUnlimitedStock() != null
+                || dto.getAvailType() != null)) {
+            throw new IllegalArgumentException("Draft-only changes require a saved draft.");
+        }
+        if (dto.getAvailType() != null && !KitchenVisibility.isHomemadeProduct(product)) {
+            throw new IllegalArgumentException("Availability type is supported only for homemade drafts.");
+        }
+        if (dto.getAvailType() != null
+                && dto.getAvailType() != product.getHomemadeAvailabilityType()
+                && dto.getReadyByTime() == null) {
+            throw new IllegalArgumentException("Delivery / Ready By is required when changing availability type.");
+        }
         LocalDate today = AppTimeZone.today();
         boolean effectivePreorder = dto.getIsPreorder() != null
                 ? dto.getIsPreorder()
@@ -460,6 +490,19 @@ public class SellerService {
         boolean hasOrders = !orderItemRepository
                 .findByProductIdAndOrderOrderStatusNot(productId, OrderStatus.DRAFT)
                 .isEmpty();
+        if (hasOrders && (Boolean.TRUE.equals(dto.getClearDraftCutoff()) || dto.getDraftUnlimitedStock() != null)) {
+            throw new IllegalArgumentException("Cannot change draft stock or remove the cutoff after orders exist.");
+        }
+        if (Boolean.FALSE.equals(dto.getDraftUnlimitedStock()) && dto.getMaxQuantity() == null) {
+            throw new IllegalArgumentException("Quantity Available is required for limited stock.");
+        }
+        if (Boolean.TRUE.equals(dto.getDraftUnlimitedStock()) && dto.getMaxQuantity() != null) {
+            throw new IllegalArgumentException("Unlimited stock cannot have a quantity limit.");
+        }
+        if (Boolean.TRUE.equals(dto.getClearDraftCutoff())
+                && (dto.getOrderWindowEnd() != null || dto.getCutoffTime() != null)) {
+            throw new IllegalArgumentException("Cannot set and remove Orders Close together.");
+        }
         String effectiveOpen = dto.getOrderWindowStart() != null
                 ? OfferingTiming.normalizeHhmm(dto.getOrderWindowStart(), "Orders Open")
                 : product.getOrderWindowStart();
@@ -474,7 +517,7 @@ public class SellerService {
         String effectiveCloseInput = dto.getOrderWindowEnd() != null
                 ? dto.getOrderWindowEnd()
                 : (dto.getCutoffTime() != null ? dto.getCutoffTime() : product.getOrderWindowEnd());
-        String effectiveClose = effectiveCloseInput != null
+        String effectiveClose = Boolean.TRUE.equals(dto.getClearDraftCutoff()) ? null : effectiveCloseInput != null
                 ? OfferingTiming.requireOrdersClose(effectiveCloseInput)
                 : OfferingTiming.resolveOrdersClose(product);
         String effectiveReady = dto.getReadyByTime() != null
@@ -495,9 +538,23 @@ public class SellerService {
         boolean timingChanged = dto.getAvailableDate() != null || dto.getOrderWindowStart() != null
                 || dto.getOrderWindowEnd() != null || dto.getCutoffTime() != null
                 || dto.getReadyByTime() != null || dto.getIsPreorder() != null
-                || dto.getOrderOpenDate() != null || dto.getOrderOpenTime() != null;
+                || dto.getOrderOpenDate() != null || dto.getOrderOpenTime() != null
+                || Boolean.TRUE.equals(dto.getClearDraftCutoff());
         LocalDateTime effectiveOrdersOpenFrom = product.getOrdersOpenFrom();
-        if (timingChanged) {
+        boolean homemadeDraftWithoutCutoff = product.isPublicationDraft()
+                && KitchenVisibility.isHomemadeProduct(product)
+                && !effectivePreorder && effectiveClose == null;
+        if (timingChanged && homemadeDraftWithoutCutoff) {
+            if (dto.getOrderOpenDate() != null || dto.getOrderOpenTime() != null) {
+                throw new IllegalArgumentException("Orders Open From requires an Orders Close time.");
+            }
+            if (effectiveDate.isBefore(today)) {
+                throw new IllegalArgumentException("Offering date cannot be in the past.");
+            }
+            if (effectiveReady == null || effectiveReady.isBlank()) {
+                throw new IllegalArgumentException("Delivery / Ready By is required.");
+            }
+        } else if (timingChanged) {
             // Same cross-day tolerance as createProduct: rebase an early
             // client-computed readyBy onto the effective offering date so a
             // day-boundary skew is corrected instead of rejected.
@@ -517,6 +574,9 @@ public class SellerService {
                         AppTimeZone.today());
             }
         }
+        HomemadeAvailabilityType effectiveAvailabilityType = dto.getAvailType() != null
+                ? dto.getAvailType() : product.getHomemadeAvailabilityType();
+        validateDraftAvailabilityType(effectiveAvailabilityType, effectivePreorder, effectiveClose, effectiveReady);
 
         if (hasOrders) {
             if (dto.getName() != null && !dto.getName().isBlank() && !dto.getName().equals(product.getName()))
@@ -566,11 +626,30 @@ public class SellerService {
             product.setOrderWindowEnd(effectiveClose);
             product.setCutoffTime(effectiveClose);
         }
+        if (Boolean.TRUE.equals(dto.getClearDraftCutoff())) {
+            product.setOrderWindowEnd(null);
+            product.setCutoffTime(null);
+        }
         if (dto.getReadyByTime() != null) product.setReadyByTime(effectiveReady);
         if (dto.getMaxQuantity() != null) product.setMaxQuantity(dto.getMaxQuantity());
+        if (dto.getDraftUnlimitedStock() != null) {
+            product.setMaxQuantity(Boolean.TRUE.equals(dto.getDraftUnlimitedStock()) ? null : dto.getMaxQuantity());
+            product.setRemainingQuantity(Boolean.TRUE.equals(dto.getDraftUnlimitedStock()) ? null : dto.getMaxQuantity());
+        }
         if (dto.getAvailableToday() != null) product.setAvailableToday(dto.getAvailableToday());
-        if (dto.getIsPreorder() != null) product.setIsPreorder(effectivePreorder);
-        if (dto.getCategories() != null) product.setCategory(joinCategories(dto.getCategories()));
+        if (dto.getIsPreorder() != null || (product.isPublicationDraft() && dto.getAvailableDate() != null)) {
+            product.setIsPreorder(effectivePreorder);
+        }
+        if (dto.getCategories() != null) {
+            String category = joinCategories(dto.getCategories());
+            if (product.isPublicationDraft() && KitchenVisibility.isHomemadeProduct(product)
+                    && category != null && !category.toUpperCase(java.util.Locale.ROOT).contains("HOMEMADE")) {
+                category = "HOMEMADE," + category;
+            }
+            product.setCategory(category);
+        }
+        if (product.isPublicationDraft()) product.setAvailableToday(false);
+        if (dto.getAvailType() != null) product.setHomemadeAvailabilityType(dto.getAvailType());
         return toProductDto(productRepository.save(product));
     }
 
@@ -612,18 +691,49 @@ public class SellerService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setIsPreorder(product.getIsPreorder());
         dto.setSoldOut(product.isSoldOut());
+        dto.setSoldOutManually(product.isSoldOutManually());
+        dto.setManualReactivationRequired(product.isManualReactivationRequired());
         dto.setOrdersPaused(product.isOrdersPaused());
         dto.setLifecycleState(OfferingTiming.lifecycleState(product, AppTimeZone.today(), AppTimeZone.time()));
+        dto.setAvailType(product.getHomemadeAvailabilityType());
         dto.setHasOrders(orderCount > 0);
         dto.setOrderCount((int) orderCount);
         return dto;
     }
 
     public void deleteProduct(Long productId, User seller) {
-        Product product = productRepository.findById(productId)
+        Product product = productRepository.findByIdForUpdate(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
         getOwnedKitchen(product.getKitchen().getId(), seller);
-        productRepository.delete(product);
+        product.setArchived(true);
+        productRepository.save(product);
+    }
+
+    private void validateDraftAvailabilityType(HomemadeAvailabilityType type, boolean preorder,
+                                               String close, String readyBy) {
+        if (type == null) return;
+        if (type == HomemadeAvailabilityType.SPECIFIC_DATE) {
+            if (close == null || close.isBlank() || readyBy == null || readyBy.isBlank()) {
+                throw new IllegalArgumentException("Specific Date requires Orders Close and Delivery / Ready By.");
+            }
+            if (!readyBy.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}")) {
+                throw new IllegalArgumentException("Specific Date requires a date and time in YYYY-MM-DDTHH:mm format.");
+            }
+        } else if (preorder || close != null) {
+            throw new IllegalArgumentException("This availability type cannot have a future date or Orders Close.");
+        } else if (readyBy == null || readyBy.isBlank()) {
+            throw new IllegalArgumentException("Delivery / Ready By is required.");
+        } else if (type == HomemadeAvailabilityType.ALWAYS_AVAILABLE
+                && !List.of("Usually ready in 1 day", "Same day fulfillment",
+                        "Usually ready in 2 days", "Usually ready in 3 days").contains(readyBy)) {
+            throw new IllegalArgumentException("Choose a supported fulfillment estimate.");
+        } else if (type == HomemadeAvailabilityType.MADE_ON_REQUEST
+                && !List.of("Made on Request - Order at least Same Day in advance",
+                        "Made on Request - Order at least 1 Day in advance",
+                        "Made on Request - Order at least 2 Days in advance",
+                        "Made on Request - Order at least 3 Days in advance").contains(readyBy)) {
+            throw new IllegalArgumentException("Choose a supported preparation time.");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -913,9 +1023,11 @@ public class SellerService {
         dto.setTimeSlots(product.getTimeSlots());
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
+        dto.setSoldOutManually(product.isSoldOutManually());
+        dto.setManualReactivationRequired(product.isManualReactivationRequired());
         dto.setOrdersPaused(product.isOrdersPaused());
         String lifecycle = OfferingTiming.lifecycleState(product, AppTimeZone.today(), AppTimeZone.time());
-        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "HISTORY".equals(lifecycle)
+        dto.setOrdersClosed("ORDERS_CLOSED".equals(lifecycle) || "EXPIRED".equals(lifecycle)
                 || "SCHEDULED_TO_OPEN".equals(lifecycle));
         dto.setLifecycleState(lifecycle);
         dto.setCreatedAt(product.getCreatedAt());

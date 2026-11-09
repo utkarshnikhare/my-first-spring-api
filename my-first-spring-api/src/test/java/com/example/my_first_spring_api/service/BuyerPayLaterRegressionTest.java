@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -52,6 +53,7 @@ public class BuyerPayLaterRegressionTest {
     @Autowired private ProductRepository productRepository;
     @Autowired private OrderRepository orderRepository;
     @Autowired private OrderService orderService;
+    @Autowired private JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private MockMvc mockMvc;
@@ -111,6 +113,43 @@ public class BuyerPayLaterRegressionTest {
         item.setProductId(product.getId());
         item.setQuantity(2);
         orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(item), session);
+    }
+
+    @Test
+    void draftSnapshotsPersistThroughPlacementAndProductEdits() {
+        MockHttpSession session = buyerSession();
+        draft(session);
+        Long draftId = (Long) session.getAttribute(OrderService.DRAFT_ORDER_SESSION_KEY);
+        Order draft = orderRepository.findByIdWithItems(draftId).orElseThrow();
+        assertThat(draft.getItems().get(0).getProductNameSnapshot()).isEqualTo(product.getName());
+        assertThat(draft.getItems().get(0).getPriceUnitSnapshot()).isEqualTo(product.getPriceUnit());
+        String originalName = product.getName();
+        String originalUnit = product.getPriceUnit();
+        BigDecimal originalPrice = product.getPrice();
+
+        product.setName("Later name");
+        product.setPriceUnit("box");
+        product.setPrice(new BigDecimal("999.00"));
+        productRepository.saveAndFlush(product);
+
+        OrderDto placed = orderService.placeOrder(PaymentStatus.UNPAID, "upi", null, null, session);
+        Order reread = orderRepository.findByIdWithItems(placed.getId()).orElseThrow();
+        assertThat(reread.getItems().get(0).getProductNameSnapshot()).isEqualTo(originalName);
+        assertThat(reread.getItems().get(0).getPriceUnitSnapshot()).isEqualTo(originalUnit);
+        assertThat(reread.getItems().get(0).getPrice()).isEqualByComparingTo(originalPrice);
+    }
+
+    @Test
+    void placementDoesNotInventSnapshotsForAnExistingDraft() {
+        MockHttpSession session = buyerSession();
+        draft(session);
+        Long draftId = (Long) session.getAttribute(OrderService.DRAFT_ORDER_SESSION_KEY);
+        jdbcTemplate.update("UPDATE order_items SET product_name_snapshot = NULL, price_unit_snapshot = NULL WHERE order_id = ?", draftId);
+
+        OrderDto placed = orderService.placeOrder(PaymentStatus.UNPAID, "upi", null, null, session);
+        Order stored = orderRepository.findByIdWithItems(placed.getId()).orElseThrow();
+        assertThat(stored.getItems().get(0).getProductNameSnapshot()).isNull();
+        assertThat(stored.getItems().get(0).getPriceUnitSnapshot()).isNull();
     }
 
     @Test
@@ -330,5 +369,30 @@ public class BuyerPayLaterRegressionTest {
 
         OrderDto paidB = orderService.markOrderAsPaid(orderB.getId(), seller);
         assertThat(paidB.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("Case 11: Buyer can acknowledge payment for Pay Later order (UNPAID -> AWAITING_SELLER_VERIFICATION)")
+    void buyerCanAcknowledgePaymentForPayLaterOrder() throws Exception {
+        MockHttpSession session = buyerSession();
+        draft(session);
+
+        OrderDto placed = orderService.placeOrder(
+                PaymentStatus.UNPAID, "upi", null, null, session);
+        assertThat(placed.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
+
+        UpdatePaymentStatusRequest request = new UpdatePaymentStatusRequest();
+        request.setPaymentStatus(PaymentStatus.AWAITING_SELLER_VERIFICATION);
+
+        mockMvc.perform(patch("/api/buyer/orders/" + placed.getId() + "/payment-status")
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paymentStatus").value("AWAITING_SELLER_VERIFICATION"));
+
+        Order order = orderRepository.findById(placed.getId()).orElseThrow();
+        assertThat(order.getPaymentStatus()).isEqualTo(PaymentStatus.AWAITING_SELLER_VERIFICATION);
     }
 }

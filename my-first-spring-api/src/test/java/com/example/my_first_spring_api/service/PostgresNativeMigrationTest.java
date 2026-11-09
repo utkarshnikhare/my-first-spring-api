@@ -77,7 +77,7 @@ class PostgresNativeMigrationTest {
         // V19 adds seller-configurable payment methods; V20 adds seller-verified
         // payment states without rewriting historical orders; V21 stores an
         // immutable, non-sensitive payment configuration snapshot per placed order.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("21");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("27");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "

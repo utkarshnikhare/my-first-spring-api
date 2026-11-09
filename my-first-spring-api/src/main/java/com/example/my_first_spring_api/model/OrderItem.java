@@ -26,6 +26,12 @@ public class OrderItem {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 
+    @Column(name = "product_name_snapshot")
+    private String productNameSnapshot;
+
+    @Column(name = "price_unit_snapshot")
+    private String priceUnitSnapshot;
+
     /** Legacy / database column synchronization with Supabase PostgreSQL schema */
     @Column(name = "unit_price", precision = 10, scale = 2)
     private BigDecimal unitPrice;
@@ -85,6 +91,10 @@ public class OrderItem {
         this.product = product;
         this.quantity = quantity;
         this.price = price;
+        if (product != null) {
+            this.productNameSnapshot = product.getName();
+            this.priceUnitSnapshot = product.getPriceUnit();
+        }
         this.unitPrice = price;
         if (price != null && quantity != null) {
             this.subtotal = price.multiply(BigDecimal.valueOf(quantity));
@@ -105,6 +115,10 @@ public class OrderItem {
         }
     }
     public BigDecimal getPrice() { return price; }
+    public String getProductNameSnapshot() { return productNameSnapshot; }
+    public void setProductNameSnapshot(String productNameSnapshot) { this.productNameSnapshot = productNameSnapshot; }
+    public String getPriceUnitSnapshot() { return priceUnitSnapshot; }
+    public void setPriceUnitSnapshot(String priceUnitSnapshot) { this.priceUnitSnapshot = priceUnitSnapshot; }
     public void setPrice(BigDecimal price) {
         this.price = price;
         if (this.unitPrice == null) {

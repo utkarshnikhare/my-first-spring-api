@@ -40,7 +40,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Native PostgreSQL 16 Disaster Recovery & Backup Restoration Test.
  *
  * Exercises the genuine native PostgreSQL 16 utilities (pg_dump, pg_restore, psql),
- * AES-256-CBC encryption/decryption, SHA-256 tamper-detection, and complete
+ * AES-256-GCM encryption/decryption, SHA-256 tamper-detection, and complete
  * schema/data/sequence verification on an isolated PostgreSQL recovery database.
  */
 @SpringBootTest(
@@ -111,9 +111,9 @@ class PostgresDatabaseBackupAndRestoreTest {
     @DisplayName("NATIVE PG16: Full pg_dump export, AES-256 encryption, checksum tamper detection, and isolated pg_restore")
     void nativePostgres16BackupAndIsolatedRestoreVerification() throws Exception {
         // ---------------------------------------------------------------------
-        // STEP 1: Verify Flyway V21 on Source PostgreSQL Database
+        // STEP 1: Verify Flyway V27 on Source PostgreSQL Database
         // ---------------------------------------------------------------------
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("21");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("27");
 
         // ---------------------------------------------------------------------
         // STEP 2: Seed Representative Production-Like Business Data
@@ -258,11 +258,12 @@ class PostgresDatabaseBackupAndRestoreTest {
                 "--if-exists",
                 "--no-owner",
                 "--no-privileges",
+                "--exit-on-error",
                 "/tmp/restored_pg16.dump"
         );
         long restoreDuration = System.currentTimeMillis() - restoreStart;
-        // pg_restore returns 0 on success (or occasionally non-zero if DROP IF EXISTS issues warnings on fresh DB)
-        assertThat(restoreResult.getExitCode()).isLessThanOrEqualTo(1);
+        assertThat(restoreResult.getExitCode())
+                .as("pg_restore must succeed: " + restoreResult.getStderr()).isEqualTo(0);
 
         // ---------------------------------------------------------------------
         // STEP 8: Independent Verification of Restored Isolated PostgreSQL DB
@@ -276,11 +277,11 @@ class PostgresDatabaseBackupAndRestoreTest {
         // 1. Verify Flyway migration history in restored database
         Integer flywayCount = targetJdbc.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(flywayCount).as("All 21 Flyway migrations must be marked success").isGreaterThanOrEqualTo(21);
+        assertThat(flywayCount).as("All 27 Flyway migrations must be marked success").isGreaterThanOrEqualTo(27);
 
         String latestMigrationVersion = targetJdbc.queryForObject(
                 "SELECT version FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 1", String.class);
-        assertThat(latestMigrationVersion).isEqualTo("21");
+        assertThat(latestMigrationVersion).isEqualTo("27");
 
         // 2. Verify all 26 business tables + Spring Session exist in restored database
         Integer tableCount = targetJdbc.queryForObject(

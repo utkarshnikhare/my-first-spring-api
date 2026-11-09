@@ -1,5 +1,7 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.dto.OrderItemRequest;
+import com.example.my_first_spring_api.dto.PlaceOrderRequest;
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -20,6 +23,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.context.WebApplicationContext;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -79,6 +83,13 @@ class PostgresStockContentionConcurrencyTest {
     @Autowired private ProductRepository productRepository;
     @Autowired private OrderRepository orderRepository;
     @Autowired private OrderItemRepository orderItemRepository;
+    @Autowired private SellerAppService sellerAppService;
+    @Autowired private SellerService sellerService;
+    @Autowired private FavouriteService favouriteService;
+    @Autowired private FavouriteRepository favouriteRepository;
+    @Autowired private OrderService orderService;
+    @Autowired private TransactionTemplate transactionTemplate;
+    @Autowired private JdbcTemplate jdbc;
 
     private MockMvc mvc;
     private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
@@ -86,6 +97,7 @@ class PostgresStockContentionConcurrencyTest {
     private Area area;
     private Society society;
     private Kitchen kitchen;
+    private User seller;
 
     private MockHttpSession createSession(User user) {
         MockHttpSession session = new MockHttpSession();
@@ -105,6 +117,7 @@ class PostgresStockContentionConcurrencyTest {
 
         orderItemRepository.deleteAll();
         orderRepository.deleteAll();
+        favouriteRepository.deleteAll();
         productRepository.deleteAll();
         kitchenRepository.deleteAll();
         userRepository.deleteAll();
@@ -115,7 +128,7 @@ class PostgresStockContentionConcurrencyTest {
         area = areaRepository.saveAndFlush(new Area("Postgres Area " + suffix));
         society = societyRepository.saveAndFlush(new Society(area, "Postgres Society " + suffix));
 
-        User seller = new User("Postgres Seller", "910000" + suffix, "PS-1", UserRole.SELLER);
+        seller = new User("Postgres Seller", "910000" + suffix, "PS-1", UserRole.SELLER);
         seller.setSellerApprovalStatus(SellerApprovalStatus.APPROVED);
         seller.setAreaRef(area);
         seller.setSocietyRef(society);
@@ -237,5 +250,308 @@ class PostgresStockContentionConcurrencyTest {
                 .filter(o -> o.getOrderStatus() != OrderStatus.DRAFT)
                 .count();
         assertThat(nonDraftOrders).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("PostgreSQL checkout rejects a stale draft after the seller pauses the offering")
+    void staleDraftCannotPlaceAfterOfferingIsPaused() throws Exception {
+        Product item = createProduct(kitchen, "Pause-sensitive offering", BigDecimal.valueOf(40), 3);
+        User buyer = createBuyer("StaleDraftBuyer");
+        MockHttpSession session = createSession(buyer);
+
+        mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchen.getId())
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(List.of(
+                                Map.of("productId", item.getId(), "quantity", 1)))))
+                .andExpect(status().isOk());
+
+        sellerAppService.pauseOrders(item.getId(), seller);
+
+        Map<String, Object> placePayload = Map.of(
+                "kitchenId", kitchen.getId(),
+                "items", List.of(Map.of("productId", item.getId(), "quantity", 1)),
+                "paymentStatus", "AWAITING_SELLER_VERIFICATION",
+                "paymentMethod", "upi"
+        );
+        mvc.perform(post("/api/buyer/orders/place")
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(placePayload)))
+                .andExpect(status().isBadRequest());
+
+        assertThat(productRepository.findById(item.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("PostgreSQL checkout rejects a stale draft after the seller marks it sold out")
+    void staleDraftCannotPlaceAfterOfferingIsMarkedSoldOut() throws Exception {
+        Product item = createProduct(kitchen, "Manual sold-out offering", BigDecimal.valueOf(40), 3);
+        User buyer = createBuyer("SoldOutDraftBuyer");
+        MockHttpSession session = createSession(buyer);
+
+        mvc.perform(post("/api/buyer/orders/draft?kitchenId=" + kitchen.getId())
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(List.of(
+                                Map.of("productId", item.getId(), "quantity", 1)))))
+                .andExpect(status().isOk());
+
+        sellerAppService.markSoldOut(item.getId(), seller);
+
+        Map<String, Object> placePayload = Map.of(
+                "kitchenId", kitchen.getId(),
+                "items", List.of(Map.of("productId", item.getId(), "quantity", 1)),
+                "paymentStatus", "AWAITING_SELLER_VERIFICATION",
+                "paymentMethod", "upi"
+        );
+        mvc.perform(post("/api/buyer/orders/place")
+                        .session(session)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(placePayload)))
+                .andExpect(status().isBadRequest());
+
+        assertThat(productRepository.findById(item.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("PostgreSQL rating a stale product cannot undo a committed archive")
+    void ratingStaleProductDoesNotUndoArchive() throws Exception {
+        Product item = createProduct(kitchen, "Archive rating offering", BigDecimal.valueOf(40), 3);
+        User buyer = createBuyer("ArchiveRatingBuyer");
+        MockHttpSession session = createSession(buyer);
+        OrderItemRequest request = new OrderItemRequest();
+        request.setProductId(item.getId());
+        request.setQuantity(1);
+        Long orderId = orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request), session).getId();
+        orderService.placeOrder(PaymentStatus.PENDING, "upi", null, null, session);
+        transactionTemplate.executeWithoutResult(status -> {
+            Order order = orderRepository.findById(orderId).orElseThrow();
+            order.setPaymentStatus(PaymentStatus.PAID);
+            orderRepository.save(order);
+        });
+        CountDownLatch staleLoaded = new CountDownLatch(1);
+        CountDownLatch allowRating = new CountDownLatch(1);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<?> rating = executor.submit(() -> transactionTemplate.execute(status -> {
+                Product stale = productRepository.findById(item.getId()).orElseThrow();
+                if (stale.isArchived()) throw new IllegalStateException("Product was already archived");
+                staleLoaded.countDown();
+                try {
+                    if (!allowRating.await(8, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("Archive did not commit");
+                    }
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Rating transaction interrupted", ex);
+                }
+                return orderService.rateOrder(orderId, 5, buyer);
+            }));
+            assertThat(staleLoaded.await(8, TimeUnit.SECONDS)).isTrue();
+            sellerService.deleteProduct(item.getId(), seller);
+            allowRating.countDown();
+            rating.get(10, TimeUnit.SECONDS);
+            Product saved = productRepository.findById(item.getId()).orElseThrow();
+            assertThat(saved.isArchived()).isTrue();
+            assertThat(saved.getRating()).isEqualTo(5.0);
+            assertThat(orderRepository.findById(orderId).orElseThrow().getRating()).isEqualTo(5);
+        } finally {
+            allowRating.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(15, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @Test
+    @DisplayName("PostgreSQL checkout waits for archive and rejects the stale draft")
+    void checkoutRevalidatesAfterConcurrentArchiveCommits() throws Exception {
+        Product item = createProduct(kitchen, "Archive lock offering", BigDecimal.valueOf(40), 3);
+        User buyer = createBuyer("ArchiveLockBuyer");
+        MockHttpSession session = createSession(buyer);
+        OrderItemRequest request = new OrderItemRequest();
+        request.setProductId(item.getId());
+        request.setQuantity(1);
+        Long orderId = orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request), session).getId();
+        String applicationName = "archive-checkout-" + UUID.randomUUID();
+        CountDownLatch archived = new CountDownLatch(1);
+        CountDownLatch allowCommit = new CountDownLatch(1);
+        AtomicInteger archivePid = new AtomicInteger();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> archive = executor.submit(() -> transactionTemplate.execute(status -> {
+                jdbc.execute("SET LOCAL lock_timeout = '8s'");
+                archivePid.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                sellerService.deleteProduct(item.getId(), seller);
+                archived.countDown();
+                try {
+                    if (!allowCommit.await(8, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("Checkout did not reach the product lock");
+                    }
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Archive transaction interrupted", ex);
+                }
+                return null;
+            }));
+            assertThat(archived.await(8, TimeUnit.SECONDS)).isTrue();
+            Future<?> checkout = executor.submit(() -> transactionTemplate.execute(status -> {
+                jdbc.execute("SET LOCAL lock_timeout = '8s'");
+                jdbc.queryForObject("SELECT set_config('application_name', ?, true)", String.class, applicationName);
+                return orderService.placeOrder(PaymentStatus.PENDING, "upi", null, null, session);
+            }));
+            assertThat(awaitBlockedBy(applicationName, archivePid.get(), "products"))
+                    .as("checkout must wait for the archive's product row lock").isTrue();
+            allowCommit.countDown();
+            archive.get(10, TimeUnit.SECONDS);
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> checkout.get(10, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class)
+                    .hasCauseInstanceOf(IllegalArgumentException.class);
+            Product saved = productRepository.findById(item.getId()).orElseThrow();
+            assertThat(saved.isArchived()).isTrue();
+            assertThat(saved.getRemainingQuantity()).isEqualTo(3);
+            assertThat(orderRepository.findById(orderId).orElseThrow().getOrderStatus()).isEqualTo(OrderStatus.DRAFT);
+        } finally {
+            allowCommit.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(15, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @Test
+    @DisplayName("PostgreSQL checkout and favourite use buyer-before-kitchen locking")
+    void checkoutAndFavouriteDoNotDeadlockOnBuyerAndKitchen() throws Exception {
+        Product item = createProduct(kitchen, "Favourite lock offering", BigDecimal.valueOf(40), 3);
+        User buyer = createBuyer("FavouriteLockBuyer");
+        MockHttpSession session = createSession(buyer);
+        OrderItemRequest request = new OrderItemRequest();
+        request.setProductId(item.getId());
+        request.setQuantity(1);
+        Long orderId = orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request), session).getId();
+        String applicationName = "checkout-lock-" + UUID.randomUUID();
+        CountDownLatch buyerLocked = new CountDownLatch(1);
+        CountDownLatch allowFavouriteInsert = new CountDownLatch(1);
+        AtomicInteger favouritePid = new AtomicInteger();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Boolean> favourite = executor.submit(() -> transactionTemplate.execute(status -> {
+                jdbc.execute("SET LOCAL lock_timeout = '8s'");
+                favouritePid.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                User lockedBuyer = userRepository.findByIdForUpdate(buyer.getId()).orElseThrow();
+                buyerLocked.countDown();
+                try {
+                    if (!allowFavouriteInsert.await(8, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("Checkout did not reach the buyer lock");
+                    }
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Favourite transaction interrupted", ex);
+                }
+                return favouriteService.toggleKitchen(lockedBuyer, kitchen.getId());
+            }));
+            assertThat(buyerLocked.await(8, TimeUnit.SECONDS)).isTrue();
+            Future<?> checkout = executor.submit(() -> transactionTemplate.execute(status -> {
+                jdbc.execute("SET LOCAL lock_timeout = '8s'");
+                jdbc.queryForObject("SELECT set_config('application_name', ?, true)", String.class, applicationName);
+                PlaceOrderRequest.BuyerDetails details = new PlaceOrderRequest.BuyerDetails();
+                details.setName("Updated checkout buyer");
+                return orderService.placeOrder(PaymentStatus.PENDING, "upi", details, null, session);
+            }));
+
+            assertThat(awaitBlockedBy(applicationName, favouritePid.get()))
+                    .as("checkout must wait for the favourite's buyer lock").isTrue();
+            allowFavouriteInsert.countDown();
+            assertThat(favourite.get(10, TimeUnit.SECONDS)).isTrue();
+            checkout.get(10, TimeUnit.SECONDS);
+            assertThat(favouriteRepository.findByUserIdAndKitchenId(buyer.getId(), kitchen.getId())).isPresent();
+            assertThat(orderRepository.findById(orderId).orElseThrow().getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
+            assertThat(productRepository.findById(item.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(2);
+            assertThat(userRepository.findById(buyer.getId()).orElseThrow().getName()).isEqualTo("Updated checkout buyer");
+        } finally {
+            allowFavouriteInsert.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(15, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @Test
+    @DisplayName("PostgreSQL checkout and new draft use buyer-before-product locking")
+    void checkoutAndDraftInsertDoNotDeadlockOnBuyerAndProduct() throws Exception {
+        Product item = createProduct(kitchen, "Draft lock offering", BigDecimal.valueOf(40), 3);
+        User buyer = createBuyer("DraftLockBuyer");
+        MockHttpSession session = createSession(buyer);
+        OrderItemRequest request = new OrderItemRequest();
+        request.setProductId(item.getId());
+        request.setQuantity(1);
+        Long checkoutOrderId = orderService.createOrUpdateDraftOrder(kitchen.getId(), List.of(request), session).getId();
+        String applicationName = "draft-lock-" + UUID.randomUUID();
+        CountDownLatch draftInserted = new CountDownLatch(1);
+        CountDownLatch allowItemInsert = new CountDownLatch(1);
+        AtomicInteger draftPid = new AtomicInteger();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Long> draft = executor.submit(() -> transactionTemplate.execute(status -> {
+                jdbc.execute("SET LOCAL lock_timeout = '8s'");
+                draftPid.set(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class));
+                User managedBuyer = userRepository.findByIdForUpdate(buyer.getId()).orElseThrow();
+                Kitchen managedKitchen = kitchenRepository.findById(kitchen.getId()).orElseThrow();
+                Order newDraft = orderRepository.saveAndFlush(new Order(managedBuyer, managedKitchen));
+                draftInserted.countDown();
+                try {
+                    if (!allowItemInsert.await(8, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("Checkout did not reach the draft's buyer lock");
+                    }
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Draft transaction interrupted", ex);
+                }
+                Product managedProduct = productRepository.findById(item.getId()).orElseThrow();
+                OrderItem draftItem = new OrderItem(managedProduct, 1, managedProduct.getPrice());
+                draftItem.setOrder(newDraft);
+                orderItemRepository.saveAndFlush(draftItem);
+                return newDraft.getId();
+            }));
+            assertThat(draftInserted.await(8, TimeUnit.SECONDS)).isTrue();
+            Future<?> checkout = executor.submit(() -> transactionTemplate.execute(status -> {
+                jdbc.execute("SET LOCAL lock_timeout = '8s'");
+                jdbc.queryForObject("SELECT set_config('application_name', ?, true)", String.class, applicationName);
+                return orderService.placeOrder(PaymentStatus.PENDING, "upi", null, null, session);
+            }));
+            assertThat(awaitBlockedBy(applicationName, draftPid.get()))
+                    .as("checkout must wait for the draft's buyer foreign-key lock").isTrue();
+            allowItemInsert.countDown();
+            Long draftId = draft.get(10, TimeUnit.SECONDS);
+            checkout.get(10, TimeUnit.SECONDS);
+            assertThat(orderRepository.findById(draftId).orElseThrow().getOrderStatus()).isEqualTo(OrderStatus.DRAFT);
+            assertThat(orderRepository.findById(checkoutOrderId).orElseThrow().getOrderStatus()).isEqualTo(OrderStatus.ORDERED);
+            assertThat(productRepository.findById(item.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(2);
+        } finally {
+            allowItemInsert.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(15, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    private boolean awaitBlockedBy(String applicationName, int blockingPid) throws InterruptedException {
+        return awaitBlockedBy(applicationName, blockingPid, "users");
+    }
+
+    private boolean awaitBlockedBy(String applicationName, int blockingPid, String table) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(6);
+        while (System.nanoTime() < deadline) {
+            Integer waiting = jdbc.queryForObject(
+                    "SELECT count(*) FROM pg_stat_activity WHERE application_name = ? "
+                            + "AND ? = ANY(pg_blocking_pids(pid)) "
+                            + "AND query ~* ?",
+                    Integer.class, applicationName, blockingPid,
+                    "(^|[^a-z0-9_])" + table + "([^a-z0-9_]|$)");
+            if (waiting != null && waiting > 0) return true;
+            Thread.sleep(25);
+        }
+        return false;
     }
 }

@@ -1,5 +1,7 @@
 package com.example.my_first_spring_api.service;
 
+import com.example.my_first_spring_api.AppTimeZone;
+import com.example.my_first_spring_api.dto.ProductDto;
 import com.example.my_first_spring_api.model.*;
 import com.example.my_first_spring_api.repository.*;
 import org.junit.jupiter.api.Test;
@@ -25,6 +27,8 @@ class InventoryRestorationIntegrationTest {
     @Autowired ProductRepository products;
     @Autowired OrderRepository orders;
     @Autowired OrderService orderService;
+    @Autowired SellerAppService sellerAppService;
+    @Autowired AvailabilityService availabilityService;
 
     @Test
     @Transactional
@@ -66,7 +70,7 @@ class InventoryRestorationIntegrationTest {
     @Transactional
     void cancellingSoldOutUnpausedOfferingRestoresAvailability() {
         Product product = offering(false);
-        assertThat(products.restoreStock(product.getId(), 1)).isEqualTo(1);
+        assertThat(products.restoreStock(product.getId(), 1, AppTimeZone.today())).isEqualTo(1);
         Product restored = products.findById(product.getId()).orElseThrow();
         assertThat(restored.getRemainingQuantity()).isEqualTo(1);
         assertThat(restored.getBookedQuantity()).isEqualTo(1);
@@ -77,12 +81,27 @@ class InventoryRestorationIntegrationTest {
     @Transactional
     void cancellingPausedOfferingRestoresStockWithoutReopeningIt() {
         Product product = offering(true);
-        assertThat(products.restoreStock(product.getId(), 1)).isEqualTo(1);
+        assertThat(products.restoreStock(product.getId(), 1, AppTimeZone.today())).isEqualTo(1);
         Product restored = products.findById(product.getId()).orElseThrow();
         assertThat(restored.getRemainingQuantity()).isEqualTo(1);
         assertThat(restored.getBookedQuantity()).isEqualTo(1);
         assertThat(restored.getAvailableToday()).isFalse();
         assertThat(restored.isOrdersPaused()).isTrue();
+    }
+
+    @Test
+    @Transactional
+    void cancellationRestorationDoesNotOverrideManualSoldOut() {
+        Product product = offering(false);
+        product.setSoldOutManually(true);
+        products.saveAndFlush(product);
+
+        assertThat(products.restoreStock(product.getId(), 1, AppTimeZone.today())).isEqualTo(1);
+        assertThat(products.reopenAfterRestore(product.getId(), AppTimeZone.today())).isZero();
+        Product restored = products.findById(product.getId()).orElseThrow();
+        assertThat(restored.getRemainingQuantity()).isEqualTo(1);
+        assertThat(restored.isSoldOutManually()).isTrue();
+        assertThat(restored.getAvailableToday()).isFalse();
     }
 
     @Test
@@ -94,11 +113,73 @@ class InventoryRestorationIntegrationTest {
         product.setAvailableToday(false);
         products.saveAndFlush(product);
 
-        assertThat(products.restoreStock(product.getId(), 1)).isEqualTo(1);
+        assertThat(products.restoreStock(product.getId(), 1, AppTimeZone.today())).isEqualTo(1);
         Product restored = products.findById(product.getId()).orElseThrow();
         assertThat(restored.getRemainingQuantity()).isEqualTo(1);
         assertThat(restored.getAvailableToday()).isFalse();
         assertThat(restored.getIsPreorder()).isTrue();
+    }
+
+    @Test
+    @Transactional
+    void manualSoldOutPreservesStockAndRequiresExplicitReactivationAfterRestock() {
+        Product product = offering(false);
+        product.setRemainingQuantity(2);
+        product = products.saveAndFlush(product);
+        User seller = product.getKitchen().getSeller();
+
+        ProductDto soldOut = sellerAppService.markSoldOut(product.getId(), seller);
+        assertThat(soldOut.getSoldOut()).isTrue();
+        assertThat(soldOut.getSoldOutManually()).isTrue();
+        assertThat(products.findById(product.getId()).orElseThrow().getRemainingQuantity()).isEqualTo(2);
+
+        ProductDto replenished = sellerAppService.updateInventory(product.getId(), 1, seller);
+        assertThat(replenished.getSoldOut()).isTrue();
+        assertThat(replenished.getSoldOutManually()).isTrue();
+        assertThat(replenished.getAvailableToday()).isFalse();
+
+        ProductDto available = sellerAppService.markAvailable(product.getId(), seller);
+        assertThat(available.getSoldOut()).isFalse();
+        assertThat(available.getSoldOutManually()).isFalse();
+        assertThat(available.getAvailableToday()).isTrue();
+    }
+
+    @Test
+    @Transactional
+    void replenishingSoldOutPreorderRequiresExplicitReactivation() {
+        Product product = offering(false);
+        product.setIsPreorder(true);
+        product.setAvailableDate(AppTimeZone.today().plusDays(1));
+        product.setRemainingQuantity(0);
+        product.setAvailableToday(false);
+        product = products.saveAndFlush(product);
+        User seller = product.getKitchen().getSeller();
+
+        ProductDto replenished = sellerAppService.updateInventory(product.getId(), 1, seller);
+        assertThat(replenished.getSoldOut()).isTrue();
+        assertThat(replenished.getManualReactivationRequired()).isTrue();
+
+        ProductDto available = sellerAppService.markAvailable(product.getId(), seller);
+        assertThat(available.getSoldOut()).isFalse();
+        assertThat(available.getManualReactivationRequired()).isFalse();
+        assertThat(available.getAvailableToday()).isTrue();
+        assertThat(available.getLifecycleState()).isEqualTo("PRE_ORDER");
+    }
+
+    @Test
+    @Transactional
+    void futurePreorderIsOrderableEvenWhenNotAvailableToday() {
+        Product product = offering(false);
+        product.getKitchen().setAvailableToday(true);
+        kitchens.saveAndFlush(product.getKitchen());
+        product.setIsPreorder(true);
+        product.setAvailableDate(AppTimeZone.today().plusDays(1));
+        product.setAvailableToday(false);
+        product.setRemainingQuantity(2);
+        product = products.saveAndFlush(product);
+
+        assertThat(availabilityService.isPreorderable(product, null)).isTrue();
+        assertThat(availabilityService.isAvailableToday(product, null)).isFalse();
     }
 
 

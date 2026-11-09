@@ -243,6 +243,10 @@ public class AuthService {
     }
 
     private boolean validPasswordFor(User user, String rawPassword) {
+        if (StringUtils.hasText(user.getPasswordHash())
+                && passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
+            return true;
+        }
         if (user.getRole() == UserRole.ADMIN || user.getRole() == UserRole.SUPER_ADMIN) {
             String property = user.getRole() == UserRole.SUPER_ADMIN
                     ? AuthSettings.SUPER_ADMIN_PASSWORD : AuthSettings.ADMIN_PASSWORD;
@@ -252,11 +256,8 @@ public class AuthService {
                     rawPassword.getBytes(StandardCharsets.UTF_8), configured.getBytes(StandardCharsets.UTF_8))) {
                 return true;
             }
-            return StringUtils.hasText(user.getPasswordHash())
-                    && passwordEncoder.matches(rawPassword, user.getPasswordHash());
         }
-        return StringUtils.hasText(user.getPasswordHash())
-                && passwordEncoder.matches(rawPassword, user.getPasswordHash());
+        return false;
     }
 
     private void requireDirectAuthEnabled() {
