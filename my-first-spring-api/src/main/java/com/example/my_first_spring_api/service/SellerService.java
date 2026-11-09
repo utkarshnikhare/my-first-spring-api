@@ -720,6 +720,7 @@ public class SellerService {
         dto.setIsPreorder(product.getIsPreorder());
         dto.setSoldOut(product.isSoldOut());
         dto.setSoldOutManually(product.isSoldOutManually());
+        dto.setSoldOutReason(product.getSoldOutReason());
         dto.setManualReactivationRequired(product.isManualReactivationRequired());
         dto.setOrdersPaused(product.isOrdersPaused());
         dto.setLifecycleState(OfferingTiming.lifecycleState(product, AppTimeZone.today(), AppTimeZone.time()));
@@ -1052,6 +1053,7 @@ public class SellerService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
         dto.setSoldOutManually(product.isSoldOutManually());
+        dto.setSoldOutReason(product.getSoldOutReason());
         dto.setManualReactivationRequired(product.isManualReactivationRequired());
         dto.setOrdersPaused(product.isOrdersPaused());
         String lifecycle = OfferingTiming.lifecycleState(product, AppTimeZone.today(), AppTimeZone.time());

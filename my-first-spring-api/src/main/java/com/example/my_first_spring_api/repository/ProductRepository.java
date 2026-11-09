@@ -64,7 +64,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             + "AND p.soldOutManually = false "
             + "AND p.manualReactivationRequired = false "
             + "AND COALESCE(p.isPreorder, false) = false "
-            + "AND (p.availableDate IS NULL OR p.availableDate <= :today) "
+            + "AND (p.availableDate IS NULL OR p.availableDate = :today) "
             + "AND (p.availableUntilDate IS NULL OR p.availableUntilDate >= :today) "
             + "AND p.remainingQuantity + :qty > 0 THEN TRUE ELSE p.availableToday END, "
             + "p.updatedAt = CURRENT_TIMESTAMP "
@@ -82,7 +82,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             + "AND p.soldOutManually = false "
             + "AND p.manualReactivationRequired = false "
             + "AND COALESCE(p.isPreorder, false) = false "
-            + "AND (p.availableDate IS NULL OR p.availableDate <= :today) "
+            + "AND (p.availableDate IS NULL OR p.availableDate = :today) "
             + "AND (p.availableUntilDate IS NULL OR p.availableUntilDate >= :today)")
     int reopenAfterRestore(@Param("productId") Long productId, @Param("today") LocalDate today);
 
@@ -116,6 +116,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("UPDATE Product p SET p.availableToday = false, p.updatedAt = CURRENT_TIMESTAMP " +
             "WHERE p.id = :productId AND p.remainingQuantity IS NOT NULL AND p.remainingQuantity <= 0")
     int closeIfSoldOut(@Param("productId") Long productId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE Product p SET p.availableToday = :available, p.updatedAt = CURRENT_TIMESTAMP WHERE p.id = :productId")
+    int setAvailableToday(@Param("productId") Long productId, @Param("available") boolean available);
 
     /** Atomic increment for unlimited offerings when an order is placed. */
     @Modifying(flushAutomatically = true)
