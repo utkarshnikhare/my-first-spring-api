@@ -42,6 +42,7 @@ class OfferingLifecycleSpecificationTest {
     @Autowired SellerAppService sellerAppService;
     @Autowired KitchenService kitchenService;
     @Autowired MarketplaceService marketplaceService;
+    @Autowired jakarta.persistence.EntityManager entityManager;
 
     @Test
     @Transactional
@@ -283,6 +284,120 @@ class OfferingLifecycleSpecificationTest {
 
         assertThat(p.isSoldOut()).isFalse();
         assertThat(p.getSoldOutReason()).isNull();
+    }
+
+    @Test
+    @Transactional
+    void databaseReloadPreservesPersistentSoldOutStateAcrossPersistenceContextClear() {
+        Product manualP = createLiveProduct(5);
+        User seller = manualP.getKitchen().getSeller();
+        sellerAppService.markSoldOut(manualP.getId(), seller);
+
+        Product autoP = new Product(manualP.getKitchen(), "Auto Stock Dish", "Tasty", BigDecimal.valueOf(100), null);
+        autoP.setAvailableToday(true);
+        autoP.setAvailableDate(AppTimeZone.today());
+        autoP.setOrderWindowStart("00:00");
+        autoP.setOrderWindowEnd("23:59");
+        autoP.setReadyByTime("23:59");
+        autoP.setMaxQuantity(5);
+        autoP.setRemainingQuantity(0);
+        autoP.setBookedQuantity(5);
+        autoP = products.saveAndFlush(autoP);
+
+        // Force DB flush and clear persistence context (simulating fresh DB read/restart)
+        entityManager.flush();
+        entityManager.clear();
+
+        Product reloadedManual = products.findById(manualP.getId()).orElseThrow();
+        assertThat(reloadedManual.isSoldOut()).isTrue();
+        assertThat(reloadedManual.isSoldOutManually()).isTrue();
+        assertThat(reloadedManual.getSoldOutReason()).isEqualTo("MANUAL");
+
+        Product reloadedAuto = products.findById(autoP.getId()).orElseThrow();
+        assertThat(reloadedAuto.isSoldOut()).isTrue();
+        assertThat(reloadedAuto.isSoldOutManually()).isFalse();
+        assertThat(reloadedAuto.getSoldOutReason()).isEqualTo("AUTO_STOCK_EXHAUSTED");
+
+        // DTO reconstruction reflects persistent database fields
+        final Long manualPid = manualP.getId();
+        final Long autoPid = autoP.getId();
+        com.example.my_first_spring_api.dto.SellerDashboardDto dash = sellerAppService.getDashboard(seller);
+        ProductDto sellerManualDto = dash.getOfferings().stream()
+                .filter(dto -> dto.getId().equals(manualPid)).findFirst().orElseThrow();
+        assertThat(sellerManualDto.getSoldOutReason()).isEqualTo("MANUAL");
+        assertThat(sellerManualDto.getSoldOutManually()).isTrue();
+
+        ProductDto sellerAutoDto = dash.getOfferings().stream()
+                .filter(dto -> dto.getId().equals(autoPid)).findFirst().orElseThrow();
+        assertThat(sellerAutoDto.getSoldOutReason()).isEqualTo("AUTO_STOCK_EXHAUSTED");
+        assertThat(sellerAutoDto.getSoldOutManually()).isFalse();
+    }
+
+    @Test
+    @Transactional
+    void preorderCancellationAutomaticallyRestoresStockAndReopens() {
+        Product preorderP = createLiveProduct(1);
+        preorderP.setIsPreorder(true);
+        preorderP.setAvailableToday(false);
+        preorderP.setAvailableDate(AppTimeZone.today().plusDays(2));
+        preorderP = products.saveAndFlush(preorderP);
+
+        User buyer = createBuyer();
+        Order order = new Order(buyer, preorderP.getKitchen());
+        order.setOrderStatus(OrderStatus.CONFIRMED);
+        order.setPaymentStatus(PaymentStatus.PAID);
+        order.setOrderNumber("PREORDER-RESTORE-" + System.nanoTime());
+        order.addItem(new OrderItem(preorderP, 1, preorderP.getPrice()));
+        order.recalculateTotal();
+        order = orders.saveAndFlush(order);
+
+        // Consume 1 unit to exhaust stock
+        products.consumeStock(preorderP.getId(), 1);
+
+        Product exhaustedPreorder = products.findById(preorderP.getId()).orElseThrow();
+        assertThat(exhaustedPreorder.getRemainingQuantity()).isEqualTo(0);
+        assertThat(exhaustedPreorder.isSoldOut()).isTrue();
+        assertThat(exhaustedPreorder.getSoldOutReason()).isEqualTo("AUTO_STOCK_EXHAUSTED");
+
+        entityManager.flush();
+        entityManager.clear();
+
+        // Cancel preorder order
+        orderService.cancelOrder(order.getId(), buyer);
+
+        entityManager.flush();
+        entityManager.clear();
+
+        Product reopened = products.findById(preorderP.getId()).orElseThrow();
+        assertThat(reopened.getRemainingQuantity()).isEqualTo(1);
+        assertThat(reopened.isSoldOut()).isFalse();
+        assertThat(reopened.getSoldOutReason()).isNull();
+
+        // Verifying buyer sees PRE_ORDER section and can order
+        ProductDto dto = kitchenService.getProductById(preorderP.getId(), buyer);
+        assertThat(dto.getBuyerSection()).isEqualTo("PRE_ORDER");
+        assertThat(dto.getSoldOut()).isFalse();
+        assertThat(dto.getLifecycleState()).isEqualTo("PRE_ORDER");
+    }
+
+    @Test
+    @Transactional
+    void manualSoldOutTerminalBehaviourRejectsResumeAndMarkAvailable() {
+        Product p = createLiveProduct(5);
+        User seller = p.getKitchen().getSeller();
+        sellerAppService.markSoldOut(p.getId(), seller);
+
+        entityManager.flush();
+        entityManager.clear();
+
+        Long pid = p.getId();
+        assertThatThrownBy(() -> sellerAppService.markAvailable(pid, seller))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("A manually sold-out offering cannot be reopened");
+
+        assertThatThrownBy(() -> sellerAppService.resumeOrders(pid, seller))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("A manually sold-out offering cannot be reopened");
     }
 
     private Product createLiveProduct(int stock) {
