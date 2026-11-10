@@ -32,6 +32,8 @@ var routes = {
 
 function resolveRoute(hash) {
     if (routes[hash]) return { fn: routes[hash], arg: hash };
+    if (hash.startsWith('#/offering/')) return { fn: offeringDirectView, arg: hash };
+    if (hash.startsWith('#/product/')) return { fn: offeringDirectView, arg: hash };
     if (hash.startsWith('#/category/')) return { fn: categoryView, arg: hash };
     if (hash.startsWith('#/kitchen/')) return { fn: kitchenPageView, arg: hash };
     if (hash.startsWith('#/homemade-store/')) return { fn: homemadeStoreView, arg: hash };
@@ -51,6 +53,10 @@ function resolveRoute(hash) {
  */
 function resolvePathRoute(path) {
     if (!path) return null;
+    var om = path.match(/^\/offering\/(.+)$/);
+    if (om) return { fn: offeringDirectView, arg: '#/offering/' + decodeURIComponent(om[1]) };
+    var pm = path.match(/^\/product\/(.+)$/);
+    if (pm) return { fn: offeringDirectView, arg: '#/product/' + decodeURIComponent(pm[1]) };
     var hm = path.match(/^\/homemade-store\/(.+)$/);
     if (hm) return { fn: homemadeStoreView, arg: 'slug:' + decodeURIComponent(hm[1]) };
     if (path === '/homemade' || path === '/homemade/') return { fn: homemadeView, arg: '#/homemade' };

@@ -194,6 +194,33 @@ class InventoryRestorationIntegrationTest {
     }
 
 
+    @Test
+    @Transactional
+    void cancellingPastDayExpiredOfferingDoesNotReopenAvailability() {
+        Product product = offering(false);
+        product.setAvailableDate(AppTimeZone.today().minusDays(1));
+        products.saveAndFlush(product);
+
+        assertThat(products.restoreStock(product.getId(), 1, AppTimeZone.today())).isEqualTo(1);
+        Product restored = products.findById(product.getId()).orElseThrow();
+        assertThat(restored.getRemainingQuantity()).isEqualTo(1);
+        assertThat(restored.getAvailableToday()).isFalse();
+    }
+
+    @Test
+    @Transactional
+    void cancellingOrderWhilePausedRestoresStockWithoutReopening() {
+        Product product = offering(true);
+        product.setAvailableDate(AppTimeZone.today());
+        products.saveAndFlush(product);
+
+        assertThat(products.restoreStock(product.getId(), 1, AppTimeZone.today())).isEqualTo(1);
+        Product restored = products.findById(product.getId()).orElseThrow();
+        assertThat(restored.getRemainingQuantity()).isEqualTo(1);
+        assertThat(restored.isOrdersPaused()).isTrue();
+        assertThat(restored.getAvailableToday()).isFalse();
+    }
+
     private Product offering(boolean paused) {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         User seller = new User("Seller" + suffix, "91" + suffix + "0001", "S-1", UserRole.SELLER);

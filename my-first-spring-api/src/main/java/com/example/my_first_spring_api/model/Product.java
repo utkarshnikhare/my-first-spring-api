@@ -260,6 +260,12 @@ public class Product {
                 || (remainingQuantity != null && remainingQuantity <= 0);
     }
 
+    @Transient
+    public String getSoldOutReason() {
+        if (!isSoldOut()) return null;
+        return isSoldOutManually() ? "MANUAL" : "AUTO_STOCK_EXHAUSTED";
+    }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

@@ -17,12 +17,14 @@ function todayDate() {
 
 function buyerOfferingSection(product) {
     if (!product) return 'UNAVAILABLE';
-    if (product.ordersPaused || product.soldOut || product.lifecycleState === 'SOLD_OUT'
+    if (product.ordersPaused
         || product.lifecycleState === 'EXPIRED' || product.lifecycleState === 'ADMIN_SUSPENDED') return 'UNAVAILABLE';
     var date = product.recurring ? product.nextOccurrenceDate : product.availableDate;
     if (!date) date = todayDate();
     if (date < todayDate()) return 'UNAVAILABLE';
-    if (date === todayDate() && product.availableToday === false) return 'UNAVAILABLE';
+    var isSoldOut = !!product.soldOut || product.lifecycleState === 'SOLD_OUT'
+        || (product.remainingQuantity != null && product.remainingQuantity <= 0);
+    if (date === todayDate() && product.availableToday === false && !isSoldOut) return 'UNAVAILABLE';
     return date > todayDate() ? 'PRE_ORDER' : 'ORDER';
 }
 
@@ -774,8 +776,8 @@ function offeringCardHtml(p, kitchen, isPreorderSection) {
             ? '<div class="oc-footer"><span class="pill pill-red">🔴 Sold out</span>' +
               '<button class="btn btn-outline btn-sm" disabled>Sold out</button></div>'
             : paused
-            ? '<div class="oc-footer"><span class="pill pill-amber">⏸️ Orders paused</span>' +
-              '<button class="btn btn-outline btn-sm" disabled>Orders paused</button></div>'
+            ? '<div class="oc-footer"><span class="pill pill-amber">⏸️ Temporarily unavailable</span>' +
+              '<button class="btn btn-outline btn-sm" disabled>Temporarily unavailable</button></div>'
             : ordersClosed
             ? '<div class="oc-footer"><span class="pill pill-red">🔒 ORDERS CLOSED</span>' +
               '<button class="btn btn-outline btn-sm" disabled>Orders closed</button></div>'
@@ -819,7 +821,7 @@ function openOrderSheet(productJson, kitchenJson) {
     var k = JSON.parse(decodeURIComponent(kitchenJson));
     if (p.ordersPaused) {
         closeSheet();
-        toast('Orders are paused for this offering', 'error');
+        toast('This offering is temporarily unavailable (orders paused)', 'error');
         return;
     }
     if (p.ordersClosed || p.lifecycleState === 'ORDERS_CLOSED' || p.lifecycleState === 'SOLD_OUT'
@@ -2070,4 +2072,31 @@ async function profileView() {
 
     h += '</div>';
     return h;
+}
+
+// ==================== Direct Offering Deep-Link View ====================
+async function offeringDirectView(hash) {
+    var id = String(hash || '').replace(/^#?\/?(?:offering|product)\//, '').replace(/^#/, '');
+    if (!id) return homeView();
+    try {
+        var p = await api('/api/products/' + encodeURIComponent(id));
+        if (!p || !p.id) {
+            return emptyHtml('🍽️', 'Offering not found', 'This offering may have been removed.',
+                '<a class="btn btn-primary card-mt" href="#/home">Browse kitchens</a>');
+        }
+        var k = null;
+        if (p.kitchenId) {
+            try { k = await api('/api/kitchens/' + encodeURIComponent(p.kitchenId)); } catch (e) {}
+        }
+        var kJson = encodeURIComponent(JSON.stringify(k || { id: p.kitchenId, name: p.kitchenName || '' }));
+        var h = '<div class="view-enter offering-direct-page">';
+        h += '<div class="section-header mb-3"><a class="btn btn-outline btn-sm" href="' + (k && k.slug ? '#/kitchen/' + encodeURIComponent(k.slug) : '#/home') + '">← Back to kitchen</a></div>';
+        h += '<div class="offering-direct-card-wrapper">';
+        h += offeringCardHtml(p, kJson, false);
+        h += '</div></div>';
+        return h;
+    } catch (err) {
+        return emptyHtml('⚠️', 'Could not load offering', err.message || 'Please try again.',
+            '<a class="btn btn-primary card-mt" href="#/home">Browse kitchens</a>');
+    }
 }

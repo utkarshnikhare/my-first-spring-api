@@ -87,6 +87,7 @@ public class DiscoveryService {
         dto.setOrdersPaused(product.isOrdersPaused());
         dto.setSoldOut(product.isSoldOut());
         dto.setSoldOutManually(product.isSoldOutManually());
+        dto.setSoldOutReason(product.getSoldOutReason());
         dto.setManualReactivationRequired(product.isManualReactivationRequired());
         String lifecycle = OfferingTiming.lifecycleState(
                 product, today, AppTimeZone.time());

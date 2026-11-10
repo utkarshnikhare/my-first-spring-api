@@ -139,7 +139,7 @@ public class OrderService {
                     throw new IllegalArgumentException("Quantity must be at least 1.");
                 }
                 if (Boolean.TRUE.equals(product.getOrdersPaused())) {
-                    throw new IllegalArgumentException("Orders are paused for '" + product.getName() + "'.");
+                    throw new IllegalArgumentException("'" + product.getName() + "' is temporarily unavailable (orders paused).");
                 }
                 boolean itemPreorder = OfferingTiming.isPreorderForOrdering(product, AppTimeZone.today());
                 // Recurring offerings are governed by their occurrence rows:
@@ -1198,7 +1198,7 @@ public class OrderService {
                 throw new IllegalArgumentException("The kitchen '" + product.getKitchen().getDisplayName() + "' is not currently accepting orders.");
             }
             if (Boolean.TRUE.equals(product.getOrdersPaused())) {
-                throw new IllegalArgumentException("Orders are paused for '" + product.getName() + "'.");
+                throw new IllegalArgumentException("'" + product.getName() + "' is temporarily unavailable (orders paused).");
             }
             if (product.isSoldOutManually() || product.isManualReactivationRequired()) {
                 throw new IllegalArgumentException("'" + product.getName() + "' is sold out.");
@@ -1357,12 +1357,20 @@ public class OrderService {
             if (recurringScheduleService != null && recurringScheduleService.hasSchedule(product.getId())) continue;
             if (product.getRemainingQuantity() != null) {
                 LocalDate today = AppTimeZone.today();
+                LocalTime now = AppTimeZone.time();
                 int restored = productRepository.restoreStock(e.getKey(), quantity, today);
                 if (restored == 0) {
                     throw new IllegalArgumentException("Could not restore inventory for '"
                             + product.getName() + "'. Please try again.");
                 }
-                productRepository.reopenAfterRestore(e.getKey(), today);
+                boolean timingOpen = OfferingTiming.isTimingWindowOpen(product, today, now);
+                boolean adminSuspended = KitchenVisibility.isAdminSuspended(product.getKitchen());
+                if (!timingOpen || adminSuspended || product.isOrdersPaused()
+                        || product.isSoldOutManually() || OfferingTiming.isExpired(product, today)) {
+                    productRepository.setAvailableToday(e.getKey(), false);
+                } else {
+                    productRepository.reopenAfterRestore(e.getKey(), today);
+                }
             } else {
                 productRepository.decrementBookedQuantity(e.getKey(), quantity);
             }

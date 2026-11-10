@@ -112,6 +112,7 @@ public class MarketplaceService {
         dto.setBookedQuantity(product.getBookedQuantity());
         dto.setSoldOut(product.isSoldOut());
         dto.setSoldOutManually(product.isSoldOutManually());
+        dto.setSoldOutReason(product.getSoldOutReason());
         dto.setManualReactivationRequired(product.isManualReactivationRequired());
         dto.setOrdersPaused(product.isOrdersPaused());
         dto.setQuickPost(product.isQuickPost());

@@ -322,6 +322,18 @@ final class OfferingTiming {
         }
     }
 
+    static boolean isTimingWindowOpen(Product product, LocalDate today, LocalTime now) {
+        if (product == null) return false;
+        LocalDate fulfillmentDate = product.getAvailableDate() != null
+                ? product.getAvailableDate() : today;
+        try {
+            enforceOrderWindow(product, fulfillmentDate, "today", today, now);
+            return true;
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
+    }
+
     /** Query-time lifecycle state used consistently by Buyer and Seller DTOs. */
     static String lifecycleState(Product product, LocalDate today, LocalTime now) {
         if (product == null) return "UNAVAILABLE";

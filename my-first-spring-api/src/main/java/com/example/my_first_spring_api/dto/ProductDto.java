@@ -35,6 +35,7 @@ public class ProductDto {
     private Integer bookedQuantity;
     private Boolean soldOut;
     private Boolean soldOutManually;
+    private String soldOutReason;
     private Boolean manualReactivationRequired;
     private Boolean ordersClosed;
     private String lifecycleState;
@@ -149,6 +150,14 @@ public class ProductDto {
     public void setSoldOut(Boolean soldOut) { this.soldOut = soldOut; }
     public Boolean getSoldOutManually() { return soldOutManually; }
     public void setSoldOutManually(Boolean soldOutManually) { this.soldOutManually = soldOutManually; }
+    public String getSoldOutReason() {
+        if (soldOutReason != null) return soldOutReason;
+        if (Boolean.TRUE.equals(soldOut)) {
+            return Boolean.TRUE.equals(soldOutManually) ? "MANUAL" : "AUTO_STOCK_EXHAUSTED";
+        }
+        return null;
+    }
+    public void setSoldOutReason(String soldOutReason) { this.soldOutReason = soldOutReason; }
     public Boolean getManualReactivationRequired() { return manualReactivationRequired; }
     public void setManualReactivationRequired(Boolean manualReactivationRequired) {
         this.manualReactivationRequired = manualReactivationRequired;

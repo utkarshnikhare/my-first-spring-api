@@ -952,6 +952,29 @@ function sdCategoryGroup(p) {
 }
 function sdCategoryLabel(k) { return k === 'HOMEMADE' ? 'Homemade' : 'Kitchen'; }
 
+function sdOfferingStatusFilterHtml(offerings) {
+    var counts = { ALL: offerings.length, LIVE: 0, PAUSED: 0, SOLD_OUT: 0, EXPIRED: 0 };
+    offerings.forEach(function (p) {
+        if (p.ordersPaused || p.lifecycleState === 'PAUSED') counts.PAUSED++;
+        else if (p.soldOut || p.lifecycleState === 'SOLD_OUT') counts.SOLD_OUT++;
+        else if (p.lifecycleState === 'EXPIRED') counts.EXPIRED++;
+        else if (!p.ordersClosed) counts.LIVE++;
+    });
+    var current = S.dashStatusFilter || 'ALL';
+    var tabs = [
+        { k: 'ALL', label: 'All', n: counts.ALL },
+        { k: 'LIVE', label: 'Live', n: counts.LIVE },
+        { k: 'PAUSED', label: 'Paused', n: counts.PAUSED },
+        { k: 'SOLD_OUT', label: 'Sold Out', n: counts.SOLD_OUT },
+        { k: 'EXPIRED', label: 'Expired', n: counts.EXPIRED }
+    ];
+    return '<div class="sd-status-filters" role="tablist">'
+        + tabs.map(function (tab) {
+            return '<button type="button" class="sd-chip' + (tab.k === current ? ' is-active' : '') + '" data-action="set-dash-status-filter" data-status="' + tab.k + '">'
+                + esc(tab.label) + ' (' + tab.n + ')</button>';
+        }).join('') + '</div>';
+}
+
 /**
  * Simple dashboard filter. Full filtering/history lives on My Offerings, so this
  * stays deliberately minimal: "All", plus Kitchen/Homemade only when the seller
@@ -1174,19 +1197,29 @@ async function sellerHomeView() {
                 + '<button class="sd-note__retry" type="button" data-action="seller-retry">Retry</button></p>';
         }
         var offerings = (dash.offerings || []).filter(function (p) {
-            return !p.ordersClosed && !p.ordersPaused && !p.soldOut;
+            return !p.archived && !p.publicationDraft;
         });
         // LIVE is the default tab: what can customers order right now?
         if (S.dashTab === 'recurring') {
             h += await sellerRecurringHtml();
         } else {
             var shown = offerings;
+            if (S.dashStatusFilter && S.dashStatusFilter !== 'ALL') {
+                shown = shown.filter(function (p) {
+                    if (S.dashStatusFilter === 'LIVE') return !p.ordersClosed && !p.ordersPaused && !p.soldOut && (p.lifecycleState === 'LIVE' || !p.lifecycleState);
+                    if (S.dashStatusFilter === 'PAUSED') return p.ordersPaused || p.lifecycleState === 'PAUSED';
+                    if (S.dashStatusFilter === 'SOLD_OUT') return p.soldOut || p.lifecycleState === 'SOLD_OUT';
+                    if (S.dashStatusFilter === 'EXPIRED') return p.lifecycleState === 'EXPIRED';
+                    return true;
+                });
+            }
             if (S.dashFilter && S.dashFilter !== 'ALL') {
-                shown = offerings.filter(function (p) { return sdCategoryGroup(p) === S.dashFilter; });
+                shown = shown.filter(function (p) { return sdCategoryGroup(p) === S.dashFilter; });
             }
             h += '<div class="sd-section">'
                 + '<h2 class="sd-section__title">My Offerings<span class="sd-section__count">(' + shown.length + ')</span></h2>'
                 + '<div class="sd-section__actions">'
+                + sdOfferingStatusFilterHtml(offerings)
                 + sdOfferingFilterHtml(offerings)
                 + '<button class="sd-btn sd-btn--primary sd-section__add-btn" type="button" data-action="go-add"><span aria-hidden="true">＋</span> Add Offering</button>'
                 + '</div>'
@@ -4403,31 +4436,43 @@ document.addEventListener('click', async function (e) {
             case 'occ-sold-out': {
                 // V2 §11 / V3 §8: per-day Sold Out toggle - this date only.
                 var soldOid = Number(t.dataset.oid);
-                t.disabled = true;
-                try {
-                    await sellerApi('/api/seller/schedules/occurrences/' + soldOid + '/sold-out',
-                        { method: 'POST', body: { soldOut: true } });
-                    toast('Marked sold out for this date only', 'success');
-                    await sellerRender();
-                } catch (err) {
-                    t.disabled = false;
-                    toast(err.message || 'Could not mark sold out', 'error');
-                }
+                confirmModal({
+                    icon: '🏷️',
+                    title: 'Mark as Sold Out for this date?',
+                    message: 'New orders for this date will be stopped immediately. Buyers will see a SOLD OUT badge. This action is terminal for this occurrence.',
+                    okLabel: 'Yes, Mark Sold Out',
+                    onOk: async function () {
+                        try {
+                            await sellerApi('/api/seller/schedules/occurrences/' + soldOid + '/sold-out',
+                                { method: 'POST', body: { soldOut: true } });
+                            toast('Marked sold out for this date only', 'success');
+                            await sellerRender();
+                        } catch (err) {
+                            toast(err.message || 'Could not mark sold out', 'error');
+                        }
+                    }
+                });
                 break;
             }
             case 'occ-close': {
                 // V2 §11 / V3 §8: per-day Close Orders toggle - this date only.
                 var closeOid = Number(t.dataset.oid);
-                t.disabled = true;
-                try {
-                    await sellerApi('/api/seller/schedules/occurrences/' + closeOid + '/pause',
-                        { method: 'POST', body: { paused: true } });
-                    toast('Orders closed for this date only', 'success');
-                    await sellerRender();
-                } catch (err) {
-                    t.disabled = false;
-                    toast(err.message || 'Could not close orders', 'error');
-                }
+                confirmModal({
+                    icon: '⏸️',
+                    title: 'Pause orders for this date?',
+                    message: 'Buyers will no longer be able to place new orders for this date. Existing accepted orders will not be affected.',
+                    okLabel: 'Yes, Pause Orders',
+                    onOk: async function () {
+                        try {
+                            await sellerApi('/api/seller/schedules/occurrences/' + closeOid + '/pause',
+                                { method: 'POST', body: { paused: true } });
+                            toast('Orders closed for this date only', 'success');
+                            await sellerRender();
+                        } catch (err) {
+                            toast(err.message || 'Could not close orders', 'error');
+                        }
+                    }
+                });
                 break;
             }
             case 'extend-schedule': {
@@ -4496,10 +4541,10 @@ document.addEventListener('click', async function (e) {
             case 'mark-soldout': {
                 var pid = Number(t.dataset.pid);
                 confirmModal({
-                    icon: '🔴',
+                    icon: '🏷️',
                     title: 'Mark as Sold Out?',
-                    message: 'This will mark the offering as sold out and hide it from buyers.',
-                    okLabel: 'Yes, Sold Out',
+                    message: 'New orders will be stopped immediately. Buyers will see a SOLD OUT badge. This action is terminal for this occurrence.',
+                    okLabel: 'Yes, Mark Sold Out',
                     onOk: async function () {
                         await sellerApi('/api/seller-app/products/' + pid + '/sold-out', { method: 'POST' });
                         toast('Marked as Sold Out', 'success');
@@ -4523,8 +4568,33 @@ document.addEventListener('click', async function (e) {
             }
             case 'pause-orders': {
                 var pausePid = Number(t.dataset.pid);
-                await sellerApi('/api/seller-app/products/' + pausePid + '/pause', { method: 'POST' });
-                toast('Orders paused', 'success');
+                if (t.textContent && t.textContent.trim() === 'Close Post') {
+                    try {
+                        t.disabled = true;
+                        await sellerApi('/api/seller-app/products/' + pausePid + '/pause', { method: 'POST' });
+                        toast('Orders closed', 'success');
+                        await sellerRender();
+                    } catch (err) {
+                        toast(err.message || 'Could not close post', 'error');
+                        t.disabled = false;
+                    }
+                    break;
+                }
+                confirmModal({
+                    icon: '⏸️',
+                    title: 'Pause orders?',
+                    message: 'Buyers will no longer be able to place new orders. Existing accepted orders will not be affected and can still be fulfilled.',
+                    okLabel: 'Yes, Pause Orders',
+                    onOk: async function () {
+                        await sellerApi('/api/seller-app/products/' + pausePid + '/pause', { method: 'POST' });
+                        toast('Orders paused', 'success');
+                        await sellerRender();
+                    }
+                });
+                break;
+            }
+            case 'set-dash-status-filter': {
+                S.dashStatusFilter = t.dataset.status || 'ALL';
                 await sellerRender();
                 break;
             }

@@ -29,6 +29,7 @@ public class SellerOfferingEditDto {
     private Integer remainingQuantity;
     private Integer bookedQuantity;
     private boolean soldOutManually;
+    private String soldOutReason;
     private boolean manualReactivationRequired;
     private Boolean isPreorder;
     private Boolean soldOut;
@@ -70,6 +71,8 @@ public class SellerOfferingEditDto {
     public void setBookedQuantity(Integer bookedQuantity) { this.bookedQuantity = bookedQuantity; }
     public boolean isSoldOutManually() { return soldOutManually; }
     public void setSoldOutManually(boolean soldOutManually) { this.soldOutManually = soldOutManually; }
+    public String getSoldOutReason() { return soldOutReason; }
+    public void setSoldOutReason(String soldOutReason) { this.soldOutReason = soldOutReason; }
     public boolean isManualReactivationRequired() { return manualReactivationRequired; }
     public void setManualReactivationRequired(boolean manualReactivationRequired) {
         this.manualReactivationRequired = manualReactivationRequired;
