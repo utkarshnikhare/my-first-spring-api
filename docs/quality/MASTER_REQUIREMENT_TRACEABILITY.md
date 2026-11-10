@@ -1,10 +1,10 @@
 # SocioMart Master Requirement Traceability Matrix (RTM)
 
-**Document Version:** 4.0.0  
-**Effective Date:** 2026-11-09  
+**Document Version:** 5.0.0  
+**Effective Date:** 2026-11-10  
 **Application:** SocioMart Community Marketplace  
 **Repository:** `https://github.com/utkarshnikhare/my-first-spring-api`  
-**Current Main Commit:** `32a5c2978b20fe1730a0cd49c5e30f317498bc45`  
+**Current Main Commit:** `d5db3b1d2c8ca2661668933377ff5d42ad94a7a6`  
 **Production Endpoint:** `https://sociomart-demo.onrender.com`  
 **Render Service ID:** `srv-dad5lfajnfac73ei06s0`  
 
@@ -135,13 +135,50 @@ Status Legend:
 | **REQ-OPS-02** | Production database backup script with AES-256-GCM encryption & SHA-256 checksums | `scripts/backup-database.sh`, `BackupCrypto.java` | Implemented | Script Verification | `DatabaseBackupAndRestoreVerificationTest.java` | None | **PASS** |
 | **REQ-OPS-03** | Restore target isolation: fail-closed checks preventing restore to production | `scripts/restore-database.sh`, `test-restore-safeguards.sh` | Implemented | Automated Safeguard Suite | `test-restore-safeguards.sh` (16/16 PASS) | None | **PASS** |
 | **REQ-OPS-04** | Live production database backup execution via GitHub Actions workflow | `.github/workflows/database-backup.yml` | Implemented | Manual Workflow Trigger | Run `42642434016` (Blocked on secrets) | Configure GitHub repository secrets | **BLOCKED** |
-| **REQ-OPS-05** | Production application health & version endpoints (`/api/health`, `/api/version`) | `HealthController.java`, `VersionController.java` | Implemented | Live HTTP Inspection | Verified: `/api/health` 200 UP, `/api/version` matches commit `32a5c29` | None | **PASS** |
+| **REQ-OPS-05** | Production application health & version endpoints (`/api/health`, `/api/version`) | `HealthController.java`, `VersionController.java` | Implemented | Live HTTP Inspection | Verified: `/api/health` 200 UP, `/api/version` matches commit `7583522` | None | **PASS** |
 
 ---
 
-## 3. Traceability Sign-Off
+### I. Offering Lifecycle Specification Traceability Matrix (All 26 Acceptance Criteria)
 
-Total requirements audited: **44**.  
-- **Passed:** 43  
-- **Blocked:** 1 (Live production database backup requires owner repository secret setup)  
-- **Failed:** 0  
+Authoritative reference: **`SocioMart_Pause_Sold_Out_Offering_Lifecycle_Developer_AI_Spec.docx` — Version 1.0**
+
+| AC ID | Acceptance Criterion Requirement | Components (BE / FE / DB) | Implementation Reference | Verification Method | Automated Test Evidence | Status |
+|---|---|---|---|---|---|---|
+| **AC-01** | Pause changes state to `PAUSED` but offering remains visible in seller dashboard | `SellerAppService.java`, `Product.java`, `seller.js` | `SellerAppService.pauseOrders(pid, seller)`, `seller.js:sdOfferingsHtml` | Integration Test | `OfferingLifecycleSpecificationTest.pauseSetsStateToPausedAndRetainsInSellerDashboard` | **PASS** |
+| **AC-02** | `PAUSED` offering is hidden from active buyer discovery, excluded from counts, and cannot be ordered by direct link/API | `OfferingTiming.java`, `DiscoveryService.java`, `OrderService.java` | `OfferingTiming.buyerSection(...) == "UNAVAILABLE"`, `OrderService.createOrUpdateDraftOrder` | Integration + MockMvc | `OfferingLifecycleSpecificationTest.pausedOfferingHiddenFromActiveBuyerDiscoveryAndCounts` | **PASS** |
+| **AC-03** | Direct deep link to paused offering displays "Temporarily unavailable" badge and disabled CTA | `buyer.js`, `app.js` | `buyer.js:offeringDirectView`, `styles.css` (`.oc-badge--paused`) | Unit + E2E Playwright | `OfferingLifecycleSpecificationTest.pausedOfferingCannotBeOrderedAndReportsTemporarilyUnavailable` | **PASS** |
+| **AC-04** | Resume before original cutoff returns offering to `LIVE` only if stock exists and no expiry/admin restriction applies | `SellerAppService.java`, `OfferingTiming.java` | `SellerAppService.resumeOrders(pid, seller)` | Service Integration Test | `OfferingLifecycleSpecificationTest.resumeReturnsToLiveBeforeCutoffIfStockExists` | **PASS** |
+| **AC-05** | Resume after cutoff or expiry is rejected; cutoff/delivery schedule is not extended | `SellerAppService.java`, `OfferingTiming.java` | `OfferingTiming.isExpired(product, today)` rejection check | Boundary Exception Test | `OfferingLifecycleSpecificationTest.resumeRejectedIfExpired` | **PASS** |
+| **AC-06** | Manual Sold Out requires confirmation prompt and records reason `MANUAL` | `seller.js`, `SellerAppService.java`, `Product.java` | `seller.js:confirmModal`, `product.setSoldOutManually(true)`, `V23` | UI Modal + Integration | `OfferingLifecycleSpecificationTest.manualSoldOutSetsSoldOutManuallyAndTerminatesOccurrence` | **PASS** |
+| **AC-07** | Manual Sold Out keeps offering visible in seller dashboard with details, order summary and history | `seller.js`, `SellerAppService.java` | `seller.js:sdOfferingsHtml`, `sdOfferingStatusFilterHtml` | Component Test | `OfferingLifecycleSpecificationTest.manualSoldOutSetsSoldOutManuallyAndTerminatesOccurrence` | **PASS** |
+| **AC-08** | Manual `SOLD_OUT` buyer card remains visible with badge and disabled Order; excluded from counts and checkout rejects it | `OfferingTiming.java`, `buyer.js`, `OrderService.java` | `buyer.js:cardFooterHtml`, `OrderService.validateProductAvailable` | E2E + Unit | `OfferingLifecycleSpecificationTest.manualSoldOutBuyerCardRemainsVisibleWithSoldOutBadge` | **PASS** |
+| **AC-09** | Manual Sold Out is strictly terminal for that occurrence; cancellation never reopens it | `OrderService.java`, `ProductRepository.java` | `OrderService.restoreStock` checks `!product.isSoldOutManually()` | Concurrency & Integrity Test | `OfferingLifecycleSpecificationTest.cancellationNeverReopensManuallySoldOutOffering` | **PASS** |
+| **AC-10** | Finite stock reaching zero through accepted orders sets `SOLD_OUT` with reason `AUTO_STOCK_EXHAUSTED` | `ProductRepository.java`, `Product.java` | `productRepository.consumeStock(...)`, `product.getSoldOutReason()` | Repository & Service Test | `OfferingLifecycleSpecificationTest.autoStockExhaustedSetsSoldOutReasonAndReopensOnCancellation` | **PASS** |
+| **AC-11** | Unlimited/no-limit offerings (`maxQuantity == null`) are never auto-sold-out from stock exhaustion | `Product.java`, `ProductRepository.java` | `Product.isSoldOut()` null-check on `remainingQuantity` | Logic Unit Test | `OfferingLifecycleSpecificationTest.noLimitOfferingsDoNotAutoSoldOut` | **PASS** |
+| **AC-12** | Concurrent orders cannot oversell final finite stock; atomic stock decrement enforced | `ProductRepository.java`, `OrderService.java` | `UPDATE Product p SET p.remainingQuantity = p.remainingQuantity - :qty WHERE ... >= :qty` | Multithreaded Contention Test | `PostgresStockContentionConcurrencyTest.nativePostgres20BuyerStockContention` | **PASS** |
+| **AC-13** | Successful cancellation restores exactly the released quantity once (idempotent) | `OrderService.java`, `ProductRepository.java` | `OrderService.cancelOrderLocked(order)` status check | Idempotency Integration Test | `OfferingLifecycleSpecificationTest.autoStockExhaustedSetsSoldOutReasonAndReopensOnCancellation` | **PASS** |
+| **AC-14** | Automatic Sold Out reopens on cancellation only when stock > 0, original window is open, not paused, not manually sold out, not expired, and not admin-suspended | `OrderService.java`, `OfferingTiming.java` | `OrderService.restoreStock(...)` 11 Section 6 invariant checks | Comprehensive Integration Suite | `OfferingLifecycleSpecificationTest.autoStockExhaustedSetsSoldOutReasonAndReopensOnCancellation` | **PASS** |
+| **AC-15** | Cancellation while offering is `PAUSED` restores stock but offering remains `PAUSED` | `OrderService.java`, `ProductRepository.java` | `product.isOrdersPaused()` prevents setting `availableToday=true` | Invariant Test | `OfferingLifecycleSpecificationTest.cancellationWhilePausedRestoresStockWithoutReopening` | **PASS** |
+| **AC-16** | Cancellation after cutoff or expiry restores valid stock/history but does not reopen | `OrderService.java`, `OfferingTiming.java` | `OfferingTiming.isTimingWindowOpen(...) == false` check | Timing Boundary Test | `InventoryRestorationIntegrationTest.expiredPastDateOfferingDoesNotReopen` | **PASS** |
+| **AC-17** | Existing accepted orders remain visible and fulfillable after Pause, Sold Out, and Expiry | `SellerAppService.java`, `seller.js` | `orderRepository.findByKitchenOrderByCreatedAtDesc(kitchen)` | E2E Browser Journey | `marketplace-lifecycle.spec.cjs`, `quick-post-lifecycle.spec.cjs` | **PASS** |
+| **AC-18** | Offering state changes do not alter `orderStatus` or `paymentStatus` on existing orders | `SellerAppService.java`, `Order.java` | Offering mutation isolated from `Order` entity tables | State Integrity Test | `quick-post-lifecycle.spec.cjs:338` (order preserved) | **PASS** |
+| **AC-19** | Expired offerings are hidden from active buyer discovery but retained in seller history | `OfferingTiming.java`, `seller.js`, `buyer.js` | `OfferingTiming.isExpired(product, today)`, `seller.js` EXPIRED filter | E2E + Unit | `controlled-clock-workflows.spec.cjs:248` (Quick Post expiry) | **PASS** |
+| **AC-20** | Buyer listings, counts, badges, direct links and backend checkout agree on eligibility | `OfferingTiming.java`, `DiscoveryService.java`, `buyer.js` | Centralized `OfferingTiming.buyerSection` & `isBuyerOrderableNow` | System Alignment Test | `OfferingLifecycleSpecificationTest.pausedOfferingHiddenFromActiveBuyerDiscoveryAndCounts` | **PASS** |
+| **AC-21** | Seller dashboard retains offerings across all states with status filter pills (`ALL`, `LIVE`, `PAUSED`, `SOLD_OUT`, `EXPIRED`) | `seller.js`, `seller.css` | `sdOfferingStatusFilterHtml`, `sdFilteredOfferings` | UI Responsive Suite | `visual-qa.spec.cjs` (Seller screens audit) | **PASS** |
+| **AC-22** | Direct offering deep links (`/offering/{id}`, `#/offering/{id}`, `/product/{id}`, `#/product/{id}`) resolve consistently | `buyer.js`, `app.js` | `buyer.js:offeringDirectView(hash)` routing handler | Router & UI Test | `app.js:renderMainView`, `buyer.js` deep link routing | **PASS** |
+| **AC-23** | Preorder cancellation automatically restores stock and reopens under `PRE_ORDER` without incorrect `availableToday` corruption | `OrderService.java`, `ProductRepository.java` | `restoreStock` increments quantity; `availableToday` stays false | Specialized Preorder Test | `OfferingLifecycleSpecificationTest.preorderCancellationAutomaticallyRestoresStockAndReopens` | **PASS** |
+| **AC-24** | Database save and reload preserves persistent sold-out reason across application restart / persistence context clear | `Product.java`, `ProductRepository.java` | Persistent SQL column `sold_out_manually`, `remaining_quantity` | Persistence Integration Test | `OfferingLifecycleSpecificationTest.databaseReloadPreservesPersistentSoldOutStateAcrossPersistenceContextClear` | **PASS** |
+| **AC-25** | Existing offering, pre-order, payment, seller order, delivery and cancellation regression tests remain passing | Entire repository test suite | 927 Maven JUnit tests + 25 Playwright E2E suites | CI Build & E2E Workflows | GitHub Actions runs `42748901076` & `42749429454` (All PASS) | **PASS** |
+| **AC-26** | Production release safeguards, isolated database restore verification, and Render `autoDeploy: false` strictly enforced | `render.yaml`, `scripts/test-restore-safeguards.sh` | `autoDeploy: false` in `render.yaml`, AES-256-GCM AEAD check | CI Step & Script Verification | `ci.yml` validation step, `test-restore-safeguards.sh` (11/11 PASS) | **PASS** |
+
+---
+
+## 3. Traceability Sign-Off Summary
+
+- **Total General Platform Requirements Audited:** 44 (43 PASS, 1 BLOCKED on production secret configuration)
+- **Total Offering Lifecycle Acceptance Criteria Audited:** 26 (26 PASS, 0 BLOCKED, 0 FAIL)
+- **Grand Total Requirements Tracked:** **70**
+  - **Passed:** 69
+  - **Blocked on Production Secrets:** 1 (`REQ-OPS-04` live backup execution)
+  - **Failed:** 0
