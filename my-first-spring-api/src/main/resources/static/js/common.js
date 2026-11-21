@@ -309,31 +309,36 @@ async function readNotification(id) {
 
 // ==================== Theme ====================
 
-var THEME_META_COLORS = { light: '#44352F', dark: '#44352F' };
+var THEME_META_COLORS = { light: '#F5EFE6', dark: '#F5EFE6' };
 
-/** Sync every theme toggle button's state + the browser UI colour. */
+/** Sync every theme toggle button's pressed state + the browser UI colour. */
 function applyThemeUiState() {
-    document.documentElement.setAttribute('data-theme', 'light');
+    var theme = document.documentElement.getAttribute('data-theme') || 'light';
     $all('[data-action="toggle-theme"]').forEach(function (btn) {
-        btn.setAttribute('aria-pressed', 'false');
-        btn.setAttribute('aria-label', 'Theme: Warm Editorial');
-        btn.title = 'Warm Editorial (Light Theme)';
+        btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+        btn.title = theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
     });
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', '#44352F');
+    if (meta) meta.setAttribute('content', THEME_META_COLORS[theme] || THEME_META_COLORS.light);
 }
 
 function toggleTheme() {
+    var html = document.documentElement;
+    var next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    try {
+        localStorage.setItem('sociomart-theme', next);
+    } catch (e) {}
     applyThemeUiState();
-    if (typeof toast === 'function') {
-        toast('SocioMart is designed in the Warm Editorial light theme.', 'info');
-    }
 }
 function initTheme() {
-    document.documentElement.setAttribute('data-theme', 'light');
+    var saved = null;
     try {
-        localStorage.setItem('sociomart-theme', 'light');
+        saved = localStorage.getItem('sociomart-theme');
     } catch (e) {}
+    if (saved) {
+        document.documentElement.setAttribute('data-theme', saved);
+    }
     applyThemeUiState();
 }
 
