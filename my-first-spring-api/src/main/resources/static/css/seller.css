@@ -36,7 +36,63 @@
 
 @media (min-width: 768px) {
     .seller-nav {
-        display: none !important;
+        position: sticky;
+        top: 0;
+        bottom: auto;
+        left: auto;
+        right: auto;
+        z-index: 90;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        background: var(--sd-bg);
+        border-top: none;
+        border-bottom: 1px solid var(--sd-border);
+        box-shadow: 0 2px 12px rgba(68, 53, 47, 0.04);
+        padding: 8px 16px;
+        height: auto;
+    }
+    .seller-nav .nav-item {
+        flex: 0 0 auto;
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border-radius: 999px;
+        font-size: 0.84rem;
+        font-weight: 600;
+        color: var(--sd-muted);
+        text-decoration: none;
+        transition: all 0.15s ease;
+        max-width: none;
+        height: auto;
+    }
+    .seller-nav .nav-icon {
+        font-size: 1rem;
+        line-height: 1;
+    }
+    .seller-nav .nav-label {
+        font-size: 0.84rem;
+        font-weight: 600;
+        line-height: 1;
+    }
+    .seller-nav .nav-item:hover {
+        color: var(--sd-orange);
+        background: var(--sd-orange-soft);
+    }
+    .seller-nav .nav-item.active {
+        color: #FFFFFF;
+        background: var(--sd-orange);
+        font-weight: 700;
+        box-shadow: 0 2px 8px rgba(169, 103, 72, 0.25);
+    }
+    .seller-nav .nav-item.active .nav-label {
+        color: #FFFFFF;
+        font-weight: 700;
+    }
+    .seller-nav .nav-item.active::before {
+        display: none;
     }
     .seller-view {
         max-width: 760px;
@@ -2079,25 +2135,7 @@ html[data-theme="dark"] .sd-root {
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .sd-header__nav {
-    display: none;
-    align-items: center;
-    gap: 8px;
-}
-@media (min-width: 1024px) {
-    .sd-header__nav {
-        display: flex;
-        gap: 8px;
-    }
-}
-@media (min-width: 768px) and (max-width: 1023px) {
-    .sd-header__nav {
-        display: flex;
-        gap: 4px;
-    }
-    .sd-nav-link {
-        padding: 6px 10px;
-        font-size: 0.78rem;
-    }
+    display: none !important;
 }
 .sd-nav-link {
     display: inline-flex;
