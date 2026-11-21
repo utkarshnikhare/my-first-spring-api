@@ -835,10 +835,17 @@ html[data-theme="dark"] .password-toggle-btn:focus-visible {
 
 /* ===================== Empty states ===================== */
 
-.empty { text-align: center; padding: 46px 20px; }
-.empty .empty-icon { font-size: 2.6rem; display: block; margin-bottom: 10px; }
-.empty .empty-title { font-weight: 800; font-size: 1rem; margin-bottom: 4px; }
-.empty p { color: var(--muted); font-size: .85rem; }
+.empty {
+    text-align: center;
+    padding: 44px 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin: 12px 0;
+}
+.empty .empty-title { font-family: 'Playfair Display', Georgia, serif; font-weight: 700; font-size: 1.25rem; margin-bottom: 6px; color: var(--text); }
+.empty p { color: var(--muted); font-size: .88rem; max-width: 420px; margin: 0 auto; line-height: 1.5; }
 .empty .btn { margin-top: 18px; }
 
 /* ===================== Card spacing utilities ===================== */
@@ -1308,14 +1315,22 @@ select, textarea, input { max-width: 100%; }
 .odc-pay-line { display: inline-flex; align-items: center; gap: 5px; font-size: .76rem; font-weight: 700; color: var(--text); }
 .odc-pay-line .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
-/* ---------- Empty states: a little more life for live-marketplace zero results ---------- */
+/* ---------- Empty states: refined centered illustration ---------- */
 
 .empty.empty-live { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius); }
 .empty .empty-icon {
-    filter: saturate(.9); opacity: .9;
+    width: 76px;
+    height: 76px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    filter: saturate(.95);
     background: linear-gradient(135deg, var(--brand-soft) 0%, var(--accent-soft) 55%, var(--surface-2) 100%);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.6rem; color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.2rem;
+    color: var(--text);
+    box-shadow: 0 4px 14px rgba(68, 53, 47, 0.08);
 }
 /* When an <img> fails to load it hides itself and the parent reveals a data-emoji glyph */
 .img-fallback::after { content: attr(data-emoji); font-size: 2rem; }
