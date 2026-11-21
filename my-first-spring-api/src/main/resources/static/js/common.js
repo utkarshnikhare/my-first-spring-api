@@ -309,7 +309,7 @@ async function readNotification(id) {
 
 // ==================== Theme ====================
 
-var THEME_META_COLORS = { light: '#FCF9F5', dark: '#1A1410' };
+var THEME_META_COLORS = { light: '#F5EFE6', dark: '#F5EFE6' };
 
 /** Sync every theme toggle button's pressed state + the browser UI colour. */
 function applyThemeUiState() {
@@ -336,10 +336,6 @@ function initTheme() {
     try {
         saved = localStorage.getItem('sociomart-theme');
     } catch (e) {}
-    if (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        // Sensible default: respect the OS preference until the user chooses.
-        saved = 'dark';
-    }
     if (saved) {
         document.documentElement.setAttribute('data-theme', saved);
     }

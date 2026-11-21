@@ -2,9 +2,9 @@
    SocioMart Admin App — shell, login gate, placeholder screens (Increment A(
    ============================================================ */
 :root {
-    --admin-1: #EEF2FF;
-    --admin-2: #4F46E5;
-    --admin-3: #3730A3;
+    --admin-1: #E8EEF5;
+    --admin-2: #293B50;
+    --admin-3: #1B263B;
 }
 
 .hidden { display: none !important; }
@@ -172,20 +172,20 @@
    ============================================================ */
 
 html[data-theme="dark"] {
-    --admin-1: #262A52;
-    --admin-2: #818CF8;
-    --admin-3: #C7D2FE;
+    --admin-1: #293B50;
+    --admin-2: #3E546F;
+    --admin-3: #D8B9A5;
 }
 html[data-theme="dark"] .admin-role-badge.super {
-    background: linear-gradient(135deg, #4F46E5, #3730A3);
+    background: linear-gradient(135deg, #293B50, #1D2B3A);
     color: #fff;
 }
 html[data-theme="dark"] .al-info {
-    border-color: #6366F1;
+    border-color: #293B50;
 }
 html[data-theme="dark"] .ac-chip.next {
-    background: #2A2E45;
-    color: #A5ADC2;
+    background: #EFE6DC;
+    color: #44352F;
 }
 html[data-theme="dark"] .admin-login .form-group input:focus,
 html[data-theme="dark"] .admin-textarea:focus {
@@ -528,8 +528,8 @@ html[data-theme="dark"] .sr-reason { color: #fbbf24; }
     padding: 12px 14px;
 }
 [data-theme="dark"] .arm-section {
-    background: #1F2937;
-    border-color: #374151;
+    background: var(--surface-2, #E6D5C2);
+    border-color: var(--border, #D8C7B5);
 }
 .arm-sec-title {
     font-size: 0.82rem;
@@ -568,7 +568,7 @@ html[data-theme="dark"] .sr-reason { color: #fbbf24; }
     flex-wrap: wrap;
 }
 
-html[data-theme="dark"] .green { color: var(--secondary, #4ADE80); }
+html[data-theme="dark"] .green { color: var(--secondary, #293B50); }
 
 @media (prefers-reduced-motion: reduce) {
     .admin-view, .admin-topbar, .admin-nav, .dash-card { transition: none !important; animation: none !important; }

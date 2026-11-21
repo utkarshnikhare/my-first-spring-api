@@ -1,6 +1,9 @@
 # Agent tooling
 .kilo/
 
+# Local backup archives (safety snapshots)
+backups/
+
 # Local runtime data & build output (never share)
 data/
 bin/
