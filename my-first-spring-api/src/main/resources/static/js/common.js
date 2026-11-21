@@ -839,7 +839,8 @@ window.initPasswordToggles = initPasswordToggles;
 window.setupPasswordToggle = setupPasswordToggle;
 
 // ===================== SocioMart PWA Service Worker Registration =====================
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+// Register Service Worker in production (Netlify / live domains) while preventing interference with local Playwright page.route() intercepts
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.location.protocol.startsWith('http') && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
     window.addEventListener('load', function () {
         navigator.serviceWorker.register('/sw.js').then(function (registration) {
             if (typeof CONFIG !== 'undefined' && CONFIG.DEBUG) {
