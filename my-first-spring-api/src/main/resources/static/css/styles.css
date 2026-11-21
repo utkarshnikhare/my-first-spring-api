@@ -1,99 +1,103 @@
 /* ============================================================
-   SocioMart — Unified Community Marketplace Theme
-   Warm · Organic · Trustworthy · Premium
+   SocioMart — Approved Google Stitch & SARAMICS Editorial Design System
+   Warm Ivory · Sand Beige · Terracotta · Dusty Peach · Warm Brown · Midnight Blue
+   Strictly Zero Green Across All Components & Status Indicators
    ============================================================ */
 
 :root {
-    --primary-container: #C64F00;
-    --primary: #9E3D00;
-    --secondary: #006D37;
-    --secondary-fixed: #6BFE9C;
-    --on-surface: #091D2E;
+    --primary-container: #A96748;   /* Terracotta */
+    --primary: #8D543A;             /* Deep Terracotta */
+    --secondary: #293B50;           /* Midnight Blue Authority (Replaces Green) */
+    --secondary-fixed: #E6D5C2;     /* Sand Beige */
+    --on-surface: #44352F;          /* Warm Brown */
 
-    --brand: var(--primary-container);
-    --brand-2: var(--primary);
-    --brand-3: var(--primary-container);
-    --brand-soft: #FFF1E6;
+    --brand: #A96748;               /* Terracotta */
+    --brand-2: #8D543A;             /* Deep Terracotta */
+    --brand-3: #A96748;             /* Terracotta */
+    --brand-soft: #F5EAE4;          /* Soft Terracotta Tint */
 
-    --accent: var(--primary-container);
-    --accent-soft: #FFF1E6;
-    --accent-hover: var(--primary);
+    --accent: #A96748;              /* Terracotta */
+    --accent-soft: #D8B9A5;         /* Dusty Peach */
+    --accent-hover: #8D543A;
 
-    --green: var(--secondary);
-    --green-soft: #E6F7EF;
+    --green: #293B50;               /* Strictly Zero Green: Midnight Blue replaces green */
+    --green-soft: #E8EEF5;          /* Soft Blue-Gray replaces mint */
 
-    --amber: #B45309;
-    --amber-soft: #FEF3C7;
+    --amber: #C27D38;               /* Warm Honey Amber */
+    --amber-soft: #FDF3E7;
 
-    --danger: #DC2626;
-    --danger-soft: #FEE2E2;
+    --danger: #B83A3A;              /* Warm Crimson */
+    --danger-soft: #FDE8E8;
 
-    --blue: #2563EB;
-    --blue-soft: #DBEAFE;
+    --blue: #293B50;                /* Midnight Blue */
+    --blue-soft: #E8EEF5;
 
-    --purple: #7A4E3A;
+    --purple: #7A4E3A;              /* Warm Cocoa */
     --purple-soft: #F5E6D8;
 
-    --bg: #FCF9F5;
-    --surface: #FFFFFF;
-    --surface-2: #F7F9FF;
+    --bg: #F5EFE6;                  /* Warm Ivory */
+    --surface: #FFFFFF;             /* Clean Crisp Surface */
+    --surface-2: #E6D5C2;           /* Sand Beige */
 
-    --text: var(--on-surface);
-    --muted: #5C5C6A;
+    --text: #44352F;                /* Warm Brown */
+    --muted: #7E6F67;               /* Muted Warm Brown */
 
-    --border: #E8DDD2;
-    --shadow: 0 1px 3px rgba(9, 29, 46, .04), 0 6px 18px rgba(9, 29, 46, .06);
-    --shadow-lg: 0 8px 30px rgba(9, 29, 46, .12);
+    --border: #D8C7B5;              /* Sand Beige Border */
+    --border-light: #EFE6DC;
+    --shadow: 0 1px 4px rgba(68, 53, 47, .05), 0 6px 18px rgba(68, 53, 47, .06);
+    --shadow-lg: 0 10px 32px rgba(68, 53, 47, .10);
 
-    --radius: 16px;
+    --radius: 14px;
     --nav-h: 62px;
 }
 
+/* Strict requirement: Implement ONLY the approved warm light theme. Absolutely no dark theme. */
 html[data-theme="dark"] {
-    --bg: #1A1410;
-    --surface: #241C17;
-    --surface-2: #2E241D;
-    --text: #F1EDF9;
-    --muted: #A79FC0;
-    --border: #3D2F26;
-    --brand-soft: #3D2B1F;
-    --accent-soft: #3D2410;
-    --green-soft: #12351F;
-    --amber-soft: #3D2E0D;
-    --blue-soft: #16294D;
-    --purple-soft: #3D2B1F;
-    --danger-soft: #46161A;
-    --shadow: 0 2px 10px rgba(0, 0, 0, .4);
-    --shadow-lg: 0 10px 30px rgba(0, 0, 0, .5);
+    --bg: #F5EFE6;
+    --surface: #FFFFFF;
+    --surface-2: #E6D5C2;
+    --text: #44352F;
+    --muted: #7E6F67;
+    --border: #D8C7B5;
+    --border-light: #EFE6DC;
+    --brand-soft: #F5EAE4;
+    --accent-soft: #D8B9A5;
+    --green-soft: #E8EEF5;
+    --amber-soft: #FDF3E7;
+    --blue-soft: #E8EEF5;
+    --purple-soft: #F5E6D8;
+    --danger-soft: #FDE8E8;
+    --shadow: 0 1px 4px rgba(68, 53, 47, .05), 0 6px 18px rgba(68, 53, 47, .06);
+    --shadow-lg: 0 10px 32px rgba(68, 53, 47, .10);
 
-    --primary-container: #FB923C;
-    --primary: #EA580C;
-    --secondary: #4ADE80;
-    --secondary-fixed: #6BFE9C;
-    --on-surface: #F1EDF9;
+    --primary-container: #A96748;
+    --primary: #8D543A;
+    --secondary: #293B50;
+    --secondary-fixed: #E6D5C2;
+    --on-surface: #44352F;
 
-    --brand: #FB923C;
-    --brand-2: #EA580C;
-    --brand-3: #F97316;
-    --accent: #FB923C;
-    --accent-hover: #F97316;
-    --amber: #FBBF24;
-    --blue: #60A5FA;
-    --danger: #F87171;
-    --purple: #D8B4FE;
+    --brand: #A96748;
+    --brand-2: #8D543A;
+    --brand-3: #A96748;
+    --accent: #A96748;
+    --accent-hover: #8D543A;
+    --amber: #C27D38;
+    --blue: #293B50;
+    --danger: #B83A3A;
+    --purple: #7A4E3A;
 }
 
 html[data-theme="dark"] .icon-btn.ghost {
-    background: rgba(255,255,255,.12);
-    border-color: rgba(255,255,255,.2);
-    color: #fff;
+    background: rgba(68, 53, 47, .08);
+    border-color: rgba(68, 53, 47, .15);
+    color: #44352F;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; width: 100%; overflow-x: hidden; }
 
 body {
-    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+    font-family: 'Plus Jakarta Sans', 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
     background: var(--bg);
     color: var(--text);
     line-height: 1.55;
@@ -132,9 +136,9 @@ body {
     animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 6px;
 }
 
-h1 { font-size: 1.55rem; font-weight: 800; letter-spacing: -.02em; font-family: 'Montserrat', 'Segoe UI', system-ui, sans-serif; line-height: 1.2; }
-h2 { font-size: 1.2rem; font-weight: 700; font-family: 'Montserrat', 'Segoe UI', system-ui, sans-serif; line-height: 1.25; }
-h3 { font-size: 1.05rem; font-weight: 700; font-family: 'Montserrat', 'Segoe UI', system-ui, sans-serif; line-height: 1.3; }
+h1 { font-size: 1.55rem; font-weight: 700; letter-spacing: -.02em; font-family: 'Playfair Display', Georgia, serif; line-height: 1.2; color: var(--text); }
+h2 { font-size: 1.25rem; font-weight: 700; font-family: 'Playfair Display', Georgia, serif; line-height: 1.25; color: var(--text); }
+h3 { font-size: 1.05rem; font-weight: 700; font-family: 'Playfair Display', Georgia, serif; line-height: 1.3; color: var(--text); }
 .muted { color: var(--muted); }
 .small { font-size: .88rem; }
 .tiny { font-size: .76rem; }
@@ -1286,7 +1290,7 @@ select, textarea, input { max-width: 100%; }
 .empty.empty-live { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius); }
 .empty .empty-icon {
     filter: saturate(.9); opacity: .9;
-    background: linear-gradient(135deg, var(--brand-soft) 0%, var(--accent-soft) 55%, var(--green-soft) 100%);
+    background: linear-gradient(135deg, var(--brand-soft) 0%, var(--accent-soft) 55%, var(--surface-2) 100%);
     display: flex; align-items: center; justify-content: center;
     font-size: 1.6rem; color: var(--text);
 }
@@ -1305,13 +1309,13 @@ select, textarea, input { max-width: 100%; }
 
 /* Scrolling Wheel Time Picker (Brief V1) */
 .scrolling-wheel-picker-wrap { margin: 14px 0 16px; background: #FAFAFA; border: 1px solid #E5E7EB; border-radius: 18px; padding: 16px 12px; }
-[data-theme="dark"] .scrolling-wheel-picker-wrap { background: #18181B; border-color: #27272A; }
+[data-theme="dark"] .scrolling-wheel-picker-wrap { background: #FAFAFA; border-color: #E5E7EB; }
 .wheel-picker-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 600px) { .wheel-picker-cols { grid-template-columns: 1fr; gap: 20px; } }
 .wheel-col { display: flex; flex-direction: column; align-items: center; background: #FFFFFF; border: 1px solid #F3F4F6; border-radius: 14px; padding: 12px 8px 16px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
-[data-theme="dark"] .wheel-col { background: #202024; border-color: #2E2E33; }
+[data-theme="dark"] .wheel-col { background: #FFFFFF; border-color: #F3F4F6; }
 .wheel-col-header { font-size: 0.95rem; font-weight: 800; color: #111827; margin-bottom: 12px; text-align: center; }
-[data-theme="dark"] .wheel-col-header { color: #F3F4F6; }
+[data-theme="dark"] .wheel-col-header { color: #111827; }
 .wheel-selector-container { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; }
 .wheel-viewport-box { position: relative; width: 140px; height: 308px; overflow: hidden; user-select: none; -webkit-user-select: none; }
 .wheel-center-guide { position: absolute; top: 132px; left: 0; right: 0; height: 44px; pointer-events: none; border-top: 1px dashed rgba(217, 119, 54, 0.25); border-bottom: 1px dashed rgba(217, 119, 54, 0.25); border-radius: 9999px; z-index: 1; }
@@ -1320,10 +1324,10 @@ select, textarea, input { max-width: 100%; }
 .wheel-list { padding-top: 132px; padding-bottom: 132px; margin: 0; list-style: none; }
 .wheel-slot { height: 44px; display: flex; align-items: center; justify-content: center; scroll-snap-align: center; scroll-snap-stop: normal; cursor: pointer; box-sizing: border-box; }
 .wheel-slot-label { display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 500; color: #4B5563; opacity: 0.35; transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1); white-space: nowrap; }
-[data-theme="dark"] .wheel-slot-label { color: #9CA3AF; }
+[data-theme="dark"] .wheel-slot-label { color: #4B5563; }
 .wheel-slot.active .wheel-slot-label { background: #d97736; color: #ffffff; border-radius: 9999px; padding: 8px 18px; font-weight: 700; font-size: 1.2rem; opacity: 1; box-shadow: 0 4px 12px rgba(217, 119, 54, 0.3); }
 .wheel-ampm-pill { display: flex; flex-direction: column; background: #F3F4F6; border: 1px solid #E5E7EB; border-radius: 9999px; padding: 3px; gap: 3px; }
-[data-theme="dark"] .wheel-ampm-pill { background: #18181B; border-color: #3F3F46; }
+[data-theme="dark"] .wheel-ampm-pill { background: #F3F4F6; border-color: #E5E7EB; }
 .wheel-ampm-btn { border: none; background: transparent; padding: 8px 12px; border-radius: 9999px; font-size: 0.82rem; font-weight: 700; color: #6B7280; cursor: pointer; transition: all 0.15s ease; line-height: 1; }
-[data-theme="dark"] .wheel-ampm-btn { color: #A1A1AA; }
+[data-theme="dark"] .wheel-ampm-btn { color: #6B7280; }
 .wheel-ampm-btn.active { background: #d97736; color: #ffffff; box-shadow: 0 2px 6px rgba(217, 119, 54, 0.35); }

@@ -309,40 +309,31 @@ async function readNotification(id) {
 
 // ==================== Theme ====================
 
-var THEME_META_COLORS = { light: '#FCF9F5', dark: '#1A1410' };
+var THEME_META_COLORS = { light: '#44352F', dark: '#44352F' };
 
-/** Sync every theme toggle button's pressed state + the browser UI colour. */
+/** Sync every theme toggle button's state + the browser UI colour. */
 function applyThemeUiState() {
-    var theme = document.documentElement.getAttribute('data-theme') || 'light';
+    document.documentElement.setAttribute('data-theme', 'light');
     $all('[data-action="toggle-theme"]').forEach(function (btn) {
-        btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
-        btn.title = theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
+        btn.setAttribute('aria-pressed', 'false');
+        btn.setAttribute('aria-label', 'Theme: Warm Editorial');
+        btn.title = 'Warm Editorial (Light Theme)';
     });
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', THEME_META_COLORS[theme] || THEME_META_COLORS.light);
+    if (meta) meta.setAttribute('content', '#44352F');
 }
 
 function toggleTheme() {
-    var html = document.documentElement;
-    var next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    html.setAttribute('data-theme', next);
-    try {
-        localStorage.setItem('sociomart-theme', next);
-    } catch (e) {}
     applyThemeUiState();
+    if (typeof toast === 'function') {
+        toast('SocioMart is designed in the Warm Editorial light theme.', 'info');
+    }
 }
 function initTheme() {
-    var saved = null;
+    document.documentElement.setAttribute('data-theme', 'light');
     try {
-        saved = localStorage.getItem('sociomart-theme');
+        localStorage.setItem('sociomart-theme', 'light');
     } catch (e) {}
-    if (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        // Sensible default: respect the OS preference until the user chooses.
-        saved = 'dark';
-    }
-    if (saved) {
-        document.documentElement.setAttribute('data-theme', saved);
-    }
     applyThemeUiState();
 }
 
