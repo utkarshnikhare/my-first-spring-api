@@ -619,15 +619,15 @@ html[data-theme="dark"] .seller-auth-alert--rate-limit {
     cursor: pointer;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 16px;
-    box-shadow: var(--shadow);
-    padding: 16px;
-    margin-bottom: 12px;
+    border-radius: 18px;
+    box-shadow: 0 4px 16px rgba(41, 59, 80, 0.05);
+    padding: 18px;
+    margin-bottom: 14px;
     min-width: 0;
     transition: transform .15s ease, box-shadow .2s ease;
 }
 @media (hover: hover) {
-    .order-product-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+    .order-product-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(41, 59, 80, 0.09); }
 }
 .order-product-card .opc-header {
     display: flex;
@@ -638,19 +638,23 @@ html[data-theme="dark"] .seller-auth-alert--rate-limit {
     min-width: 0;
 }
 .order-product-card .opc-name {
-    font-weight: 800;
-    font-size: .95rem;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--text);
     min-width: 0;
     overflow-wrap: anywhere;
 }
 .order-product-card .opc-revenue {
-    font-weight: 800;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-weight: 700;
+    font-size: 1.05rem;
     color: var(--accent);
     flex-shrink: 0;
     overflow-wrap: anywhere;
 }
 .order-product-card .opc-meta {
-    font-size: .82rem;
+    font-size: .84rem;
     color: var(--muted);
     overflow-wrap: anywhere;
 }
@@ -1032,12 +1036,13 @@ html[data-theme="dark"] .seller-auth-alert--rate-limit {
     gap: 12px;
 }
 .form-section-title {
-    font-size: .85rem;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: .95rem;
     font-weight: 700;
-    color: var(--muted);
-    text-transform: uppercase;
-    margin: 20px 0 12px;
-    letter-spacing: .03em;
+    color: var(--text);
+    text-transform: none;
+    margin: 24px 0 14px;
+    letter-spacing: -0.01em;
 }
 
 /* ---------- Radio group ---------- */
@@ -1050,17 +1055,17 @@ html[data-theme="dark"] .seller-auth-alert--rate-limit {
 .radio-option {
     display: flex;
     align-items: center;
-    gap: 7px;
-    padding: 10px 14px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
+    gap: 8px;
+    padding: 10px 18px;
+    border: 1.5px solid var(--border);
+    border-radius: 999px;
     cursor: pointer;
     font-size: .88rem;
     font-weight: 600;
     transition: border-color .15s ease, background .15s ease, transform .12s ease;
 }
 @media (hover: hover) {
-    .radio-option:hover { transform: translateY(-1px); }
+    .radio-option:hover { transform: translateY(-1px); border-color: var(--accent); }
 }
 .radio-option.selected {
     border-color: var(--accent);
@@ -1078,10 +1083,10 @@ html[data-theme="dark"] .seller-auth-alert--rate-limit {
 .checkbox-option {
     display: flex;
     align-items: center;
-    gap: 7px;
-    padding: 10px 14px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
+    gap: 8px;
+    padding: 10px 18px;
+    border: 1.5px solid var(--border);
+    border-radius: 999px;
     cursor: pointer;
     font-size: .88rem;
     font-weight: 600;
@@ -1089,7 +1094,7 @@ html[data-theme="dark"] .seller-auth-alert--rate-limit {
     user-select: none;
 }
 @media (hover: hover) {
-    .checkbox-option:hover { transform: translateY(-1px); }
+    .checkbox-option:hover { transform: translateY(-1px); border-color: var(--accent); }
 }
 .checkbox-option:has(input:checked) {
     border-color: var(--accent);
@@ -1296,18 +1301,19 @@ html[data-theme="dark"] .seller-auth-alert--rate-limit {
        and price share the first one. */
     flex-wrap: wrap;
     align-items: center;
-    gap: 10px 12px;
+    gap: 12px 14px;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 14px;
-    margin-bottom: 10px;
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 12px;
     cursor: pointer;
     min-width: 0;
+    box-shadow: 0 4px 16px rgba(41, 59, 80, 0.04);
     transition: transform .15s ease, box-shadow .2s ease;
 }
 @media (hover: hover) {
-    .history-card:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+    .history-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(41, 59, 80, 0.08); }
 }
 .history-card:active { transform: scale(.99); }
 .history-card input[type="checkbox"] {
@@ -1328,8 +1334,10 @@ html[data-theme="dark"] .seller-auth-alert--rate-limit {
     gap: 2px;
 }
 .history-card .hc-name {
-    font-weight: 800;
-    font-size: .92rem;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--text);
     display: block;
     /* `anywhere` also lowers the element's min-content size, which is what let the
        name collapse to zero width. `break-word` still wraps an over-long single
@@ -1338,16 +1346,17 @@ html[data-theme="dark"] .seller-auth-alert--rate-limit {
     word-break: normal;
 }
 .history-card .hc-meta {
-    font-size: .8rem;
+    font-size: .82rem;
     color: var(--muted);
-    margin-top: 3px;
+    margin-top: 2px;
     overflow-wrap: break-word;
     word-break: normal;
 }
 .history-card .hc-price {
-    font-weight: 800;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-weight: 700;
     color: var(--accent);
-    font-size: .9rem;
+    font-size: 1.05rem;
     flex: 0 0 auto;
     white-space: nowrap;
 }
@@ -1356,6 +1365,7 @@ html[data-theme="dark"] .seller-auth-alert--rate-limit {
 .history-card > .btn-block {
     flex: 1 1 100%;
     width: auto;
+    border-radius: 999px;
 }
 
 /* ---------- My Offerings (Screen 5) ---------- */
@@ -1372,7 +1382,9 @@ html[data-theme="dark"] .seller-auth-alert--rate-limit {
    seller's own name directly beneath it. */
 .kitchen-identity { margin: 0 0 12px; }
 .kitchen-identity .ki-name {
-    font-size: 1.1rem; font-weight: 800; margin: 0;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 1.25rem; font-weight: 700; margin: 0;
+    color: var(--text);
     overflow-wrap: break-word; word-break: normal;
 }
 .kitchen-identity .ki-seller { margin: 2px 0 0; }
@@ -1381,24 +1393,30 @@ html[data-theme="dark"] .seller-auth-alert--rate-limit {
 .kitchen-status-badge {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
     background: var(--green-soft);
     color: var(--green);
-    padding: 7px 14px;
-    border-radius: 22px;
-    font-size: .82rem;
+    padding: 8px 18px;
+    border-radius: 999px;
+    font-size: .85rem;
     font-weight: 700;
-    margin-bottom: 16px;
+    margin-bottom: 18px;
+    border: 1px solid rgba(41, 59, 80, 0.15);
+    box-shadow: 0 1px 4px rgba(41, 59, 80, 0.04);
 }
-.kitchen-status-badge.paused { background: var(--amber-soft); color: var(--amber); }
+.kitchen-status-badge.paused {
+    background: var(--amber-soft);
+    color: var(--amber);
+    border-color: rgba(180, 83, 9, 0.2);
+}
 .kitchen-avatar-upload {
     display: flex;
     justify-content: center;
     margin-bottom: 18px;
 }
 .kitchen-avatar {
-    width: 88px;
-    height: 88px;
+    width: 92px;
+    height: 92px;
     border-radius: 50%;
     background: var(--accent-soft); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='none'%3E%3Ccircle cx='32' cy='32' r='24' stroke='%239E3D00' stroke-width='2' stroke-opacity='0.18'/%3E%3Ccircle cx='32' cy='32' r='10' stroke='%239E3D00' stroke-width='1.5' stroke-opacity='0.12'/%3E%3C/svg%3E"); background-position: center; background-repeat: no-repeat;
     display: flex;
@@ -1408,6 +1426,7 @@ html[data-theme="dark"] .seller-auth-alert--rate-limit {
     border: 3px solid var(--accent);
     cursor: pointer;
     overflow: hidden;
+    box-shadow: 0 4px 14px rgba(169, 103, 72, 0.18);
     transition: transform .15s ease;
 }
 .kitchen-avatar:active { transform: scale(.96); }
@@ -3715,12 +3734,12 @@ html[data-theme="dark"] .sd-earnings { background: var(--sd-card); border-color:
 
 /* 1-Click Quick Meal Presets */
 .meal-presets-card {
-    background: linear-gradient(135deg, #FFF7ED 0%, #FEF3C7 100%);
-    border: 1.5px solid #FDBA74;
-    border-radius: 16px;
-    padding: 16px 18px;
+    background: linear-gradient(135deg, #FDF8F5 0%, #F5EAE4 100%);
+    border: 1.5px solid #E2D9CF;
+    border-radius: 18px;
+    padding: 18px 20px;
     margin-bottom: 22px;
-    box-shadow: 0 4px 14px rgba(234, 88, 12, 0.08);
+    box-shadow: 0 4px 16px rgba(41, 59, 80, 0.05);
 }
 
 .meal-presets-head {
@@ -3731,25 +3750,26 @@ html[data-theme="dark"] .sd-earnings { background: var(--sd-card); border-color:
 }
 
 .meal-presets-badge {
-    background: #EA580C;
+    background: #A96748;
     color: #FFFFFF;
     font-size: 0.72rem;
     font-weight: 800;
-    padding: 3px 9px;
-    border-radius: 12px;
+    padding: 3px 10px;
+    border-radius: 999px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
 .meal-presets-title {
-    font-size: 1.02rem;
-    font-weight: 800;
-    color: #7C2D12;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #2D241E;
 }
 
 .meal-presets-sub {
     font-size: 0.84rem;
-    color: #9A3412;
+    color: #7A6960;
     margin: 0 0 12px 0;
     line-height: 1.4;
 }
@@ -3768,8 +3788,8 @@ html[data-theme="dark"] .sd-earnings { background: var(--sd-card); border-color:
 
 .btn-meal-preset {
     background: #FFFFFF;
-    border: 1.5px solid #FED7AA;
-    border-radius: 12px;
+    border: 1.5px solid #E2D9CF;
+    border-radius: 14px;
     padding: 12px 10px;
     display: flex;
     flex-direction: column;
@@ -3777,23 +3797,24 @@ html[data-theme="dark"] .sd-earnings { background: var(--sd-card); border-color:
     justify-content: center;
     text-align: center;
     cursor: pointer;
+    box-shadow: 0 2px 6px rgba(41, 59, 80, 0.04);
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     gap: 4px;
     user-select: none;
 }
 
 .btn-meal-preset:hover {
-    border-color: #EA580C;
+    border-color: #A96748;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(234, 88, 12, 0.16);
-    background: #FFFBF7;
+    box-shadow: 0 4px 14px rgba(169, 103, 72, 0.14);
+    background: #FDF8F5;
 }
 
 .btn-meal-preset:active,
 .btn-meal-preset.active {
-    background: #FFF7ED;
-    border-color: #EA580C;
-    box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.25);
+    background: #F5EAE4;
+    border-color: #A96748;
+    box-shadow: 0 0 0 2px rgba(169, 103, 72, 0.25);
 }
 
 .btn-meal-preset .preset-icon {
