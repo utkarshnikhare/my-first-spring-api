@@ -1,0 +1,70 @@
+name: SocioMart CI/CD Quality & Security Pipeline
+
+on:
+  push:
+    branches: [ main, 'feature/**' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-frontend:
+    name: Frontend Syntax & Asset Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate JavaScript Syntax
+        run: |
+          echo "Validating JavaScript files with node --check..."
+          find src/main/resources/static -name "*.js" -exec node --check {} +
+          echo "All JavaScript files passed syntax verification."
+
+      - name: Validate Web App Manifest & Static Assets
+        run: |
+          echo "Validating Web App Manifest JSON..."
+          node -e 'JSON.parse(require("fs").readFileSync("src/main/resources/static/manifest.webmanifest", "utf8"))'
+          test -f src/main/resources/static/sw.js
+          test -f src/main/resources/static/index.html
+          test -f src/main/resources/static/seller.html
+          test -f src/main/resources/static/admin.html
+          echo "All core PWA assets verified."
+
+  secret-scan:
+    name: Secret & Credential Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for committed production credentials
+        run: |
+          echo "Scanning for exposed credentials and private keys..."
+          ! grep -rn "BEGIN RSA PRIVATE KEY" src/
+          ! grep -rn "BEGIN OPENSSH PRIVATE KEY" src/
+          echo "Secret scan passed."
+
+  backend-build-test:
+    name: Backend Build, Test & Security Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Compile Java Spring Boot
+        run: ./mvnw -B compile test-compile
+
+      - name: Execute Full Test Suite
+        run: ./mvnw -B test
