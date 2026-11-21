@@ -1,0 +1,122 @@
+/**
+ * SocioMart Service Worker
+ * PWA offline support, intelligent asset caching, and network resilience.
+ */
+
+const CACHE_NAME = 'sociomart-shell-v1';
+const CORE_SHELL_ASSETS = [
+    '/',
+    '/index.html',
+    '/seller.html',
+    '/admin.html',
+    '/manifest.webmanifest',
+    '/css/styles.css?v=17',
+    '/css/seller.css?v=3.0',
+    '/css/admin.css?v=10',
+    '/js/config.js',
+    '/js/common.js?v=9',
+    '/js/buyer.js?v=10',
+    '/js/seller.js?v=3.0',
+    '/js/admin.js?v=11',
+    '/js/app.js?v=6',
+    '/icons/icon.svg',
+    '/icons/icon-192.png',
+    '/icons/icon-512.png'
+];
+
+// Install: pre-cache application shell
+self.addEventListener('install', (event) => {
+    event.waitUntil(
+        caches.open(CACHE_NAME).then((cache) => {
+            return cache.addAll(CORE_SHELL_ASSETS);
+        }).then(() => self.skipWaiting())
+    );
+});
+
+// Activate: clean up outdated version caches
+self.addEventListener('activate', (event) => {
+    event.waitUntil(
+        caches.keys().then((keys) => {
+            return Promise.all(
+                keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+            );
+        }).then(() => self.clients.claim())
+    );
+});
+
+// Fetch event
+self.addEventListener('fetch', (event) => {
+    const { request } = event;
+    const url = new URL(request.url);
+
+    // 1. Dynamic API and Admin login calls: NETWORK-FIRST (Never serve stale financial or auth data)
+    if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/admin/login')) {
+        event.respondWith(
+            fetch(request).catch(() => {
+                return new Response(
+                    JSON.stringify({
+                        error: 'Offline',
+                        offline: true,
+                        message: 'Network unreachable. Please check your internet connection.'
+                    }),
+                    {
+                        status: 503,
+                        headers: { 'Content-Type': 'application/json' }
+                    }
+                );
+            })
+        );
+        return;
+    }
+
+    // 2. Google Fonts & CDN assets: Cache-First with stale-while-revalidate
+    if (url.hostname.includes('fonts.googleapis.com') || url.hostname.includes('fonts.gstatic.com')) {
+        event.respondWith(
+            caches.match(request).then((cached) => {
+                const networkFetch = fetch(request).then((response) => {
+                    if (response && response.status === 200) {
+                        const copy = response.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+                    }
+                    return response;
+                }).catch(() => null);
+                return cached || networkFetch;
+            })
+        );
+        return;
+    }
+
+    // 3. Navigation / HTML pages: Network-first, fallback to cached document
+    if (request.mode === 'navigate') {
+        event.respondWith(
+            fetch(request).then((response) => {
+                if (response && response.status === 200) {
+                    const copy = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+                }
+                return response;
+            }).catch(async () => {
+                const cached = await caches.match(request);
+                if (cached) return cached;
+                if (url.pathname.startsWith('/seller')) return caches.match('/seller.html');
+                if (url.pathname.startsWith('/admin')) return caches.match('/admin.html');
+                return caches.match('/index.html');
+            })
+        );
+        return;
+    }
+
+    // 4. Static assets (CSS, JS, SVG, PNG): Cache-first, fallback to network
+    event.respondWith(
+        caches.match(request).then((cached) => {
+            if (cached) return cached;
+            return fetch(request).then((response) => {
+                if (response && response.status === 200 && request.method === 'GET') {
+                    const copy = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+                }
+                return response;
+            });
+        })
+    );
+});

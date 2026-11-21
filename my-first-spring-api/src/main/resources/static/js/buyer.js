@@ -1991,6 +1991,24 @@ async function orderDetailView(hash) {
 
 // ==================== Screen 8: Profile ====================
 
+function portalSwitchCardHtml() {
+    return '<div class="card pad card-mt portal-switch-card">' +
+        '<div class="top-row mb-2">' +
+        '<h3 class="font-700 font-size-1-1">SocioMart Portals</h3>' +
+        '<span class="pill pill-grey">Switch Mode</span></div>' +
+        '<p class="muted small mb-3">Access cook management tools or society governance:</p>' +
+        '<div class="portal-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">' +
+        '<a href="/seller.html" class="portal-card-btn" style="display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px; background:var(--surface, #FAF7F2); border:1px solid var(--border-color, #E8DFD5); text-decoration:none; color:inherit; transition:all 0.15s ease;">' +
+        '<span style="font-size:24px;">👩‍🍳</span>' +
+        '<div><strong style="display:block; font-size:14px; color:var(--brand-dark, #293B50);">Seller Studio</strong><span class="muted small">Orders, kitchen &amp; menu</span></div>' +
+        '</a>' +
+        '<a href="/admin.html" class="portal-card-btn" style="display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px; background:var(--surface, #FAF7F2); border:1px solid var(--border-color, #E8DFD5); text-decoration:none; color:inherit; transition:all 0.15s ease;">' +
+        '<span style="font-size:24px;">🛡️</span>' +
+        '<div><strong style="display:block; font-size:14px; color:var(--brand-dark, #293B50);">Admin Portal</strong><span class="muted small">Approvals &amp; governance</span></div>' +
+        '</a>' +
+        '</div></div>';
+}
+
 async function profileView() {
     var h = '<div class="view-enter"><div class="page-head"><h1>Profile</h1></div>';
 
@@ -2004,7 +2022,9 @@ async function profileView() {
             '<div class="form-group"><input class="form-input" name="mobileNumber" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" required></div>' +
             '<button class="btn btn-primary btn-block" type="submit">Log in</button></form>' +
             '<p class="tiny muted" class="mt-2">You can keep browsing without logging in.</p>' +
-            '</div></div>';
+            '</div>';
+        h += portalSwitchCardHtml();
+        h += '</div>';
         return h;
     }
 
@@ -2068,7 +2088,9 @@ async function profileView() {
         '<input class="form-input form-input-sm" name="flatHouseNumber" value="' + esc(u.flatHouseNumber || '') + '"></div>' +
         '<button class="btn btn-secondary btn-block btn-sm mt-2" type="submit">Save Profile</button></div></form>';
 
-    h += '<div class="card pad"><button class="btn btn-danger btn-block" type="button" data-action="logout">Log Out</button></div>';
+    h += portalSwitchCardHtml();
+
+    h += '<div class="card pad card-mt"><button class="btn btn-danger btn-block" type="button" data-action="logout">Log Out</button></div>';
 
     h += '</div>';
     return h;

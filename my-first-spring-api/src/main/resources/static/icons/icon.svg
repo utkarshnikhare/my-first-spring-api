@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#293B50" />
+      <stop offset="100%" stop-color="#1A2533" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C27D5D" />
+      <stop offset="100%" stop-color="#A96748" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+  <rect x="24" y="24" width="464" height="464" rx="92" fill="none" stroke="#F5EFE6" stroke-opacity="0.12" stroke-width="4"/>
+  <circle cx="256" cy="225" r="130" fill="url(#accentGrad)" filter="url(#shadow)"/>
+  <circle cx="256" cy="225" r="122" fill="none" stroke="#F5EFE6" stroke-opacity="0.25" stroke-width="3"/>
+  <path d="M190 265 V195 Q190 185 200 185 H312 Q322 185 322 195 V265 H302 V210 H210 V265 Z" fill="#F5EFE6"/>
+  <path d="M180 180 L200 155 H312 L332 180 Q320 190 307 180 Q294 190 281 180 Q268 190 256 180 Q244 190 231 180 Q218 190 205 180 Q192 190 180 180 Z" fill="#F5EFE6"/>
+  <path d="M240 265 V230 Q240 224 246 224 H266 Q272 224 272 230 V265 Z" fill="url(#bgGrad)"/>
+  <path d="M256 205 Q252 198 245 198 Q238 198 238 205 Q238 212 256 222 Q274 212 274 205 Q274 198 267 198 Q260 198 256 205 Z" fill="#F5EFE6"/>
+  <text x="256" y="415" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Playfair Display', serif" font-size="50" font-weight="700" fill="#F5EFE6" text-anchor="middle" letter-spacing="3">SOCIOMART</text>
+  <text x="256" y="448" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Plus Jakarta Sans', sans-serif" font-size="16" font-weight="600" fill="#C27D5D" text-anchor="middle" letter-spacing="4">COMMUNITY MARKETPLACE</text>
+</svg>

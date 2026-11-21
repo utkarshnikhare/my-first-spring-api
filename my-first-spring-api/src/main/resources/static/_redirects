@@ -3,9 +3,22 @@
 /api/*          https://sociomart-demo.onrender.com/api/:splat          200!
 /admin/login    https://sociomart-demo.onrender.com/admin/login          200!
 
-# Specific Buyer clean public routes
+# Specific Buyer clean public routes (rewritten to index.html)
+/food           /index.html                                              200
 /kitchens       /index.html                                              200
 /kitchen/*      /index.html                                              200
 /homemade       /index.html                                              200
 /homemade/*     /index.html                                              200
 /homemade-store/* /index.html                                            200
+/offering/*     /index.html                                              200
+/product/*      /index.html                                              200
+/category/*     /index.html                                              200
+/search/*       /index.html                                              200
+/favourites     /index.html                                              200
+/orders         /index.html                                              200
+/order/*        /index.html                                              200
+/profile        /index.html                                              200
+/summary        /index.html                                              200
+/confirm        /index.html                                              200
+/payment        /index.html                                              200
+/payment-success /index.html                                             200
