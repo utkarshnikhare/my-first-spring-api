@@ -426,10 +426,9 @@ async function sellerRender() {
     catch (err) { view.innerHTML = '<div class="view-enter">' + emptyHtml('⚠️', 'Something went wrong', err.message) + '</div>'; }
 }
 function sellerUpdateNav(hash) {
-    $all('.nav-item').forEach(function (el) { el.classList.remove('active'); });
+    $all('.nav-item, .sd-nav-link').forEach(function (el) { el.classList.remove('active'); });
     var key = hash === '#/home' ? 'home' : hash === '#/kitchen' ? 'kitchen' : (hash === '#/orders' || hash.startsWith('#/order-detail/')) ? 'orders' : hash === '#/enquiries' ? 'enquiries' : (hash === '#/history' || hash === '#/my-offerings') ? 'history' : hash === '#/earnings' ? 'earnings' : hash === '#/recurring' ? 'recurring' : null;
-    var el = document.querySelector('[data-nav="' + (key || '') + '"]');
-    if (el) el.classList.add('active');
+    $all('[data-nav="' + (key || '') + '"]').forEach(function (el) { el.classList.add('active'); });
 }
 
 /**
@@ -857,6 +856,42 @@ function sellerInitial() {
 }
 
 /**
+ * Shared brand header and desktop navigation bar across all seller views.
+ * On desktop (>= 768px), provides primary navigation links and replaces bottom nav.
+ * On mobile (< 768px), provides brand monogram, wordmark, notification bell, theme toggle, and logout.
+ */
+function sellerHeaderHtml(activeTab) {
+    var avatarLetter = sellerInitial();
+    var navLinks = [
+        { k: 'home', route: '#/home', label: 'Home' },
+        { k: 'kitchen', route: '#/kitchen', label: 'Store' },
+        { k: 'orders', route: '#/orders', label: 'Orders' },
+        { k: 'history', route: '#/my-offerings', label: 'My Offerings' },
+        { k: 'recurring', route: '#/recurring', label: 'Recurring' },
+        { k: 'earnings', route: '#/earnings', label: 'Earnings' }
+    ];
+    return '<header class="sd-header">'
+        + '<div class="sd-header__brand">'
+        + '<span class="sd-header__logo" aria-hidden="true">' + esc(avatarLetter) + '</span>'
+        + '<span class="sd-header__word">SocioMart</span>'
+        + '</div>'
+        + '<nav class="sd-header__nav" aria-label="Seller navigation">'
+        + navLinks.map(function (n) {
+            var act = (activeTab === n.k) ? ' active' : '';
+            return '<a href="' + n.route + '" data-nav="' + n.k + '" class="sd-nav-link' + act + '">' + esc(n.label) + '</a>';
+        }).join('')
+        + '</nav>'
+        + '<div class="sd-header__right">'
+        + '<span class="notif-bell">' + notificationBadgeHtml() + notificationPanelHtml('sellerNotifPanel') + '</span>'
+        + '<button class="sd-header__avatar" type="button" data-action="toggle-theme"'
+        + ' aria-label="Switch between light and dark theme" title="Switch theme">'
+        + esc(avatarLetter) + '</button>'
+        + '<button class="sd-header__logout" type="button" data-action="seller-logout"'
+        + ' aria-label="Log out of seller account" title="Log out">Log out</button>'
+        + '</div></header>';
+}
+
+/**
  * Top summary cards. Values come straight from the dashboard payload:
  * Views Today / Followers are real analytics counts and Total Orders is the
  * seller's real order count. Nothing here is invented.
@@ -897,6 +932,7 @@ function sdStoreCardHtml(dash, kitchen, unavailable) {
     var stateLabel = unavailable ? 'Status unavailable' : (paused ? 'Paused' : 'Active');
     var stateFlag = unavailable ? 'UNKNOWN' : (paused ? 'PAUSED' : 'LIVE');
     return '<div class="sd-store">'
+        + '<div class="sd-store__top">'
         + '<div class="sd-store__photo" data-emoji="' + ph + '">'
         + (img ? '<img src="' + esc(img) + '" alt="' + esc(name) + '" onerror="imgFallback(this)">' : ph)
         + '</div>'
@@ -910,10 +946,11 @@ function sdStoreCardHtml(dash, kitchen, unavailable) {
         + '<span class="' + state + '">' + stateLabel + '</span>'
         + '<span class="sd-store__sep">•</span>'
         + '<span class="sd-flag ' + state + '">' + stateFlag + '</span>'
-        + '</div></div>'
-        + '<button class="sd-store__view" type="button" data-action="preview-kitchen"><span aria-hidden="true">👁️</span> View</button>'
-        + '<a class="sd-store__edit" href="#/kitchen"><span aria-hidden="true">✏️</span> Edit</a>'
-        + '</div>';
+        + '</div></div></div>'
+        + '<div class="sd-store__actions">'
+        + '<button class="sd-store__view" type="button" data-action="preview-kitchen"><span aria-hidden="true">👁️</span> View Store</button>'
+        + '<a class="sd-store__edit" href="#/kitchen"><span aria-hidden="true">✏️</span> Edit Profile</a>'
+        + '</div></div>';
 }
 
 /**
@@ -934,14 +971,17 @@ function sdQuickActionsHtml() {
         { icon: '🖼️', label: 'Gallery', route: '#/kitchen' },
         { icon: '⋯', label: 'More', route: '#/quick-post' }
     ];
-    return '<div class="sd-quick">' + acts.map(function (a) {
-        var icon = '<span class="sd-qa__icon" aria-hidden="true">' + a.icon + '</span>';
-        var label = '<span class="sd-qa__label">' + esc(a.label) + '</span>';
-        // The preview action must run through the existing click handler, so it
-        // is a button; the rest are plain links to existing routes.
-        if (a.act) return '<button class="sd-qa" type="button" data-action="' + a.act + '">' + icon + label + '</button>';
-        return '<a class="sd-qa" href="' + a.route + '">' + icon + label + '</a>';
-    }).join('') + '</div>';
+    return '<div class="sd-quick">'
+        + '<div class="sd-quick__title">Quick Shortcuts</div>'
+        + '<div class="sd-quick__grid">'
+        + acts.map(function (a) {
+            var icon = '<span class="sd-qa__icon" aria-hidden="true">' + a.icon + '</span>';
+            var label = '<span class="sd-qa__label">' + esc(a.label) + '</span>';
+            // The preview action must run through the existing click handler, so it
+            // is a button; the rest are plain links to existing routes.
+            if (a.act) return '<button class="sd-qa" type="button" data-action="' + a.act + '">' + icon + label + '</button>';
+            return '<a class="sd-qa" href="' + a.route + '">' + icon + label + '</a>';
+        }).join('') + '</div></div>';
 }
 
 /** Coarse grouping used only by the dashboard filter dropdown. */
@@ -1016,11 +1056,18 @@ function sdOfferingCardHtml(p, orderCount) {
     var isHm = isHomemadeProduct(p);
     var catBadge = '<span class="sd-cat-badge ' + (isHm ? 'sd-cat-badge--hm' : 'sd-cat-badge--kt') + '">' + (isHm ? '🍯 Homemade' : '🍽️ Kitchen') + '</span>';
     var h = '<div class="sd-card">';
-    h += '<div class="sd-card__photo" role="button" tabindex="0" data-action="open-offering-orders" data-pid="' + esc(p.id) + '" style="cursor:pointer;" data-emoji="' + foodEmoji(p.name) + '">'
+    h += '<div class="sd-card__main-row">'
+        + '<div class="sd-card__photo" role="button" tabindex="0" data-action="open-offering-orders" data-pid="' + esc(p.id) + '" style="cursor:pointer;" data-emoji="' + foodEmoji(p.name) + '">'
         + (img ? '<img src="' + esc(img) + '" alt="' + esc(p.name) + '" onerror="imgFallback(this)">' : foodEmoji(p.name))
-        + '</div>';
+        + '</div>'
+        + '<div class="sd-card__details">'
+        + '<div class="sd-card__top"><span class="sd-card__name" role="button" tabindex="0" data-action="open-offering-orders" data-pid="' + esc(p.id) + '" style="cursor:pointer;">' + esc(p.name) + '</span><div class="sd-card__badges">' + catBadge + offeringStatusBadge(p) + '</div></div>';
+    if (p.price != null) {
+        h += '<div class="sd-card__price">' + money(p.price)
+            + (p.priceUnit ? ' <span class="sd-card__unit">/ ' + esc(p.priceUnit) + '</span>' : '') + '</div>';
+    }
+    h += '</div></div>';
     h += '<div class="sd-card__body">';
-    h += '<div class="sd-card__top"><span class="sd-card__name" role="button" tabindex="0" data-action="open-offering-orders" data-pid="' + esc(p.id) + '" style="cursor:pointer;">' + esc(p.name) + '</span><div class="sd-card__badges">' + catBadge + offeringStatusBadge(p) + '</div></div>';
     h += '<div class="sd-card__qty"><strong>' + (p.bookedQuantity || 0) + ' booked</strong> · '
         + (remaining != null ? '<strong>' + remaining + ' available</strong>' : 'No limit') + '</div>';
     if (isHm && (!p.orderWindowEnd && !p.cutoffTime)) {
@@ -1035,13 +1082,6 @@ function sdOfferingCardHtml(p, orderCount) {
             + '</div>';
     }
     // Price is real product data (price + unit), never a sample figure.
-    if (p.price != null) {
-        h += '<div class="sd-card__price">' + money(p.price)
-            + (p.priceUnit ? ' <span class="sd-card__unit">/ ' + esc(p.priceUnit) + '</span>' : '') + '</div>';
-    }
-    // V3 §11: the inline quantity +/- stepper is REMOVED from the dashboard -
-    // quantity changes happen through Edit / Edit Today, never by an inline
-    // stock hack on the card.
     h += '<div class="sd-card__actions">';
     // View Orders (N) uses the existing #/order-detail/{productId} route. The
     // count is appended only when the app returned a real one.
@@ -1149,22 +1189,7 @@ async function sellerHomeView() {
     var live = viewEl();
     if (live) live.innerHTML = sdSkeletonHtml();
     var h = '<div class="view-enter sd-root">';
-    // Header: brand on the left, real notification bell + seller avatar right.
-    var sellerNameForAvatar = String((S.user && S.user.name) || 'Seller').trim();
-    var avatarLetter = sellerNameForAvatar ? sellerNameForAvatar.charAt(0).toUpperCase() : 'S';
-    h += '<header class="sd-header">'
-        + '<div class="sd-header__brand">'
-        + '<span class="sd-header__logo" aria-hidden="true">' + esc(avatarLetter) + '</span>'
-        + '<span class="sd-header__word">SocioMart</span>'
-        + '</div>'
-        + '<div class="sd-header__right">'
-        + '<span class="notif-bell">' + notificationBadgeHtml() + notificationPanelHtml('sellerNotifPanel') + '</span>'
-        + '<button class="sd-header__avatar" type="button" data-action="toggle-theme"'
-        + ' aria-label="Switch between light and dark theme" title="Switch theme">'
-        + esc(avatarLetter) + '</button>'
-        + '<button class="sd-header__logout" type="button" data-action="seller-logout"'
-        + ' aria-label="Log out of seller account" title="Log out">Log out</button>'
-        + '</div></header>';
+    h += sellerHeaderHtml('home');
     try {
         // Both requests hit endpoints that already exist and are already used
         // elsewhere in the Seller app, so no new contract is introduced.
@@ -1176,16 +1201,17 @@ async function sellerHomeView() {
         var orderCounts = await sellerOfferingOrderCounts();
         S.kitchen = { id: dash.kitchenId, name: dash.kitchenName };
 
+        h += '<div class="sd-dashboard-layout">';
+        h += '<main class="sd-main-col">';
+
         // Greeting: the seller's real first name and the real time of day.
         h += '<div class="sd-greet">'
             + '<h1 class="sd-greet__hi">' + greeting() + ', ' + esc(sellerFirstName(dash)) + ' <span aria-hidden="true">👋</span></h1>'
             + '<p class="sd-greet__sub">Your SocioMart Dashboard</p></div>';
 
         h += sdStatCardsHtml(dash);
-        h += sdStoreCardHtml(dash, kitchen, kitchenErr);
         // LIVE is the default every time the seller opens the dashboard; RECURRING
-        // is the schedule-management tab. The "Quick actions" row is removed per
-        // the approved V3 design: View + Edit + bottom navigation cover those roles.
+        // is the schedule-management tab.
         h += '<div class="date-tabs">'
             + '<button class="date-tab' + (S.dashTab !== 'recurring' ? ' active' : '') + '" type="button" data-action="set-dash-tab" data-tab="live">LIVE</button>'
             + '<button class="date-tab' + (S.dashTab === 'recurring' ? ' active' : '') + '" type="button" data-action="set-dash-tab" data-tab="recurring">RECURRING</button>'
@@ -1245,7 +1271,16 @@ async function sellerHomeView() {
                 }
             }
         }
+        h += '</main>';
+
+        // Sidebar Column: Store Card, Quick Actions, Earnings Summary
+        h += '<aside class="sd-side-col">';
+        h += sdStoreCardHtml(dash, kitchen, kitchenErr);
+        h += sdQuickActionsHtml();
         h += sdEarningsHtml(dash);
+        h += '</aside>';
+
+        h += '</div>'; // end sd-dashboard-layout
     } catch (e) {
         // Honest failure state: say what broke and offer a retry. Never render
         // a partial success as if the action had worked.
@@ -1261,7 +1296,7 @@ async function sellerHistoryView() {
     // sd-root wrapper + sd-greet/sd-section chrome reuses the approved Dashboard
     // language. The history card list itself is intentionally untouched: its
     // classes and copy are pinned by regression tests (responsive fix + content).
-    var h = '<div class="view-enter sd-root"><div class="sd-greet"><h1 class="sd-greet__hi">My Offerings</h1>' +
+    var h = '<div class="view-enter sd-root">' + sellerHeaderHtml('history') + '<div class="sd-greet"><h1 class="sd-greet__hi">My Offerings</h1>' +
         '<p class="sd-greet__sub">Create a new offering, or revisit the ones you have already run.</p></div>';
     // Primary action sits above the history so it is reachable without scrolling.
     // It reuses the existing Add Offering screen (#/add -> the same create flow).
@@ -2762,6 +2797,7 @@ async function sellerOrdersView() {
     var dayLabel = isAll ? 'All Orders' : isToday ? 'Today' : isTomorrow ? 'Tomorrow' : prettyDate(selDate);
     var listTitle = isAll ? 'All Orders' : isToday ? 'Today\u2019s Orders' : isTomorrow ? 'Tomorrow\u2019s Orders' : prettyDate(selDate);
     var h = '<div class="view-enter sd-root so-root">';
+    h += sellerHeaderHtml('orders');
     h += '<header class="so-head"><h1 class="so-title">Orders</h1></header>';
     h += '<div class="date-tabs so-tabs" role="group" aria-label="Orders by day">'
         + '<button class="date-tab' + (isAll ? ' active' : '') + '" type="button" data-action="set-date" data-date="all" aria-pressed="' + isAll + '">All Orders</button>'
@@ -2860,7 +2896,7 @@ async function sellerKitchenView() {
     // sourced from the seller's own profile and omitted when absent.
     var kitchenSellerLine = (kitchen && kitchen.sellerName && String(kitchen.sellerName).trim())
         ? '<p class="ki-seller muted small">Seller: ' + esc(String(kitchen.sellerName).trim()) + '</p>' : '';
-    var h = '<div class="view-enter"><div class="page-head"><h1>Manage Kitchen</h1>' + kitchenSellerLine + '</div>';
+    var h = '<div class="view-enter sd-root mk-root">' + sellerHeaderHtml('kitchen') + '<div class="page-head"><h1>Manage Kitchen</h1>' + kitchenSellerLine + '</div>';
     h += '<div class="kitchen-status-badge' + (paused ? ' paused' : '') + '">' + (paused ? 'Kitchen PAUSED' : 'Kitchen Published') + '</div>';
     h += paused
         ? '<button class="btn btn-secondary btn-sm btn-block" type="button" data-action="resume-kitchen">Resume Kitchen</button>'
@@ -2963,6 +2999,7 @@ async function sellerEarningsView() {
     var live = viewEl();
     if (live) live.innerHTML = erSkeletonHtml();
     var h = '<div class="view-enter sd-root er-root">';
+    h += sellerHeaderHtml('earnings');
     h += '<header class="er-head"><h1 class="er-title">Earnings</h1></header>';
     try {
         var e = await sellerApi('/api/seller-app/earnings');
