@@ -109,7 +109,7 @@ body {
     width: 100%;
     max-width: 720px;
     margin: 0 auto;
-    padding: 16px 16px calc(var(--nav-h) + 28px + env(safe-area-inset-bottom));
+    padding: 16px 16px calc(var(--nav-h) + 48px + env(safe-area-inset-bottom, 16px));
     min-height: 100vh;
     min-height: 100svh;
 }
@@ -1114,7 +1114,7 @@ select, textarea, input { max-width: 100%; }
     }
 
     /* Fixed bars respect device safe areas (iPhone home indicator) */
-    .view { padding-bottom: calc(var(--nav-h) + 28px + env(safe-area-inset-bottom)); }
+    .view { padding-bottom: calc(var(--nav-h) + 48px + env(safe-area-inset-bottom, 16px)); }
     .view-order-bar { bottom: calc(var(--nav-h) + 10px + env(safe-area-inset-bottom)); }
 
     /* Sheets: full-width bottom sheets with internal scrolling */
