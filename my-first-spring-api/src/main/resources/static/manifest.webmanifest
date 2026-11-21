@@ -1,0 +1,67 @@
+{
+  "name": "SocioMart — Community Marketplace",
+  "short_name": "SocioMart",
+  "description": "Hyper-local community marketplace for fresh homemade meals, artisan food, and neighborhood kitchens.",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F5EFE6",
+  "theme_color": "#293B50",
+  "lang": "en",
+  "categories": ["shopping", "food", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Marketplace",
+      "short_name": "Marketplace",
+      "url": "/index.html#/food",
+      "description": "Browse homemade food and local kitchens",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Seller Studio",
+      "short_name": "Seller Studio",
+      "url": "/seller.html",
+      "description": "Manage your kitchen, menu, orders and earnings",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Admin Portal",
+      "short_name": "Admin",
+      "url": "/admin.html",
+      "description": "Society governance, approvals and directory",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

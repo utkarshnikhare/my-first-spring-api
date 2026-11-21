@@ -838,3 +838,19 @@ if (typeof document !== 'undefined') {
 window.initPasswordToggles = initPasswordToggles;
 window.setupPasswordToggle = setupPasswordToggle;
 
+// ===================== SocioMart PWA Service Worker Registration =====================
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+    window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js').then(function (registration) {
+            if (typeof CONFIG !== 'undefined' && CONFIG.DEBUG) {
+                console.log('SocioMart ServiceWorker registered with scope:', registration.scope);
+            }
+        }).catch(function (error) {
+            if (typeof CONFIG !== 'undefined' && CONFIG.DEBUG) {
+                console.warn('SocioMart ServiceWorker registration failed:', error);
+            }
+        });
+    });
+}
+
+

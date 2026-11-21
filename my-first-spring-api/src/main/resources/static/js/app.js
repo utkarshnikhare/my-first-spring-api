@@ -53,16 +53,33 @@ function resolveRoute(hash) {
  */
 function resolvePathRoute(path) {
     if (!path) return null;
+    var clean = path.replace(/\/+$/, '') || '/';
+    if (clean === '/food') return { fn: foodHubView, arg: '#/food' };
+    if (clean === '/kitchens') return { fn: kitchensView, arg: '#/kitchens' };
+    if (clean === '/homemade') return { fn: homemadeView, arg: '#/homemade' };
+    if (clean === '/favourites') return { fn: favouritesView, arg: '#/favourites' };
+    if (clean === '/orders') return { fn: ordersView, arg: '#/orders' };
+    if (clean === '/profile') return { fn: profileView, arg: '#/profile' };
+    if (clean === '/summary') return { fn: orderSummaryView, arg: '#/summary' };
+    if (clean === '/confirm') return { fn: confirmOrderView, arg: '#/confirm' };
+    if (clean === '/payment') return { fn: paymentView, arg: '#/payment' };
+    if (clean === '/payment-success') return { fn: paymentSuccessView, arg: '#/payment-success' };
+
     var om = path.match(/^\/offering\/(.+)$/);
     if (om) return { fn: offeringDirectView, arg: '#/offering/' + decodeURIComponent(om[1]) };
     var pm = path.match(/^\/product\/(.+)$/);
     if (pm) return { fn: offeringDirectView, arg: '#/product/' + decodeURIComponent(pm[1]) };
     var hm = path.match(/^\/homemade-store\/(.+)$/);
     if (hm) return { fn: homemadeStoreView, arg: 'slug:' + decodeURIComponent(hm[1]) };
-    if (path === '/homemade' || path === '/homemade/') return { fn: homemadeView, arg: '#/homemade' };
     var km = path.match(/^\/kitchen\/(.+)$/);
     if (km) return { fn: kitchenPageView, arg: 'slug:' + decodeURIComponent(km[1]) };
-    if (path === '/kitchens' || path === '/kitchens/') return { fn: kitchensView, arg: '#/kitchens' };
+    var catm = path.match(/^\/category\/(.+)$/);
+    if (catm) return { fn: categoryView, arg: '#/category/' + decodeURIComponent(catm[1]) };
+    var sm = path.match(/^\/search\/(.+)$/);
+    if (sm) return { fn: comparisonView, arg: '#/search/' + decodeURIComponent(sm[1]) };
+    var ordm = path.match(/^\/order\/(.+)$/);
+    if (ordm) return { fn: orderDetailView, arg: '#/order/' + decodeURIComponent(ordm[1]) };
+
     return null;
 }
 
@@ -94,10 +111,10 @@ async function render() {
 function updateNav(hash) {
     $all('.nav-item').forEach(function (el) { el.classList.remove('active'); });
     var key = null;
-    if (hash === '#/home') key = 'home';
-    else if (hash === '#/favourites') key = 'favourites';
-    else if (hash === '#/orders') key = 'orders';
-    else if (hash === '#/profile') key = 'profile';
+    if (hash === '#/home' || hash === '/' || hash === '/index.html') key = 'home';
+    else if (hash === '#/favourites' || hash === '/favourites') key = 'favourites';
+    else if (hash === '#/orders' || hash === '/orders' || String(hash).startsWith('/order/')) key = 'orders';
+    else if (hash === '#/profile' || hash === '/profile') key = 'profile';
     var el = document.querySelector('[data-nav="' + (key || '') + '"]');
     if (el) el.classList.add('active');
 }

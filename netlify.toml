@@ -24,6 +24,11 @@
 # Specific public clean routes for Buyer app (rewritten to index.html)
 # These preserve clean URLs without a catch-all SPA redirect that would break seller.html/admin.html
 [[redirects]]
+  from = "/food"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
   from = "/kitchens"
   to = "/index.html"
   status = 200
@@ -48,6 +53,66 @@
   to = "/index.html"
   status = 200
 
+[[redirects]]
+  from = "/offering/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/product/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/category/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/search/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/favourites"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/orders"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/order/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/profile"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/summary"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/confirm"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/payment"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/payment-success"
+  to = "/index.html"
+  status = 200
+
 # Security and caching headers for frontend assets
 [[headers]]
   for = "/*"
@@ -64,4 +129,26 @@
 [[headers]]
   for = "/js/*"
   [headers.values]
+    Cache-Control = "public, max-age=86400, must-revalidate"
+
+[[headers]]
+  for = "/icons/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800, immutable"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json; charset=utf-8"
+    Cache-Control = "public, max-age=86400, must-revalidate"
+
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Content-Type = "application/manifest+json; charset=utf-8"
     Cache-Control = "public, max-age=86400, must-revalidate"
