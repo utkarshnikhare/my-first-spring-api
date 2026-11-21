@@ -1,0 +1,67 @@
+# Netlify Configuration for SocioMart Frontend
+# Target Backend: https://sociomart-demo.onrender.com
+
+[build]
+  # Static frontend publish directory relative to repository root
+  publish = "my-first-spring-api/src/main/resources/static"
+  # No build step required for static HTML/CSS/JS frontend
+  command = ""
+
+# Proxy all backend API requests to the live Render Spring Boot service
+[[redirects]]
+  from = "/api/*"
+  to = "https://sociomart-demo.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# Proxy admin login alias endpoint
+[[redirects]]
+  from = "/admin/login"
+  to = "https://sociomart-demo.onrender.com/admin/login"
+  status = 200
+  force = true
+
+# Specific public clean routes for Buyer app (rewritten to index.html)
+# These preserve clean URLs without a catch-all SPA redirect that would break seller.html/admin.html
+[[redirects]]
+  from = "/kitchens"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/kitchen/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/homemade"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/homemade/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/homemade-store/*"
+  to = "/index.html"
+  status = 200
+
+# Security and caching headers for frontend assets
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/css/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, must-revalidate"
+
+[[headers]]
+  for = "/js/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, must-revalidate"
