@@ -3,22 +3,22 @@
  * PWA offline support, intelligent asset caching, and network resilience.
  */
 
-const CACHE_NAME = 'sociomart-shell-v1';
+const CACHE_NAME = 'sociomart-shell-v2';
 const CORE_SHELL_ASSETS = [
     '/',
     '/index.html',
     '/seller.html',
     '/admin.html',
     '/manifest.webmanifest',
-    '/css/styles.css?v=17',
-    '/css/seller.css?v=3.0',
-    '/css/admin.css?v=10',
+    '/css/styles.css?v=18',
+    '/css/seller.css?v=3.1',
+    '/css/admin.css?v=11',
     '/js/config.js',
-    '/js/common.js?v=9',
-    '/js/buyer.js?v=10',
-    '/js/seller.js?v=3.0',
-    '/js/admin.js?v=11',
-    '/js/app.js?v=6',
+    '/js/common.js?v=10',
+    '/js/buyer.js?v=11',
+    '/js/seller.js?v=3.1',
+    '/js/admin.js?v=12',
+    '/js/app.js?v=7',
     '/icons/icon.svg',
     '/icons/icon-192.png',
     '/icons/icon-512.png'
@@ -106,7 +106,26 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // 4. Static assets (CSS, JS, SVG, PNG): Cache-first, fallback to network
+    // 4. Static scripts & styles (CSS, JS): Stale-While-Revalidate
+    // Ensures instant PWA loads with background refresh so deployments arrive automatically
+    if (url.pathname.startsWith('/css/') || url.pathname.startsWith('/js/')) {
+        event.respondWith(
+            caches.open(CACHE_NAME).then((cache) => {
+                return cache.match(request).then((cached) => {
+                    const networkFetch = fetch(request).then((response) => {
+                        if (response && response.status === 200) {
+                            cache.put(request, response.clone());
+                        }
+                        return response;
+                    }).catch(() => null);
+                    return cached || networkFetch;
+                });
+            })
+        );
+        return;
+    }
+
+    // 5. Media & Icons (SVG, PNG, ICO, WebManifest): Cache-first, fallback to network
     event.respondWith(
         caches.match(request).then((cached) => {
             if (cached) return cached;
