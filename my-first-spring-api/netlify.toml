@@ -1,13 +1,6 @@
 [build]
   publish = "src/main/resources/static"
 
-# Intercept and neutralize Netlify HUD / Badge injection script
-[[redirects]]
-  from = "/.netlify/scripts/hud*"
-  to = "/empty.js"
-  status = 200
-  force = true
-
 # Proxy all API requests to the live Render backend
 [[redirects]]
   from = "/api/*"

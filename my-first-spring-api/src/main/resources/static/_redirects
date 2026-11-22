@@ -1,8 +1,5 @@
 # SocioMart Netlify Redirects & Proxies
 
-# Block Netlify HUD / Badge injection script
-/.netlify/scripts/hud*   /empty.js   200!
-
 # Proxy all API requests to the live Render backend
 /api/*          https://sociomart-demo.onrender.com/api/:splat          200!
 /admin/login    https://sociomart-demo.onrender.com/admin/login          200!
