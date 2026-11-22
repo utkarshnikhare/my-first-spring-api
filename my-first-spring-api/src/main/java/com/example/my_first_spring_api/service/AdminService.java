@@ -863,7 +863,7 @@ public class AdminService {
     }
 
     /** True when a CSV field would be interpreted as a formula by a spreadsheet. */
-    static boolean isFormulaLike(String s) {
+    public static boolean isFormulaLike(String s) {
         if (s == null || s.isEmpty()) return false;
         char first = s.charAt(0);
         if (first == '=' || first == '+' || first == '-' || first == '@' || first == '\t' || first == '\r') {

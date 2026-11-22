@@ -1087,10 +1087,12 @@ function sdOfferingCardHtml(p, orderCount) {
     if (p.recurring && p.occurrenceId != null) {
         h += '<button class="sd-btn sd-btn--primary" type="button" data-action="open-offering-orders-date" data-pid="'
             + esc(p.id) + '" data-date="' + esc(p.nextOccurrenceDate || sellerDate('today')) + '">View Orders'
-            + (orderCount != null ? ' (' + esc(String(orderCount)) + ')' : '') + '</button>';
+            + '<span class="sd-order-count-badge" data-offering-orders="' + esc(p.id) + '">'
+            + (orderCount != null ? ' (' + esc(String(orderCount)) + ')' : '') + '</span></button>';
     } else {
         h += '<a class="sd-btn sd-btn--primary" href="#/order-detail/' + p.id + '">View Orders'
-            + (orderCount != null ? ' (' + esc(String(orderCount)) + ')' : '') + '</a>';
+            + '<span class="sd-order-count-badge" data-offering-orders="' + esc(p.id) + '">'
+            + (orderCount != null ? ' (' + esc(String(orderCount)) + ')' : '') + '</span></a>';
     }
     if (p.recurring && p.occurrenceId != null) {
         // V2 §8 / V3 §8: occurrence-specific actions only. No generic Pause /
@@ -1190,11 +1192,10 @@ async function sellerHomeView() {
     var h = '<div class="view-enter sd-root">';
     h += sellerHeaderHtml('home');
     try {
-        // Parallelized fetch: fire kitchen, dashboard and order counts concurrently to eliminate sequential network latency
-        var [kitchenRes, dashRes, orderCountsRes] = await Promise.allSettled([
+        // Parallelized fetch for essential dashboard data without blocking on non-essential counts
+        var [kitchenRes, dashRes] = await Promise.allSettled([
             sellerApi('/api/seller/kitchen'),
-            sellerApi('/api/seller-app/dashboard'),
-            sellerOfferingOrderCounts()
+            sellerApi('/api/seller-app/dashboard')
         ]);
         var kitchen = null;
         var kitchenErr = false;
@@ -1205,11 +1206,29 @@ async function sellerHomeView() {
             kitchenErr = true;
         }
         if (dashRes.status !== 'fulfilled') {
-            throw dashRes.reason || new Error('Failed to load dashboard');
+            var err = dashRes.reason || new Error('Failed to load dashboard');
+            var eh = '<div class="view-enter sd-root">' + sellerHeaderHtml('home');
+            eh += '<div class="sd-dashboard-layout"><main class="sd-main-col">';
+            eh += emptyHtml('⚠️', 'Dashboard Temporarily Unavailable',
+                esc(err.message || 'Could not load your store metrics and offerings.'),
+                '<button class="btn btn-primary card-mt" type="button" data-action="seller-retry">Retry</button>');
+            eh += '</main></div></div>';
+            return eh;
         }
         var dash = dashRes.value;
-        var orderCounts = orderCountsRes.status === 'fulfilled' ? (orderCountsRes.value || {}) : {};
+        var orderCounts = {};
         S.kitchen = { id: dash.kitchenId, name: dash.kitchenName };
+
+        // Non-essential order counts fired asynchronously in the background so main dashboard is never blocked
+        sellerOfferingOrderCounts().then(function (counts) {
+            if (!counts) return;
+            Object.keys(counts).forEach(function (pId) {
+                var badge = document.querySelector('[data-offering-orders="' + pId + '"]');
+                if (badge && counts[pId] != null && counts[pId] > 0) {
+                    badge.textContent = ' (' + counts[pId] + ')';
+                }
+            });
+        });
 
         h += '<div class="sd-dashboard-layout">';
         h += '<main class="sd-main-col">';

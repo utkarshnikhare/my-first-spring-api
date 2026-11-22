@@ -138,6 +138,9 @@ document.addEventListener('click', async function (e) {
             case 'toggle-notifs': await toggleNotifications(t.dataset.panelId); break;
             case 'read-notification': await readNotification(t.dataset.notificationId); break;
             case 'toggle-theme': toggleTheme(); break;
+            case 'retry-categories':
+            case 'retry-items':
+            case 'retry-food-hub': await render(); break;
             case 'set-mode': state.viewMode = t.dataset.mode; await render(); break;
             case 'set-cat-mode': state.catMode = t.dataset.mode; await render(); break;
             case 'switch-cat': navigate('#/category/' + t.dataset.cat); break;
