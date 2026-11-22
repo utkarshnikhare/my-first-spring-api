@@ -279,7 +279,7 @@ function renderLoginScreen() {
                 ? '<p class="admin-config-warning">Could not verify demo sign-in configuration: ' + esc(A.authConfigError) + '</p>'
                 : '';
     viewEl().innerHTML =
-        '<div class="login-wrap"><div class="admin-login">' +
+        '<form id="adminLoginForm" class="login-wrap" onsubmit="event.preventDefault(); adminAction(\'admin-login\', this.querySelector(\'[data-action=admin-login]\'));"><div class="admin-login">' +
         '<div class="al-brand-row"><div class="al-brand">🛡️ SocioMart Admin</div>' +
         '<button class="icon-btn" type="button" data-action="toggle-theme" aria-label="Toggle theme">🌓</button></div>' +
         '<h2>Admin Sign In</h2>' +
@@ -288,9 +288,9 @@ function renderLoginScreen() {
         '<div class="form-group"><label for="alMobile">Mobile number</label><input id="alMobile" inputmode="numeric" maxlength="10" placeholder="10-digit mobile" autocomplete="username"></div>' +
         '<div class="form-group"><label for="alPassword">Demo password</label><div class="password-input-wrapper"><input id="alPassword" type="password" maxlength="72" autocomplete="current-password"></div></div>' +
         '<p class="muted small">Demo-only authentication; not production-ready.</p>' +
-        '<button class="btn btn-primary btn-block" type="button" data-action="admin-login"' + (!loginEnabled ? ' disabled' : '') + '>Sign In</button>' +
+        '<button class="btn btn-primary btn-block" type="submit" data-action="admin-login"' + (!loginEnabled ? ' disabled' : '') + '>Sign In</button>' +
         '<a class="al-back" href="/index.html">← Back to buyer app</a>' +
-        '</div></div>';
+        '</div></form>';
 }
 function renderBlockedScreen(role) {
     hideAdminChrome();
@@ -347,7 +347,8 @@ async function adminAction(action, t) {
                 await api('/api/auth/logout', { method: 'POST' });
                 A.me = null; A.role = null; A.loginMobile = null;
                 document.body.classList.remove('admin-authed');
-                location.href = '/index.html';
+                hideAdminChrome();
+                renderLoginScreen();
                 break;
             case 'open-buyer': location.href = '/index.html'; break;
             case 'admin-order-axis-clear': {
@@ -2477,8 +2478,8 @@ function renderTrafficContent(data, period) {
     h += '<div class="card pad card-mt"><h3 class="font-700 mb-2">Traffic Trend</h3><p class="muted tiny" style="margin:0 0 12px">Distinct active Buyers and Sellers over the selected period.</p>';
     h += '<div class="traffic-chart-wrap">' + trafficSvgChart(data.series, period) + '</div>';
     h += '<div class="flex gap-2 wrap" style="margin-top:14px">' +
-        '<div class="flex-1 min-140"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#4F46E5;margin-right:6px;vertical-align:middle"></span> Buyers</div>' +
-        '<div class="flex-1 min-140"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#16A34A;margin-right:6px;vertical-align:middle"></span> Sellers</div>' +
+        '<div class="flex-1 min-140"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#293B50;margin-right:6px;vertical-align:middle"></span> Buyers</div>' +
+        '<div class="flex-1 min-140"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#A96748;margin-right:6px;vertical-align:middle"></span> Sellers</div>' +
         '</div></div>';
     container.innerHTML = h;
 }
@@ -2738,10 +2739,10 @@ function trafficSvgChart(series, period) {
         '<rect x="' + pad.left + '" y="' + pad.top + '" width="' + chartW + '" height="' + chartH + '" fill="var(--surface)" rx="8" />' +
         yLabels +
         xLabels +
-        '<polyline fill="none" stroke="#4F46E5" stroke-width="3" points="' + polyline(pointsBuyers) + '" />' +
-        '<polyline fill="none" stroke="#16A34A" stroke-width="3" points="' + polyline(pointsSellers) + '" />' +
-        dots(pointsBuyers, '#4F46E5') +
-        dots(pointsSellers, '#16A34A') +
+        '<polyline fill="none" stroke="#293B50" stroke-width="3" points="' + polyline(pointsBuyers) + '" />' +
+        '<polyline fill="none" stroke="#A96748" stroke-width="3" points="' + polyline(pointsSellers) + '" />' +
+        dots(pointsBuyers, '#293B50') +
+        dots(pointsSellers, '#A96748') +
         '</svg>';
 }
 

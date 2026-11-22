@@ -846,6 +846,22 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.loca
             if (typeof CONFIG !== 'undefined' && CONFIG.DEBUG) {
                 console.log('SocioMart ServiceWorker registered with scope:', registration.scope);
             }
+            // Trigger explicit update check on each visit
+            if (typeof registration.update === 'function') {
+                registration.update();
+            }
+            registration.addEventListener('updatefound', function () {
+                var installingWorker = registration.installing;
+                if (installingWorker) {
+                    installingWorker.addEventListener('statechange', function () {
+                        if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            if (typeof CONFIG !== 'undefined' && CONFIG.DEBUG) {
+                                console.log('New SocioMart update installed and active.');
+                            }
+                        }
+                    });
+                }
+            });
         }).catch(function (error) {
             if (typeof CONFIG !== 'undefined' && CONFIG.DEBUG) {
                 console.warn('SocioMart ServiceWorker registration failed:', error);

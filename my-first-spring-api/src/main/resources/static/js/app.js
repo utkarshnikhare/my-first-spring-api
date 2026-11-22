@@ -174,6 +174,20 @@ document.addEventListener('click', async function (e) {
                 else { try { await navigator.clipboard.writeText(url); toast('Link copied', 'success'); } catch (e3) {} }
                 break;
             }
+            case 'copy-upi': {
+                var upi = t.dataset.upi || '';
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    try {
+                        await navigator.clipboard.writeText(upi);
+                        toast('UPI ID copied to clipboard', 'success');
+                    } catch (eUpi) {
+                        toast(upi, 'info');
+                    }
+                } else {
+                    toast(upi, 'info');
+                }
+                break;
+            }
             case 'open-order-sheet': openOrderSheet(t.dataset.product, t.dataset.kitchen); break;
             case 'sheet-qty': sheetQty(Number(t.dataset.dir)); break;
             case 'set-sheet-date': sheet.date = t.dataset.date; highlightSheetSelection(); break;
