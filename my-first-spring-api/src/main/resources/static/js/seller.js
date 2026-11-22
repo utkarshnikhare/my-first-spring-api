@@ -97,7 +97,8 @@ async function sellerAuthHtml() {
         '<button class="btn btn-primary btn-block" type="submit">Sign in</button>' +
         '<button class="btn btn-secondary btn-block mt-2" type="button" data-action="seller-show-register">Register as a seller</button>';
     var body = '<div class="login-wrap"><section class="admin-login seller-auth-card">' +
-        '<div class="al-brand">🍲 SocioMart Seller</div>' +
+        '<div class="al-brand-row"><div class="al-brand">🍲 SocioMart Seller</div>' +
+        '<button class="icon-btn" type="button" data-action="toggle-theme" aria-label="Toggle theme" title="Toggle theme">🌓</button></div>' +
         '<p class="muted small">Demo-only password sign-in. This is not production-ready authentication.</p>' +
         '<form id="sellerLoginForm"><div id="sellerLoginAlert" class="seller-auth-alert" style="display:none;" role="alert"></div>' + login + '</form></section></div>';
     if (S.authMode !== 'register') return body;
@@ -883,11 +884,9 @@ function sellerHeaderHtml(activeTab) {
         + '</nav>'
         + '<div class="sd-header__right">'
         + '<span class="notif-bell">' + notificationBadgeHtml() + notificationPanelHtml('sellerNotifPanel') + '</span>'
-        + '<button class="sd-header__avatar" type="button" data-action="toggle-theme"'
-        + ' aria-label="Switch between light and dark theme" title="Switch theme">'
-        + esc(avatarLetter) + '</button>'
-        + '<button class="sd-header__logout" type="button" data-action="seller-logout"'
-        + ' aria-label="Log out of seller account" title="Log out">Log out</button>'
+        + '<button class="icon-btn" type="button" data-action="toggle-theme" aria-label="Toggle theme" title="Toggle theme">🌓</button>'
+        + '<a class="sd-header__avatar" href="#/kitchen" aria-label="Store Profile" title="Store Profile">' + esc(avatarLetter) + '</a>'
+        + '<button class="sd-header__logout" type="button" data-action="seller-logout" aria-label="Log out of seller account" title="Log out">Log out</button>'
         + '</div></header>';
 }
 
