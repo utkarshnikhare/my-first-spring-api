@@ -1,0 +1,31 @@
+# SocioMart Cache-Control and Security Headers
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# Static CSS assets: 1 year immutable caching with query versioning
+/css/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Static JS assets: 1 year immutable caching with query versioning
+/js/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Static icon assets: 1 year immutable caching
+/icons/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Service worker: NEVER cache stale SW
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# HTML files: no-cache so users always receive latest versions immediately
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/seller.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/admin.html
+  Cache-Control: no-cache, no-store, must-revalidate

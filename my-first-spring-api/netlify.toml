@@ -1,0 +1,145 @@
+[build]
+  publish = "src/main/resources/static"
+
+# Intercept and neutralize Netlify HUD / Badge injection script
+[[redirects]]
+  from = "/.netlify/scripts/hud*"
+  to = "/empty.js"
+  status = 200
+  force = true
+
+# Proxy all API requests to the live Render backend
+[[redirects]]
+  from = "/api/*"
+  to = "https://sociomart-demo.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/admin/login"
+  to = "https://sociomart-demo.onrender.com/admin/login"
+  status = 200
+  force = true
+
+# Public Buyer clean routes
+[[redirects]]
+  from = "/food"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/kitchens"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/kitchen/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/homemade"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/homemade/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/homemade-store/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/offering/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/product/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/category/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/search/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/favourites"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/orders"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/order/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/profile"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/summary"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/confirm"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/payment"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/payment-success"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/css/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/js/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/icons/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
