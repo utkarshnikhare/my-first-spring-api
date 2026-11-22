@@ -220,6 +220,9 @@ document.addEventListener('click', async function (e) {
             case 'logout': {
                 try { await api('/api/auth/logout', { method: 'POST' }); } catch (e5) {}
                 state.user = null;
+                if (typeof FAV_CACHE !== 'undefined') FAV_CACHE = new Set();
+                if (typeof FAV_FULL_CACHE !== 'undefined') FAV_FULL_CACHE = null;
+                clearCart();
                 toast('Logged out', 'info');
                 navigate('#/home');
                 if (location.hash === '#/home') render();

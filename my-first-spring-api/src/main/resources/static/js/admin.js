@@ -344,7 +344,7 @@ async function adminAction(action, t) {
             case 'login-back': renderLoginScreen(); break;
             case 'toggle-theme': if (typeof toggleTheme === 'function') toggleTheme(); break;
             case 'logout':
-                await api('/api/auth/logout', { method: 'POST' });
+                try { await api('/api/auth/logout', { method: 'POST' }); } catch (e) {}
                 A.me = null; A.role = null; A.loginMobile = null;
                 document.body.classList.remove('admin-authed');
                 hideAdminChrome();

@@ -3019,6 +3019,11 @@ html[data-theme="dark"] .sd-earnings { background: var(--sd-card); border-color:
     box-shadow: 0 3px 10px rgba(68, 53, 47, 0.12), 0 1px 2px rgba(68, 53, 47, 0.06);
     font-weight: 800;
 }
+html[data-theme="dark"] .sd-root > .date-tabs .date-tab.active {
+    background: var(--sd-card, #261F1B);
+    color: var(--sd-orange, #C98263);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+}
 
 /* Tablets / desktop */
 @media (min-width: 768px) {
@@ -4108,6 +4113,22 @@ html[data-theme="dark"] .sd-earnings { background: var(--sd-card); border-color:
     background: #F5EAE4;
     border-color: #A96748;
     box-shadow: 0 0 0 2px rgba(169, 103, 72, 0.25);
+}
+
+html[data-theme="dark"] .btn-meal-preset {
+    background: var(--sd-card, #261F1B);
+    border-color: var(--sd-border, #423731);
+    color: var(--sd-text, #F5EFE6);
+}
+html[data-theme="dark"] .btn-meal-preset:hover {
+    background: var(--sd-orange-soft, #38251C);
+    border-color: var(--sd-orange, #C98263);
+}
+html[data-theme="dark"] .btn-meal-preset:active,
+html[data-theme="dark"] .btn-meal-preset.active {
+    background: var(--sd-orange-soft, #38251C);
+    border-color: var(--sd-orange, #C98263);
+    color: #FFFFFF;
 }
 
 .btn-meal-preset .preset-icon {

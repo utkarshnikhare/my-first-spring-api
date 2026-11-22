@@ -192,8 +192,8 @@ html[data-theme="dark"] .al-info {
     border-color: #293B50;
 }
 html[data-theme="dark"] .ac-chip.next {
-    background: #EFE6DC;
-    color: #44352F;
+    background: var(--surface-2, #332B26);
+    color: var(--text, #F5EFE6);
 }
 html[data-theme="dark"] .admin-login .form-group input:focus,
 html[data-theme="dark"] .admin-textarea:focus {

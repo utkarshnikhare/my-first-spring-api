@@ -4347,10 +4347,13 @@ document.addEventListener('click', async function (e) {
                 await sellerRender();
                 break;
             case 'seller-logout':
-                await api('/api/auth/logout', { method: 'POST' });
+                try { await api('/api/auth/logout', { method: 'POST' }); } catch (e) {}
                 S.user = null;
+                S.kitchen = null;
+                S.myKitchen = null;
                 S.kitchenUrl = null;
                 S.authMode = 'login';
+                toast('Logged out', 'info');
                 await sellerRender();
                 break;
             case 'toggle-notifs': await toggleNotifications(t.dataset.panelId || 'sellerNotifPanel'); break;
