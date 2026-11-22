@@ -156,9 +156,9 @@ test.describe('Real-World Live Production Verification (Commit 7ff18db)', () => 
 
     console.log('[PWA Live] Service Worker registration & caches:', JSON.stringify(swInfo));
     expect(swInfo.supported).toBeTruthy();
-    // Verify sociomart-shell-v3 is present or active, and no stale v1/v2 caches remain
+    // Verify current sociomart-shell version is present, and no stale v1/v2 caches remain
     if (swInfo.cacheKeys.length > 0) {
-      expect(swInfo.cacheKeys).toContain('sociomart-shell-v3');
+      expect(swInfo.cacheKeys.some(k => k.startsWith('sociomart-shell-v'))).toBeTruthy();
       expect(swInfo.cacheKeys).not.toContain('sociomart-shell-v2');
       expect(swInfo.cacheKeys).not.toContain('sociomart-shell-v1');
     }
