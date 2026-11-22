@@ -1190,14 +1190,25 @@ async function sellerHomeView() {
     var h = '<div class="view-enter sd-root">';
     h += sellerHeaderHtml('home');
     try {
-        // Both requests hit endpoints that already exist and are already used
-        // elsewhere in the Seller app, so no new contract is introduced.
+        // Parallelized fetch: fire kitchen, dashboard and order counts concurrently to eliminate sequential network latency
+        var [kitchenRes, dashRes, orderCountsRes] = await Promise.allSettled([
+            sellerApi('/api/seller/kitchen'),
+            sellerApi('/api/seller-app/dashboard'),
+            sellerOfferingOrderCounts()
+        ]);
         var kitchen = null;
         var kitchenErr = false;
-        try { kitchen = await sellerApi('/api/seller/kitchen'); S.myKitchen = kitchen; }
-        catch (e) { kitchenErr = true; }
-        var dash = await sellerApi('/api/seller-app/dashboard');
-        var orderCounts = await sellerOfferingOrderCounts();
+        if (kitchenRes.status === 'fulfilled') {
+            kitchen = kitchenRes.value;
+            S.myKitchen = kitchen;
+        } else {
+            kitchenErr = true;
+        }
+        if (dashRes.status !== 'fulfilled') {
+            throw dashRes.reason || new Error('Failed to load dashboard');
+        }
+        var dash = dashRes.value;
+        var orderCounts = orderCountsRes.status === 'fulfilled' ? (orderCountsRes.value || {}) : {};
         S.kitchen = { id: dash.kitchenId, name: dash.kitchenName };
 
         h += '<div class="sd-dashboard-layout">';
@@ -2861,14 +2872,22 @@ async function sellerOrdersView() {
 // SCREEN 6: MANAGE KITCHEN
 async function sellerKitchenView() {
     var kitchen = null;
-    try { kitchen = await sellerApi('/api/seller/kitchen'); S.myKitchen = kitchen; S.kitchen = kitchen; } catch (e) { }
-    // Service-area coverage is chosen from the Admin-owned Area/Society master and
-    // submitted as Society IDs. Only active records are offered, and the previous
-    // coverage is restored from the kitchen's authoritative ID set - never re-derived
-    // from the display string.
     var coverageOptions = [];
     var coverageError = false;
-    try { coverageOptions = await sellerApi('/api/seller/coverage-options') || []; } catch (e) { coverageError = true; }
+    var [kRes, covRes] = await Promise.allSettled([
+        sellerApi('/api/seller/kitchen'),
+        sellerApi('/api/seller/coverage-options')
+    ]);
+    if (kRes.status === 'fulfilled') {
+        kitchen = kRes.value;
+        S.myKitchen = kitchen;
+        S.kitchen = kitchen;
+    }
+    if (covRes.status === 'fulfilled') {
+        coverageOptions = covRes.value || [];
+    } else {
+        coverageError = true;
+    }
     var coveredIds = (kitchen && kitchen.servedSocietyIds) ? kitchen.servedSocietyIds.map(Number) : [];
     // Preselect the Area that owns the current coverage so an edit does not silently
     // move the kitchen to a different area.

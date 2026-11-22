@@ -3,22 +3,23 @@
  * PWA offline support, intelligent asset caching, and network resilience.
  */
 
-const CACHE_NAME = 'sociomart-shell-v3';
+const CACHE_NAME = 'sociomart-shell-v4';
 const CORE_SHELL_ASSETS = [
     '/',
     '/index.html',
     '/seller.html',
     '/admin.html',
+    '/empty.js',
     '/manifest.webmanifest',
-    '/css/styles.css?v=19',
-    '/css/seller.css?v=3.2',
-    '/css/admin.css?v=12',
+    '/css/styles.css?v=20',
+    '/css/seller.css?v=3.3',
+    '/css/admin.css?v=13',
     '/js/config.js',
-    '/js/common.js?v=11',
-    '/js/buyer.js?v=11',
-    '/js/seller.js?v=3.2',
+    '/js/common.js?v=12',
+    '/js/buyer.js?v=12',
+    '/js/seller.js?v=3.3',
     '/js/admin.js?v=13',
-    '/js/app.js?v=7',
+    '/js/app.js?v=8',
     '/icons/icon.svg',
     '/icons/icon-192.png',
     '/icons/icon-512.png'
@@ -48,6 +49,17 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     const { request } = event;
     const url = new URL(request.url);
+
+    // 0. Neutralize Netlify HUD / Badge injection script
+    if (url.pathname.includes('/.netlify/scripts/hud')) {
+        event.respondWith(
+            new Response('/* Netlify HUD neutralized */', {
+                status: 200,
+                headers: { 'Content-Type': 'application/javascript' }
+            })
+        );
+        return;
+    }
 
     // 1. Dynamic API and Admin login calls: NETWORK-FIRST (Never serve stale financial or auth data)
     if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/admin/login')) {

@@ -32,17 +32,20 @@ function favSet() {
     return FAV_CACHE && FAV_CACHE.size ? FAV_CACHE : new Set();
 }
 
-async function loadFavSet() {
+async function loadFavSet(forceRefresh) {
+    if (!forceRefresh && FAV_FULL_CACHE !== null) return FAV_CACHE;
     FAV_CACHE = new Set();
     FAV_FULL_CACHE = null;
     if (!state.user) return FAV_CACHE;
     try {
         var favs = await api('/api/favourites');
         FAV_FULL_CACHE = (favs || []);
-        (favs || []).forEach(function (f) {
+        FAV_FULL_CACHE.forEach(function (f) {
             if (f && f.kitchenId) FAV_CACHE.add(String(f.kitchenId));
         });
-    } catch (e) { /* not authenticated — hearts render unfavourited */ }
+    } catch (e) {
+        FAV_FULL_CACHE = [];
+    }
     return FAV_CACHE;
 }
 
@@ -216,7 +219,14 @@ function itemGroupCard(g) {
 
 async function foodHubView() {
     var mode = state.viewMode || 'items';
-    await loadFavSet();
+    // Fire all three data dependencies concurrently to eliminate serial network latency
+    var favPromise = loadFavSet();
+    var catsPromise = api('/api/discovery/categories').catch(function (e) { return { error: e }; });
+    var itemsPromise = (mode === 'items'
+        ? api('/api/discovery/items')
+        : api('/api/discovery/category-kitchens')
+    ).catch(function (e) { return { error: e }; });
+
     var h = '<div class="view-enter">' + topBarHtml();
     h += '<div class="page-head"><h1>Food &amp; Kitchens</h1>' +
         '<p class="muted small">What\'s available in your community today?</p></div>';
@@ -228,8 +238,9 @@ async function foodHubView() {
         '</form>';
 
     // Category tiles (SPECIAL supported by backend, surfaced only when non-empty)
-    try {
-        var cats = await api('/api/discovery/categories');
+    var catsRes = await catsPromise;
+    if (catsRes && !catsRes.error) {
+        var cats = Array.isArray(catsRes) ? catsRes : [];
         var special = cats.find(function (c) { return c.category === 'SPECIAL' && c.itemCount > 0; });
         var tiles = cats.filter(function (c) { return c.category !== 'SPECIAL'; });
         h += '<div class="cat-grid">' + tiles.map(function (c) {
@@ -243,8 +254,8 @@ async function foodHubView() {
                 '<span class="cat-name">' + esc(special.label) + '</span><span class="cat-count">' + special.itemCount + ' items</span></a>';
         }
         h += '</div>';
-    } catch (e) {
-        h += emptyHtml('📡', 'Could not load categories', e.message);
+    } else {
+        h += emptyHtml('📡', 'Could not load categories', catsRes && catsRes.error ? catsRes.error.message : '');
     }
 
     // Mode toggle: By Items vs By Kitchens
@@ -253,21 +264,22 @@ async function foodHubView() {
         '<button type="button" class="' + (mode === 'kitchens' ? 'active' : '') + '" data-action="set-mode" data-mode="kitchens">By Kitchens</button>' +
         '</div>';
 
-    try {
+    var itemsRes = await itemsPromise;
+    if (itemsRes && !itemsRes.error) {
         if (mode === 'items') {
-            var data = await api('/api/discovery/items');
-            var items = data.items || [];
+            var items = itemsRes.items || [];
             h += items.length ? '<div class="items-grid">' + items.map(itemGroupCard).join('') + '</div>'
                 : emptyHtml('🍳', 'Nothing cooking yet', 'No food items are available right now. Check back soon!');
         } else {
-            var kitchens = await api('/api/discovery/category-kitchens');
+            var kitchens = Array.isArray(itemsRes) ? itemsRes : [];
             h += kitchens.length ? '<div class="kitchen-list">' + kitchens.map(kitchenCardHtml).join('') + '</div>'
                 : emptyHtml('🏪', 'No kitchens yet', 'No community kitchens are open right now.');
         }
-    } catch (e) {
-        h += emptyHtml('⚠️', 'Something went wrong', e.message);
+    } else {
+        h += emptyHtml('⚠️', 'Something went wrong', itemsRes && itemsRes.error ? itemsRes.error.message : '');
     }
 
+    await favPromise;
     // Favourites row
     h += '<div class="section-gap"><div class="top-row mb-2">' +
         '<h3>❤️ Favourite Kitchens</h3>' +
@@ -386,10 +398,14 @@ async function categoryView(hash) {
     }).join('') + '</div>';
 
     try {
-        await loadFavSet();
-        var data = await api('/api/discovery/items?category=' + cat);
-        h += '<div class="top-row mb-2"><h3>Explore ' + esc(m[1].toLowerCase()) + ' — ' +
-            data.count + ' items</h3></div>';
+        var favPromise = loadFavSet();
+        var dataPromise = (mode === 'items'
+            ? api('/api/discovery/items?category=' + cat)
+            : api('/api/discovery/category-kitchens?category=' + cat)
+        );
+        var data = await dataPromise;
+        await favPromise;
+        h += '<div class="top-row mb-2"><h3>Explore ' + esc(m[1].toLowerCase()) + (data.count != null ? ' — ' + data.count + ' items' : '') + '</h3></div>';
         h += '<div class="segmented">' +
             '<button type="button" class="' + (mode === 'items' ? 'active' : '') + '" data-action="set-cat-mode" data-mode="items">By Items</button>' +
             '<button type="button" class="' + (mode === 'kitchens' ? 'active' : '') + '" data-action="set-cat-mode" data-mode="kitchens">By Kitchens</button>' +
@@ -399,7 +415,7 @@ async function categoryView(hash) {
             h += items.length ? '<div class="items-grid">' + items.map(itemGroupCard).join('') + '</div>'
                 : emptyHtml('🍽️', 'No items in this category', 'Nothing is available here right now — try another category.');
         } else {
-            var kitchens = await api('/api/discovery/category-kitchens?category=' + cat);
+            var kitchens = Array.isArray(data) ? data : [];
             h += kitchens.length ? '<div class="kitchen-list">' + kitchens.map(kitchenCardHtml).join('') + '</div>'
                 : emptyHtml('🏪', 'No kitchens for this category', 'Check back later for new kitchens.');
         }
