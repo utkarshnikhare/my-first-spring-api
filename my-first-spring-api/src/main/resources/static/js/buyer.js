@@ -217,16 +217,53 @@ function itemGroupCard(g) {
         '<div class="ic-sub">' + g.kitchenCount + ' kitchen' + (g.kitchenCount === 1 ? '' : 's') + '</div></div></a>';
 }
 
-async function foodHubView() {
-    var mode = state.viewMode || 'items';
-    // Fire all three data dependencies concurrently to eliminate serial network latency
-    var favPromise = loadFavSet();
-    var catsPromise = api('/api/discovery/categories').catch(function (e) { return { error: e }; });
-    var itemsPromise = (mode === 'items'
-        ? api('/api/discovery/items')
-        : api('/api/discovery/category-kitchens')
-    ).catch(function (e) { return { error: e }; });
+var foodHubRenderToken = 0;
 
+function foodHubSkeletonCatsHtml() {
+    var tiles = [];
+    for (var i = 0; i < 5; i++) {
+        tiles.push(
+            '<div class="cat-tile cat-tile--skeleton" aria-hidden="true">' +
+                '<div class="skeleton-circle"></div>' +
+                '<div class="skeleton-line"></div>' +
+                '<div class="skeleton-subline"></div>' +
+            '</div>'
+        );
+    }
+    return '<div class="cat-grid" id="foodHubCats">' + tiles.join('') + '</div>';
+}
+
+function foodHubSkeletonItemsHtml(mode) {
+    if (mode === 'items') {
+        var cards = [];
+        for (var i = 0; i < 4; i++) {
+            cards.push(
+                '<div class="item-card item-card--skeleton" aria-hidden="true">' +
+                    '<div class="skeleton-img"></div>' +
+                    '<div class="ic-body">' +
+                        '<div class="skeleton-text-1"></div>' +
+                        '<div class="skeleton-text-2"></div>' +
+                    '</div>' +
+                '</div>'
+            );
+        }
+        return '<div class="items-grid" id="foodHubItems">' + cards.join('') + '</div>';
+    } else {
+        var kitchens = [];
+        for (var i = 0; i < 3; i++) {
+            kitchens.push(
+                '<div class="kitchen-card kitchen-card--skeleton" aria-hidden="true">' +
+                    '<div class="skeleton-img" style="height:120px;border-radius:12px;margin-bottom:12px;"></div>' +
+                    '<div class="skeleton-text-1" style="height:16px;width:60%;margin-bottom:8px;"></div>' +
+                    '<div class="skeleton-text-2" style="height:12px;width:40%;"></div>' +
+                '</div>'
+            );
+        }
+        return '<div class="kitchen-list" id="foodHubItems">' + kitchens.join('') + '</div>';
+    }
+}
+
+function foodHubShellHtml(mode) {
     var h = '<div class="view-enter">' + topBarHtml();
     h += '<div class="page-head"><h1>Food &amp; Kitchens</h1>' +
         '<p class="muted small">What\'s available in your community today?</p></div>';
@@ -237,26 +274,8 @@ async function foodHubView() {
         '<input class="form-input" id="foodSearch" name="q" placeholder="Search food items..." autocomplete="off">' +
         '</form>';
 
-    // Category tiles (SPECIAL supported by backend, surfaced only when non-empty)
-    var catsRes = await catsPromise;
-    if (catsRes && !catsRes.error) {
-        var cats = Array.isArray(catsRes) ? catsRes : [];
-        var special = cats.find(function (c) { return c.category === 'SPECIAL' && c.itemCount > 0; });
-        var tiles = cats.filter(function (c) { return c.category !== 'SPECIAL'; });
-        h += '<div class="cat-grid">' + tiles.map(function (c) {
-            return '<a class="cat-tile" href="#/category/' + c.category + '">' +
-                '<span class="cat-emoji">' + c.emoji + '</span>' +
-                '<span class="cat-name">' + esc(c.label) + '</span>' +
-                '<span class="cat-count">' + c.itemCount + ' items</span></a>';
-        }).join('');
-        if (special) {
-            h += '<a class="cat-tile" href="#/category/SPECIAL"><span class="cat-emoji">' + special.emoji + '</span>' +
-                '<span class="cat-name">' + esc(special.label) + '</span><span class="cat-count">' + special.itemCount + ' items</span></a>';
-        }
-        h += '</div>';
-    } else {
-        h += emptyHtml('📡', 'Could not load categories', catsRes && catsRes.error ? catsRes.error.message : '');
-    }
+    // Category tiles (immediate skeleton placeholders)
+    h += foodHubSkeletonCatsHtml();
 
     // Mode toggle: By Items vs By Kitchens
     h += '<div class="segmented">' +
@@ -264,30 +283,104 @@ async function foodHubView() {
         '<button type="button" class="' + (mode === 'kitchens' ? 'active' : '') + '" data-action="set-mode" data-mode="kitchens">By Kitchens</button>' +
         '</div>';
 
-    var itemsRes = await itemsPromise;
-    if (itemsRes && !itemsRes.error) {
-        if (mode === 'items') {
-            var items = itemsRes.items || [];
-            h += items.length ? '<div class="items-grid">' + items.map(itemGroupCard).join('') + '</div>'
-                : emptyHtml('🍳', 'Nothing cooking yet', 'No food items are available right now. Check back soon!');
-        } else {
-            var kitchens = Array.isArray(itemsRes) ? itemsRes : [];
-            h += kitchens.length ? '<div class="kitchen-list">' + kitchens.map(kitchenCardHtml).join('') + '</div>'
-                : emptyHtml('🏪', 'No kitchens yet', 'No community kitchens are open right now.');
-        }
-    } else {
-        h += emptyHtml('⚠️', 'Something went wrong', itemsRes && itemsRes.error ? itemsRes.error.message : '');
-    }
+    // Items container (immediate skeleton placeholders)
+    h += foodHubSkeletonItemsHtml(mode);
 
-    await favPromise;
     // Favourites row
     h += '<div class="section-gap"><div class="top-row mb-2">' +
         '<h3>❤️ Favourite Kitchens</h3>' +
         '<a class="small text-sm font-700 text-brand no-underline" href="#/favourites">See all →</a></div>' +
-        '<div id="favRow">' + await favRowInner() + '</div></div>';
+        '<div id="favRow"><div class="fav-skeleton-placeholder"><div class="skeleton-box" style="height:48px;width:100%;border-radius:12px;"></div></div></div></div>';
 
     h += '</div>';
     return h;
+}
+
+async function foodHubView() {
+    var mode = state.viewMode || 'items';
+    var token = ++foodHubRenderToken;
+
+    // Build the shell with immediate skeleton cards
+    var shell = foodHubShellHtml(mode);
+    var live = viewEl();
+    if (live) {
+        live.innerHTML = shell;
+    }
+
+    // Fire all three data dependencies concurrently to eliminate serial network latency
+    var favPromise = loadFavSet();
+    var catsPromise = api('/api/discovery/categories').catch(function (e) { return { error: e }; });
+    var itemsPromise = (mode === 'items'
+        ? api('/api/discovery/items')
+        : api('/api/discovery/category-kitchens')
+    ).catch(function (e) { return { error: e }; });
+
+    // Progressive asynchronous hydration: Categories
+    catsPromise.then(function (catsRes) {
+        if (token !== foodHubRenderToken) return;
+        var el = document.getElementById('foodHubCats');
+        if (!el) return;
+        if (catsRes && !catsRes.error) {
+            var cats = Array.isArray(catsRes) ? catsRes : [];
+            var special = cats.find(function (c) { return c.category === 'SPECIAL' && c.itemCount > 0; });
+            var tiles = cats.filter(function (c) { return c.category !== 'SPECIAL'; });
+            var ch = tiles.map(function (c) {
+                return '<a class="cat-tile" href="#/category/' + c.category + '">' +
+                    '<span class="cat-emoji">' + c.emoji + '</span>' +
+                    '<span class="cat-name">' + esc(c.label) + '</span>' +
+                    '<span class="cat-count">' + c.itemCount + ' items</span></a>';
+            }).join('');
+            if (special) {
+                ch += '<a class="cat-tile" href="#/category/SPECIAL"><span class="cat-emoji">' + special.emoji + '</span>' +
+                    '<span class="cat-name">' + esc(special.label) + '</span><span class="cat-count">' + special.itemCount + ' items</span></a>';
+            }
+            el.outerHTML = '<div class="cat-grid" id="foodHubCats">' + ch + '</div>';
+        } else {
+            var msg = catsRes && catsRes.error ? (catsRes.error.message || 'Could not load categories') : 'Could not load categories';
+            el.outerHTML = '<div id="foodHubCats">' +
+                emptyHtml('📡', 'Could not load categories', msg,
+                    '<button class="btn btn-outline btn-sm card-mt" type="button" data-action="retry-categories">Retry</button>') +
+                '</div>';
+        }
+    });
+
+    // Progressive asynchronous hydration: Items / Kitchens
+    itemsPromise.then(function (itemsRes) {
+        if (token !== foodHubRenderToken) return;
+        var el = document.getElementById('foodHubItems');
+        if (!el) return;
+        if (itemsRes && !itemsRes.error) {
+            if (mode === 'items') {
+                var items = itemsRes.items || [];
+                el.outerHTML = items.length ? '<div class="items-grid" id="foodHubItems">' + items.map(itemGroupCard).join('') + '</div>'
+                    : '<div id="foodHubItems">' + emptyHtml('🍳', 'Nothing cooking yet', 'No food items are available right now. Check back soon!') + '</div>';
+            } else {
+                var kitchens = Array.isArray(itemsRes) ? itemsRes : [];
+                el.outerHTML = kitchens.length ? '<div class="kitchen-list" id="foodHubItems">' + kitchens.map(kitchenCardHtml).join('') + '</div>'
+                    : '<div id="foodHubItems">' + emptyHtml('🏪', 'No kitchens yet', 'No community kitchens are open right now.') + '</div>';
+            }
+        } else {
+            var msg = itemsRes && itemsRes.error ? (itemsRes.error.message || 'Something went wrong') : 'Something went wrong';
+            el.outerHTML = '<div id="foodHubItems">' +
+                emptyHtml('⚠️', 'Something went wrong', msg,
+                    '<button class="btn btn-outline btn-sm card-mt" type="button" data-action="retry-items">Retry</button>') +
+                '</div>';
+        }
+    });
+
+    // Progressive asynchronous hydration: Favourites
+    favPromise.then(async function () {
+        if (token !== foodHubRenderToken) return;
+        var el = document.getElementById('favRow');
+        if (!el) return;
+        try {
+            el.innerHTML = await favRowInner();
+        } catch (e) {
+            el.innerHTML = '<span class="muted small">Could not load favourites.</span>';
+        }
+    });
+
+    return shell;
 }
 
 // ==================== Screen 3: Kitchen discovery ====================
