@@ -197,7 +197,7 @@ html[data-theme="dark"] .ac-chip.next {
 }
 html[data-theme="dark"] .admin-login .form-group input:focus,
 html[data-theme="dark"] .admin-textarea:focus {
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, .28);
+    box-shadow: 0 0 0 3px rgba(169, 103, 72, .28);
 }
 html[data-theme="dark"] .seller-row .sr-avatar { border: 1px solid var(--border); }
 

@@ -309,7 +309,7 @@ async function readNotification(id) {
 
 // ==================== Theme ====================
 
-var THEME_META_COLORS = { light: '#F5EFE6', dark: '#F5EFE6' };
+var THEME_META_COLORS = { light: '#F5EFE6', dark: '#1C1613' };
 
 /** Sync every theme toggle button's pressed state + the browser UI colour. */
 function applyThemeUiState() {

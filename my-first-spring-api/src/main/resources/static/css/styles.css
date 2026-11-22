@@ -51,46 +51,45 @@
     --nav-h: 62px;
 }
 
-/* Strict requirement: Implement ONLY the approved warm light theme. Absolutely no dark theme. */
 html[data-theme="dark"] {
-    --bg: #F5EFE6;
-    --surface: #FFFFFF;
-    --surface-2: #E6D5C2;
-    --text: #44352F;
-    --muted: #7E6F67;
-    --border: #D8C7B5;
-    --border-light: #EFE6DC;
-    --brand-soft: #F5EAE4;
-    --accent-soft: #D8B9A5;
-    --green-soft: #E8EEF5;
-    --amber-soft: #FDF3E7;
-    --blue-soft: #E8EEF5;
-    --purple-soft: #F5E6D8;
-    --danger-soft: #FDE8E8;
-    --shadow: 0 1px 4px rgba(68, 53, 47, .05), 0 6px 18px rgba(68, 53, 47, .06);
-    --shadow-lg: 0 10px 32px rgba(68, 53, 47, .10);
+    --bg: #1C1613;                  /* Rich Warm Espresso Background */
+    --surface: #261F1B;             /* Warm Dark Surface */
+    --surface-2: #332B26;           /* Elevated Dark Warm Surface */
+    --text: #F5EFE6;                /* Warm Ivory Text (High Contrast) */
+    --muted: #A89B93;               /* Warm Taupe Muted Text */
+    --border: #423731;              /* Subtle Warm Dark Border */
+    --border-light: #4F433B;
+    --brand-soft: #38251C;
+    --accent-soft: #422D22;
+    --green-soft: #1E2E24;
+    --amber-soft: #3B2E19;
+    --blue-soft: #1C2735;
+    --purple-soft: #33231D;
+    --danger-soft: #381A1C;
+    --shadow: 0 1px 4px rgba(0, 0, 0, .4), 0 6px 18px rgba(0, 0, 0, .5);
+    --shadow-lg: 0 10px 32px rgba(0, 0, 0, .6);
 
-    --primary-container: #A96748;
-    --primary: #8D543A;
-    --secondary: #293B50;
-    --secondary-fixed: #E6D5C2;
-    --on-surface: #44352F;
+    --primary-container: #C98263;
+    --primary: #A96748;
+    --secondary: #4A6382;
+    --secondary-fixed: #5A799E;
+    --on-surface: #F5EFE6;
 
     --brand: #A96748;
     --brand-2: #8D543A;
-    --brand-3: #A96748;
-    --accent: #A96748;
-    --accent-hover: #8D543A;
-    --amber: #C27D38;
-    --blue: #293B50;
-    --danger: #B83A3A;
-    --purple: #7A4E3A;
+    --brand-3: #C98263;
+    --accent: #C98263;
+    --accent-hover: #D8B9A5;
+    --amber: #D9822B;
+    --blue: #4A6382;
+    --danger: #E05252;
+    --purple: #9E6B55;
 }
 
 html[data-theme="dark"] .icon-btn.ghost {
-    background: rgba(68, 53, 47, .08);
-    border-color: rgba(68, 53, 47, .15);
-    color: #44352F;
+    background: rgba(245, 239, 230, .08);
+    border-color: rgba(245, 239, 230, .15);
+    color: #F5EFE6;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1471,29 +1470,29 @@ select, textarea, input { max-width: 100%; }
 .kh-social-link.instagram:hover { filter: brightness(1.06); }
 
 /* Scrolling Wheel Time Picker (Brief V1) */
-.scrolling-wheel-picker-wrap { margin: 14px 0 16px; background: #FAFAFA; border: 1px solid #E5E7EB; border-radius: 18px; padding: 16px 12px; }
-[data-theme="dark"] .scrolling-wheel-picker-wrap { background: #FAFAFA; border-color: #E5E7EB; }
+.scrolling-wheel-picker-wrap { margin: 14px 0 16px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 18px; padding: 16px 12px; }
+[data-theme="dark"] .scrolling-wheel-picker-wrap { background: var(--surface-2); border-color: var(--border); }
 .wheel-picker-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 600px) { .wheel-picker-cols { grid-template-columns: 1fr; gap: 20px; } }
-.wheel-col { display: flex; flex-direction: column; align-items: center; background: #FFFFFF; border: 1px solid #F3F4F6; border-radius: 14px; padding: 12px 8px 16px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
-[data-theme="dark"] .wheel-col { background: #FFFFFF; border-color: #F3F4F6; }
-.wheel-col-header { font-size: 0.95rem; font-weight: 800; color: #111827; margin-bottom: 12px; text-align: center; }
-[data-theme="dark"] .wheel-col-header { color: #111827; }
+.wheel-col { display: flex; flex-direction: column; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px 8px 16px; box-shadow: var(--shadow); }
+[data-theme="dark"] .wheel-col { background: var(--surface); border-color: var(--border); }
+.wheel-col-header { font-size: 0.95rem; font-weight: 800; color: var(--text); margin-bottom: 12px; text-align: center; }
+[data-theme="dark"] .wheel-col-header { color: var(--text); }
 .wheel-selector-container { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; }
 .wheel-viewport-box { position: relative; width: 140px; height: 308px; overflow: hidden; user-select: none; -webkit-user-select: none; }
-.wheel-center-guide { position: absolute; top: 132px; left: 0; right: 0; height: 44px; pointer-events: none; border-top: 1px dashed rgba(217, 119, 54, 0.25); border-bottom: 1px dashed rgba(217, 119, 54, 0.25); border-radius: 9999px; z-index: 1; }
+.wheel-center-guide { position: absolute; top: 132px; left: 0; right: 0; height: 44px; pointer-events: none; border-top: 1px dashed rgba(169, 103, 72, 0.35); border-bottom: 1px dashed rgba(169, 103, 72, 0.35); border-radius: 9999px; z-index: 1; }
 .wheel-viewport { position: relative; height: 308px; overflow-y: scroll; scroll-snap-type: y mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; z-index: 2; }
 .wheel-viewport::-webkit-scrollbar { display: none; }
 .wheel-list { padding-top: 132px; padding-bottom: 132px; margin: 0; list-style: none; }
 .wheel-slot { height: 44px; display: flex; align-items: center; justify-content: center; scroll-snap-align: center; scroll-snap-stop: normal; cursor: pointer; box-sizing: border-box; }
-.wheel-slot-label { display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 500; color: #4B5563; opacity: 0.35; transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1); white-space: nowrap; }
-[data-theme="dark"] .wheel-slot-label { color: #4B5563; }
-.wheel-slot.active .wheel-slot-label { background: #d97736; color: #ffffff; border-radius: 9999px; padding: 8px 18px; font-weight: 700; font-size: 1.2rem; opacity: 1; box-shadow: 0 4px 12px rgba(217, 119, 54, 0.3); }
-.wheel-ampm-pill { display: flex; flex-direction: column; background: #F3F4F6; border: 1px solid #E5E7EB; border-radius: 9999px; padding: 3px; gap: 3px; }
-[data-theme="dark"] .wheel-ampm-pill { background: #F3F4F6; border-color: #E5E7EB; }
-.wheel-ampm-btn { border: none; background: transparent; padding: 8px 12px; border-radius: 9999px; font-size: 0.82rem; font-weight: 700; color: #6B7280; cursor: pointer; transition: all 0.15s ease; line-height: 1; }
-[data-theme="dark"] .wheel-ampm-btn { color: #6B7280; }
-.wheel-ampm-btn.active { background: #d97736; color: #ffffff; box-shadow: 0 2px 6px rgba(217, 119, 54, 0.35); }
+.wheel-slot-label { display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 500; color: var(--muted); opacity: 0.35; transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1); white-space: nowrap; }
+[data-theme="dark"] .wheel-slot-label { color: var(--muted); }
+.wheel-slot.active .wheel-slot-label { background: var(--brand); color: #ffffff; border-radius: 9999px; padding: 8px 18px; font-weight: 700; font-size: 1.2rem; opacity: 1; box-shadow: 0 4px 12px rgba(169, 103, 72, 0.3); }
+.wheel-ampm-pill { display: flex; flex-direction: column; background: var(--surface-2); border: 1px solid var(--border); border-radius: 9999px; padding: 3px; gap: 3px; }
+[data-theme="dark"] .wheel-ampm-pill { background: var(--surface-2); border-color: var(--border); }
+.wheel-ampm-btn { border: none; background: transparent; padding: 8px 12px; border-radius: 9999px; font-size: 0.82rem; font-weight: 700; color: var(--muted); cursor: pointer; transition: all 0.15s ease; line-height: 1; }
+[data-theme="dark"] .wheel-ampm-btn { color: var(--muted); }
+.wheel-ampm-btn.active { background: var(--brand); color: #ffffff; box-shadow: 0 2px 6px rgba(169, 103, 72, 0.35); }
 
 /* ===================== SocioMart Unified Portal Switcher ===================== */
 .portal-switch-card {
