@@ -54,8 +54,14 @@
 .admin-role-badge.super { background: linear-gradient(135deg, var(--admin-2), var(--admin-3)); color: #fff; border: none; }
 
 /* Main area */
-.admin-view { padding-top: 16px; padding-bottom: 84px; }
-.admin-body.admin-authed .admin-view { padding-top: 68px; }
+.admin-view {
+    padding-top: 16px;
+    padding-bottom: calc(var(--nav-h, 68px) + 48px + env(safe-area-inset-bottom, 16px));
+}
+.admin-body.admin-authed .admin-view {
+    padding-top: 68px;
+    padding-bottom: calc(var(--nav-h, 68px) + 48px + env(safe-area-inset-bottom, 16px));
+}
 
 /* Bottom nav accent */
 .admin-nav .nav-item.active { color: var(--admin-2); }

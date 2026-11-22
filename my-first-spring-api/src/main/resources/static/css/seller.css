@@ -30,7 +30,7 @@
     width: 100%;
     max-width: 100%;
     margin: 0 auto;
-    padding: 12px 16px 88px;
+    padding: 12px 16px calc(var(--nav-h, 68px) + 48px + env(safe-area-inset-bottom, 16px));
     box-sizing: border-box;
 }
 
@@ -2412,45 +2412,103 @@ html[data-theme="dark"] .sd-root {
 /* ---------- Quick actions ---------- */
 
 .sd-quick {
-    background: var(--sd-card);
+    background: #FFFFFF;
     border: 1px solid var(--sd-border);
     border-radius: var(--sd-radius);
-    padding: 16px;
-    box-shadow: var(--sd-shadow);
+    padding: 18px 16px;
+    box-shadow: 0 2px 8px rgba(68, 53, 47, 0.05);
+    margin-bottom: 12px;
+}
+html[data-theme="dark"] .sd-quick {
+    background: var(--sd-card);
 }
 .sd-quick__title {
     font-family: 'Playfair Display', Georgia, serif;
     font-size: 1.05rem;
     font-weight: 700;
     color: var(--sd-text);
-    margin-bottom: 12px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 .sd-quick__grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
+    gap: 10px;
 }
-@media (max-width: 1023px) {
-    .sd-quick__title { display: none; }
-    .sd-quick__grid { grid-template-columns: repeat(5, 1fr); }
-    .sd-quick { padding: 12px; }
+.sd-quick__grid > :nth-child(5) {
+    grid-column: span 2;
+}
+@media (min-width: 640px) and (max-width: 1023px) {
+    .sd-quick__grid {
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 12px;
+    }
+    .sd-quick__grid > :nth-child(5) {
+        grid-column: auto;
+    }
+}
+@media (min-width: 1024px) {
+    .sd-quick__grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+    .sd-quick__grid > :nth-child(5) {
+        grid-column: span 2;
+    }
 }
 .sd-qa {
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-    min-height: var(--sd-tap);
-    padding: 10px 4px;
-    border: 1px solid var(--sd-border); border-radius: var(--sd-radius-sm);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 52px;
+    padding: 12px 10px;
+    border: 1px solid var(--sd-border);
+    border-radius: var(--sd-radius-sm);
     background: var(--sd-bg);
     color: var(--sd-text);
-    font: inherit; text-decoration: none; cursor: pointer;
-    transition: all 0.15s ease;
+    font: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: all 0.18s ease;
 }
-.sd-qa:hover { background: var(--sd-orange-soft); border-color: var(--sd-orange); color: var(--sd-orange); transform: translateY(-1px); }
-.sd-qa:focus-visible { outline: 2px solid var(--sd-orange); outline-offset: 2px; }
-.sd-qa__icon { font-size: 1.2rem; line-height: 1; }
+.sd-quick__grid > :nth-child(5).sd-qa {
+    flex-direction: row;
+    gap: 8px;
+    padding: 10px 14px;
+}
+.sd-qa:hover {
+    background: var(--sd-orange-soft);
+    border-color: var(--sd-orange);
+    color: var(--sd-orange);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(169, 103, 72, 0.12);
+}
+.sd-qa:active {
+    transform: translateY(0);
+}
+.sd-qa:focus-visible {
+    outline: 2px solid var(--sd-orange);
+    outline-offset: 2px;
+}
+.sd-qa__icon {
+    font-size: 1.3rem;
+    line-height: 1;
+}
 .sd-qa__label {
-    font-size: .72rem; font-weight: 700; line-height: 1.2;
-    text-align: center; overflow-wrap: anywhere; word-break: break-word;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.25;
+    text-align: center;
+    word-break: normal;
+    overflow-wrap: normal;
+    white-space: normal;
+    hyphens: none;
 }
 
 /* ---------- Section heading + filter ---------- */
@@ -2875,8 +2933,6 @@ html[data-theme="dark"] .sd-earnings { background: var(--sd-card); border-color:
 @media (max-width: 360px) {
     .sd-stat__value { font-size: 1.3rem; }
     .sd-stat__label { font-size: .68rem; }
-    .sd-quick { grid-template-columns: repeat(5, 1fr); gap: 6px; padding: 10px 8px; }
-    .sd-qa__label { font-size: .6rem; }
     .sd-card__photo { width: 66px; height: 66px; flex: 0 0 66px; font-size: 1.6rem; }
     .sd-btn { padding: 0 10px; font-size: .78rem; }
     .sd-store { flex-wrap: wrap; }
