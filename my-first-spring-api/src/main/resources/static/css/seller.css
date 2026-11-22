@@ -30,7 +30,7 @@ iframe[src*="netlify" i],
 .seller-nav {
     --nav-active: var(--accent);
     --nav-active-soft: var(--accent-soft);
-    z-index: 1000;
+    z-index: 100;
 }
 .seller-nav .nav-item.active {
     color: var(--accent);
