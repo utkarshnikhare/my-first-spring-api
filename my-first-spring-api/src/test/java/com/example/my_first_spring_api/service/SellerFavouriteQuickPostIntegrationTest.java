@@ -82,6 +82,43 @@ class SellerFavouriteQuickPostIntegrationTest {
     }
 
     @Test
+    void unfavouriteThenRefavouriteSequenceWorksRepeatedly() {
+        SellerTemplateDto tA = sellerApp.addTemplate(seller, template("Poha"));
+        SellerTemplateDto tB = sellerApp.addTemplate(seller, template("Upma"));
+        SellerTemplateDto tC = sellerApp.addTemplate(seller, template("Thali"));
+        assertThat(templates.countBySeller(seller)).isEqualTo(3);
+
+        // Unfavourite Upma (tB)
+        sellerApp.deleteTemplate(tB.getId(), seller);
+        assertThat(templates.countBySeller(seller)).isEqualTo(2);
+
+        List<SellerTemplateDto> remaining = sellerApp.getTemplates(seller);
+        assertThat(remaining).extracting(SellerTemplateDto::getName)
+                .containsExactlyInAnyOrder("Poha", "Thali");
+
+        // Add replacement favourite (Biryani)
+        SellerTemplateDto tD = sellerApp.addTemplate(seller, template("Biryani"));
+        assertThat(templates.countBySeller(seller)).isEqualTo(3);
+
+        // Trying to add 4th must fail
+        assertThatThrownBy(() -> sellerApp.addTemplate(seller, template("Khichdi")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Maximum 3");
+
+        // Free two slots
+        sellerApp.deleteTemplate(tA.getId(), seller);
+        sellerApp.deleteTemplate(tC.getId(), seller);
+        assertThat(templates.countBySeller(seller)).isEqualTo(1);
+
+        // Refill to 3
+        sellerApp.addTemplate(seller, template("Dosa"));
+        sellerApp.addTemplate(seller, template("Idli"));
+        assertThat(templates.countBySeller(seller)).isEqualTo(3);
+        assertThat(sellerApp.getTemplates(seller)).extracting(SellerTemplateDto::getName)
+                .containsExactlyInAnyOrder("Biryani", "Dosa", "Idli");
+    }
+
+    @Test
     void favouriteTemplatesDoNotEnterProductHistory() {
         sellerApp.addTemplate(seller, template("Saved template"));
         Product yesterday = products.save(new Product(kitchen, "Published yesterday", "", BigDecimal.TEN, null));

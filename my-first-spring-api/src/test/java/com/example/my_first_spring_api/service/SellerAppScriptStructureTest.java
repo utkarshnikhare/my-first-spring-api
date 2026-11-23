@@ -443,4 +443,29 @@ class SellerAppScriptStructureTest {
                 .contains("No previous items")
                 .contains("Could not load history");
     }
+
+    @Test
+    void favouriteToggleSupportsBothAddAndRemoveWithCapEnforcement() {
+        assertThat(sellerJs)
+                .as("offering form must bind active favourite template to toggle and show remove label")
+                .contains("isCurrentFav ? '★ Remove from Favourites' : '☆ Add to Favourites'")
+                .contains("data-tid=\"' + activeTemplateId")
+                .contains("This offering is saved in your favourites (tap switch to remove).");
+
+        assertThat(sellerJs)
+                .as("toggle-favourite handler must support DELETE call when unfavouriting an existing template")
+                .contains("await sellerApi('/api/seller-app/templates/' + tid, { method: 'DELETE' });")
+                .contains("S.favTemplates = (S.favTemplates || []).filter(function (x) { return x.id !== tid; });")
+                .contains("Removed from favourites");
+
+        assertThat(sellerJs)
+                .as("toggle-favourite handler must enforce 3-favourite limit when toggling ON")
+                .contains("if (currentCount >= 3)")
+                .contains("You can save up to 3 favourite offerings. Remove an existing favourite to add another.");
+
+        assertThat(sellerJs)
+                .as("publish handler must not create duplicate template if already saved")
+                .contains("var existingFavTid = $('#favToggle') && $('#favToggle').dataset.tid;")
+                .contains("if (saveFav && !existingFavTid)");
+    }
 }
