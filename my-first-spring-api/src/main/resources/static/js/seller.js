@@ -818,7 +818,7 @@ async function sellerAddView() {
     S.favTemplates = []; S.favError = null;
     try { S.favTemplates = (await sellerApi('/api/seller-app/templates')) || []; } catch (e) { S.favError = e.message || 'please try again'; }
     h += '<div class="pathway-card" data-action="go-use-favourite"><div class="pc-icon">⭐</div><div class="pc-title">Create from Favourite</div><div class="pc-desc">Quickly post from saved templates (max 3).</div>';
-    if (S.favError) { h += '<div class="pc-desc">Could not load your saved favourites - ' + esc(S.favError) + ' <button class="btn btn-secondary btn-sm" type="button" data-action="retry-favourites">Retry</button></div>'; } else if (S.favTemplates.length > 0) { h += '<div class="favourite-pills">'; S.favTemplates.forEach(function (t) { h += '<span class="fav-pill" data-action="use-template" data-tid="' + t.id + '">⭐ ' + esc(t.name) + '</span>'; }); h += '</div>'; }
+    if (S.favError) { h += '<div class="pc-desc">Could not load your saved favourites - ' + esc(S.favError) + ' <button class="btn btn-secondary btn-sm" type="button" data-action="retry-favourites">Retry</button></div>'; } else if (S.favTemplates.length > 0) { h += '<div class="favourite-pills">'; S.favTemplates.forEach(function (t) { h += '<span class="fav-pill" data-action="use-template" data-tid="' + t.id + '">⭐ ' + esc(t.name) + '<button class="fav-pill-remove" type="button" data-action="delete-favourite-pill" data-tid="' + t.id + '" title="Remove from favourites" aria-label="Remove ' + esc(t.name) + ' from favourites">✕</button></span>'; }); h += '</div>'; }
     else { h += '<div class="pc-desc">No saved favourites yet - turn on Save as template (max 3) while creating an offering.</div>'; }
     h += '</div>';
     h += '<div class="pathway-card" data-action="go-create"><div class="pc-icon">✨</div><div class="pc-title">Create New Offering</div><div class="pc-desc">Fill in all details manually.</div></div>';
@@ -2742,7 +2742,7 @@ function offeringFormHtml(t, opts) {
         favNote = 'Save as template (max 3).';
     }
 
-    h += '<div class="toggle-row' + (favDisabled ? ' is-disabled' : '') + '" id="favToggleRow">'
+    h += '<div class="toggle-row' + (favDisabled ? ' is-disabled' : '') + '" id="favToggleRow"' + (favDisabled ? ' title="You can save up to 3 favourite offerings. Remove an existing favourite to add another."' : ' data-action="toggle-favourite" style="cursor:pointer;"') + '>'
         + '<div>'
         + '<div class="toggle-text" id="favToggleLabel">' + toggleLabel + '</div>'
         + '<div class="toggle-note" id="favToggleNote">' + favNote + '</div>'
@@ -4664,7 +4664,32 @@ document.addEventListener('click', async function (e) {
                 sellerNavigate('#/order-detail/' + t.dataset.pid);
                 break;
             }
+            case 'delete-favourite-pill': {
+                e.stopPropagation();
+                var tid = Number(t.dataset.tid);
+                if (!tid) break;
+                if (t.dataset.busy === 'true') break;
+                t.dataset.busy = 'true';
+                try {
+                    await sellerApi('/api/seller-app/templates/' + tid, { method: 'DELETE' });
+                    S.favTemplates = (S.favTemplates || []).filter(function (x) { return x.id !== tid; });
+                    if (S.loadedTemplateId === tid) S.loadedTemplateId = null;
+                    if (S.draftOffering && S.draftOffering.id === tid) {
+                        delete S.draftOffering.id;
+                    }
+                    toast('Removed from favourites', 'success');
+                    if (location.hash === '#/add') {
+                        sellerNavigate('#/add');
+                    }
+                } catch (err) {
+                    toast(err.message || 'Could not remove favourite', 'error');
+                } finally {
+                    delete t.dataset.busy;
+                }
+                break;
+            }
             case 'use-template': {
+                if (e.target && e.target.closest('[data-action="delete-favourite-pill"]')) break;
                 var tid = Number(t.dataset.tid);
                 var template = S.favTemplates.find(function (x) { return x.id === tid; });
                 if (template) {
