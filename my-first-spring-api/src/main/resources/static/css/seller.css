@@ -628,14 +628,47 @@ html[data-theme="dark"] .seller-auth-alert--rate-limit {
     flex-wrap: wrap;
 }
 .fav-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     background: var(--brand-soft);
     color: var(--brand-3);
-    padding: 8px 14px;
+    padding: 6px 12px;
     border-radius: 22px;
     font-size: .8rem;
     font-weight: 700;
     cursor: pointer;
     transition: transform .15s ease, box-shadow .15s ease;
+}
+.fav-pill-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    background: rgba(0, 0, 0, 0.08);
+    border: none;
+    border-radius: 50%;
+    color: inherit;
+    font-size: 11px;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    margin-left: 2px;
+    transition: background .15s ease, transform .15s ease, color .15s ease;
+}
+.fav-pill-remove:hover {
+    background: rgba(220, 38, 38, 0.2);
+    color: #dc2626;
+    transform: scale(1.15);
+}
+[data-theme="dark"] .fav-pill-remove {
+    background: rgba(255, 255, 255, 0.15);
+}
+[data-theme="dark"] .fav-pill-remove:hover {
+    background: rgba(239, 68, 68, 0.3);
+    color: #f87171;
 }
 @media (hover: hover) {
     .fav-pill:hover { transform: translateY(-1px); box-shadow: var(--shadow); }

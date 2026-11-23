@@ -467,5 +467,14 @@ class SellerAppScriptStructureTest {
                 .as("publish handler must not create duplicate template if already saved")
                 .contains("var existingFavTid = $('#favToggle') && $('#favToggle').dataset.tid;")
                 .contains("if (saveFav && !existingFavTid)");
+
+        assertThat(sellerJs)
+                .as("favourite pills in sellerAddView must have delete button and handler")
+                .contains("data-action=\"delete-favourite-pill\"")
+                .contains("case 'delete-favourite-pill':");
+
+        assertThat(sellerJs)
+                .as("favourite toggle row must be directly interactive for touch accessibility")
+                .contains("id=\"favToggleRow\"' + (favDisabled ? ' title=\"You can save up to 3 favourite offerings. Remove an existing favourite to add another.\"' : ' data-action=\"toggle-favourite\" style=\"cursor:pointer;\"')");
     }
 }

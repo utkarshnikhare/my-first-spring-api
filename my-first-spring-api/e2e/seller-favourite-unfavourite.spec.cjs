@@ -165,6 +165,35 @@ test('seller can load existing favourite, see active toggle, unfavourite to free
     expect.arrayContaining(['Poha Special', 'Evening Samosa', 'Paneer Bhurji'])
   );
 
+  // 11b. Test direct unfavourite from pill remove button on #/add
+  await page.goto('/seller.html#/add');
+  const paneerPill = page.locator('.fav-pill').filter({ hasText: 'Paneer Bhurji' });
+  await expect(paneerPill).toBeVisible();
+  const pillDeleteBtn = paneerPill.locator('.fav-pill-remove');
+  await expect(pillDeleteBtn).toBeVisible();
+
+  const directDeletePromise = page.waitForResponse(response =>
+    response.url().includes('/api/seller-app/templates/') && response.request().method() === 'DELETE');
+  await pillDeleteBtn.click();
+  expect((await directDeletePromise).status()).toBe(200);
+
+  // Verify pill is immediately removed
+  await expect(page.locator('.fav-pill').filter({ hasText: 'Paneer Bhurji' })).toHaveCount(0);
+  const afterDirectDelete = await apiJson(page, '/api/seller-app/templates');
+  expect(afterDirectDelete.body.length).toBe(2);
+
+  // Re-add to test cap enforcement
+  const readded = await apiJson(page, '/api/seller-app/templates', {
+    method: 'POST',
+    body: {
+      name: 'Paneer Bhurji',
+      price: 120,
+      orderWindowEnd: '14:00',
+      category: 'LUNCH'
+    }
+  });
+  expect(readded.status).toBe(200);
+
   // 12. Verify 4th addition is blocked by backend (cap of 3 enforced)
   const blockedFourth = await apiJson(page, '/api/seller-app/templates', {
     method: 'POST',
