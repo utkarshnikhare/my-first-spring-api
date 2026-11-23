@@ -1,7 +1,7 @@
 /**
  * SocioMart Seller App v1.0 - 6-tab SPA
  */
-var S = { user: null, kitchen: null, kitchenUrl: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFilterDelivery: '', offeringProductId: '', deliverySaving: {}, deliveryBlockRequestId: 0, bulkDelivering: false, offeringFor: 'today', quickPostRequestId: null, editOffering: null, dashFilter: 'ALL', offeringsTab: 'history', recurringSchedules: [], recurringDetail: null, recurringDuration: 'thisweek', dashTab: 'live', offeringSubmitting: false, editOccurrenceId: null, authMode: 'login', authOptions: null, authError: null, authServiceAreaId: '', authSlugTouched: false };
+var S = { user: null, kitchen: null, kitchenUrl: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, loadedTemplateId: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFilterDelivery: '', offeringProductId: '', deliverySaving: {}, deliveryBlockRequestId: 0, bulkDelivering: false, offeringFor: 'today', quickPostRequestId: null, editOffering: null, dashFilter: 'ALL', offeringsTab: 'history', recurringSchedules: [], recurringDetail: null, recurringDuration: 'thisweek', dashTab: 'live', offeringSubmitting: false, editOccurrenceId: null, authMode: 'login', authOptions: null, authError: null, authServiceAreaId: '', authSlugTouched: false };
 var sellerRoutes = {
     '#/home': sellerHomeView, '#/add': sellerAddView, '#/create': sellerCreateView,
     '#/edit-offering': sellerEditOfferingView,
@@ -2718,14 +2718,37 @@ function offeringFormHtml(t, opts) {
     }
     h += '<div class="form-group"><label class="form-label">' + (isEdit ? 'Quantity Available Now' : 'Quantity Available — Optional') + '</label><input class="form-input" name="' + (isEdit ? 'availableQuantity' : 'maxQuantity') + '" type="number" min="' + (isEdit ? '0' : '1') + '" step="1" value="' + esc(qtyValue) + '" placeholder="' + (isEdit ? 'Unlimited' : 'Blank for unlimited') + '"' + qtyAttr + '><p class="muted small">' + esc(qtyNote) + '</p></div>';
     h += '<div class="form-group"><label class="form-label">To be listed in <span class="req">*</span></label><div class="checkbox-group">' + offeringCategoryBox('BREAKFAST', 'Breakfast', categoryValues) + offeringCategoryBox('LUNCH', 'Lunch', categoryValues) + offeringCategoryBox('DINNER', 'Dinner', categoryValues) + offeringCategoryBox('SNACKS', 'Snacks', categoryValues) + '</div><p class="muted small">Select at least one category.</p></div>';
-    if (!isEdit) {
-        var favCount = (S.favTemplates && S.favTemplates.length) ? S.favTemplates.length : 0;
-        var favDisabled = favCount >= 3;
-        var favNote = favDisabled
-            ? '<span class="text-danger" style="color:#dc2626;font-weight:600;">You already have 3 items marked as favourite. Remove items to add more favorites.</span>'
-            : 'Save as template (max 3).';
-        h += '<div class="toggle-row' + (favDisabled ? ' is-disabled' : '') + '"><div><div class="toggle-text">Mark as Favourite</div><div class="toggle-note">' + favNote + '</div></div><div class="toggle-switch' + (favDisabled ? ' disabled' : '') + '" id="favToggle"' + (favDisabled ? ' title="You already have 3 items marked as favourite"' : ' data-action="toggle-favourite"') + '></div></div>';
+    // Favourite Offering Template toggle (Add/Remove)
+    var favCount = (S.favTemplates && S.favTemplates.length) ? S.favTemplates.length : 0;
+    var activeTemplate = (S.favTemplates || []).find(function (x) {
+        return (S.loadedTemplateId && x.id === S.loadedTemplateId)
+            || (t && t.id && !isEdit && x.id === t.id)
+            || (t && t.name && x.name && x.name.trim().toLowerCase() === t.name.trim().toLowerCase());
+    });
+    var isCurrentFav = !!activeTemplate;
+    var activeTemplateId = activeTemplate ? activeTemplate.id : null;
+    var favDisabled = !isCurrentFav && favCount >= 3;
+    var toggleClass = 'toggle-switch' + (isCurrentFav ? ' on' : '') + (favDisabled ? ' disabled' : '');
+    var toggleAction = favDisabled ? '' : ' data-action="toggle-favourite"';
+    var toggleTid = activeTemplateId ? (' data-tid="' + activeTemplateId + '"') : '';
+    var toggleTitle = favDisabled ? ' title="You can save up to 3 favourite offerings. Remove an existing favourite to add another."' : '';
+    var toggleLabel = isCurrentFav ? '★ Remove from Favourites' : '☆ Add to Favourites';
+    var favNote;
+    if (isCurrentFav) {
+        favNote = 'This offering is saved in your favourites (tap switch to remove).';
+    } else if (favDisabled) {
+        favNote = '<span class="text-danger" style="color:#dc2626;font-weight:600;">You can save up to 3 favourite offerings. Remove an existing favourite to add another.</span>';
+    } else {
+        favNote = 'Save as template (max 3).';
     }
+
+    h += '<div class="toggle-row' + (favDisabled ? ' is-disabled' : '') + '" id="favToggleRow">'
+        + '<div>'
+        + '<div class="toggle-text" id="favToggleLabel">' + toggleLabel + '</div>'
+        + '<div class="toggle-note" id="favToggleNote">' + favNote + '</div>'
+        + '</div>'
+        + '<div class="' + toggleClass + '" id="favToggle"' + toggleAction + toggleTid + toggleTitle + '></div>'
+        + '</div>';
     h += '<div class="offering-form-actions-row">'
         + '<button class="btn btn-secondary btn-cancel-offering" type="button" data-action="cancel-offering-form">Cancel</button>'
         + '<button class="btn btn-primary btn-flex-1" type="submit">' + (isEdit ? 'Save Changes' : 'Publish Offering') + '</button>'
@@ -2748,6 +2771,11 @@ async function sellerCreateView() {
     } catch (e) {
         S.favTemplates = S.favTemplates || [];
     }
+    if (S.draftOffering && S.draftOffering.id && !S.loadedTemplateId) {
+        if (S.favTemplates.some(function (ft) { return ft.id === S.draftOffering.id; })) {
+            S.loadedTemplateId = S.draftOffering.id;
+        }
+    }
     var h = '<div class="view-enter">';
     h += '<div class="page-head"><h1>' + (isHm ? 'Add Homemade Product' : 'Create Offering') + '</h1><p class="muted small">' +
         (isHm ? 'List your homemade treats, bakes, ghee, pickles or packaged specialties.' :
@@ -2765,6 +2793,11 @@ async function sellerEditOfferingView() {
         return '<div class="view-enter">' + emptyHtml('🍽️', 'Offering not found', 'Open an offering from your dashboard and tap Edit again.') + '</div>';
     }
     var isHm = isHomemadeProduct(o);
+    try {
+        S.favTemplates = (await sellerApi('/api/seller-app/templates')) || [];
+    } catch (e) {
+        S.favTemplates = S.favTemplates || [];
+    }
     var locked = !!o.hasOrders;
     // Pre-select the Offering For choice that matches the stored date.
     S.offeringFor = offeringForMode(o.availableDate);
@@ -3907,6 +3940,29 @@ async function submitOfferingEdit(form) {
     if (delta !== 0) {
         await sellerApi('/api/seller-app/products/' + o.id + '/inventory', { method: 'PATCH', body: { delta: delta } });
     }
+    var saveFav = $('#favToggle') && $('#favToggle').classList.contains('on');
+    var existingFavTid = $('#favToggle') && $('#favToggle').dataset.tid;
+    if (saveFav && !existingFavTid) {
+        try {
+            var favBody = {
+                name: ev.name || o.name,
+                description: ev.description || o.description || '',
+                price: Number(ev.price != null ? ev.price : o.price),
+                priceUnit: ev.priceUnit || o.priceUnit,
+                maxQuantity: ev.availableQuantity != null && String(ev.availableQuantity).trim() !== '' ? Number(ev.availableQuantity) : (o.maxQuantity != null ? o.maxQuantity : null),
+                orderWindowStart: ev.orderWindowStart || o.orderWindowStart,
+                orderWindowEnd: ev.orderWindowEnd || o.orderWindowEnd,
+                cutoffTime: ev.cutoffTime || o.cutoffTime,
+                readyByTime: ev.readyByTime || o.readyByTime,
+                availableDate: ev.availableDate || o.availableDate,
+                category: (ev.category || o.category || '').split(',')[0].trim()
+            };
+            await sellerApi('/api/seller-app/templates', { method: 'POST', body: favBody });
+            S.favTemplates = (await sellerApi('/api/seller-app/templates')) || [];
+        } catch (favErr) {
+            toast('Could not save favourite: ' + favErr.message, 'error');
+        }
+    }
     toast('Offering updated', 'success');
     S.editOffering = null;
     S.offeringFor = 'today';
@@ -4013,10 +4069,12 @@ document.addEventListener('submit', async function (e) {
             }
             vals.categories = categories;
             var saveFav = $('#favToggle') && $('#favToggle').classList.contains('on');
-            if (saveFav) {
+            var existingFavTid = $('#favToggle') && $('#favToggle').dataset.tid;
+            if (saveFav && !existingFavTid) {
                 try {
                     var favBody = { name: vals.name, description: vals.description || '', price: Number(vals.price), priceUnit: vals.priceUnit, maxQuantity: vals.maxQuantity, orderWindowStart: vals.orderWindowStart, orderWindowEnd: vals.orderWindowEnd, cutoffTime: vals.cutoffTime, readyByTime: vals.readyByTime, availableDate: vals.availableDate, category: (categories && categories[0]) || '' };
                     await sellerApi('/api/seller-app/templates', { method: 'POST', body: favBody });
+                    S.favTemplates = (await sellerApi('/api/seller-app/templates')) || [];
                 } catch (favErr) { toast('Could not save favourite: ' + favErr.message, 'error'); }
             }
             try {
@@ -4028,6 +4086,7 @@ document.addEventListener('submit', async function (e) {
                 await sellerApi(prodUrl, { method: 'POST', body: vals });
                 toast('Offering published!', 'success');
                 S.draftOffering = null;
+                S.loadedTemplateId = null;
                 S.republishSourceId = null;
                 S.offeringFor = 'today';
                 sellerNavigate('#/home');
@@ -4260,6 +4319,8 @@ document.addEventListener('click', async function (e) {
             case 'cancel-dialog-discard': {
                 closeModal();
                 S.offeringFormDirty = false;
+                S.draftOffering = null;
+                S.loadedTemplateId = null;
                 history.back();
                 break;
             }
@@ -4394,7 +4455,13 @@ document.addEventListener('click', async function (e) {
                 toast('Tap one of your saved favourites to use it', 'info');
                 break;
             }
-            case 'go-create': sellerNavigate('#/create'); break;
+            case 'go-create':
+              if (!t.closest('.parse-result-box')) {
+                  S.draftOffering = null;
+                  S.loadedTemplateId = null;
+              }
+              sellerNavigate('#/create');
+              break;
             case 'go-quick-post': sellerNavigate('#/quick-post'); break;
             case 'go-kitchen': sellerNavigate('#/kitchen'); break;
             case 'go-orders': sellerNavigate('#/orders'); break;
@@ -4600,7 +4667,11 @@ document.addEventListener('click', async function (e) {
             case 'use-template': {
                 var tid = Number(t.dataset.tid);
                 var template = S.favTemplates.find(function (x) { return x.id === tid; });
-                if (template) { S.draftOffering = template; sellerNavigate('#/create'); }
+                if (template) {
+                    S.draftOffering = Object.assign({}, template);
+                    S.loadedTemplateId = tid;
+                    sellerNavigate('#/create');
+                }
                 break;
             }
             case 'inv-inc': {
@@ -4876,11 +4947,53 @@ document.addEventListener('click', async function (e) {
             case 'toggle-favourite': {
                 var tg = $('#favToggle');
                 if (!tg) break;
+                if (tg.dataset.busy === 'true') break;
                 if (tg.classList.contains('disabled')) {
-                    toast('You already have 3 items marked as favourite. Remove items to add more favorites.', 'error');
+                    toast('You can save up to 3 favourite offerings. Remove an existing favourite to add another.', 'error');
                     break;
                 }
-                tg.classList.toggle('on');
+                var tid = tg.dataset.tid ? Number(tg.dataset.tid) : null;
+                var isCurrentlyOn = tg.classList.contains('on');
+
+                if (isCurrentlyOn && tid) {
+                    tg.dataset.busy = 'true';
+                    try {
+                        await sellerApi('/api/seller-app/templates/' + tid, { method: 'DELETE' });
+                        S.favTemplates = (S.favTemplates || []).filter(function (x) { return x.id !== tid; });
+                        if (S.loadedTemplateId === tid) S.loadedTemplateId = null;
+                        if (S.draftOffering && S.draftOffering.id === tid) {
+                            delete S.draftOffering.id;
+                        }
+                        tg.classList.remove('on');
+                        delete tg.dataset.tid;
+                        var labelEl = $('#favToggleLabel');
+                        if (labelEl) labelEl.textContent = '☆ Add to Favourites';
+                        var noteEl = $('#favToggleNote');
+                        if (noteEl) noteEl.textContent = 'Save as template (max 3).';
+                        toast('Removed from favourites', 'success');
+                    } catch (err) {
+                        toast(err.message || 'Could not remove favourite', 'error');
+                    } finally {
+                        delete tg.dataset.busy;
+                    }
+                } else if (isCurrentlyOn && !tid) {
+                    tg.classList.remove('on');
+                    var labelEl = $('#favToggleLabel');
+                    if (labelEl) labelEl.textContent = '☆ Add to Favourites';
+                    var noteEl = $('#favToggleNote');
+                    if (noteEl) noteEl.textContent = 'Save as template (max 3).';
+                } else {
+                    var currentCount = (S.favTemplates && S.favTemplates.length) ? S.favTemplates.length : 0;
+                    if (currentCount >= 3) {
+                        toast('You can save up to 3 favourite offerings. Remove an existing favourite to add another.', 'error');
+                        break;
+                    }
+                    tg.classList.add('on');
+                    var labelEl = $('#favToggleLabel');
+                    if (labelEl) labelEl.textContent = '★ Remove from Favourites';
+                    var noteEl = $('#favToggleNote');
+                    if (noteEl) noteEl.textContent = 'Will be saved to favourites on publish.';
+                }
                 break;
             }
             case 'mark-paid': {
