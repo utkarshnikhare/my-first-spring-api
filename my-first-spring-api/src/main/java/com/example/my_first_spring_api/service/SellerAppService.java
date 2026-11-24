@@ -640,6 +640,7 @@ public class SellerAppService {
             for (OrderItem item : order.getItems()) {
                 if (!itemMatchesDate(order, item, date)) continue;
                 Product product = item.getProduct();
+                if (product == null || product.getId() == null) continue;
                 Long pid = product.getId();
                 SellerOrderSummaryDto.ProductOrderAggregate agg = productAgg.computeIfAbsent(pid, k -> {
                     SellerOrderSummaryDto.ProductOrderAggregate a =
@@ -760,7 +761,7 @@ public class SellerAppService {
             BigDecimal itemRevenue = BigDecimal.ZERO;
             OrderItem matchedItem = null;
             for (OrderItem item : order.getItems()) {
-                if (item.getProduct().getId().equals(productId) && itemMatchesDate(order, item, effectiveDate)) {
+                if (item.getProduct() != null && productId.equals(item.getProduct().getId()) && itemMatchesDate(order, item, effectiveDate)) {
                     qtyForProduct += (item.getQuantity() != null ? item.getQuantity() : 0);
                     itemRevenue = itemRevenue.add(item.getPrice() != null
                             ? item.getPrice().multiply(BigDecimal.valueOf(
@@ -900,7 +901,7 @@ public class SellerAppService {
         row.setOrderNumber(order.getOrderNumber());
         int qtyForProduct = 0;
         for (OrderItem item : order.getItems()) {
-            if (item.getProduct().getId().equals(productId)) {
+            if (item.getProduct() != null && productId.equals(item.getProduct().getId())) {
                 qtyForProduct += (item.getQuantity() != null ? item.getQuantity() : 0);
             }
         }
@@ -995,6 +996,7 @@ public class SellerAppService {
             }
 
             for (OrderItem item : order.getItems()) {
+                if (item.getProduct() == null || item.getProduct().getId() == null) continue;
                 Long pid = item.getProduct().getId();
                 SellerEarningsDto.ItemEarning ie = itemMap.computeIfAbsent(pid, k -> {
                     SellerEarningsDto.ItemEarning e = new SellerEarningsDto.ItemEarning();

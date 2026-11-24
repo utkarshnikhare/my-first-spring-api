@@ -3,7 +3,7 @@
  * PWA offline support, intelligent asset caching, and network resilience.
  */
 
-const CACHE_NAME = 'sociomart-shell-v7';
+const CACHE_NAME = 'sociomart-shell-v8';
 const CORE_SHELL_ASSETS = [
     '/',
     '/index.html',
@@ -11,15 +11,15 @@ const CORE_SHELL_ASSETS = [
     '/admin.html',
     '/empty.js',
     '/manifest.webmanifest',
-    '/css/styles.css?v=21',
-    '/css/seller.css?v=3.6',
-    '/css/admin.css?v=14',
+    '/css/styles.css?v=22',
+    '/css/seller.css?v=4.0',
+    '/css/admin.css?v=15',
     '/js/config.js',
-    '/js/common.js?v=14',
-    '/js/buyer.js?v=14',
-    '/js/seller.js?v=3.6',
-    '/js/admin.js?v=14',
-    '/js/app.js?v=9',
+    '/js/common.js?v=15',
+    '/js/buyer.js?v=15',
+    '/js/seller.js?v=4.0',
+    '/js/admin.js?v=15',
+    '/js/app.js?v=10',
     '/icons/icon.svg',
     '/icons/icon-192.png',
     '/icons/icon-512.png'
@@ -34,7 +34,7 @@ self.addEventListener('install', (event) => {
     );
 });
 
-// Activate: clean up outdated version caches
+// Activate: clean up outdated version caches immediately
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((keys) => {
@@ -43,6 +43,12 @@ self.addEventListener('activate', (event) => {
             );
         }).then(() => self.clients.claim())
     );
+});
+
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
 });
 
 // Fetch event

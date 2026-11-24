@@ -54,6 +54,11 @@ function resolveRoute(hash) {
 function resolvePathRoute(path) {
     if (!path) return null;
     var clean = path.replace(/\/+$/, '') || '/';
+    if (clean === '/buyer' || clean === '/buyer/') return { fn: homeView, arg: '#/home' };
+    if (clean.startsWith('/buyer/')) {
+        var sub = clean.substring(6);
+        return resolvePathRoute(sub) || { fn: homeView, arg: '#/home' };
+    }
     if (clean === '/food') return { fn: foodHubView, arg: '#/food' };
     if (clean === '/kitchens') return { fn: kitchensView, arg: '#/kitchens' };
     if (clean === '/homemade') return { fn: homemadeView, arg: '#/homemade' };
