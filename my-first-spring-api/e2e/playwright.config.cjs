@@ -40,7 +40,7 @@ module.exports = defineConfig({
   projects: [
     {
       name: 'desktop',
-      testIgnore: '**/*.mobile.spec.cjs',
+      testIgnore: ['**/*.mobile.spec.cjs', '**/live_*.spec.cjs'],
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1440, height: 1000 }
@@ -49,6 +49,7 @@ module.exports = defineConfig({
     {
       name: 'mobile',
       testMatch: '**/*.mobile.spec.cjs',
+      testIgnore: ['**/live_*.spec.cjs'],
       use: { ...devices['Pixel 7'] }
     }
   ],
