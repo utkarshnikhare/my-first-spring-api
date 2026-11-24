@@ -163,7 +163,8 @@ var CSRF_HEADER_NAME = 'X-XSRF-TOKEN';
 async function api(path, opts) {
     opts = opts || {};
     var isGet = !opts.method || opts.method.toUpperCase() === 'GET';
-    var maxRetries = opts.retries !== undefined ? opts.retries : (isGet ? 2 : 0);
+    // Allow up to 4 retries for GET and 2 retries for mutating requests during cold starts
+    var maxRetries = opts.retries !== undefined ? opts.retries : (isGet ? 4 : 2);
     var attempt = 0;
 
     while (true) {
@@ -177,10 +178,8 @@ async function api(path, opts) {
 
             if ((isColdStart || isNetworkError) && attempt < maxRetries) {
                 attempt++;
-                var delay = attempt === 1 ? 2000 : 3500;
-                if (attempt === 1 && typeof toast === 'function') {
-                    toast('Waking up cloud server... retrying in a moment', 'info');
-                }
+                var delay = attempt === 1 ? 1500 : (attempt === 2 ? 3000 : (attempt === 3 ? 5000 : 7000));
+                if (CONFIG.DEBUG) console.warn('Cloud server warming up, retrying API call (' + attempt + '/' + maxRetries + ') in ' + delay + 'ms:', path);
                 await new Promise(function (resolve) { setTimeout(resolve, delay); });
                 continue;
             }

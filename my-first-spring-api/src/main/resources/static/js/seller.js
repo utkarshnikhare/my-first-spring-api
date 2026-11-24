@@ -85,38 +85,31 @@ function sellerStatusHtml() {
 
 async function sellerAuthHtml() {
     if (S.user && S.user.role === 'SELLER') return sellerStatusHtml();
-    if (S.authError) {
-        var isColdStart = S.authError.status === 504 || S.authError.status === 502 || S.authError.status === 503 ||
-            (S.authError.message && (S.authError.message.includes('504') || S.authError.message.includes('502') || S.authError.message.includes('503')));
-        var title = isColdStart ? 'Waking up cloud server' : 'Seller service connecting';
-        var desc = isColdStart
-            ? 'The cloud server was sleeping to conserve resources. Waking up now (usually takes ~15-25s)...'
-            : esc(S.authError.message || 'Could not verify your session.');
-        setTimeout(function () {
-            var secsEl = document.getElementById('sellerWakeSecs');
-            if (!secsEl) return;
-            var remaining = 4;
-            var timer = setInterval(function () {
-                remaining--;
-                if (secsEl) secsEl.textContent = String(remaining);
-                if (remaining <= 0) {
-                    clearInterval(timer);
+
+    var isColdStart = S.authError && (S.authError.status === 504 || S.authError.status === 502 || S.authError.status === 503 ||
+        (S.authError.message && (S.authError.message.includes('504') || S.authError.message.includes('502') || S.authError.message.includes('503'))));
+
+    // Auto-poll health in background if cold start occurs
+    if (isColdStart && !window._sellerHealthPoller) {
+        window._sellerHealthPoller = setInterval(async function () {
+            try {
+                var res = await fetch('/api/health');
+                if (res.ok) {
+                    clearInterval(window._sellerHealthPoller);
+                    window._sellerHealthPoller = null;
                     S.authError = null;
                     if (typeof sellerRender === 'function') sellerRender();
                 }
-            }, 1000);
-        }, 100);
-        return '<div class="login-wrap"><section class="admin-login seller-auth-card">' +
-            '<div class="modal-icon">⏳</div><h1>' + esc(title) + '</h1>' +
-            '<p class="muted">' + desc + '</p>' +
-            '<div id="sellerWakeCountdown" style="margin:14px 0;font-size:14px;font-weight:600;color:var(--primary, #D9531E);">' +
-            '<span class="spinner inline-spinner" style="margin-right:6px;"></span> Retrying automatically in <span id="sellerWakeSecs">4</span>s...</div>' +
-            '<div class="seller-auth-actions">' +
-            '<button class="btn btn-primary" type="button" data-action="seller-retry">Retry Now</button> ' +
-            '<button class="btn btn-outline" type="button" data-action="seller-show-login">Sign In As Seller</button>' +
-            '</div></section></div>';
+            } catch (e) {}
+        }, 2500);
     }
-    var login = '<div class="form-group"><label for="sellerLoginMobile">Mobile number</label>' +
+
+    var coldStartNotice = isColdStart
+        ? '<div class="seller-auth-alert seller-auth-alert--info" style="display:flex;margin-bottom:14px;"><span class="alert-icon">⏳</span><div class="alert-content"><strong>Waking up cloud server...</strong><p>Cloud server was sleeping. Waking up now (~15-25s). You can enter your details below.</p></div></div>'
+        : '';
+
+    var login = coldStartNotice +
+        '<div class="form-group"><label for="sellerLoginMobile">Mobile number</label>' +
         '<input class="form-input" id="sellerLoginMobile" name="mobileNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" autocomplete="username" required></div>' +
         '<div class="form-group"><label for="sellerLoginPassword">Password</label>' +
         '<div class="password-input-wrapper"><input class="form-input" id="sellerLoginPassword" name="password" type="password" minlength="10" maxlength="72" autocomplete="current-password" required></div></div>' +
