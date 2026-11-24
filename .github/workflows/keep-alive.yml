@@ -1,0 +1,23 @@
+name: Render Backend Keep-Alive
+
+on:
+  schedule:
+    # Run every 14 minutes to prevent Render free-tier web service from sleeping (idle timeout is 15 mins)
+    - cron: '*/14 * * * *'
+  workflow_dispatch:
+
+jobs:
+  keep-alive:
+    name: Ping Render Health Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping SocioMart Backend & Netlify Proxy
+        run: |
+          echo "Pinging Render backend health endpoint directly..."
+          DIRECT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 https://sociomart-demo.onrender.com/api/health || true)
+          echo "Direct Render status: $DIRECT_STATUS"
+
+          echo "Pinging Netlify proxy health endpoint..."
+          PROXY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 https://sociomart-frontend.netlify.app/api/health || true)
+          echo "Netlify proxy status: $PROXY_STATUS"

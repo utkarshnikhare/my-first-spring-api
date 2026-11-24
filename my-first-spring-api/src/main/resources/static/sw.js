@@ -3,7 +3,7 @@
  * PWA offline support, intelligent asset caching, and network resilience.
  */
 
-const CACHE_NAME = 'sociomart-shell-v6';
+const CACHE_NAME = 'sociomart-shell-v7';
 const CORE_SHELL_ASSETS = [
     '/',
     '/index.html',
@@ -12,12 +12,12 @@ const CORE_SHELL_ASSETS = [
     '/empty.js',
     '/manifest.webmanifest',
     '/css/styles.css?v=21',
-    '/css/seller.css?v=3.5',
+    '/css/seller.css?v=3.6',
     '/css/admin.css?v=14',
     '/js/config.js',
-    '/js/common.js?v=13',
-    '/js/buyer.js?v=13',
-    '/js/seller.js?v=3.5',
+    '/js/common.js?v=14',
+    '/js/buyer.js?v=14',
+    '/js/seller.js?v=3.6',
     '/js/admin.js?v=14',
     '/js/app.js?v=9',
     '/icons/icon.svg',
@@ -112,6 +112,7 @@ self.addEventListener('fetch', (event) => {
                 if (cached) return cached;
                 if (url.pathname.startsWith('/seller')) return caches.match('/seller.html');
                 if (url.pathname.startsWith('/admin')) return caches.match('/admin.html');
+                if (url.pathname.startsWith('/buyer')) return caches.match('/index.html');
                 return caches.match('/index.html');
             })
         );

@@ -162,6 +162,38 @@ var CSRF_HEADER_NAME = 'X-XSRF-TOKEN';
 
 async function api(path, opts) {
     opts = opts || {};
+    var isGet = !opts.method || opts.method.toUpperCase() === 'GET';
+    var maxRetries = opts.retries !== undefined ? opts.retries : (isGet ? 2 : 0);
+    var attempt = 0;
+
+    while (true) {
+        try {
+            return await _rawApi(path, opts);
+        } catch (err) {
+            var status = err && err.status;
+            var isColdStart = status === 504 || status === 502 || status === 503 ||
+                (err && err.message && (err.message.includes('504') || err.message.includes('502') || err.message.includes('503')));
+            var isNetworkError = err && (err.name === 'TypeError' || String(err.message).toLowerCase().includes('failed to fetch') || String(err.message).toLowerCase().includes('network'));
+
+            if ((isColdStart || isNetworkError) && attempt < maxRetries) {
+                attempt++;
+                var delay = attempt === 1 ? 2000 : 3500;
+                if (attempt === 1 && typeof toast === 'function') {
+                    toast('Waking up cloud server... retrying in a moment', 'info');
+                }
+                await new Promise(function (resolve) { setTimeout(resolve, delay); });
+                continue;
+            }
+            if (isNetworkError && typeof toast === 'function') {
+                toast('Network error: ' + err.message, 'error');
+            }
+            throw err;
+        }
+    }
+}
+
+async function _rawApi(path, opts) {
+    opts = opts || {};
     path = path.replace(/\/+$/, '');
     if (!path) path = '/';
     var url = (path.startsWith('/api') || path.startsWith('/h2-console')) ? CONFIG.API_BASE_URL + path : path;
@@ -175,12 +207,7 @@ async function api(path, opts) {
     var res;
     var text;
     var data = null;
-    try {
-        res = await fetch(url, init);
-    } catch (err) {
-        toast('Network error: ' + err.message, 'error');
-        throw err;
-    }
+    res = await fetch(url, init);
     text = await res.text();
     try {
         data = text ? JSON.parse(text) : null;

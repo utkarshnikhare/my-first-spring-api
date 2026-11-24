@@ -86,9 +86,35 @@ function sellerStatusHtml() {
 async function sellerAuthHtml() {
     if (S.user && S.user.role === 'SELLER') return sellerStatusHtml();
     if (S.authError) {
+        var isColdStart = S.authError.status === 504 || S.authError.status === 502 || S.authError.status === 503 ||
+            (S.authError.message && (S.authError.message.includes('504') || S.authError.message.includes('502') || S.authError.message.includes('503')));
+        var title = isColdStart ? 'Waking up cloud server' : 'Seller service connecting';
+        var desc = isColdStart
+            ? 'The cloud server was sleeping to conserve resources. Waking up now (usually takes ~15-25s)...'
+            : esc(S.authError.message || 'Could not verify your session.');
+        setTimeout(function () {
+            var secsEl = document.getElementById('sellerWakeSecs');
+            if (!secsEl) return;
+            var remaining = 4;
+            var timer = setInterval(function () {
+                remaining--;
+                if (secsEl) secsEl.textContent = String(remaining);
+                if (remaining <= 0) {
+                    clearInterval(timer);
+                    S.authError = null;
+                    if (typeof sellerRender === 'function') sellerRender();
+                }
+            }, 1000);
+        }, 100);
         return '<div class="login-wrap"><section class="admin-login seller-auth-card">' +
-            '<h1>Seller service unavailable</h1><p>' + esc(S.authError.message || 'Could not verify your session.') + '</p>' +
-            '<button class="btn btn-primary" type="button" data-action="seller-retry">Retry</button></section></div>';
+            '<div class="modal-icon">⏳</div><h1>' + esc(title) + '</h1>' +
+            '<p class="muted">' + desc + '</p>' +
+            '<div id="sellerWakeCountdown" style="margin:14px 0;font-size:14px;font-weight:600;color:var(--primary, #D9531E);">' +
+            '<span class="spinner inline-spinner" style="margin-right:6px;"></span> Retrying automatically in <span id="sellerWakeSecs">4</span>s...</div>' +
+            '<div class="seller-auth-actions">' +
+            '<button class="btn btn-primary" type="button" data-action="seller-retry">Retry Now</button> ' +
+            '<button class="btn btn-outline" type="button" data-action="seller-show-login">Sign In As Seller</button>' +
+            '</div></section></div>';
     }
     var login = '<div class="form-group"><label for="sellerLoginMobile">Mobile number</label>' +
         '<input class="form-input" id="sellerLoginMobile" name="mobileNumber" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" autocomplete="username" required></div>' +

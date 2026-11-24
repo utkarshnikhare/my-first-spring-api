@@ -21,6 +21,39 @@
   status = 200
   force = true
 
+# Seller app routes (clean URLs)
+[[redirects]]
+  from = "/seller"
+  to = "/seller.html"
+  status = 200
+
+[[redirects]]
+  from = "/seller/*"
+  to = "/seller.html"
+  status = 200
+
+# Buyer app routes (clean URLs)
+[[redirects]]
+  from = "/buyer"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/buyer/*"
+  to = "/index.html"
+  status = 200
+
+# Admin app routes (clean URLs)
+[[redirects]]
+  from = "/admin"
+  to = "/admin.html"
+  status = 200
+
+[[redirects]]
+  from = "/admin/*"
+  to = "/admin.html"
+  status = 200
+
 # Specific public clean routes for Buyer app (rewritten to index.html)
 # These preserve clean URLs without a catch-all SPA redirect that would break seller.html/admin.html
 [[redirects]]
