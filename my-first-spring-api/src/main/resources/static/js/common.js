@@ -163,8 +163,8 @@ var CSRF_HEADER_NAME = 'X-XSRF-TOKEN';
 async function api(path, opts) {
     opts = opts || {};
     var isGet = !opts.method || opts.method.toUpperCase() === 'GET';
-    // Allow up to 4 retries for GET and 2 retries for mutating requests during cold starts
-    var maxRetries = opts.retries !== undefined ? opts.retries : (isGet ? 4 : 2);
+    // Allow up to 4 retries for GET requests during cold starts; mutating POST/PUT/DELETE requests do not auto-retry
+    var maxRetries = opts.retries !== undefined ? opts.retries : (isGet ? 4 : 0);
     var attempt = 0;
 
     while (true) {
