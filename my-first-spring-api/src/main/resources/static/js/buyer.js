@@ -336,9 +336,13 @@ async function foodHubView() {
             }
             el.outerHTML = '<div class="cat-grid" id="foodHubCats">' + ch + '</div>';
         } else {
-            var msg = catsRes && catsRes.error ? (catsRes.error.message || 'Could not load categories') : 'Could not load categories';
+            var rawMsg = catsRes && catsRes.error ? (catsRes.error.message || '') : '';
+            var isCold = rawMsg.includes('504') || rawMsg.includes('502') || rawMsg.includes('503');
+            var icon = isCold ? '⏳' : '📡';
+            var title = isCold ? 'Waking up cloud server' : 'Could not load categories';
+            var desc = isCold ? 'The server is warming up. Tap Retry to load.' : (rawMsg || 'Could not load categories');
             el.outerHTML = '<div id="foodHubCats">' +
-                emptyHtml('📡', 'Could not load categories', msg,
+                emptyHtml(icon, title, desc,
                     '<button class="btn btn-outline btn-sm card-mt" type="button" data-action="retry-categories">Retry</button>') +
                 '</div>';
         }
@@ -360,9 +364,13 @@ async function foodHubView() {
                     : '<div id="foodHubItems">' + emptyHtml('🏪', 'No kitchens yet', 'No community kitchens are open right now.') + '</div>';
             }
         } else {
-            var msg = itemsRes && itemsRes.error ? (itemsRes.error.message || 'Something went wrong') : 'Something went wrong';
+            var rawItemMsg = itemsRes && itemsRes.error ? (itemsRes.error.message || '') : '';
+            var isItemCold = rawItemMsg.includes('504') || rawItemMsg.includes('502') || rawItemMsg.includes('503');
+            var itemIcon = isItemCold ? '⏳' : '⚠️';
+            var itemTitle = isItemCold ? 'Waking up cloud server' : 'Something went wrong';
+            var itemDesc = isItemCold ? 'The server is warming up. Tap Retry to load items.' : (rawItemMsg || 'Something went wrong');
             el.outerHTML = '<div id="foodHubItems">' +
-                emptyHtml('⚠️', 'Something went wrong', msg,
+                emptyHtml(itemIcon, itemTitle, itemDesc,
                     '<button class="btn btn-outline btn-sm card-mt" type="button" data-action="retry-items">Retry</button>') +
                 '</div>';
         }
