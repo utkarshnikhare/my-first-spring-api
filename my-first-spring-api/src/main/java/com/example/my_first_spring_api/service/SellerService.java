@@ -136,7 +136,11 @@ public class SellerService {
         // so the seller cannot accidentally cover a society they did not tick.
         // Legacy callers that send only the name string keep the name-based path.
         if (dto.getSocietyIds() != null) {
-            locationService.saveSellerCoverage(kitchen, dto.getAreaId(), dto.getSocietyIds());
+            if (dto.getAreaId() != null) {
+                locationService.saveSellerCoverage(kitchen, dto.getAreaId(), dto.getSocietyIds());
+            } else {
+                locationService.saveSellerCoverage(kitchen, dto.getSocietyIds());
+            }
         } else {
             // Validation first (unchanged), then the ID-backed coverage is kept in step.
             locationService.applyCoverageFromNames(kitchen,

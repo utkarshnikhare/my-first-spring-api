@@ -230,10 +230,248 @@ html[data-theme="dark"] .seller-auth-alert--rate-limit {
 .seller-reg-coverage legend { display: block; font-weight: 700; margin-bottom: 6px; }
 .seller-auth-card .form-input { width: 100%; }
 .seller-reg-coverage {
-    margin: 12px 0;
-    padding: 12px;
+    margin: 16px 0;
+    padding: 14px;
     border: 1px solid var(--border);
     border-radius: 12px;
+    background: var(--surface-card, transparent);
+}
+.seller-location-section {
+    background: var(--surface-subtle, rgba(0, 0, 0, 0.02));
+}
+.seller-delivery-coverage-section {
+    background: var(--surface-card, transparent);
+}
+.coverage-global-search-wrap,
+.coverage-area-search-wrap {
+    margin-bottom: 10px;
+}
+.coverage-global-search-wrap input,
+.coverage-area-search-wrap input {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 0.875rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--input-bg, var(--surface));
+    color: var(--text);
+}
+.coverage-areas-accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 8px 0;
+}
+.coverage-area-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface, #fff);
+    overflow: hidden;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.coverage-area-card:hover {
+    border-color: var(--primary-light, #93c5fd);
+}
+.coverage-area-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: var(--surface-subtle, rgba(0, 0, 0, 0.02));
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.95rem;
+    min-height: 48px;
+    gap: 8px;
+    color: var(--text);
+    transition: background-color 0.15s ease;
+}
+.coverage-area-header:hover {
+    background: var(--surface-hover, rgba(0, 0, 0, 0.04));
+}
+.coverage-area-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.coverage-area-chevron {
+    display: inline-block;
+    font-size: 0.75rem;
+    width: 14px;
+    color: var(--text-muted, #6b7280);
+    transition: transform 0.15s ease;
+}
+.coverage-area-name {
+    font-weight: 700;
+    color: var(--text);
+}
+.coverage-area-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--muted-surface, rgba(0, 0, 0, 0.06));
+    color: var(--text-muted, #64748b);
+    white-space: nowrap;
+}
+.coverage-area-badge--selected {
+    background: rgba(37, 99, 235, 0.12);
+    color: #2563eb;
+}
+.coverage-area-body {
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+}
+.coverage-select-all-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--border);
+    margin-bottom: 8px;
+    cursor: pointer;
+    color: var(--text);
+}
+.coverage-societies-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 220px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+.coverage-society-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--text);
+    transition: background-color 0.1s ease;
+}
+.coverage-society-item:hover {
+    background: var(--surface-hover, rgba(0, 0, 0, 0.04));
+}
+.coverage-society-name {
+    flex: 1;
+    min-width: 0;
+}
+.coverage-no-results,
+.coverage-empty-notice {
+    padding: 8px 4px;
+    color: var(--text-muted, #94a3b8);
+    font-style: italic;
+    margin: 0;
+}
+.delivery-coverage-summary {
+    margin-top: 14px;
+    padding: 12px 14px;
+    background: var(--surface-subtle, rgba(0, 0, 0, 0.02));
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+.coverage-summary-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.coverage-summary-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--muted-surface, rgba(0, 0, 0, 0.06));
+    color: var(--text-muted, #64748b);
+}
+.coverage-summary-badge--active {
+    background: rgba(22, 163, 74, 0.12);
+    color: #16a34a;
+}
+.coverage-summary-grouped {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.coverage-summary-group {
+    font-size: 0.85rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+.coverage-summary-area-title {
+    font-weight: 700;
+    color: var(--text);
+}
+.coverage-summary-tags {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.coverage-summary-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(37, 99, 235, 0.08);
+    color: var(--text);
+    border: 1px solid rgba(37, 99, 235, 0.2);
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+}
+.coverage-tag-remove {
+    background: none;
+    border: none;
+    color: var(--text-muted, #64748b);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 2px;
+    display: inline-flex;
+    align-items: center;
+}
+.coverage-tag-remove:hover {
+    color: #ef4444;
+}
+
+[data-theme="dark"] .coverage-area-card {
+    background: var(--surface-card, #1e293b);
+    border-color: var(--border, #334155);
+}
+[data-theme="dark"] .coverage-area-header {
+    background: rgba(255, 255, 255, 0.03);
+}
+[data-theme="dark"] .coverage-area-header:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+[data-theme="dark"] .coverage-area-body {
+    background: var(--surface-card, #1e293b);
+}
+[data-theme="dark"] .coverage-area-badge--selected {
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+}
+[data-theme="dark"] .coverage-summary-badge--active {
+    background: rgba(34, 197, 94, 0.2);
+    color: #4ade80;
+}
+[data-theme="dark"] .coverage-summary-tag {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.35);
+    color: #e2e8f0;
+}
+[data-theme="dark"] .coverage-tag-remove:hover {
+    color: #f87171;
 }
 .seller-reg-society { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
 .seller-auth-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }

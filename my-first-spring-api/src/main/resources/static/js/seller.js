@@ -60,7 +60,53 @@ function sellerServiceSocietyHtml(areaId) {
     if (!rows.length) return '<p class="muted small">No active societies are available in this area.</p>';
     return rows.map(function (society) {
         return '<label class="seller-reg-society"><input type="checkbox" name="serviceSocietyIds" value="' +
-            esc(society.id) + '"> <span>' + esc(society.name) + '</span></label>';
+            esc(society.id) + '" data-area-id="' + esc(areaId) + '"> <span>' + esc(society.name) + '</span></label>';
+    }).join('');
+}
+
+function sellerDeliveryCoverageAccordionHtml() {
+    var areas = S.authOptions || [];
+    if (!areas.length) return '<p class="muted small coverage-empty-notice">No active areas and societies are available.</p>';
+    return areas.map(function (area, index) {
+        var societies = area.societies || [];
+        var isOpen = index === 0;
+        var areaId = esc(area.id);
+        var areaName = esc(area.name);
+        var societiesHtml = '';
+        if (!societies.length) {
+            societiesHtml = '<p class="muted small coverage-empty-notice">No societies available yet in this area.</p>';
+        } else {
+            societiesHtml = societies.map(function (soc) {
+                var isChecked = S.authSelectedSocieties && S.authSelectedSocieties.has(Number(soc.id));
+                return '<label class="seller-reg-society coverage-society-item" data-society-id="' + esc(soc.id) + '" data-society-name="' + esc(soc.name).toLowerCase() + '">' +
+                    '<input type="checkbox" name="serviceSocietyIds" value="' + esc(soc.id) + '" data-area-id="' + areaId + '"' + (isChecked ? ' checked' : '') + '> ' +
+                    '<span class="coverage-society-name">' + esc(soc.name) + '</span>' +
+                    '</label>';
+            }).join('');
+        }
+        return '<div class="coverage-area-card" data-area-id="' + areaId + '">' +
+            '<button type="button" class="coverage-area-header" aria-expanded="' + (isOpen ? 'true' : 'false') + '" data-action="toggle-coverage-area" data-area-id="' + areaId + '">' +
+                '<div class="coverage-area-title-wrap">' +
+                    '<span class="coverage-area-chevron" aria-hidden="true">' + (isOpen ? '▼' : '▶') + '</span> ' +
+                    '<strong class="coverage-area-name">' + areaName + '</strong>' +
+                '</div>' +
+                '<span class="coverage-area-badge" data-badge-area-id="' + areaId + '">Not selected</span>' +
+            '</button>' +
+            '<div class="coverage-area-body" data-body-area-id="' + areaId + '" style="' + (isOpen ? '' : 'display:none;') + '">' +
+                (societies.length ? (
+                    '<div class="coverage-area-search-wrap">' +
+                        '<input type="search" class="form-input form-input-sm coverage-area-search" placeholder="Search societies in ' + areaName + '" data-area-id="' + areaId + '" autocomplete="off">' +
+                    '</div>' +
+                    '<label class="coverage-select-all-label">' +
+                        '<input type="checkbox" class="coverage-select-all" data-area-id="' + areaId + '"> ' +
+                        '<span>Select all societies in ' + areaName + '</span>' +
+                    '</label>'
+                ) : '') +
+                '<div class="coverage-societies-list" data-list-area-id="' + areaId + '">' +
+                    societiesHtml +
+                '</div>' +
+            '</div>' +
+        '</div>';
     }).join('');
 }
 
@@ -164,21 +210,143 @@ async function sellerAuthHtml() {
         '</fieldset>' +
         '<div class="form-group"><label for="sellerRegShort">Short description (optional)</label><textarea class="form-input" id="sellerRegShort" name="shortDescription" maxlength="500"></textarea></div>' +
         '<div class="form-group"><label for="sellerRegInstagram">Instagram URL (optional)</label><input class="form-input" id="sellerRegInstagram" name="instagramLink" type="url" maxlength="255"></div>' +
-        '<div class="form-group"><label for="sellerRegPrimaryArea">Primary area</label><select class="form-input" id="sellerRegPrimaryArea" name="primaryAreaId" required>' +
+        '<fieldset class="seller-reg-coverage seller-location-section">' +
+        '<legend>📍 Your Location / Pickup Address <span class="req">*</span></legend>' +
+        '<p class="muted small mb-2">Where you operate or where orders are collected. This is not your delivery coverage.</p>' +
+        '<div class="form-group"><label for="sellerRegPrimaryArea">Your Area</label><select class="form-input" id="sellerRegPrimaryArea" name="primaryAreaId" required>' +
         sellerAreaOptions(firstArea.id) + '</select></div>' +
-        '<div class="form-group"><label for="sellerRegPrimarySociety">Primary society</label><select class="form-input" id="sellerRegPrimarySociety" name="primarySocietyId" required>' +
+        '<div class="form-group"><label for="sellerRegPrimarySociety">Your Society / Community</label><select class="form-input" id="sellerRegPrimarySociety" name="primarySocietyId" required>' +
         sellerSocietyOptions(firstArea.id) + '</select></div>' +
-        '<div class="form-group"><label for="sellerRegBuilding">Building / wing (optional)</label><input class="form-input" id="sellerRegBuilding" name="building" maxlength="120"></div>' +
-        '<div class="form-group"><label for="sellerRegServiceArea">Service coverage area</label><select class="form-input" id="sellerRegServiceArea" name="serviceAreaId" required>' +
+        '<div class="form-group"><label for="sellerRegBuilding">Building / Flat / Unit (optional)</label><input class="form-input" id="sellerRegBuilding" name="building" maxlength="120"></div>' +
+        '</fieldset>' +
+        '<fieldset class="seller-reg-coverage seller-delivery-coverage-section" id="sellerRegCoverageSection">' +
+        '<legend>🚚 Where do you deliver? / Delivery Coverage <span class="req">*</span></legend>' +
+        '<p class="muted small mb-2">Choose one or more areas, then select the societies you serve.</p>' +
+        '<div class="coverage-global-search-wrap mb-2">' +
+        '<input type="search" class="form-input form-input-sm" id="sellerCoverageGlobalSearch" placeholder="Search all areas and societies..." autocomplete="off">' +
+        '</div>' +
+        '<div class="form-group mb-2"><label for="sellerRegServiceArea">Quick jump to area</label><select class="form-input" id="sellerRegServiceArea" name="serviceAreaId">' +
         sellerAreaOptions(firstArea.id) + '</select></div>' +
-        '<fieldset class="seller-reg-coverage"><legend>Societies you will serve</legend><div id="sellerRegSocieties">' +
-        sellerServiceSocietyHtml(firstArea.id) + '</div></fieldset>' +
+        '<div id="sellerRegSocieties" class="coverage-areas-accordion">' +
+        sellerDeliveryCoverageAccordionHtml() + '</div>' +
+        '<div class="delivery-coverage-summary" id="sellerCoverageSummary">' +
+        '<div class="coverage-summary-head">' +
+        '<strong>Selected societies</strong>' +
+        '<span class="coverage-summary-badge" id="coverageSummaryCount">No societies selected</span>' +
+        '</div>' +
+        '<div class="coverage-summary-grouped" id="coverageSummaryGrouped"></div>' +
+        '</div>' +
+        '</fieldset>' +
         '<p class="muted small">New seller accounts remain pending until Admin approval. This demo password is not production authentication.</p>' +
         '<button class="btn btn-primary btn-block" type="submit">Submit seller application</button>' +
         '<button class="btn btn-secondary btn-block mt-2" type="button" data-action="seller-show-login">Back to sign in</button>' +
         '</form>';
     return '<div class="login-wrap"><section class="admin-login seller-auth-card seller-registration-card">' +
         '<div class="al-brand">🏪 Seller registration</div>' + form + '</section></div>';
+}
+
+function syncCoverageSelectionUI(form) {
+    if (!form) return;
+    var areas = S.authOptions || [];
+    var checkedBoxes = Array.from(form.querySelectorAll('input[name="serviceSocietyIds"]:checked'));
+    var checkedIds = new Set(checkedBoxes.map(function (cb) { return Number(cb.value); }));
+    S.authSelectedSocieties = checkedIds;
+
+    var selectedMap = {};
+    var totalSelected = 0;
+
+    areas.forEach(function (area) {
+        var areaId = String(area.id);
+        var societies = area.societies || [];
+        var areaChecked = 0;
+        var selectedInArea = [];
+
+        societies.forEach(function (soc) {
+            if (checkedIds.has(Number(soc.id))) {
+                areaChecked++;
+                selectedInArea.push(soc);
+            }
+        });
+
+        if (selectedInArea.length) {
+            selectedMap[area.name] = selectedInArea;
+            totalSelected += selectedInArea.length;
+        }
+
+        var badge = form.querySelector('[data-badge-area-id="' + areaId + '"]');
+        if (badge) {
+            if (areaChecked === 0) {
+                badge.textContent = 'Not selected';
+                badge.className = 'coverage-area-badge';
+            } else if (societies.length > 0 && areaChecked === societies.length) {
+                badge.textContent = 'All societies';
+                badge.className = 'coverage-area-badge coverage-area-badge--selected';
+            } else {
+                badge.textContent = areaChecked + ' selected';
+                badge.className = 'coverage-area-badge coverage-area-badge--selected';
+            }
+        }
+
+        var selectAll = form.querySelector('.coverage-select-all[data-area-id="' + areaId + '"]');
+        if (selectAll && societies.length > 0) {
+            if (areaChecked === 0) {
+                selectAll.checked = false;
+                selectAll.indeterminate = false;
+            } else if (areaChecked === societies.length) {
+                selectAll.checked = true;
+                selectAll.indeterminate = false;
+            } else {
+                selectAll.checked = false;
+                selectAll.indeterminate = true;
+            }
+        }
+    });
+
+    var countBadge = form.querySelector('#coverageSummaryCount');
+    var areaCount = Object.keys(selectedMap).length;
+    if (countBadge) {
+        if (totalSelected === 0) {
+            countBadge.textContent = 'No societies selected';
+            countBadge.className = 'coverage-summary-badge';
+        } else if (totalSelected === 1) {
+            countBadge.textContent = '1 society selected in 1 area';
+            countBadge.className = 'coverage-summary-badge coverage-summary-badge--active';
+        } else if (areaCount === 1) {
+            countBadge.textContent = totalSelected + ' societies selected in 1 area';
+            countBadge.className = 'coverage-summary-badge coverage-summary-badge--active';
+        } else {
+            countBadge.textContent = totalSelected + ' societies selected across ' + areaCount + ' areas';
+            countBadge.className = 'coverage-summary-badge coverage-summary-badge--active';
+        }
+    }
+
+    var groupedContainer = form.querySelector('#coverageSummaryGrouped');
+    if (groupedContainer) {
+        if (totalSelected === 0) {
+            groupedContainer.innerHTML = '<p class="muted small" style="margin:4px 0 0;">No delivery societies chosen yet. Expand areas above to select societies.</p>';
+        } else {
+            var html = '';
+            Object.keys(selectedMap).forEach(function (areaName) {
+                var socs = selectedMap[areaName];
+                html += '<div class="coverage-summary-group">' +
+                    '<span class="coverage-summary-area-title">' + esc(areaName) + ':</span> ' +
+                    '<div class="coverage-summary-tags">' +
+                    socs.map(function (s) {
+                        return '<span class="coverage-summary-tag">' + esc(s.name) +
+                            ' <button type="button" class="coverage-tag-remove" data-action="remove-coverage-society" data-society-id="' + esc(s.id) + '" title="Remove ' + esc(s.name) + '">×</button></span>';
+                    }).join(' ') +
+                    '</div></div>';
+            });
+            groupedContainer.innerHTML = html;
+        }
+    }
+
+    var serviceAreaSelect = form.querySelector('#sellerRegServiceArea');
+    if (serviceAreaSelect && areaCount === 1) {
+        var singleAreaName = Object.keys(selectedMap)[0];
+        var matchedArea = areas.find(function (a) { return a.name === singleAreaName; });
+        if (matchedArea) serviceAreaSelect.value = String(matchedArea.id);
+    }
 }
 
 function bindSellerAuth(view) {
@@ -198,10 +366,151 @@ function bindSellerAuth(view) {
         society.innerHTML = sellerSocietyOptions(primaryArea.value);
     });
     var serviceArea = view.querySelector('#sellerRegServiceArea');
-    serviceArea.addEventListener('change', function () {
-        S.authServiceAreaId = serviceArea.value;
-        view.querySelector('#sellerRegSocieties').innerHTML = sellerServiceSocietyHtml(serviceArea.value);
+    if (serviceArea) {
+        serviceArea.addEventListener('change', function () {
+            var targetAreaId = serviceArea.value;
+            var targetCard = registrationForm.querySelector('.coverage-area-card[data-area-id="' + targetAreaId + '"]');
+            if (targetCard) {
+                var body = targetCard.querySelector('.coverage-area-body');
+                var chevron = targetCard.querySelector('.coverage-area-chevron');
+                var toggleBtn = targetCard.querySelector('.coverage-area-header');
+                if (body) body.style.display = '';
+                if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
+                if (chevron) chevron.textContent = '▼';
+                targetCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        });
+    }
+
+    registrationForm.addEventListener('click', function (e) {
+        var toggleBtn = e.target.closest('[data-action="toggle-coverage-area"]');
+        if (toggleBtn) {
+            e.preventDefault();
+            var areaId = toggleBtn.getAttribute('data-area-id');
+            var card = toggleBtn.closest('.coverage-area-card');
+            var body = card ? card.querySelector('.coverage-area-body') : null;
+            var chevron = toggleBtn.querySelector('.coverage-area-chevron');
+            if (body) {
+                var isHidden = body.style.display === 'none';
+                body.style.display = isHidden ? '' : 'none';
+                toggleBtn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+                if (chevron) chevron.textContent = isHidden ? '▼' : '▶';
+            }
+            return;
+        }
+
+        var removeBtn = e.target.closest('[data-action="remove-coverage-society"]');
+        if (removeBtn) {
+            e.preventDefault();
+            var socId = removeBtn.getAttribute('data-society-id');
+            var cb = registrationForm.querySelector('input[name="serviceSocietyIds"][value="' + socId + '"]');
+            if (cb) {
+                cb.checked = false;
+                syncCoverageSelectionUI(registrationForm);
+            }
+            return;
+        }
     });
+
+    registrationForm.addEventListener('change', function (e) {
+        if (e.target.classList.contains('coverage-select-all')) {
+            var areaId = e.target.getAttribute('data-area-id');
+            var isChecked = e.target.checked;
+            var cbs = registrationForm.querySelectorAll('input[name="serviceSocietyIds"][data-area-id="' + areaId + '"]');
+            cbs.forEach(function (cb) {
+                cb.checked = isChecked;
+            });
+            syncCoverageSelectionUI(registrationForm);
+            return;
+        }
+
+        if (e.target.name === 'serviceSocietyIds') {
+            syncCoverageSelectionUI(registrationForm);
+            return;
+        }
+    });
+
+    registrationForm.addEventListener('input', function (e) {
+        if (e.target.classList.contains('coverage-area-search')) {
+            var areaId = e.target.getAttribute('data-area-id');
+            var term = e.target.value.trim().toLowerCase();
+            var list = registrationForm.querySelector('.coverage-societies-list[data-list-area-id="' + areaId + '"]');
+            if (list) {
+                var items = list.querySelectorAll('.coverage-society-item');
+                var visibleCount = 0;
+                items.forEach(function (item) {
+                    var sName = item.getAttribute('data-society-name') || '';
+                    var matches = !term || sName.includes(term);
+                    item.style.display = matches ? 'flex' : 'none';
+                    if (matches) visibleCount++;
+                });
+                var existingNoRes = list.querySelector('.coverage-no-results');
+                if (visibleCount === 0) {
+                    if (!existingNoRes) {
+                        var noRes = document.createElement('p');
+                        noRes.className = 'muted small coverage-no-results';
+                        noRes.style.padding = '6px 0';
+                        noRes.textContent = 'No societies found';
+                        list.appendChild(noRes);
+                    }
+                } else if (existingNoRes) {
+                    existingNoRes.remove();
+                }
+            }
+            return;
+        }
+
+        if (e.target.id === 'sellerCoverageGlobalSearch') {
+            var globalTerm = e.target.value.trim().toLowerCase();
+            var cards = registrationForm.querySelectorAll('.coverage-area-card');
+            cards.forEach(function (card) {
+                var body = card.querySelector('.coverage-area-body');
+                var chevron = card.querySelector('.coverage-area-chevron');
+                var toggleBtn = card.querySelector('.coverage-area-header');
+                var items = card.querySelectorAll('.coverage-society-item');
+                var cardMatches = 0;
+
+                items.forEach(function (item) {
+                    var sName = item.getAttribute('data-society-name') || '';
+                    var matches = !globalTerm || sName.includes(globalTerm);
+                    item.style.display = matches ? 'flex' : 'none';
+                    if (matches) cardMatches++;
+                });
+
+                var list = card.querySelector('.coverage-societies-list');
+                var existingNoRes = list ? list.querySelector('.coverage-no-results') : null;
+                if (globalTerm && cardMatches === 0) {
+                    if (list && !existingNoRes) {
+                        var noRes = document.createElement('p');
+                        noRes.className = 'muted small coverage-no-results';
+                        noRes.style.padding = '6px 0';
+                        noRes.textContent = 'No societies found';
+                        list.appendChild(noRes);
+                    }
+                } else if (existingNoRes) {
+                    existingNoRes.remove();
+                }
+
+                if (globalTerm) {
+                    if (cardMatches > 0) {
+                        card.style.display = '';
+                        if (body) body.style.display = '';
+                        if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
+                        if (chevron) chevron.textContent = '▼';
+                    } else {
+                        if (body) body.style.display = 'none';
+                        if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
+                        if (chevron) chevron.textContent = '▶';
+                    }
+                } else {
+                    card.style.display = '';
+                }
+            });
+            return;
+        }
+    });
+
+    syncCoverageSelectionUI(registrationForm);
     var kitchenName = view.querySelector('#sellerRegKitchen');
     var slug = view.querySelector('#sellerRegSlug');
     var slugHint = view.querySelector('#sellerRegSlugHint');
@@ -315,8 +624,8 @@ async function sellerRegistrationSubmit(event) {
     var button = form.querySelector('button[type="submit"]');
     if (S.regSubmitting || button.disabled) return;
     var alertBox = form.parentElement.querySelector('#sellerRegAlert') || form.querySelector('#sellerRegAlert');
-    var serviceIds = Array.from(form.querySelectorAll('input[name="serviceSocietyIds"]:checked'))
-        .map(function (input) { return Number(input.value); });
+    var checkedInputs = Array.from(form.querySelectorAll('input[name="serviceSocietyIds"]:checked'));
+    var serviceIds = Array.from(new Set(checkedInputs.map(function (input) { return Number(input.value); })));
     if (!serviceIds.length) {
         if (alertBox) {
             alertBox.className = 'seller-auth-alert seller-auth-alert--error';
@@ -334,6 +643,17 @@ async function sellerRegistrationSubmit(event) {
     button.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span> Submitting application...';
     if (alertBox) { alertBox.style.display = 'none'; alertBox.innerHTML = ''; }
     try {
+        var areas = S.authOptions || [];
+        var coveredAreaIds = new Set();
+        areas.forEach(function (a) {
+            (a.societies || []).forEach(function (s) {
+                if (serviceIds.includes(Number(s.id))) coveredAreaIds.add(Number(a.id));
+            });
+        });
+        var sendServiceAreaId = coveredAreaIds.size === 1
+            ? Array.from(coveredAreaIds)[0]
+            : (form.elements.serviceAreaId && form.elements.serviceAreaId.value ? Number(form.elements.serviceAreaId.value) : null);
+
         var session = await api('/api/auth/register/seller', { method: 'POST', body: {
             sellerName: form.elements.sellerName.value.trim(),
             mobileNumber: form.elements.mobileNumber.value.trim(),
@@ -353,7 +673,7 @@ async function sellerRegistrationSubmit(event) {
             upiId: form.elements.upiId.disabled ? null : form.elements.upiId.value.trim(),
             gpayIdentifierType: form.elements.gpayIdentifierType.disabled ? null : form.elements.gpayIdentifierType.value,
             gpayIdentifier: form.elements.gpayIdentifier.disabled ? null : form.elements.gpayIdentifier.value.trim(),
-            serviceAreaId: Number(form.elements.serviceAreaId.value),
+            serviceAreaId: sendServiceAreaId,
             serviceSocietyIds: serviceIds
         } });
         S.regSubmitting = false;
