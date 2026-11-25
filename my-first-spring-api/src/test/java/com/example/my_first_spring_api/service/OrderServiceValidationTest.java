@@ -459,10 +459,10 @@ class OrderServiceValidationTest {
         OrderDto placedDto = orderService.placeOrder(PaymentStatus.PENDING, "COD", details, "Leave at door", httpSession);
 
         InOrder locks = inOrder(productRepository, userRepository, kitchenRepository);
-        locks.verify(userRepository).findByIdForUpdate(20L);
+        locks.verify(kitchenRepository).findByIdForUpdate(1L);
         locks.verify(productRepository).findByIdForUpdate(1L);
         locks.verify(userRepository).findByIdForUpdate(10L);
-        locks.verify(kitchenRepository).findByIdForUpdate(1L);
+        locks.verify(userRepository).findByIdForUpdate(20L);
         assertThat(placedDto).isNotNull();
         assertThat(placedDto.getId()).isEqualTo(100L);
         assertThat(placedDto.getOrderNumber()).isNotBlank();

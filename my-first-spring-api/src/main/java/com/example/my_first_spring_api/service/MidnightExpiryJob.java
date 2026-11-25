@@ -44,6 +44,9 @@ public class MidnightExpiryJob {
     private final OccurrenceRepository occurrenceRepository;
     private final RecurringScheduleRepository scheduleRepository;
 
+    @Autowired(required = false)
+    private DistributedLockService lockService;
+
     @Autowired
     public MidnightExpiryJob(OccurrenceRepository occurrenceRepository,
                              RecurringScheduleRepository scheduleRepository) {
@@ -73,13 +76,23 @@ public class MidnightExpiryJob {
     @Scheduled(cron = "0 0 0 * * ?", zone = "Asia/Kolkata")
     @Transactional
     public void expireAndActivateOccurrences() {
-        LocalDate today = LocalDate.now(AppTimeZone.ZONE);
-        log.info("Midnight expiry job running for date {}", today);
+        if (lockService != null && !lockService.tryLock("midnight_expiry_job", java.time.Duration.ofMinutes(15))) {
+            log.info("Midnight expiry job skipped on this instance: lock held by another cluster node.");
+            return;
+        }
+        try {
+            LocalDate today = LocalDate.now(AppTimeZone.ZONE);
+            log.info("Midnight expiry job running for date {}", today);
 
-        expirePastOccurrences(today);
-        activateScheduledOccurrences(today);
+            expirePastOccurrences(today);
+            activateScheduledOccurrences(today);
 
-        log.info("Midnight expiry job completed for date {}", today);
+            log.info("Midnight expiry job completed for date {}", today);
+        } finally {
+            if (lockService != null) {
+                lockService.unlock("midnight_expiry_job");
+            }
+        }
     }
 
     /**

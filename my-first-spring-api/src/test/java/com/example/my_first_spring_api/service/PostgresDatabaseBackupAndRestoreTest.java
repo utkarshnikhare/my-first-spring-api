@@ -111,9 +111,9 @@ class PostgresDatabaseBackupAndRestoreTest {
     @DisplayName("NATIVE PG16: Full pg_dump export, AES-256 encryption, checksum tamper detection, and isolated pg_restore")
     void nativePostgres16BackupAndIsolatedRestoreVerification() throws Exception {
         // ---------------------------------------------------------------------
-        // STEP 1: Verify Flyway V28 on Source PostgreSQL Database
+        // STEP 1: Verify Flyway V29 on Source PostgreSQL Database
         // ---------------------------------------------------------------------
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("28");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("29");
 
         // ---------------------------------------------------------------------
         // STEP 2: Seed Representative Production-Like Business Data
@@ -277,19 +277,19 @@ class PostgresDatabaseBackupAndRestoreTest {
         // 1. Verify Flyway migration history in restored database
         Integer flywayCount = targetJdbc.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(flywayCount).as("All 28 Flyway migrations must be marked success").isGreaterThanOrEqualTo(28);
+        assertThat(flywayCount).as("All 29 Flyway migrations must be marked success").isGreaterThanOrEqualTo(29);
 
         String latestMigrationVersion = targetJdbc.queryForObject(
                 "SELECT version FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 1", String.class);
-        assertThat(latestMigrationVersion).isEqualTo("28");
+        assertThat(latestMigrationVersion).isEqualTo("29");
 
-        // 2. Verify all 26 business tables + Spring Session exist in restored database
+        // 2. Verify all 26 business tables + Spring Session + 2 cluster tables exist in restored database
         Integer tableCount = targetJdbc.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
                         + "WHERE table_schema = 'public' AND table_type = 'BASE TABLE' "
                         + "AND table_name <> 'flyway_schema_history'",
                 Integer.class);
-        assertThat(tableCount).isEqualTo(28); // 26 business + 2 Spring Session
+        assertThat(tableCount).isEqualTo(30); // 26 business + 2 Spring Session + 2 cluster tables
 
         // 3. Verify Foreign Key constraints exist
         Integer fkCount = targetJdbc.queryForObject(

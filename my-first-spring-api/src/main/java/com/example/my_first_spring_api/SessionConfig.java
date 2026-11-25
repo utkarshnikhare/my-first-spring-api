@@ -39,7 +39,8 @@ public class SessionConfig {
         serializer.setUseBase64Encoding(false);
         // Mirrors server.servlet.session.cookie.same-site=lax.
         serializer.setSameSite("Lax");
-        // No explicit max-age: this stays a browser session cookie, as before.
+        // 7-day persistent session cookie (604800s), mirroring server.servlet.session.timeout=7d
+        serializer.setCookieMaxAge((int) java.time.Duration.ofDays(7).toSeconds());
         return serializer;
     }
 }

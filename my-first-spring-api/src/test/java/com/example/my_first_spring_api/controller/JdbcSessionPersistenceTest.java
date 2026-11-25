@@ -128,7 +128,7 @@ class JdbcSessionPersistenceTest {
         assertThat(session).isNotNull();
         Object securityContext = session.getAttribute("SPRING_SECURITY_CONTEXT");
         assertThat(securityContext).isNotNull();
-        assertThat(session.getMaxInactiveInterval().getSeconds()).isEqualTo(30 * 60);
+        assertThat(session.getMaxInactiveInterval().getSeconds()).isEqualTo(7 * 24 * 60 * 60);
     }
 
     @Test
@@ -148,12 +148,12 @@ class JdbcSessionPersistenceTest {
     }
 
     @Test
-    void sessionCookieIsSecureSameSiteLaxAndTimeoutIsThirtyMinutes() throws Exception {
+    void sessionCookieIsSecureSameSiteLaxAndTimeoutIsSevenDays() throws Exception {
         // The pre-Phase-E container cookie carried Secure + SameSite=Lax; the
         // Spring Session cookie must carry exactly the same flags.
         assertThat(environment.getProperty("server.servlet.session.cookie.secure")).isEqualTo("true");
         assertThat(environment.getProperty("server.servlet.session.cookie.same-site")).isEqualTo("lax");
-        assertThat(environment.getProperty("server.servlet.session.timeout")).isEqualTo("30m");
+        assertThat(environment.getProperty("server.servlet.session.timeout")).isEqualTo("7d");
 
         String mobile = uniqueMobile();
         registerBuyer(mobile);
@@ -167,15 +167,15 @@ class JdbcSessionPersistenceTest {
         assertThat(setCookie).contains("Path=/");
         assertThat(setCookie).contains("HttpOnly");
 
-        // The effective timeout is what the persisted session enforces...
+        // The effective timeout is what the persisted session enforces (7 days = 604800s)...
         Integer maxInactive = jdbcTemplate.queryForObject(
                 "SELECT MAX_INACTIVE_INTERVAL FROM SPRING_SESSION WHERE SESSION_ID = ?",
                 Integer.class, cookie.getValue());
-        assertThat(maxInactive).isEqualTo(30 * 60);
+        assertThat(maxInactive).isEqualTo(7 * 24 * 60 * 60);
         // ...and what a recovered session reports.
         Session probe = sessionRepository.findById(cookie.getValue());
         assertThat(probe).isNotNull();
-        assertThat(probe.getMaxInactiveInterval().getSeconds()).isEqualTo(30 * 60);
+        assertThat(probe.getMaxInactiveInterval().getSeconds()).isEqualTo(7 * 24 * 60 * 60);
     }
 
     @Test

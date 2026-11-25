@@ -77,8 +77,8 @@ class PostgresNativeMigrationTest {
         // V19 adds seller-configurable payment methods; V20 adds seller-verified
         // payment states without rewriting historical orders; V21 stores an
         // immutable, non-sensitive payment configuration snapshot per placed order;
-        // V28 adds enterprise scalability and multi-society performance indexes.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("28");
+        // V29 adds cluster locks and persistent rate limits.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("29");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
@@ -86,7 +86,7 @@ class PostgresNativeMigrationTest {
                         + "AND table_name <> 'flyway_schema_history' "
                         + "AND LOWER(table_name) NOT LIKE 'spring_session%'",
                 Integer.class);
-        assertThat(tableCount).isEqualTo(26);
+        assertThat(tableCount).isEqualTo(28); // 26 business entities + 2 cluster infrastructure tables (V29)
 
         Integer emailColumnCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.columns "

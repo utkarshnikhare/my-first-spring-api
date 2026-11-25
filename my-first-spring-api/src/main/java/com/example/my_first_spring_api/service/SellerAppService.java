@@ -120,26 +120,42 @@ public class SellerAppService {
     // ==================== INVENTORY CONTROL ====================
 
     private Product requireOwnedProductForUpdate(Long productId, User seller) {
-        Product product = productRepository.findByIdForUpdate(productId)
+        Product candidate = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId));
-        if (product.getKitchen() == null || product.getKitchen().getSeller() == null
-                || !product.getKitchen().getSeller().getId().equals(seller.getId())) {
+        if (candidate.getKitchen() == null || candidate.getKitchen().getSeller() == null
+                || !candidate.getKitchen().getSeller().getId().equals(seller.getId())) {
             throw new SellerNotAuthorizedException("Not your product");
         }
-        if (product.isArchived()) throw new IllegalArgumentException("Archived offerings cannot be changed.");
+        if (candidate.isArchived()) throw new IllegalArgumentException("Archived offerings cannot be changed.");
+
+        // Canonical global lock acquisition order:
+        // 1. Kitchen (by ID)
+        // 2. Product (by ID)
+        // 3. User / Owner (by ID)
+        // Harmonized with OrderService to eliminate circular wait deadlocks.
+        Long kitchenId = candidate.getKitchen().getId();
+        kitchenRepository.findByIdForUpdate(kitchenId)
+                .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
+        Product product = productRepository.findByIdForUpdate(productId)
+                .orElseThrow(() -> new ProductNotFoundException(productId));
+        User owner = product.getKitchen().getSeller();
+        if (owner != null && owner.getId() != null) {
+            userRepository.findByIdForUpdate(owner.getId())
+                    .orElseThrow(() -> new SellerNotAuthorizedException("The offering's seller is unavailable."));
+        }
         return product;
     }
 
     private void refreshStorefrontForUpdate(Kitchen kitchen) {
+        // Enforce canonical order: Kitchen -> User/Owner without redundant entity refresh round-trips
+        if (kitchen == null || kitchen.getId() == null) return;
+        kitchenRepository.findByIdForUpdate(kitchen.getId())
+                .orElseThrow(() -> new KitchenNotFoundException(kitchen.getId()));
         User owner = kitchen.getSeller();
         if (owner != null && owner.getId() != null) {
-            User lockedOwner = userRepository.findByIdForUpdate(owner.getId())
+            userRepository.findByIdForUpdate(owner.getId())
                     .orElseThrow(() -> new SellerNotAuthorizedException("The offering's seller is unavailable."));
-            entityManager.refresh(lockedOwner, LockModeType.PESSIMISTIC_WRITE);
         }
-        Kitchen lockedKitchen = kitchenRepository.findByIdForUpdate(kitchen.getId())
-                .orElseThrow(() -> new KitchenNotFoundException(kitchen.getId()));
-        entityManager.refresh(lockedKitchen, LockModeType.PESSIMISTIC_WRITE);
     }
 
     @Transactional
