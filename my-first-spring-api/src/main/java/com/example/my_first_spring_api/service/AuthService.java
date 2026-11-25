@@ -26,7 +26,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 @Service
 public class AuthService {
@@ -93,7 +97,28 @@ public class AuthService {
                 gpayIdentifierType, request.getGpayIdentifier());
         Area primaryArea = requireActiveArea(request.getPrimaryAreaId());
         Society primarySociety = requireActiveSociety(request.getPrimarySocietyId(), primaryArea);
-        Area serviceArea = requireActiveArea(request.getServiceAreaId());
+
+        List<Long> serviceSocietyIds = request.getServiceSocietyIds();
+        if (serviceSocietyIds == null || serviceSocietyIds.isEmpty()) {
+            throw new IllegalArgumentException("Select at least one society for delivery coverage.");
+        }
+        Set<Long> uniqueSocietyIds = new LinkedHashSet<>();
+        for (Long socId : serviceSocietyIds) {
+            if (socId == null) continue;
+            Society s = locations.findSociety(socId)
+                    .orElseThrow(() -> new IllegalArgumentException("Unknown community selected for delivery coverage."));
+            if (!s.isActive()) {
+                throw new IllegalArgumentException("Community \"" + s.getName() + "\" is no longer available.");
+            }
+            if (s.getArea() == null || !s.getArea().isActive()) {
+                throw new IllegalArgumentException("Area for community \"" + s.getName() + "\" is not active.");
+            }
+            uniqueSocietyIds.add(socId);
+        }
+        if (uniqueSocietyIds.isEmpty()) {
+            throw new IllegalArgumentException("Select at least one society for delivery coverage.");
+        }
+
         // The public URL is generated and reserved server-side (never trusted from
         // the browser): the seller's requested slug is normalised, then reserved
         // against the DB unique constraint inside createKitchen, which appends
@@ -129,8 +154,18 @@ public class AuthService {
         kitchen.setUpiId(clean(request.getUpiId()));
         kitchen.setGpayIdentifierType(gpayIdentifierType == null ? null : gpayIdentifierType.name());
         kitchen.setGpayIdentifier(clean(request.getGpayIdentifier()));
-        kitchen.setAreaId(serviceArea.getId());
-        kitchen.setSocietyIds(request.getServiceSocietyIds());
+        Long explicitServiceAreaId = request.getServiceAreaId();
+        if (explicitServiceAreaId != null) {
+            Area explicitArea = locations.findArea(explicitServiceAreaId).orElse(null);
+            boolean allInArea = explicitArea != null && explicitArea.isActive() && uniqueSocietyIds.stream().allMatch(id -> {
+                Society s = locations.findSociety(id).orElse(null);
+                return s != null && s.getArea() != null && explicitArea.getId().equals(s.getArea().getId());
+            });
+            kitchen.setAreaId(allInArea ? explicitServiceAreaId : null);
+        } else {
+            kitchen.setAreaId(null);
+        }
+        kitchen.setSocietyIds(new ArrayList<>(uniqueSocietyIds));
         KitchenDto created = sellerService.createKitchen(kitchen, seller);
         String reservedSlug = created.getName();
         // Audit the slug reservation against the seller application (Step 7). The

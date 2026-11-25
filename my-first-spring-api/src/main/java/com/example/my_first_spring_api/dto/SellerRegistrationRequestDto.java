@@ -61,10 +61,14 @@ public class SellerRegistrationRequestDto {
     @Size(max = 120)
     private String building;
 
-    @NotNull
+    /**
+     * Optional single service area ID for backward compatibility.
+     * When delivery coverage spans multiple areas, this is omitted/null and
+     * {@link #serviceSocietyIds} represents the authoritative multi-area society coverage.
+     */
     private Long serviceAreaId;
 
-    @NotEmpty
+    @NotEmpty(message = "Select at least one society you will serve.")
     private List<@NotNull Long> serviceSocietyIds;
 
     @NotBlank
