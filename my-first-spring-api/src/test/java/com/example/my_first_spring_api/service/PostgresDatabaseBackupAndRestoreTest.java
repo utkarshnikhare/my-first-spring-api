@@ -111,9 +111,9 @@ class PostgresDatabaseBackupAndRestoreTest {
     @DisplayName("NATIVE PG16: Full pg_dump export, AES-256 encryption, checksum tamper detection, and isolated pg_restore")
     void nativePostgres16BackupAndIsolatedRestoreVerification() throws Exception {
         // ---------------------------------------------------------------------
-        // STEP 1: Verify Flyway V27 on Source PostgreSQL Database
+        // STEP 1: Verify Flyway V28 on Source PostgreSQL Database
         // ---------------------------------------------------------------------
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("27");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("28");
 
         // ---------------------------------------------------------------------
         // STEP 2: Seed Representative Production-Like Business Data
@@ -277,11 +277,11 @@ class PostgresDatabaseBackupAndRestoreTest {
         // 1. Verify Flyway migration history in restored database
         Integer flywayCount = targetJdbc.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(flywayCount).as("All 27 Flyway migrations must be marked success").isGreaterThanOrEqualTo(27);
+        assertThat(flywayCount).as("All 28 Flyway migrations must be marked success").isGreaterThanOrEqualTo(28);
 
         String latestMigrationVersion = targetJdbc.queryForObject(
                 "SELECT version FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 1", String.class);
-        assertThat(latestMigrationVersion).isEqualTo("27");
+        assertThat(latestMigrationVersion).isEqualTo("28");
 
         // 2. Verify all 26 business tables + Spring Session exist in restored database
         Integer tableCount = targetJdbc.queryForObject(

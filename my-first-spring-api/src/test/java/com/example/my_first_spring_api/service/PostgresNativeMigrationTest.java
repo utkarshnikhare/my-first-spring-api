@@ -76,8 +76,9 @@ class PostgresNativeMigrationTest {
         // V18 adds the nullable Quick Post retry key and uniqueness constraint;
         // V19 adds seller-configurable payment methods; V20 adds seller-verified
         // payment states without rewriting historical orders; V21 stores an
-        // immutable, non-sensitive payment configuration snapshot per placed order.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("27");
+        // immutable, non-sensitive payment configuration snapshot per placed order;
+        // V28 adds enterprise scalability and multi-society performance indexes.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("28");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
