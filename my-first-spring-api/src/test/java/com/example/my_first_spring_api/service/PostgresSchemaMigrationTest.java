@@ -53,8 +53,9 @@ class PostgresSchemaMigrationTest {
         // V16 adds Quick Post metadata; V17 repairs missing payment_method;
         // V18 adds a nullable Quick Post retry key and its uniqueness constraint;
         // V19 adds seller-configurable payment methods; V20 adds seller-verified
-        // payment states without rewriting historical orders.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("27");
+        // payment states without rewriting historical orders;
+        // V28 adds enterprise scalability and multi-society performance indexes.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("28");
 
         Integer tableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables "
@@ -174,7 +175,7 @@ class PostgresSchemaMigrationTest {
                 Integer.class);
         Assertions.assertNotNull(paymentMethodColumnCount);
         assertThat(paymentMethodColumnCount).isEqualTo(1);
-        assertThat(repair.info().current().getVersion().getVersion()).isEqualTo("27");
+        assertThat(repair.info().current().getVersion().getVersion()).isEqualTo("28");
     }
 
 }

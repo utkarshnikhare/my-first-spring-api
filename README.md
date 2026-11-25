@@ -21,9 +21,13 @@
 For complete technical and operational details, refer to the documentation suite in [`docs/`](./docs/):
 
 - 🏛️ [**System Architecture**](./docs/ARCHITECTURE.md): Frontend, backend, database, session persistence, and API proxy design.
+- 📐 [**Architecture Decision Records (ADRs)**](./docs/adr/): Formal decisions on modular monolith, dual-backend evaluation, multi-society isolation, and concurrency.
+- 📈 [**Scalability & Capacity Planning**](./docs/SCALABILITY.md): 1,000+ concurrent active user capacity forecast, RPS, connections, memory, and cost scaling.
+- 🛡️ [**Disaster Recovery & Continuity**](./docs/DISASTER_RECOVERY.md): RPO/RTO targets, automated backup pipelines, and tested restoration procedures.
+- 📋 [**Operational Runbooks**](./docs/RUNBOOKS.md): Incident handling for 504 timeouts, connection pool exhaustion, and emergency rollbacks.
 - 📁 [**Project Structure**](./docs/PROJECT_STRUCTURE.md): Comprehensive repository directory layout and component classification.
 - 🔌 [**REST API Reference**](./docs/API_REFERENCE.md): Full specification for all 182 supported endpoints.
-- 🗄️ [**Database Architecture**](./docs/DATABASE.md): Schema models, Flyway migrations (V1–V27), and indexing strategy.
+- 🗄️ [**Database Architecture**](./docs/DATABASE.md): Schema models, Flyway migrations (V1–V28), and indexing strategy.
 - 💻 [**Developer Onboarding & Setup**](./docs/DEVELOPMENT.md): Local environment setup, H2 console, and debugging.
 - 🚀 [**Deployment Runbook**](./docs/DEPLOYMENT.md): Netlify frontend, Render backend, and rollback procedures.
 - 🔒 [**Security Architecture**](./docs/SECURITY.md): RBAC, session isolation, formula injection defense, and CSP.

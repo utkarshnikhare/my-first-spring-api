@@ -4,6 +4,32 @@ All notable changes to the SocioMart platform are documented in this file.
 
 ---
 
+## [v4.2.0] - 2026-11-25 (Enterprise Architecture Hardening)
+
+### Added
+- **Flyway Migration `V28__enterprise_scalability_indexes.sql`**:
+  - `idx_kitchen_served_societies_society`: Accelerates buyer multi-society discovery to `O(log N)` index seeks.
+  - `idx_products_available_today_created`: Optimizes hot marketplace active offering queries without scanning archived items.
+  - `idx_users_role_approved`: Accelerates admin seller onboarding and user moderation queries.
+  - `idx_orders_status_composite`: High-performance compound index for seller earnings and active order status queries.
+- **Enterprise Architectural Decision Records (ADRs)** in `docs/adr/`:
+  - `ADR-001-modular-monolith-vs-microservices.md`
+  - `ADR-002-dual-backend-evaluation-and-netlify-independence.md`
+  - `ADR-003-multi-society-data-isolation-and-authorization.md`
+  - `ADR-004-concurrency-and-transaction-pool-routing.md`
+  - `ADR-005-database-indexing-and-capacity-scaling.md`
+- **Scalability, Disaster Recovery & Operational Runbooks**:
+  - `docs/SCALABILITY.md`: Capacity forecast for 1k to 100k users, RPS, connections, and cost models.
+  - `docs/DISASTER_RECOVERY.md`: RPO (<1hr) and RTO (<15min) specifications, backup architectures, and restoration runbooks.
+  - `docs/RUNBOOKS.md`: Operational incident response for 504 timeouts, connection pool exhaustion, and emergency rollbacks.
+
+### Verified
+- Zero regressions across existing Buyer, Seller, and Admin functional journeys.
+- Concurrency and transactional isolation verified via pessimistic write locking and Hikari pool routing.
+- Multi-area delivery coverage confirmed operational across both Netlify and Render.
+
+---
+
 ## [Unreleased] - `feature/complete-project-cleanup`
 
 ### Added
