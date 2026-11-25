@@ -86,7 +86,7 @@ class PostgresNativeMigrationTest {
                         + "AND table_name <> 'flyway_schema_history' "
                         + "AND LOWER(table_name) NOT LIKE 'spring_session%'",
                 Integer.class);
-        assertThat(tableCount).isEqualTo(26);
+        assertThat(tableCount).isEqualTo(28); // 26 business entities + 2 cluster infrastructure tables (V29)
 
         Integer emailColumnCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.columns "
