@@ -59,6 +59,9 @@ public class AuthRateLimiter {
     private final Clock clock;
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
+    @Autowired(required = false)
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     @Value("${sociomart.bootstrap.super-admin-mobile:" + AdminService.SUPER_ADMIN_MOBILE + "}")
     private String superAdminMobile = AdminService.SUPER_ADMIN_MOBILE;
 
@@ -72,8 +75,13 @@ public class AuthRateLimiter {
     }
 
     AuthRateLimiter(boolean enabled, Clock clock) {
+        this(enabled, clock, null);
+    }
+
+    AuthRateLimiter(boolean enabled, Clock clock, org.springframework.jdbc.core.JdbcTemplate jdbcTemplate) {
         this.enabled = enabled;
         this.clock = clock;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     public boolean isAdminMobile(String mobile) {
@@ -121,6 +129,10 @@ public class AuthRateLimiter {
         long maxRemainingSeconds = -1;
         for (String key : keys) {
             Bucket bucket = buckets.get(key);
+            if (bucket == null || bucket.lockedUntil == null || !now.isBefore(bucket.lockedUntil)) {
+                // If not locked in memory, check persistent cluster store if available
+                bucket = loadFromStoreIfLocked(key, now);
+            }
             if (bucket != null && bucket.lockedUntil != null && now.isBefore(bucket.lockedUntil)) {
                 long remaining = Math.max(1, Duration.between(now, bucket.lockedUntil).toSeconds());
                 if (remaining > maxRemainingSeconds) {
@@ -144,6 +156,32 @@ public class AuthRateLimiter {
             }
             throw new com.example.my_first_spring_api.exception.TooManyRequestsException(maxRemainingSeconds);
         }
+    }
+
+    private Bucket loadFromStoreIfLocked(String key, Instant now) {
+        if (jdbcTemplate == null || key == null) return null;
+        try {
+            java.util.List<Bucket> list = jdbcTemplate.query(
+                    "SELECT hit_count, window_start, locked_until FROM auth_rate_limit_buckets WHERE rate_key = ? AND locked_until > ?",
+                    (rs, rowNum) -> {
+                        Bucket b = new Bucket();
+                        b.count = rs.getInt("hit_count");
+                        java.sql.Timestamp ws = rs.getTimestamp("window_start");
+                        b.windowStart = ws != null ? ws.toInstant() : null;
+                        java.sql.Timestamp lu = rs.getTimestamp("locked_until");
+                        b.lockedUntil = lu != null ? lu.toInstant() : null;
+                        return b;
+                    },
+                    key, java.sql.Timestamp.from(now));
+            if (!list.isEmpty()) {
+                Bucket b = list.get(0);
+                buckets.put(key, b);
+                return b;
+            }
+        } catch (Exception ex) {
+            // Non-destructive fallback to memory
+        }
+        return null;
     }
 
     /**
@@ -174,7 +212,13 @@ public class AuthRateLimiter {
         if (!enabled) {
             return;
         }
-        buckets.remove(loginMobileKey(mobile));
+        String key = loginMobileKey(mobile);
+        buckets.remove(key);
+        if (jdbcTemplate != null) {
+            try {
+                jdbcTemplate.update("DELETE FROM auth_rate_limit_buckets WHERE rate_key = ?", key);
+            } catch (Exception ignore) {}
+        }
     }
 
     /** Records a registration attempt from an IP; locks when the threshold is reached. */
@@ -210,8 +254,33 @@ public class AuthRateLimiter {
                 bucket.lockedUntil = now.plus(window);
                 lockedNow = true;
             }
+            persistBucketAsync(key, bucket);
         }
         return lockedNow;
+    }
+
+    private void persistBucketAsync(String key, Bucket bucket) {
+        if (jdbcTemplate == null || key == null) return;
+        try {
+            java.sql.Timestamp ws = bucket.windowStart != null ? java.sql.Timestamp.from(bucket.windowStart) : null;
+            java.sql.Timestamp lu = bucket.lockedUntil != null ? java.sql.Timestamp.from(bucket.lockedUntil) : null;
+            int updated = jdbcTemplate.update(
+                    "UPDATE auth_rate_limit_buckets SET hit_count = ?, window_start = ?, locked_until = ? WHERE rate_key = ?",
+                    bucket.count, ws, lu, key);
+            if (updated == 0) {
+                try {
+                    jdbcTemplate.update(
+                            "INSERT INTO auth_rate_limit_buckets (rate_key, hit_count, window_start, locked_until) VALUES (?, ?, ?, ?)",
+                            key, bucket.count, ws, lu);
+                } catch (Exception ignoreDuplicate) {
+                    jdbcTemplate.update(
+                            "UPDATE auth_rate_limit_buckets SET hit_count = ?, window_start = ?, locked_until = ? WHERE rate_key = ?",
+                            bucket.count, ws, lu, key);
+                }
+            }
+        } catch (Exception ex) {
+            // Non-destructive fallback
+        }
     }
 
     private Bucket bucket(String key) {

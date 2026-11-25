@@ -46,7 +46,7 @@ class OfferingLifecycleMigrationTest {
         Flyway upgraded = Flyway.configure().dataSource(source).locations("classpath:db/migration").load();
         upgraded.migrate();
 
-        assertThat(upgraded.info().current().getVersion().getVersion()).isEqualTo("28");
+        assertThat(upgraded.info().current().getVersion().getVersion()).isEqualTo("29");
         var product = jdbc.queryForMap("SELECT * FROM products WHERE id = 1");
         assertThat(product.get("NAME")).isEqualTo("Legacy item");
         assertThat((BigDecimal) product.get("PRICE")).isEqualByComparingTo("12.50");

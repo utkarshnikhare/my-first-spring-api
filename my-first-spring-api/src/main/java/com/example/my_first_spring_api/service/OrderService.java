@@ -1277,32 +1277,40 @@ public class OrderService {
     }
 
     private void lockCheckoutRows(Order order, User buyer) {
-        User lockedBuyer = userRepository.findByIdForUpdate(buyer.getId())
-                .orElseThrow(() -> new BuyerNotAuthenticatedException("Buyer not found."));
-        entityManager.refresh(lockedBuyer, LockModeType.PESSIMISTIC_WRITE);
+        // Canonical global lock acquisition order:
+        // 1. Kitchen (by ID)
+        // 2. Products (sorted by ID ascending)
+        // 3. Users (Buyer and Seller, sorted by ID ascending)
+        // Eliminates circular wait deadlocks against concurrent seller kitchen/offering updates.
+        Long kitchenId = order.getKitchen() != null ? order.getKitchen().getId() : null;
+        Kitchen kitchen = null;
+        if (kitchenId != null) {
+            kitchen = kitchenRepository.findByIdForUpdate(kitchenId)
+                    .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
+            order.setKitchen(kitchen);
+        }
 
         Set<Long> productIds = order.getItems().stream()
                 .map(item -> item.getProduct() != null ? item.getProduct().getId() : null)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(TreeSet::new));
         for (Long productId : productIds) {
-            Product product = productRepository.findByIdForUpdate(productId)
+            productRepository.findByIdForUpdate(productId)
                     .orElseThrow(() -> new ProductNotFoundException(productId));
-            entityManager.refresh(product, LockModeType.PESSIMISTIC_WRITE);
         }
 
-        Long kitchenId = order.getKitchen() != null ? order.getKitchen().getId() : null;
-        if (kitchenId == null) return;
-        Long sellerId = order.getKitchen().getSeller() != null ? order.getKitchen().getSeller().getId() : null;
-        if (sellerId != null) {
-            User seller = userRepository.findByIdForUpdate(sellerId)
-                    .orElseThrow(() -> new SellerNotAuthorizedException("The offering's seller is unavailable."));
-            entityManager.refresh(seller, LockModeType.PESSIMISTIC_WRITE);
+        Set<Long> userIds = new TreeSet<>();
+        if (buyer != null && buyer.getId() != null) {
+            userIds.add(buyer.getId());
         }
-        Kitchen kitchen = kitchenRepository.findByIdForUpdate(kitchenId)
-                .orElseThrow(() -> new KitchenNotFoundException(kitchenId));
-        entityManager.refresh(kitchen, LockModeType.PESSIMISTIC_WRITE);
-        order.setKitchen(kitchen);
+        Long sellerId = (kitchen != null && kitchen.getSeller() != null) ? kitchen.getSeller().getId() : null;
+        if (sellerId != null) {
+            userIds.add(sellerId);
+        }
+        for (Long uid : userIds) {
+            userRepository.findByIdForUpdate(uid)
+                    .orElseThrow(() -> new BuyerNotAuthenticatedException("User not found."));
+        }
     }
 
     private void consumeStock(Order order) {

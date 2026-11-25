@@ -30,6 +30,9 @@ public class NotificationReminderJob {
     private final EnquiryRepository enquiryRepository;
     private final NotificationService notificationService;
 
+    @Autowired(required = false)
+    private DistributedLockService lockService;
+
     @Autowired
     public NotificationReminderJob(OrderRepository orderRepository, EnquiryRepository enquiryRepository,
                                    NotificationService notificationService, PlatformTransactionManager transactionManager) {
@@ -42,27 +45,37 @@ public class NotificationReminderJob {
     @Scheduled(fixedDelayString = "${sociomart.reminders.delay-ms:300000}",
                initialDelayString = "${sociomart.reminders.initial-delay-ms:30000}")
     public void sendUnacknowledgedReminders() {
-        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(15);
-        // Bound each run. Successful records leave the candidate set; failures are retried.
-        for (Long id : orderRepository.findReminderCandidates(WAITING, cutoff, PageRequest.of(0, 100))) {
-            process("order", id, () -> orderRepository.findByIdForUpdate(id).ifPresent(order -> {
-                if (order.getRemindedAt() != null || order.getAcknowledgedAt() != null || !WAITING.contains(order.getOrderStatus())) return;
-                notificationService.sendReminder(order.getKitchen().getSeller(),
-                        "Reminder: Unacknowledged SocioMart order",
-                        "Order " + order.getOrderNumber() + " is still unacknowledged. Please review it."
-                );
-                order.setRemindedAt(LocalDateTime.now());
-            }));
+        if (lockService != null && !lockService.tryLock("notification_reminder_job", java.time.Duration.ofMinutes(4))) {
+            log.info("Notification reminder job skipped on this instance: lock held by another cluster node.");
+            return;
         }
-        for (Long id : enquiryRepository.findReminderCandidates(EnquiryStatus.NEW, cutoff, PageRequest.of(0, 100))) {
-            process("enquiry", id, () -> enquiryRepository.findByIdForUpdate(id).ifPresent(enquiry -> {
-                if (enquiry.getRemindedAt() != null || enquiry.getAcknowledgedAt() != null || enquiry.getStatus() != EnquiryStatus.NEW) return;
-                notificationService.sendReminder(enquiry.getKitchen().getSeller(),
-                        "Reminder: Unacknowledged SocioMart enquiry",
-                        "Enquiry " + enquiry.getId() + " from " + enquiry.getUser().getName() + " is waiting for your response."
-                );
-                enquiry.setRemindedAt(LocalDateTime.now());
-            }));
+        try {
+            LocalDateTime cutoff = LocalDateTime.now().minusMinutes(15);
+            // Bound each run. Successful records leave the candidate set; failures are retried.
+            for (Long id : orderRepository.findReminderCandidates(WAITING, cutoff, PageRequest.of(0, 100))) {
+                process("order", id, () -> orderRepository.findByIdForUpdate(id).ifPresent(order -> {
+                    if (order.getRemindedAt() != null || order.getAcknowledgedAt() != null || !WAITING.contains(order.getOrderStatus())) return;
+                    notificationService.sendReminder(order.getKitchen().getSeller(),
+                            "Reminder: Unacknowledged SocioMart order",
+                            "Order " + order.getOrderNumber() + " is still unacknowledged. Please review it."
+                    );
+                    order.setRemindedAt(LocalDateTime.now());
+                }));
+            }
+            for (Long id : enquiryRepository.findReminderCandidates(EnquiryStatus.NEW, cutoff, PageRequest.of(0, 100))) {
+                process("enquiry", id, () -> enquiryRepository.findByIdForUpdate(id).ifPresent(enquiry -> {
+                    if (enquiry.getRemindedAt() != null || enquiry.getAcknowledgedAt() != null || enquiry.getStatus() != EnquiryStatus.NEW) return;
+                    notificationService.sendReminder(enquiry.getKitchen().getSeller(),
+                            "Reminder: Unacknowledged SocioMart enquiry",
+                            "Enquiry " + enquiry.getId() + " from " + enquiry.getUser().getName() + " is waiting for your response."
+                    );
+                    enquiry.setRemindedAt(LocalDateTime.now());
+                }));
+            }
+        } finally {
+            if (lockService != null) {
+                lockService.unlock("notification_reminder_job");
+            }
         }
     }
 
