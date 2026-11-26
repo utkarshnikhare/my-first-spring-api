@@ -214,6 +214,17 @@ async function _rawApi(path, opts) {
         data = text;
     }
     if (!res.ok) {
+        // Self-healing CSRF retry: if a state-changing request failed with 403, silently refresh token and retry once
+        if (res.status === 403 && (init.method !== 'GET') && !opts._retryCsrf) {
+            try {
+                await fetch(CONFIG.API_BASE_URL + '/api/auth/me', { method: 'GET', credentials: 'same-origin', cache: 'no-store' });
+                var newCsrf = csrfTokenFromCookie();
+                if (newCsrf && newCsrf !== csrf) {
+                    var retryOpts = Object.assign({}, opts, { _retryCsrf: true });
+                    return await api(path, retryOpts);
+                }
+            } catch (ignored) {}
+        }
         var msg = null;
         if (data) {
             if (typeof data === 'string' && data.trim()) {
@@ -898,6 +909,15 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.loca
             }
         });
     });
+}
+
+// Silent session keep-alive heartbeat: keeps seller/admin sessions alive and warms cloud backend
+if (typeof window !== 'undefined') {
+    setInterval(function () {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+            fetch('/api/auth/me', { method: 'GET', cache: 'no-store' }).catch(function () {});
+        }
+    }, 10 * 60 * 1000); // Every 10 minutes
 }
 
 

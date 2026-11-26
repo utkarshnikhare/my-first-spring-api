@@ -51,6 +51,8 @@ public class AuthService {
     private PasswordRecoveryService passwordRecovery;
     /** Same minimum password policy as registration (10-72 characters). */
     private static final int MIN_PASSWORD_LENGTH = 10;
+    /** Constant-time BCrypt computation hash to prevent username/mobile enumeration timing attacks. */
+    private static final String DUMMY_BCRYPT_HASH = "$2a$10$7EqJtq98hPqEX7fNZaFWoOhi5p.1XG82aFvGgW6V7jZ7I0V7I7XkG";
 
     public AuthService(UserRepository users, KitchenRepository kitchens, LocationService locations,
                        SellerService sellerService, PasswordEncoder passwordEncoder, Environment environment,
@@ -197,9 +199,9 @@ public class AuthService {
         if (request.getPassword().getBytes(StandardCharsets.UTF_8).length > 72) {
             throw new InvalidCredentialsException();
         }
-        User user = users.findByMobileNumber(request.getMobileNumber())
-                .orElseThrow(InvalidCredentialsException::new);
-        if (user.isBlocked()) {
+        User user = users.findByMobileNumber(request.getMobileNumber()).orElse(null);
+        if (user == null || user.isBlocked()) {
+            passwordEncoder.matches(request.getPassword(), DUMMY_BCRYPT_HASH);
             throw new InvalidCredentialsException();
         }
         boolean standardPassword = validPasswordFor(user, request.getPassword());
