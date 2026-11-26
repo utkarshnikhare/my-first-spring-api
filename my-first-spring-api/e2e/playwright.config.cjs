@@ -56,7 +56,7 @@ module.exports = defineConfig({
   webServer: {
     command: process.platform === 'win32'
       ? 'mvnw.cmd -DskipTests -Dspring-boot.run.profiles=local,e2e spring-boot:run'
-      : './mvnw -DskipTests -Dspring-boot.run.profiles=local,e2e spring-boot:run',
+      : (process.env.CI ? 'mvn' : './mvnw') + ' -DskipTests -Dspring-boot.run.profiles=local,e2e spring-boot:run',
     cwd: backendDirectory,
     url: `${baseURL}/api/auth/config`,
     timeout: 180_000,
