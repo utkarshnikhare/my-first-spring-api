@@ -1001,6 +1001,9 @@ function applyOfferingDatePicker(picker) {
             }
         }
         validateFormTiming(form);
+        if (typeof updateOfferingScheduleSummary === 'function') {
+            updateOfferingScheduleSummary(form);
+        }
     }
 }
 function sellerDate(dateKey) {
@@ -1477,11 +1480,11 @@ function sdEarningsHtml(dash) {
         + '<a class="sd-earnings__more" href="#/earnings">View Details <span aria-hidden="true">→</span></a>'
         + '</div>'
         + '<div class="sd-earnings__grid">'
-        + '<div class="sd-earnings__cell"><div class="sd-earnings__label">Confirmed Today</div>'
+        + '<div class="sd-earnings__cell"><div class="sd-earnings__label"><span class="sd-earnings__lbl-part">Confirmed</span><span class="sd-earnings__lbl-part">Today</span></div>'
         + '<div class="sd-earnings__val is-green">' + money(dash.confirmedToday) + '</div></div>'
-        + '<div class="sd-earnings__cell"><div class="sd-earnings__label">Pending Today</div>'
+        + '<div class="sd-earnings__cell"><div class="sd-earnings__label"><span class="sd-earnings__lbl-part">Pending</span><span class="sd-earnings__lbl-part">Today</span></div>'
         + '<div class="sd-earnings__val is-amber">' + money(dash.pending) + '</div></div>'
-        + '<div class="sd-earnings__cell"><div class="sd-earnings__label">This Month</div>'
+        + '<div class="sd-earnings__cell"><div class="sd-earnings__label"><span class="sd-earnings__lbl-part">This</span><span class="sd-earnings__lbl-part">Month</span></div>'
         + '<div class="sd-earnings__val">' + money(dash.thisMonth) + '</div></div>'
         + '</div></div>';
 }
@@ -2944,6 +2947,9 @@ function openOfferingTimePicker(targetField, form) {
             input.dispatchEvent(new Event('change', { bubbles: true }));
             updateOfferingScheduleSummary(form);
             validateFormTiming(form);
+        if (typeof updateOfferingScheduleSummary === 'function') {
+            updateOfferingScheduleSummary(form);
+        }
             S.offeringFormDirty = true;
             closeSheet();
         });
@@ -2972,6 +2978,9 @@ function openOfferingTimePicker(targetField, form) {
             input.dispatchEvent(new Event('change', { bubbles: true }));
             updateOfferingScheduleSummary(form);
             validateFormTiming(form);
+        if (typeof updateOfferingScheduleSummary === 'function') {
+            updateOfferingScheduleSummary(form);
+        }
             S.offeringFormDirty = true;
             closeSheet();
         });
@@ -3027,10 +3036,16 @@ function initOfferingFormWheels(view) {
             inp.addEventListener('input', function () {
                 updateOfferingScheduleSummary(form);
                 validateFormTiming(form);
+        if (typeof updateOfferingScheduleSummary === 'function') {
+            updateOfferingScheduleSummary(form);
+        }
             });
             inp.addEventListener('change', function () {
                 updateOfferingScheduleSummary(form);
                 validateFormTiming(form);
+        if (typeof updateOfferingScheduleSummary === 'function') {
+            updateOfferingScheduleSummary(form);
+        }
             });
         }
     });
@@ -4621,6 +4636,9 @@ document.addEventListener('submit', async function (e) {
             var timingError = offeringTimingError(vals.availableDate, vals.orderWindowStart, vals.orderWindowEnd, vals.readyByTime);
             if (timingError) {
                 validateFormTiming(form);
+        if (typeof updateOfferingScheduleSummary === 'function') {
+            updateOfferingScheduleSummary(form);
+        }
                 toast(timingError, 'error');
                 return;
             }
@@ -5722,6 +5740,9 @@ document.addEventListener('click', async function (e) {
                          autoClampOrderWindowEndIfInvalid(form);
                      }
                      validateFormTiming(form);
+        if (typeof updateOfferingScheduleSummary === 'function') {
+            updateOfferingScheduleSummary(form);
+        }
                  }
                  break;
              }
@@ -5838,6 +5859,9 @@ document.addEventListener('change', function (e) {
             }
             updateLiveTimingBadge(form);
             validateFormTiming(form);
+        if (typeof updateOfferingScheduleSummary === 'function') {
+            updateOfferingScheduleSummary(form);
+        }
         }
     }
     if (e.target && e.target.name === 'readyByTime') {
@@ -5920,6 +5944,9 @@ document.addEventListener('focusout', function (e) {
             autoClampOrderWindowEndIfInvalid(form);
             updateLiveTimingBadge(form);
             validateFormTiming(form);
+        if (typeof updateOfferingScheduleSummary === 'function') {
+            updateOfferingScheduleSummary(form);
+        }
         }
     }
 });
