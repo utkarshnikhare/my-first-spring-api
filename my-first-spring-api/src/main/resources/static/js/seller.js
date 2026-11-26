@@ -1,9 +1,10 @@
 /**
  * SocioMart Seller App v1.0 - 6-tab SPA
  */
-var S = { user: null, kitchen: null, kitchenUrl: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, loadedTemplateId: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFilterDelivery: '', offeringProductId: '', deliverySaving: {}, deliveryBlockRequestId: 0, bulkDelivering: false, offeringFor: 'today', quickPostRequestId: null, editOffering: null, dashFilter: 'ALL', offeringsTab: 'history', recurringSchedules: [], recurringDetail: null, recurringDuration: 'thisweek', dashTab: 'live', offeringSubmitting: false, editOccurrenceId: null, authMode: 'login', authOptions: null, authError: null, authServiceAreaId: '', authSlugTouched: false };
+var S = { user: null, kitchen: null, kitchenUrl: null, viewMode: 'editor', selectedDate: 'today', sortFilter: 'all', historySelected: [], draftOffering: null, favTemplates: [], favError: null, loadedTemplateId: null, historyItems: [], offeringFilterSociety: '', offeringFilterStatus: '', offeringFilterDelivery: '', offeringProductId: '', deliverySaving: {}, deliveryBlockRequestId: 0, bulkDelivering: false, offeringFor: 'today', quickPostRequestId: null, editOffering: null, dashFilter: 'ALL', offeringsTab: 'history', recurringSchedules: [], recurringDetail: null, recurringDuration: 'thisweek', dashTab: 'live', offeringSubmitting: false, editOccurrenceId: null, authMode: 'login', authOptions: null, authError: null, authServiceAreaId: '', authSlugTouched: false, reuseQueue: null, reuseIndex: 0, yesterdayItems: [], yesterdaySelected: [] };
 var sellerRoutes = {
     '#/home': sellerHomeView, '#/add': sellerAddView, '#/create': sellerCreateView,
+    '#/reuse-yesterday': sellerReuseYesterdayView,
     '#/edit-offering': sellerEditOfferingView,
     '#/quick-post': sellerQuickPostView,
     // "My Offerings". '#/history' stays registered as an alias so existing
@@ -1013,8 +1014,22 @@ function sellerDate(dateKey) {
         var parts = istToday.split('-').map(Number);
         return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + 1)).toISOString().slice(0, 10);
     }
+    if (dateKey === 'yesterday') {
+        var partsY = istToday.split('-').map(Number);
+        return new Date(Date.UTC(partsY[0], partsY[1] - 1, partsY[2] - 1)).toISOString().slice(0, 10);
+    }
     if (dateKey && dateKey !== 'today' && dateKey !== 'pick') return dateKey;
     return istToday;
+}
+function formatDisplayDate(isoDate) {
+    if (!isoDate) return '';
+    try {
+        var p = isoDate.split('-').map(Number);
+        var d = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    } catch (e) {
+        return isoDate;
+    }
 }
 function sellerTimeNow() {
     var parts = new Intl.DateTimeFormat('en-GB', {
@@ -1157,20 +1172,191 @@ async function sellerAddView() {
     // Default Kitchen flow (single-category Kitchen or selected Kitchen):
     S.offeringCategory = 'KITCHEN';
     var h = '<div class="view-enter">';
-    h += '<div class="page-head"><h1>Add Offering</h1><p class="muted small">Favourites are manual reusable templates (maximum 3). History is automatic published-offering history.</p></div>';
-    h += '<p class="muted small mb-2"><a class="text-brand" href="#/history">View automatic History →</a></p>';
-    // A failed read is NOT the same as "you have no favourites": keep the error
-    // separate from the legitimately empty list so real data is never hidden by it.
+    h += '<div class="page-head"><h1>Add Offering</h1><p class="muted small">Choose how you want to add offerings for your kitchen today.</p></div>';
+
+    // Option 1: Create Offering
+    h += '<div class="pathway-card" data-action="go-create"><div class="pc-icon">✨</div><div class="pc-title">Create Offering</div><div class="pc-desc">Create a new offering from scratch.</div></div>';
+
+    // Option 2: Create from Favourites
     S.favTemplates = []; S.favError = null;
     try { S.favTemplates = (await sellerApi('/api/seller-app/templates')) || []; } catch (e) { S.favError = e.message || 'please try again'; }
-    h += '<div class="pathway-card" data-action="go-use-favourite"><div class="pc-icon">⭐</div><div class="pc-title">Create from Favourite</div><div class="pc-desc">Quickly post from saved templates (max 3).</div>';
-    if (S.favError) { h += '<div class="pc-desc">Could not load your saved favourites - ' + esc(S.favError) + ' <button class="btn btn-secondary btn-sm" type="button" data-action="retry-favourites">Retry</button></div>'; } else if (S.favTemplates.length > 0) { h += '<div class="favourite-pills">'; S.favTemplates.forEach(function (t) { h += '<span class="fav-pill" data-action="use-template" data-tid="' + t.id + '">⭐ ' + esc(t.name) + '<button class="fav-pill-remove" type="button" data-action="delete-favourite-pill" data-tid="' + t.id + '" title="Remove from favourites" aria-label="Remove ' + esc(t.name) + ' from favourites">✕</button></span>'; }); h += '</div>'; }
-    else { h += '<div class="pc-desc">No saved favourites yet - turn on Save as template (max 3) while creating an offering.</div>'; }
+    h += '<div class="pathway-card" data-action="go-use-favourite"><div class="pc-icon">⭐</div><div class="pc-title">Create from Favourites</div><div class="pc-desc">Choose previously saved favourite items.</div>';
+    if (S.favError) { h += '<div class="pc-desc text-danger">Could not load your saved favourites - ' + esc(S.favError) + ' <button class="btn btn-secondary btn-sm" type="button" data-action="retry-favourites">Retry</button></div>'; } else if (S.favTemplates.length > 0) { h += '<div class="favourite-pills">'; S.favTemplates.forEach(function (t) { h += '<span class="fav-pill" data-action="use-template" data-tid="' + t.id + '">⭐ ' + esc(t.name) + '<button class="fav-pill-remove" type="button" data-action="delete-favourite-pill" data-tid="' + t.id + '" title="Remove from favourites" aria-label="Remove ' + esc(t.name) + ' from favourites">✕</button></span>'; }); h += '</div>'; }
+    else { h += '<div class="pc-desc muted">No saved favourites yet - turn on Save as template (max 3) while creating an offering.</div>'; }
     h += '</div>';
-    h += '<div class="pathway-card" data-action="go-create"><div class="pc-icon">✨</div><div class="pc-title">Create New Offering</div><div class="pc-desc">Fill in all details manually.</div></div>';
-    h += '<div class="pathway-card" data-action="go-quick-post"><div class="pc-icon">📋</div><div class="pc-title">Quick Post</div><div class="pc-desc">Paste a WhatsApp message and publish a simple Today announcement.</div></div>';
+
+    // Option 3: Quick Post
+    h += '<div class="pathway-card" data-action="go-quick-post"><div class="pc-icon">📋</div><div class="pc-title">Quick Post</div><div class="pc-desc">Create a quick post using the existing Quick Post flow.</div></div>';
+
+    // Option 4: Reuse Yesterday’s Menu
+    h += '<div class="pathway-card" data-action="go-reuse-yesterday"><div class="pc-icon">🔄</div><div class="pc-title">Reuse Yesterday’s Menu <span class="badge-new">New</span></div><div class="pc-desc">Select yesterday’s offerings and publish them again with editable details.</div></div>';
+
+    h += '<p class="muted small mt-3"><a class="text-brand" href="#/history">View automatic History →</a></p>';
     h += '</div>';
     return h;
+}
+
+/**
+ * Prepares an editable draft offering from a yesterday source offering.
+ * Adheres strictly to Section 5: resets offering date to today, preserves
+ * listed quantity (never sold/remaining quantity), copies schedule times,
+ * and clears operational IDs.
+ */
+function prepareReuseDraft(src) {
+    if (!src) return null;
+    return {
+        name: src.name || '',
+        description: src.description || '',
+        price: src.price != null ? src.price : '',
+        priceUnit: src.priceUnit || src.unit || 'portion',
+        unit: src.unit || src.priceUnit || 'portion',
+        maxQuantity: src.maxQuantity != null ? src.maxQuantity : null,
+        imageUrl: src.imageUrl || '',
+        category: src.category || (Array.isArray(src.categories) && src.categories[0]) || '',
+        categories: Array.isArray(src.categories) ? src.categories.slice() : (src.category ? [src.category] : []),
+        availableDate: sellerDate('today'),
+        orderOpenDate: sellerDate('today'),
+        orderOpenDateMode: 'today',
+        orderWindowStart: src.orderWindowStart || '',
+        orderWindowEnd: src.orderWindowEnd || '',
+        readyByTime: src.readyByTime || '',
+        cutoffTime: src.cutoffTime || src.orderWindowEnd || '',
+        serves: src.serves || '',
+        dietaryTag: src.dietaryTag || 'VEG',
+        isVeg: src.isVeg !== false,
+        deliveryType: src.deliveryType || 'DELIVERY_AND_PICKUP',
+        id: null,
+        republishSourceId: src.id,
+        isReuse: true
+    };
+}
+
+/**
+ * Selection screen for Reuse Yesterday's Menu (Option 4).
+ * Allows the seller to view, select, and batch-prepare yesterday's offerings.
+ */
+async function sellerReuseYesterdayView() {
+    var h = '<div class="view-enter reuse-yesterday-view">';
+    h += '<div class="top-row"><button class="icon-btn" type="button" data-action="go-add" aria-label="Back">←</button><h2 class="flex-1">Reuse Yesterday’s Menu</h2></div>';
+
+    var yesterdayIso = sellerDate('yesterday');
+    var displayYesterday = formatDisplayDate(yesterdayIso);
+    h += '<div class="reuse-header-desc">';
+    h += '<p class="muted small">Choose the items you want to offer again today.</p>';
+    h += '<div class="reuse-date-badge"><span class="reuse-cal-icon">📅</span> Yesterday · ' + esc(displayYesterday) + '</div>';
+    h += '</div>';
+
+    var items = [];
+    var fetchError = null;
+    try {
+        items = await sellerApi('/api/seller-app/yesterday-offerings');
+        S.yesterdayItems = items || [];
+    } catch (err) {
+        fetchError = err.message || 'Failed to load yesterday’s offerings.';
+    }
+
+    if (fetchError) {
+        h += '<div class="alert alert-danger my-3">' + esc(fetchError) + '</div>';
+        h += '<div class="text-center my-3"><button type="button" class="btn btn-primary" data-action="retry-reuse-yesterday">Retry</button></div>';
+        h += '</div>';
+        return h;
+    }
+
+    if (!items || items.length === 0) {
+        h += '<div class="empty my-4 text-center">'
+            + '<div class="empty-icon" style="font-size:3rem;">🔄</div>'
+            + '<h3 class="mt-2">No Offerings Found from Yesterday</h3>'
+            + '<p class="muted small mb-3">No menu items found from yesterday. You can create a new offering or use your favourites.</p>'
+            + '<div class="d-flex gap-2 justify-content-center flex-wrap">'
+            + '<a href="#/create" class="btn btn-primary">Create Offering</a>'
+            + '<a href="#/add" class="btn btn-secondary">Back to Add Offering</a>'
+            + '</div>'
+            + '</div>';
+        h += '</div>';
+        return h;
+    }
+
+    S.yesterdaySelected = S.yesterdaySelected || [];
+    var validItemIds = items.map(function (it) { return it.id; });
+    S.yesterdaySelected = S.yesterdaySelected.filter(function (id) { return validItemIds.indexOf(id) !== -1; });
+
+    var allSelected = items.length > 0 && S.yesterdaySelected.length === items.length;
+
+    h += '<div class="reuse-controls-bar">';
+    h += '<button type="button" class="btn btn-secondary btn-sm" data-action="reuse-toggle-all">' + (allSelected ? 'Deselect All' : 'Select All') + '</button>';
+    h += '<span class="reuse-selected-count" id="reuseSelectedCount">' + S.yesterdaySelected.length + ' item' + (S.yesterdaySelected.length === 1 ? '' : 's') + ' selected</span>';
+    h += '</div>';
+
+    h += '<div class="reuse-items-list">';
+    items.forEach(function (item) {
+        var isChecked = S.yesterdaySelected.indexOf(item.id) !== -1;
+        var thumb = item.imageUrl ? sellerImg(item.imageUrl) : '';
+        var catName = item.category || (Array.isArray(item.categories) && item.categories[0]) || '';
+        var priceDisplay = money(item.price) + (item.priceUnit ? ' / ' + esc(item.priceUnit) : '');
+
+        h += '<div class="reuse-item-card' + (isChecked ? ' is-selected' : '') + '" data-id="' + item.id + '" data-action="toggle-reuse-item-card">';
+        h += '<div class="reuse-item-cb-col">';
+        h += '<input type="checkbox" class="reuse-cb" data-id="' + item.id + '" data-action="toggle-reuse-item"' + (isChecked ? ' checked' : '') + ' aria-label="Select ' + esc(item.name) + '">';
+        h += '</div>';
+        if (thumb) {
+            h += '<img class="reuse-thumb" src="' + esc(thumb) + '" alt="' + esc(item.name) + '" onerror="this.style.display=\'none\'">';
+        }
+        h += '<div class="reuse-item-details">';
+        h += '<div class="reuse-item-name-row">';
+        h += '<strong class="reuse-item-name">' + esc(item.name) + '</strong>';
+        if (catName) {
+            h += '<span class="badge badge-subtle ms-2">' + esc(catName) + '</span>';
+        }
+        h += '</div>';
+        h += '<div class="reuse-item-meta">';
+        h += '<span class="reuse-item-price text-brand fw-bold">' + priceDisplay + '</span>';
+        if (item.maxQuantity != null) {
+            h += '<span class="reuse-item-qty muted small">Original Qty: ' + item.maxQuantity + '</span>';
+        }
+        h += '</div>';
+        if (item.orderWindowEnd || item.readyByTime) {
+            h += '<div class="reuse-item-timing muted small">';
+            if (item.orderWindowEnd) h += 'Close: ' + esc(item.orderWindowEnd) + ' ';
+            if (item.readyByTime) h += '· Deliver: ' + esc(item.readyByTime.length > 5 ? item.readyByTime.slice(-5) : item.readyByTime);
+            h += '</div>';
+        }
+        h += '</div>';
+        h += '</div>';
+    });
+    h += '</div>';
+
+    h += '<div class="reuse-actions-bar mt-4">';
+    h += '<button type="button" class="btn btn-primary w-100 py-2" id="btnContinueReuse" data-action="continue-reuse-yesterday"' + (S.yesterdaySelected.length === 0 ? ' disabled' : '') + '>';
+    h += 'Continue with Selected (' + S.yesterdaySelected.length + ')';
+    h += '</button>';
+    h += '<button type="button" class="btn btn-ghost w-100 mt-2" data-action="go-add">Cancel</button>';
+    h += '</div>';
+
+    h += '</div>';
+    return h;
+}
+
+function updateReuseUiState() {
+    var count = (S.yesterdaySelected || []).length;
+    var total = (S.yesterdayItems || []).length;
+    var countEl = $('#reuseSelectedCount');
+    if (countEl) countEl.textContent = count + ' item' + (count === 1 ? '' : 's') + ' selected';
+    var btn = $('#btnContinueReuse');
+    if (btn) {
+        btn.disabled = count === 0;
+        btn.textContent = 'Continue with Selected (' + count + ')';
+    }
+    var toggleBtn = $('[data-action="reuse-toggle-all"]');
+    if (toggleBtn) {
+        toggleBtn.textContent = (count === total && total > 0) ? 'Deselect All' : 'Select All';
+    }
+    $$('.reuse-item-card').forEach(function (card) {
+        var cid = Number(card.dataset.id);
+        var isSel = (S.yesterdaySelected || []).indexOf(cid) !== -1;
+        card.classList.toggle('is-selected', isSel);
+        var cb = card.querySelector('.reuse-cb');
+        if (cb) cb.checked = isSel;
+    });
 }
 
 // SCREEN 1: SELLER DASHBOARD (HOME)
@@ -3350,8 +3536,11 @@ async function sellerCreateView() {
     var isHm = S.offeringCategory === 'HOMEMADE' || isHomemadeProduct(t);
     var now = new Date();
     var isLateNight = now.getHours() >= 21;
-    // For standard kitchen meals, default past 21:00 to tomorrow. For homemade specialties, default to today.
+    // For standard kitchen meals, default past 21:00 to tomorrow. For homemade specialties or reuse, default to today.
     S.offeringFor = (!isHm && isLateNight) ? 'tomorrow' : 'today';
+    if (t.isReuse) {
+        S.offeringFor = 'today';
+    }
     S.recurringDuration = 'thisweek';
     S.recurringScheduleConfig = null;
     try {
@@ -3365,9 +3554,27 @@ async function sellerCreateView() {
         }
     }
     var h = '<div class="view-enter">';
+    if (S.reuseQueue && S.reuseQueue.length > 0) {
+        var totalInQueue = S.reuseQueue.length;
+        var currentNum = S.reuseIndex + 1;
+        h += '<div class="reuse-batch-banner mb-3">';
+        h += '<div class="reuse-batch-info">';
+        h += '<span class="reuse-batch-badge">🔄 Reuse Yesterday</span> ';
+        h += '<span class="reuse-batch-count">Item ' + currentNum + ' of ' + totalInQueue + '</span>';
+        h += '<strong class="reuse-batch-name ms-1">' + esc(t.name || 'Draft Item') + '</strong>';
+        h += '</div>';
+        h += '<div class="reuse-batch-actions">';
+        if (totalInQueue > 1 && currentNum < totalInQueue) {
+            h += '<button type="button" class="btn btn-secondary btn-sm" data-action="skip-reuse-item">Skip Item</button>';
+        }
+        h += '<button type="button" class="btn btn-ghost btn-sm" data-action="cancel-reuse-queue">Exit Batch</button>';
+        h += '</div>';
+        h += '</div>';
+    }
     h += '<div class="page-head"><h1>' + (isHm ? 'Add Homemade Product' : 'Create Offering') + '</h1><p class="muted small">' +
         (isHm ? 'List your homemade treats, bakes, ghee, pickles or packaged specialties.' :
-        (S.republishSourceId ? 'Review the previous offering details, then set fresh timing and quantity.' : 'Fill in the details for your new dish.')) + '</p></div>';
+        (t.isReuse ? 'Reviewing yesterday’s offering details. Everything is editable before publishing for today.' :
+        (S.republishSourceId ? 'Review the previous offering details, then set fresh timing and quantity.' : 'Fill in the details for your new dish.'))) + '</p></div>';
     // Offering Mode toggle - blocking call handled by event delegation
     h += offeringFormHtml(t, { formId: 'createOfferingForm', mode: S.offeringFor, edit: false, locked: false, isHomemade: isHm });
     h += '</div>';
@@ -4680,6 +4887,20 @@ document.addEventListener('submit', async function (e) {
                 S.loadedTemplateId = null;
                 S.republishSourceId = null;
                 S.offeringFor = 'today';
+                if (S.reuseQueue && S.reuseQueue.length > 0) {
+                    S.reuseIndex++;
+                    if (S.reuseIndex < S.reuseQueue.length) {
+                        S.draftOffering = S.reuseQueue[S.reuseIndex];
+                        S.republishSourceId = S.draftOffering.republishSourceId;
+                        toast('Item published! Reviewing item ' + (S.reuseIndex + 1) + ' of ' + S.reuseQueue.length, 'success');
+                        sellerNavigate('#/create');
+                        return;
+                    } else {
+                        S.reuseQueue = null;
+                        S.reuseIndex = 0;
+                        toast('All selected offerings published for today!', 'success');
+                    }
+                }
                 sellerNavigate('#/home');
             } catch (saveErr) {
                 var errData = (saveErr && saveErr.data) || {};
@@ -5053,6 +5274,104 @@ document.addEventListener('click', async function (e) {
               }
               sellerNavigate('#/create');
               break;
+            case 'go-reuse-yesterday':
+              S.yesterdaySelected = [];
+              sellerNavigate('#/reuse-yesterday');
+              break;
+            case 'go-add':
+              sellerNavigate('#/add');
+              break;
+            case 'retry-reuse-yesterday':
+              sellerNavigate('#/reuse-yesterday');
+              break;
+            case 'toggle-reuse-item': {
+              var rid = Number(t.dataset.id);
+              if (rid) {
+                  var idx = (S.yesterdaySelected || []).indexOf(rid);
+                  if (t.checked && idx === -1) {
+                      S.yesterdaySelected.push(rid);
+                  } else if (!t.checked && idx !== -1) {
+                      S.yesterdaySelected.splice(idx, 1);
+                  }
+                  updateReuseUiState();
+              }
+              break;
+            }
+            case 'toggle-reuse-item-card': {
+              if (e.target && e.target.matches('input[type="checkbox"]')) break;
+              var cid = Number(t.dataset.id);
+              if (cid) {
+                  var cb = t.querySelector('.reuse-cb');
+                  if (cb) {
+                      cb.checked = !cb.checked;
+                      var idx = (S.yesterdaySelected || []).indexOf(cid);
+                      if (cb.checked && idx === -1) {
+                          S.yesterdaySelected.push(cid);
+                      } else if (!cb.checked && idx !== -1) {
+                          S.yesterdaySelected.splice(idx, 1);
+                      }
+                      updateReuseUiState();
+                  }
+              }
+              break;
+            }
+            case 'reuse-toggle-all': {
+              if (!S.yesterdayItems || S.yesterdayItems.length === 0) break;
+              if (S.yesterdaySelected.length === S.yesterdayItems.length) {
+                  S.yesterdaySelected = [];
+              } else {
+                  S.yesterdaySelected = S.yesterdayItems.map(function (it) { return it.id; });
+              }
+              updateReuseUiState();
+              break;
+            }
+            case 'continue-reuse-yesterday': {
+              if (!S.yesterdaySelected || S.yesterdaySelected.length === 0) {
+                  toast('Please select at least one item to continue', 'error');
+                  break;
+              }
+              var chosen = (S.yesterdayItems || []).filter(function (it) {
+                  return S.yesterdaySelected.indexOf(it.id) !== -1;
+              });
+              if (chosen.length === 0) {
+                  toast('Selected items are no longer available', 'error');
+                  break;
+              }
+              S.reuseQueue = chosen.map(prepareReuseDraft).filter(Boolean);
+              S.reuseIndex = 0;
+              S.draftOffering = S.reuseQueue[0];
+              S.loadedTemplateId = null;
+              S.republishSourceId = S.draftOffering.republishSourceId;
+              S.offeringFor = 'today';
+              sellerNavigate('#/create');
+              break;
+            }
+            case 'skip-reuse-item': {
+              if (!S.reuseQueue || S.reuseQueue.length === 0) break;
+              S.reuseIndex++;
+              if (S.reuseIndex < S.reuseQueue.length) {
+                  S.draftOffering = S.reuseQueue[S.reuseIndex];
+                  S.loadedTemplateId = null;
+                  S.republishSourceId = S.draftOffering.republishSourceId;
+                  toast('Skipped. Reviewing item ' + (S.reuseIndex + 1) + ' of ' + S.reuseQueue.length, 'info');
+                  sellerNavigate('#/create');
+              } else {
+                  S.reuseQueue = null;
+                  S.reuseIndex = 0;
+                  S.draftOffering = null;
+                  toast('Finished reviewing batch', 'info');
+                  sellerNavigate('#/home');
+              }
+              break;
+            }
+            case 'cancel-reuse-queue': {
+              S.reuseQueue = null;
+              S.reuseIndex = 0;
+              S.draftOffering = null;
+              toast('Exited batch review', 'info');
+              sellerNavigate('#/add');
+              break;
+            }
             case 'go-quick-post': sellerNavigate('#/quick-post'); break;
             case 'go-kitchen': sellerNavigate('#/kitchen'); break;
             case 'go-orders': sellerNavigate('#/orders'); break;

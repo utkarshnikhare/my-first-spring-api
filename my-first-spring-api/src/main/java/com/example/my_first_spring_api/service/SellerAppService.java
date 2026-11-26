@@ -490,6 +490,16 @@ public class SellerAppService {
     // ==================== HISTORY & BATCH REPUBLISH ====================
 
     @Transactional(readOnly = true)
+    public List<ProductDto> getYesterdayOfferings(User seller) {
+        Kitchen kitchen = getOwnedKitchen(seller);
+        LocalDate yesterday = AppTimeZone.today().minusDays(1);
+        return productRepository
+                .findYesterdayOfferings(kitchen, yesterday).stream()
+                .map(this::toProductDto)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
     public List<ProductDto> getRecentOfferings(User seller) {
         Kitchen kitchen = getOwnedKitchen(seller);
         // History is defined by the authoritative offering date, not creation age.

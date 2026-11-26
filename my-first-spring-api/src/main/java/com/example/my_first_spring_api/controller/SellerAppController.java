@@ -138,6 +138,11 @@ public class SellerAppController {
         return ResponseEntity.ok(sellerAppService.parseQuickPost(message));
     }
 
+    @GetMapping("/yesterday-offerings")
+    public ResponseEntity<List<ProductDto>> getYesterdayOfferings(HttpSession session) {
+        return ResponseEntity.ok(sellerAppService.getYesterdayOfferings(requireSeller(session)));
+    }
+
     @GetMapping("/history")
     public ResponseEntity<List<ProductDto>> getHistory(HttpSession session) {
         return ResponseEntity.ok(sellerAppService.getRecentOfferings(requireSeller(session)));
