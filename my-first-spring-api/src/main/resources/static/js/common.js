@@ -884,6 +884,10 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.loca
                             if (typeof CONFIG !== 'undefined' && CONFIG.DEBUG) {
                                 console.log('New SocioMart update installed and active.');
                             }
+                            if (typeof toast === 'function') {
+                                toast('New version available. Refreshing to update...', 'info');
+                            }
+                            setTimeout(function () { window.location.reload(); }, 1000);
                         }
                     });
                 }
