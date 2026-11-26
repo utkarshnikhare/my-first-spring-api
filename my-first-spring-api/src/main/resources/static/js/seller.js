@@ -1029,14 +1029,18 @@ function updateOrdersOpenFromSummary(form) {
     var date = mode && mode.value === 'tomorrow' ? sellerDate('tomorrow')
         : (mode && mode.value === 'choose' ? (dateInput && dateInput.value || '') : sellerDate('today'));
     var summary = form.querySelector('#ordersOpenFromSummary');
-    if (!summary) return;
-    if (!date) {
-        summary.textContent = 'Choose the date orders should begin.';
-    } else if (date === sellerDate('today') && !(timeInput && timeInput.value)) {
-        summary.textContent = 'Orders open immediately after publishing.';
-    } else {
-        summary.textContent = 'Orders open ' + (date === sellerDate('today') ? 'today' : date === sellerDate('tomorrow') ? 'tomorrow' : 'on ' + date)
-            + (timeInput && timeInput.value ? ' at ' + formatFriendlyTime12h(timeInput.value) : ' — choose a time.');
+    if (summary) {
+        if (!date) {
+            summary.textContent = 'Choose the date orders should begin.';
+        } else if (date === sellerDate('today') && !(timeInput && timeInput.value)) {
+            summary.textContent = 'Orders open immediately after publishing.';
+        } else {
+            summary.textContent = 'Orders open ' + (date === sellerDate('today') ? 'today' : date === sellerDate('tomorrow') ? 'tomorrow' : 'on ' + date)
+                + (timeInput && timeInput.value ? ' at ' + formatFriendlyTime12h(timeInput.value) : ' — choose a time.');
+        }
+    }
+    if (typeof updateOfferingScheduleSummary === 'function') {
+        updateOfferingScheduleSummary(form);
     }
 }
 function ordersOpenFromError(openDate, openTime, offeringDate, orderWindowEnd, readyBy) {
@@ -1902,10 +1906,12 @@ function availabilityOption(val, label, mode, locked) {
     return '<label class="radio-option' + (mode === val ? ' selected' : '') + '"' +
         (locked ? ' aria-disabled="true"' : ' data-action="set-availability" data-val="' + val + '"') + '>' + label + '</label>';
 }
-/** One category checkbox, pre-checked from the stored category list. */
+/** One category checkbox, pre-checked from the stored category list with enhanced touch target and visual states. */
 function offeringCategoryBox(value, label, selected) {
-    return '<label class="checkbox-option"><input type="checkbox" name="categories" value="' + value + '"' +
-        (selected.indexOf(value) >= 0 ? ' checked' : '') + '> ' + label + '</label>';
+    var isChecked = selected.indexOf(value) >= 0;
+    var icon = value === 'BREAKFAST' ? '🌅' : (value === 'LUNCH' ? '☀️' : (value === 'DINNER' ? '🌙' : '🥪'));
+    return '<label class="checkbox-option' + (isChecked ? ' selected' : '') + '"><input type="checkbox" name="categories" value="' + value + '"' +
+        (isChecked ? ' checked' : '') + '> <span class="cat-icon" aria-hidden="true">' + icon + '</span> <span class="cat-label">' + label + '</span></label>';
 }
 /** Cross-field timing rules shared by Create and Edit; returns an error text or null. */
 function offeringTimingError(availableDate, openHhmm, closeHhmm, readyBy) {
@@ -2565,249 +2571,477 @@ function renderWheelSlotsHtml(activeIdx) {
     return h;
 }
 
-function scrollingWheelPickerHtml(closeVal, readyVal, isLocked) {
-    var closeParsed = parseTimeForWheel(closeVal || '19:00');
-    var readyParsed = parseTimeForWheel(readyVal || '20:30');
+/* ============================================================
+   Compact Time Rows & Reusable Time Picker Sheet Component
+   ============================================================ */
 
-    var h = '<div class="scrolling-wheel-picker-wrap' + (isLocked ? ' wheel-locked' : '') + '">'
-        + '<div class="wheel-picker-cols">'
+/**
+ * Builds the 3 compact time rows: Orders Open From time, Place your order before, Order deliver by.
+ */
+function compactTimeRowsHtml(openTime, closeValue, readyValue, isLocked, openDateMode) {
+    var lockAttr = isLocked ? ' disabled' : '';
+    var openTimeDisplay = openTime ? formatFriendlyTime12h(openTime) : 'Not set';
+    var isToday = (!openDateMode || openDateMode === 'today');
+    var openTimeSub = isToday ? 'Optional for Today • Opens immediately if not set' : 'Required for ' + (openDateMode === 'tomorrow' ? 'Tomorrow' : 'future date');
+    var closeTimeDisplay = closeValue ? formatFriendlyTime12h(closeValue) : 'Not set';
+    var readyTimeDisplay = readyValue ? formatFriendlyTime12h(readyValue) : 'Not set';
+    var readyIsoVal = (readyValue && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(readyValue)) ? readyValue.slice(0, 16) : (readyValue || '');
 
-        // Column 1: Place your order before (Orders Close)
-        + '<div class="wheel-col" data-wheel-type="close">'
-        + '<div class="wheel-col-header">Place your order before</div>'
-        + '<div class="wheel-selector-container">'
-        + '<div class="wheel-viewport-box">'
-        + '<div class="wheel-center-guide"></div>'
-        + '<div class="wheel-viewport" id="wheelCloseViewport" data-target-input="orderWindowEnd">'
-        + '<ul class="wheel-list">' + renderWheelSlotsHtml(closeParsed.index) + '</ul>'
-        + '</div>'
-        + '</div>'
-        + '<div class="wheel-ampm-pill" data-target-ampm="orderWindowEnd">'
-        + '<button type="button" class="wheel-ampm-btn' + (closeParsed.ampm === 'AM' ? ' active' : '') + '" data-ampm="AM">AM</button>'
-        + '<button type="button" class="wheel-ampm-btn' + (closeParsed.ampm === 'PM' ? ' active' : '') + '" data-ampm="PM">PM</button>'
-        + '</div>'
-        + '</div>'
-        + '</div>'
+    var h = '<div class="compact-time-rows-group' + (isLocked ? ' is-locked' : '') + '">';
 
-        // Column 2: Order deliver by (Delivery / Ready By)
-        + '<div class="wheel-col" data-wheel-type="ready">'
-        + '<div class="wheel-col-header">Order deliver by</div>'
-        + '<div class="wheel-selector-container">'
-        + '<div class="wheel-viewport-box">'
-        + '<div class="wheel-center-guide"></div>'
-        + '<div class="wheel-viewport" id="wheelReadyViewport" data-target-input="readyByTime">'
-        + '<ul class="wheel-list">' + renderWheelSlotsHtml(readyParsed.index) + '</ul>'
-        + '</div>'
-        + '</div>'
-        + '<div class="wheel-ampm-pill" data-target-ampm="readyByTime">'
-        + '<button type="button" class="wheel-ampm-btn' + (readyParsed.ampm === 'AM' ? ' active' : '') + '" data-ampm="AM">AM</button>'
-        + '<button type="button" class="wheel-ampm-btn' + (readyParsed.ampm === 'PM' ? ' active' : '') + '" data-ampm="PM">PM</button>'
-        + '</div>'
-        + '</div>'
-        + '</div>'
+    // Row 1: Orders Open From time
+    h += '<div class="compact-time-row" data-action="open-time-picker" data-field="orderOpenTime" role="button" tabindex="' + (isLocked ? '-1' : '0') + '" aria-label="Orders Open From time">';
+    h += '<div class="ctr-info">';
+    h += '<span class="ctr-label">Orders Open From time</span>';
+    h += '<span class="ctr-sub" id="ctrSub_orderOpenTime">' + esc(openTimeSub) + '</span>';
+    h += '</div>';
+    h += '<div class="ctr-action">';
+    h += '<span class="ctr-val' + (openTime ? '' : ' is-empty') + '" id="ctrVal_orderOpenTime">' + esc(openTimeDisplay) + '</span>';
+    h += '<span class="ctr-chevron" aria-hidden="true">›</span>';
+    h += '</div>';
+    h += '<input class="ctr-input" name="orderOpenTime" type="text" value="' + esc(openTime || '') + '"' + lockAttr + ' aria-label="Orders Open From time">';
+    h += '</div>';
 
-        + '</div>' // .wheel-picker-cols
-        + '</div>'; // .scrolling-wheel-picker-wrap
+    // Row 2: Place your order before
+    h += '<div class="compact-time-row" data-action="open-time-picker" data-field="orderWindowEnd" role="button" tabindex="' + (isLocked ? '-1' : '0') + '" aria-label="Place your order before">';
+    h += '<div class="ctr-info">';
+    h += '<span class="ctr-label">Place your order before</span>';
+    h += '<span class="ctr-sub">Order cut-off time</span>';
+    h += '</div>';
+    h += '<div class="ctr-action">';
+    h += '<span class="ctr-val' + (closeValue ? '' : ' is-empty') + '" id="ctrVal_orderWindowEnd">' + esc(closeTimeDisplay) + '</span>';
+    h += '<span class="ctr-chevron" aria-hidden="true">›</span>';
+    h += '</div>';
+    h += '<input class="ctr-input" name="orderWindowEnd" type="text" value="' + esc(closeValue || '') + '"' + lockAttr + ' aria-label="Place your order before">';
+    h += '</div>';
+
+    // Row 3: Order deliver by
+    h += '<div class="compact-time-row" data-action="open-time-picker" data-field="readyByTime" role="button" tabindex="' + (isLocked ? '-1' : '0') + '" aria-label="Order deliver by">';
+    h += '<div class="ctr-info">';
+    h += '<span class="ctr-label">Order deliver by</span>';
+    h += '<span class="ctr-sub">Delivery / ready-by time</span>';
+    h += '</div>';
+    h += '<div class="ctr-action">';
+    h += '<span class="ctr-val' + (readyValue ? '' : ' is-empty') + '" id="ctrVal_readyByTime">' + esc(readyTimeDisplay) + '</span>';
+    h += '<span class="ctr-chevron" aria-hidden="true">›</span>';
+    h += '</div>';
+    h += '<input class="ctr-input" name="readyByTime" type="text" value="' + esc(readyIsoVal) + '"' + lockAttr + ' aria-label="Order deliver by">';
+    h += '</div>';
+
+    h += '</div>'; // .compact-time-rows-group
     return h;
 }
 
-function updateActiveSlotInViewport(viewport, activeIdx) {
-    if (!viewport) return;
-    var slots = viewport.querySelectorAll('.wheel-slot');
-    for (var i = 0; i < slots.length; i++) {
-        var s = slots[i];
-        var sIdx = Number(s.getAttribute('data-slot-index'));
-        if (sIdx === activeIdx) {
-            s.classList.add('active');
+/**
+ * Builds the non-editable Schedule summary card below the time rows.
+ */
+function offeringScheduleSummaryHtml(openTime, closeValue, readyValue, openDateMode, storedOpenDate) {
+    var todayIso = sellerDate('today');
+    var isToday = (!openDateMode || openDateMode === 'today');
+    var openSummary;
+    if (!openTime && isToday) {
+        openSummary = 'Immediately after publish';
+    } else if (openTime) {
+        var prefix = openDateMode === 'tomorrow' ? 'Tomorrow at ' : (isToday ? 'Today at ' : (storedOpenDate ? storedOpenDate + ' at ' : ''));
+        openSummary = prefix + formatFriendlyTime12h(openTime);
+    } else {
+        openSummary = (openDateMode === 'tomorrow' ? 'Tomorrow' : 'Future date') + ' (Time required)';
+    }
+
+    var cutoffSummary = closeValue ? formatFriendlyTime12h(closeValue) : 'Not set';
+    var deliverySummary = readyValue ? formatFriendlyTime12h(readyValue) : 'Not set';
+
+    var h = '<div class="offering-schedule-summary" id="offeringScheduleSummary">';
+    h += '<div class="oss-head"><span class="oss-icon">📋</span> <span class="oss-title">Schedule summary</span></div>';
+    h += '<div class="oss-grid">';
+    h += '<div class="oss-cell"><span class="oss-label">Orders open</span><span class="oss-val" id="ossOpenVal">' + esc(openSummary) + '</span></div>';
+    h += '<div class="oss-cell"><span class="oss-label">Order cutoff</span><span class="oss-val" id="ossCutoffVal">' + esc(cutoffSummary) + '</span></div>';
+    h += '<div class="oss-cell"><span class="oss-label">Delivery by</span><span class="oss-val" id="ossDeliveryVal">' + esc(deliverySummary) + '</span></div>';
+    h += '</div></div>';
+    return h;
+}
+
+/**
+ * Reactively synchronizes the compact time rows and Schedule Summary from the form state.
+ */
+function updateOfferingScheduleSummary(form) {
+    if (!form) return;
+    var openTimeInput = form.querySelector('[name="orderOpenTime"]');
+    var closeInput = form.querySelector('[name="orderWindowEnd"]');
+    var readyInput = form.querySelector('[name="readyByTime"]');
+    var modeSelect = form.querySelector('[name="orderOpenDateMode"]');
+    var chosenDateInput = form.querySelector('[name="chosenOrderOpenDate"]');
+    var availDateInput = form.querySelector('input[name="availableDate"]') || form.querySelector('#availDate');
+
+    var todayIso = sellerDate('today');
+    var tomorrowIso = sellerDate('tomorrow');
+    var availDate = availDateInput ? availDateInput.value : todayIso;
+
+    var openMode = modeSelect ? modeSelect.value : (S.offeringFor || 'today');
+    var openDate = openMode === 'tomorrow' ? tomorrowIso : (openMode === 'choose' ? (chosenDateInput ? chosenDateInput.value : todayIso) : todayIso);
+    var openTimeVal = openTimeInput ? (openTimeInput.value || '').trim() : '';
+    var closeVal = closeInput ? (closeInput.value || '').trim() : '';
+    var readyVal = readyInput ? (readyInput.value || '').trim() : '';
+
+    var ossOpen = form.querySelector('#ossOpenVal');
+    var ossCutoff = form.querySelector('#ossCutoffVal');
+    var ossDelivery = form.querySelector('#ossDeliveryVal');
+
+    if (ossOpen) {
+        if (!openTimeVal && openDate === todayIso) {
+            ossOpen.textContent = 'Immediately after publish';
+        } else if (openTimeVal) {
+            var dateLabel = openDate === todayIso ? 'Today' : (openDate === tomorrowIso ? 'Tomorrow' : openDate);
+            ossOpen.textContent = dateLabel + ' at ' + formatFriendlyTime12h(openTimeVal);
         } else {
-            s.classList.remove('active');
+            var dateLabel = openDate === tomorrowIso ? 'Tomorrow' : (openDate === todayIso ? 'Today' : openDate);
+            ossOpen.textContent = dateLabel + ' (Time required)';
         }
     }
-}
 
-function updateAmpmButtons(container, targetName, ampm) {
-    if (!container) return;
-    var pill = container.querySelector('.wheel-ampm-pill[data-target-ampm="' + targetName + '"]');
-    if (!pill) return;
-    pill.querySelectorAll('.wheel-ampm-btn').forEach(function (btn) {
-        btn.classList.toggle('active', btn.getAttribute('data-ampm') === ampm);
-    });
-}
-
-function applyWheelTimeToInput(container, targetName, slotIdx) {
-    if (!container) return;
-    var pill = container.querySelector('.wheel-ampm-pill[data-target-ampm="' + targetName + '"]');
-    var activeAmpmBtn = pill ? pill.querySelector('.wheel-ampm-btn.active') : null;
-    var ampm = activeAmpmBtn ? activeAmpmBtn.getAttribute('data-ampm') : 'PM';
-    var time24 = wheelIndexTo24h(slotIdx, ampm);
-
-    var form = container.querySelector('#createOfferingForm') || container.querySelector('#editOfferingForm') || (container.tagName === 'FORM' ? container : null);
-    if (!form) return;
-
-    if (targetName === 'orderWindowEnd') {
-        var closeInput = form.querySelector('input[name="orderWindowEnd"]');
-        if (closeInput) closeInput.value = time24;
-    } else if (targetName === 'readyByTime') {
-        var readyInput = form.querySelector('input[name="readyByTime"]');
-        var availDateInput = form.querySelector('input[name="availableDate"]') || form.querySelector('input[name="chosenOfferingDate"]');
-        var dateVal = (readyInput && readyInput.value && readyInput.value.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(readyInput.value))
-            ? readyInput.value.slice(0, 10)
-            : (availDateInput ? availDateInput.value : sellerDate('today'));
-        if (readyInput) readyInput.value = dateVal + 'T' + time24;
+    if (ossCutoff) {
+        ossCutoff.textContent = closeVal ? formatFriendlyTime12h(closeVal) : 'Not set';
     }
+
+    if (ossDelivery) {
+        ossDelivery.textContent = readyVal ? formatFriendlyTime12h(readyVal) : 'Not set';
+    }
+
+    // Sync compact row text values
+    var valOpen = form.querySelector('#ctrVal_orderOpenTime');
+    var subOpen = form.querySelector('#ctrSub_orderOpenTime');
+    if (valOpen) {
+        if (openTimeVal) {
+            valOpen.textContent = formatFriendlyTime12h(openTimeVal);
+            valOpen.classList.remove('is-empty');
+        } else {
+            valOpen.textContent = 'Not set';
+            valOpen.classList.add('is-empty');
+        }
+    }
+    if (subOpen) {
+        if (openDate === todayIso) {
+            subOpen.textContent = openTimeVal ? 'Today' : 'Optional for Today • Opens immediately if not set';
+        } else if (openDate === tomorrowIso) {
+            subOpen.textContent = openTimeVal ? 'Tomorrow' : 'Required for Tomorrow';
+        } else {
+            subOpen.textContent = openTimeVal ? openDate : 'Required for ' + openDate;
+        }
+    }
+
+    var valClose = form.querySelector('#ctrVal_orderWindowEnd');
+    if (valClose) {
+        if (closeVal) {
+            valClose.textContent = formatFriendlyTime12h(closeVal);
+            valClose.classList.remove('is-empty');
+        } else {
+            valClose.textContent = 'Not set';
+            valClose.classList.add('is-empty');
+        }
+    }
+
+    var valReady = form.querySelector('#ctrVal_readyByTime');
+    if (valReady) {
+        if (readyVal) {
+            valReady.textContent = formatFriendlyTime12h(readyVal);
+            valReady.classList.remove('is-empty');
+        } else {
+            valReady.textContent = 'Not set';
+            valReady.classList.add('is-empty');
+        }
+    }
+
     updateLiveTimingBadge(form);
-    validateFormTiming(form);
 }
 
+/**
+ * Opens the reusable time picker bottom sheet for the selected field.
+ */
+function openOfferingTimePicker(targetField, form) {
+    if (!form || !targetField) return;
+    var input = form.querySelector('[name="' + targetField + '"]');
+    if (!input) return;
+
+    var title = 'Select time';
+    var helper = 'Choose hour, minute and period';
+    if (targetField === 'orderOpenTime') {
+        title = 'Select orders open time';
+        helper = 'When customers can start placing orders';
+    } else if (targetField === 'orderWindowEnd') {
+        title = 'Select order cut-off time';
+        helper = 'Place your order before this time';
+    } else if (targetField === 'readyByTime') {
+        title = 'Select delivery / ready-by time';
+        helper = 'When the offering will be delivered or ready';
+    }
+
+    var currentVal = (input.value || '').trim();
+    var curHours = 12;
+    var curMinutes = 0;
+    var curAmpm = 'PM';
+
+    if (currentVal) {
+        var timePart = currentVal.indexOf('T') !== -1 ? currentVal.split('T')[1] : currentVal;
+        var p = timePart.split(':');
+        if (p.length >= 2) {
+            var h = parseInt(p[0], 10);
+            var m = parseInt(p[1], 10);
+            if (!isNaN(h)) {
+                curAmpm = h >= 12 ? 'PM' : 'AM';
+                curHours = h % 12;
+                if (curHours === 0) curHours = 12;
+            }
+            if (!isNaN(m)) curMinutes = m;
+        }
+    } else {
+        if (targetField === 'orderWindowEnd') {
+            curHours = 7; curMinutes = 0; curAmpm = 'PM';
+        } else if (targetField === 'readyByTime') {
+            curHours = 8; curMinutes = 30; curAmpm = 'PM';
+        } else {
+            curHours = 9; curMinutes = 0; curAmpm = 'AM';
+        }
+    }
+
+    var openMode = form.querySelector('[name="orderOpenDateMode"]');
+    var isToday = !openMode || openMode.value === 'today';
+    var allowClear = (targetField === 'orderOpenTime' && isToday);
+
+    var hoursList = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+    var minutesList = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+    if (minutesList.indexOf(curMinutes) === -1) {
+        minutesList.push(curMinutes);
+        minutesList.sort(function (a, b) { return a - b; });
+    }
+
+    var sheetHtml = '<div class="stp-container" data-field="' + esc(targetField) + '">'
+        + '<div class="stp-header">'
+        + '<div class="stp-title-wrap">'
+        + '<h3 class="stp-title">' + esc(title) + '</h3>'
+        + '<p class="stp-sub">' + esc(helper) + '</p>'
+        + '</div>'
+        + '<div class="stp-preview" id="stpPreview">'
+        + '<span class="stp-preview-h">' + curHours + '</span>'
+        + '<span class="stp-preview-colon">:</span>'
+        + '<span class="stp-preview-m">' + ('0' + curMinutes).slice(-2) + '</span> '
+        + '<span class="stp-preview-ampm">' + curAmpm + '</span>'
+        + '</div>'
+        + '</div>'
+
+        + '<div class="stp-body">'
+        // Hours column
+        + '<div class="stp-col stp-col--hours">'
+        + '<div class="stp-col-label">Hour</div>'
+        + '<div class="stp-col-scroll">'
+        + hoursList.map(function (hr) {
+            return '<button type="button" class="stp-slot' + (hr === curHours ? ' active' : '') + '" data-stp-val="' + hr + '" data-stp-type="hour">' + hr + '</button>';
+        }).join('')
+        + '</div></div>'
+
+        + '<div class="stp-colon-divider">:</div>'
+
+        // Minutes column
+        + '<div class="stp-col stp-col--minutes">'
+        + '<div class="stp-col-label">Minute</div>'
+        + '<div class="stp-col-scroll">'
+        + minutesList.map(function (mn) {
+            var mnStr = ('0' + mn).slice(-2);
+            return '<button type="button" class="stp-slot' + (mn === curMinutes ? ' active' : '') + '" data-stp-val="' + mnStr + '" data-stp-type="minute">' + mnStr + '</button>';
+        }).join('')
+        + '</div></div>'
+
+        // AM/PM Column
+        + '<div class="stp-col stp-col--ampm">'
+        + '<div class="stp-col-label">Period</div>'
+        + '<div class="stp-ampm-pill">'
+        + '<button type="button" class="stp-ampm-btn' + (curAmpm === 'AM' ? ' active' : '') + '" data-stp-ampm="AM">AM</button>'
+        + '<button type="button" class="stp-ampm-btn' + (curAmpm === 'PM' ? ' active' : '') + '" data-stp-ampm="PM">PM</button>'
+        + '</div></div>'
+        + '</div>'; // .stp-body
+
+    if (allowClear) {
+        sheetHtml += '<div class="stp-clear-wrap">'
+            + '<button type="button" class="stp-clear-btn" id="stpClearBtn">Clear time (Open immediately after publish)</button>'
+            + '</div>';
+    }
+
+    sheetHtml += '<div class="stp-actions">'
+        + '<button type="button" class="btn btn-secondary stp-btn-cancel" id="stpCancelBtn">Cancel</button>'
+        + '<button type="button" class="btn btn-primary stp-btn-done" id="stpDoneBtn">Done</button>'
+        + '</div>'
+        + '</div>'; // .stp-container
+
+    openSheet(sheetHtml);
+
+    var sheetRoot = document.getElementById('sheetRoot');
+    if (!sheetRoot) return;
+
+    var selectedHour = curHours;
+    var selectedMinute = ('0' + curMinutes).slice(-2);
+    var selectedAmpm = curAmpm;
+
+    function updatePreview() {
+        var hEl = sheetRoot.querySelector('.stp-preview-h');
+        var mEl = sheetRoot.querySelector('.stp-preview-m');
+        var ampmEl = sheetRoot.querySelector('.stp-preview-ampm');
+        if (hEl) hEl.textContent = selectedHour;
+        if (mEl) mEl.textContent = selectedMinute;
+        if (ampmEl) ampmEl.textContent = selectedAmpm;
+    }
+
+    // Scroll initial active items into view
+    sheetRoot.querySelectorAll('.stp-col-scroll').forEach(function (scrollEl) {
+        var activeBtn = scrollEl.querySelector('.stp-slot.active');
+        if (activeBtn) {
+            scrollEl.scrollTop = activeBtn.offsetTop - scrollEl.offsetTop - (scrollEl.clientHeight / 2) + (activeBtn.clientHeight / 2);
+        }
+    });
+
+    // Wire hour & minute clicks
+    sheetRoot.querySelectorAll('.stp-slot').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var type = btn.getAttribute('data-stp-type');
+            var val = btn.getAttribute('data-stp-val');
+            var parent = btn.parentElement;
+            if (parent) {
+                parent.querySelectorAll('.stp-slot').forEach(function (b) { b.classList.remove('active'); });
+            }
+            btn.classList.add('active');
+            if (type === 'hour') {
+                selectedHour = parseInt(val, 10);
+            } else if (type === 'minute') {
+                selectedMinute = val;
+            }
+            updatePreview();
+        });
+    });
+
+    // Wire AM/PM clicks
+    sheetRoot.querySelectorAll('.stp-ampm-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var ampm = btn.getAttribute('data-stp-ampm');
+            sheetRoot.querySelectorAll('.stp-ampm-btn').forEach(function (b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            selectedAmpm = ampm;
+            updatePreview();
+        });
+    });
+
+    // Wire Cancel button
+    var cancelBtn = sheetRoot.querySelector('#stpCancelBtn');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', function () {
+            closeSheet();
+        });
+    }
+
+    // Wire Clear button (for openTime)
+    var clearBtn = sheetRoot.querySelector('#stpClearBtn');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function () {
+            input.value = '';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            updateOfferingScheduleSummary(form);
+            validateFormTiming(form);
+            S.offeringFormDirty = true;
+            closeSheet();
+        });
+    }
+
+    // Wire Done button
+    var doneBtn = sheetRoot.querySelector('#stpDoneBtn');
+    if (doneBtn) {
+        doneBtn.addEventListener('click', function () {
+            var h24 = selectedHour;
+            if (selectedAmpm === 'PM' && h24 < 12) h24 += 12;
+            if (selectedAmpm === 'AM' && h24 === 12) h24 = 0;
+            var time24 = ('0' + h24).slice(-2) + ':' + selectedMinute;
+
+            if (targetField === 'readyByTime') {
+                var availDateInput = form.querySelector('input[name="availableDate"]') || form.querySelector('#availDate');
+                var datePart = (input.value && input.value.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(input.value))
+                    ? input.value.slice(0, 10)
+                    : (availDateInput ? availDateInput.value : sellerDate('today'));
+                input.value = datePart + 'T' + time24;
+            } else {
+                input.value = time24;
+            }
+
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            updateOfferingScheduleSummary(form);
+            validateFormTiming(form);
+            S.offeringFormDirty = true;
+            closeSheet();
+        });
+    }
+}
+
+/**
+ * Backward compatibility stub for existing callers.
+ */
 function syncOfferingFormWheels(form) {
     if (!form) return;
-    var closeViewport = form.querySelector('#wheelCloseViewport');
-    var readyViewport = form.querySelector('#wheelReadyViewport');
-    var closeInput = form.querySelector('input[name="orderWindowEnd"]');
-    var readyInput = form.querySelector('input[name="readyByTime"]');
-    if (closeViewport && closeInput && closeInput.value) {
-        var cp = parseTimeForWheel(closeInput.value);
-        closeViewport._programmaticScroll = true;
-        closeViewport.scrollTop = cp.index * 44;
-        updateActiveSlotInViewport(closeViewport, cp.index);
-        updateAmpmButtons(form, 'orderWindowEnd', cp.ampm);
-    }
-    if (readyViewport && readyInput && readyInput.value) {
-        var rp = parseTimeForWheel(readyInput.value);
-        readyViewport._programmaticScroll = true;
-        readyViewport.scrollTop = rp.index * 44;
-        updateActiveSlotInViewport(readyViewport, rp.index);
-        updateAmpmButtons(form, 'readyByTime', rp.ampm);
-    }
+    updateOfferingScheduleSummary(form);
 }
 
+/**
+ * Initializes the offering form compact time controls, event listeners, and schedule summary.
+ */
 function initOfferingFormWheels(view) {
     if (!view) return;
     var form = view.querySelector('#createOfferingForm') || view.querySelector('#editOfferingForm');
-    var pickerWrap = view.querySelector('.scrolling-wheel-picker-wrap');
-    if (!form || !pickerWrap) return;
+    if (!form) return;
 
     S.offeringFormDirty = false;
-
     form.addEventListener('input', function () { S.offeringFormDirty = true; });
     form.addEventListener('change', function () { S.offeringFormDirty = true; });
 
-    var closeViewport = view.querySelector('#wheelCloseViewport');
-    var readyViewport = view.querySelector('#wheelReadyViewport');
-    var closeInput = form.querySelector('input[name="orderWindowEnd"]');
-    var readyInput = form.querySelector('input[name="readyByTime"]');
+    // Sync compact time rows and schedule summary
+    updateOfferingScheduleSummary(form);
 
-    syncOfferingFormWheels(form);
-
-    function attachWheelScroll(viewport, targetName) {
-        if (!viewport) return;
-        var scrollTimer = null;
-        var isDragging = false;
-        var startY = 0;
-        var startScrollTop = 0;
-        var hasDragged = false;
-
-        viewport.style.cursor = 'pointer';
-
-        viewport.addEventListener('scroll', function () {
-            var idx = Math.round(viewport.scrollTop / 44);
-            if (idx < 0) idx = 0;
-            if (idx >= WHEEL_INTERVALS.length) idx = WHEEL_INTERVALS.length - 1;
-            updateActiveSlotInViewport(viewport, idx);
-
-            if (viewport._programmaticScroll) {
-                viewport._programmaticScroll = false;
-                return;
-            }
-
-            clearTimeout(scrollTimer);
-            scrollTimer = setTimeout(function () {
-                S.offeringFormDirty = true;
-                applyWheelTimeToInput(view, targetName, idx);
-            }, 60);
-        }, { passive: true });
-
-        // Desktop mouse drag scrolling alongside touch
-        viewport.addEventListener('mousedown', function (e) {
-            isDragging = true;
-            hasDragged = false;
-            startY = e.pageY;
-            startScrollTop = viewport.scrollTop;
-            viewport.style.cursor = 'grabbing';
-            viewport.style.userSelect = 'none';
-        });
-
-        window.addEventListener('mousemove', function (e) {
-            if (!isDragging) return;
-            var delta = e.pageY - startY;
-            if (Math.abs(delta) > 3) hasDragged = true;
-            viewport.scrollTop = startScrollTop - delta;
-        });
-
-        window.addEventListener('mouseup', function () {
-            if (!isDragging) return;
-            isDragging = false;
-            viewport.style.cursor = 'pointer';
-            viewport.style.removeProperty('user-select');
-            if (hasDragged) {
-                var idx = Math.round(viewport.scrollTop / 44);
-                if (idx < 0) idx = 0;
-                if (idx >= WHEEL_INTERVALS.length) idx = WHEEL_INTERVALS.length - 1;
-                viewport.scrollTo({ top: idx * 44, behavior: 'smooth' });
-                updateActiveSlotInViewport(viewport, idx);
-                S.offeringFormDirty = true;
-                applyWheelTimeToInput(view, targetName, idx);
+    // Listen for click/tap on compact time rows
+    form.querySelectorAll('.compact-time-row').forEach(function (row) {
+        row.addEventListener('click', function (e) {
+            if (row.classList.contains('is-locked') || row.querySelector('input:disabled')) return;
+            var field = row.getAttribute('data-field');
+            if (field) {
+                openOfferingTimePicker(field, form);
             }
         });
-
-        // Direct click-to-select on hour and minute items
-        viewport.addEventListener('click', function (e) {
-            if (hasDragged) {
-                hasDragged = false;
-                return;
-            }
-            var slot = e.target.closest('.wheel-slot');
-            if (!slot) return;
-            var idx = Number(slot.getAttribute('data-slot-index'));
-            if (isNaN(idx)) return;
-            viewport.scrollTo({ top: idx * 44, behavior: 'smooth' });
-            updateActiveSlotInViewport(viewport, idx);
-            S.offeringFormDirty = true;
-            applyWheelTimeToInput(view, targetName, idx);
-        });
-    }
-
-    attachWheelScroll(closeViewport, 'orderWindowEnd');
-    attachWheelScroll(readyViewport, 'readyByTime');
-
-    view.querySelectorAll('.wheel-ampm-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var pill = btn.closest('.wheel-ampm-pill');
-            if (!pill) return;
-            var targetName = pill.getAttribute('data-target-ampm');
-            var ampm = btn.getAttribute('data-ampm');
-            pill.querySelectorAll('.wheel-ampm-btn').forEach(function (b) {
-                b.classList.toggle('active', b === btn);
-            });
-            S.offeringFormDirty = true;
-            var viewport = targetName === 'orderWindowEnd' ? closeViewport : readyViewport;
-            if (viewport) {
-                var idx = Math.round(viewport.scrollTop / 44);
-                if (idx < 0) idx = 0;
-                if (idx >= WHEEL_INTERVALS.length) idx = WHEEL_INTERVALS.length - 1;
-                applyWheelTimeToInput(view, targetName, idx);
+        row.addEventListener('keydown', function (e) {
+            if (row.classList.contains('is-locked') || row.querySelector('input:disabled')) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                var field = row.getAttribute('data-field');
+                if (field) openOfferingTimePicker(field, form);
             }
         });
     });
 
-    if (closeInput) {
-        closeInput.addEventListener('input', function () { syncOfferingFormWheels(form); });
-        closeInput.addEventListener('change', function () { syncOfferingFormWheels(form); });
-    }
-    if (readyInput) {
-        readyInput.addEventListener('input', function () { syncOfferingFormWheels(form); });
-        readyInput.addEventListener('change', function () { syncOfferingFormWheels(form); });
-    }
+    // Also listen for change/input on the inputs directly (e.g. Playwright fill)
+    ['orderOpenTime', 'orderWindowEnd', 'readyByTime', 'chosenOrderOpenDate', 'chosenOfferingDate'].forEach(function (name) {
+        var inp = form.querySelector('[name="' + name + '"]');
+        if (inp) {
+            inp.addEventListener('input', function () {
+                updateOfferingScheduleSummary(form);
+                validateFormTiming(form);
+            });
+            inp.addEventListener('change', function () {
+                updateOfferingScheduleSummary(form);
+                validateFormTiming(form);
+            });
+        }
+    });
+
+    // Category checkbox styling sync
+    form.querySelectorAll('input[name="categories"]').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+            var opt = cb.closest('.checkbox-option');
+            if (opt) opt.classList.toggle('selected', cb.checked);
+        });
+    });
 }
 
 /**
@@ -2972,7 +3206,7 @@ function offeringFormHtml(t, opts) {
         var dinnerLabel = isAfter8pm ? 'Tomorrow 8:30 PM' : 'Tonight 8:30 PM';
         h += '<div class="meal-presets-card">';
         h += '<div class="meal-presets-head"><span class="meal-presets-badge">⚡ Quick Start</span> <span class="meal-presets-title">1-Click Quick Meal Presets</span></div>';
-        h += '<p class="meal-presets-sub">Tap any preset to auto-fill delivery time, cutoff, and category:</p>';
+        h += '<p class="meal-presets-sub">Auto-fill delivery time, cutoff, and category:</p>';
         h += '<div class="meal-presets-grid">';
         h += '<button type="button" class="btn-meal-preset" data-action="apply-preset" data-preset="lunch">';
         h += '<span class="preset-icon">☀️</span><div class="preset-info"><span class="preset-name">Lunch</span><span class="preset-time">Tomorrow 1:00 PM</span></div>';
@@ -2988,12 +3222,16 @@ function offeringFormHtml(t, opts) {
         h += '</button>';
         h += '</div></div>';
     }
-    h += '<div class="form-group"><label class="form-label">Photos <span class="req">*</span></label><div class="photo-upload-row"><div class="photo-tile" data-action="add-photo">' + (isEdit && sellerImg(t.imageUrl) ? '<img src="' + esc(sellerImg(t.imageUrl)) + '" alt="' + esc(t.name) + '" onerror="imgFallback(this)">' : '+') + '</div></div></div>';
+    h += '<div class="form-group"><label class="form-label">Photos <span class="req">*</span></label><div class="photo-upload-row"><div class="photo-tile" data-action="add-photo">' + (isEdit && sellerImg(t.imageUrl) ? '<img src="' + esc(sellerImg(t.imageUrl)) + '" alt="' + esc(t.name) + '" onerror="imgFallback(this)">' : '+') + '</div></div><p class="muted small">Upload clear photo of your dish (JPEG/PNG up to 5MB).</p></div>';
     h += '<div class="form-group"><label class="form-label">Item Name <span class="req">*</span></label><input class="form-input" name="name" value="' + esc(t.name || '') + '" placeholder="e.g. POHA" required' + lockAttr + '></div>';
-    h += '<div class="form-group"><label class="form-label">Short Description</label><textarea class="form-textarea" name="description">' + esc(t.description || '') + '</textarea></div>';
+    h += '<div class="form-group"><label class="form-label">Short Description</label><textarea class="form-textarea" name="description" placeholder="Describe taste, ingredients, portion size...">' + esc(t.description || '') + '</textarea></div>';
     h += '<div class="form-row-2"><div class="form-group"><label class="form-label">Price (Rs) <span class="req">*</span></label><input class="form-input" name="price" type="number" value="' + (t.price || '') + '" placeholder="100" required' + lockAttr + '></div>';
     h += '<div class="form-group"><label class="form-label">Unit <span class="req">*</span></label><select class="form-select" name="priceUnit"' + lockAttr + '><option value="Per Piece"' + (selectedUnit === 'Per Piece' ? ' selected' : '') + '>Per Piece</option><option value="Per Plate"' + (selectedUnit === 'Per Plate' ? ' selected' : '') + '>Per Plate</option><option value="Per Box"' + (selectedUnit === 'Per Box' ? ' selected' : '') + '>Per Box</option></select></div></div>';
     h += '<input type="hidden" name="imageUrl" value="' + esc(t.imageUrl || '') + '">';
+
+    // Availability & Timing Section (Unified Card)
+    h += '<div class="form-section-card availability-timing-card">';
+    h += '<div class="section-card-header"><span class="section-card-icon">🕒</span> <h3 class="section-card-title">Availability & timing</h3></div>';
     h += '<div class="form-group" id="offeringForGroup"><label class="form-label">Offering For <span class="req">*</span></label><div class="radio-group">' + availabilityOption('today', 'Today', mode, locked) + availabilityOption('tomorrow', 'Tomorrow', mode, locked) + availabilityOption('choose', 'Choose Date', mode, locked) + '</div></div>';
     h += '<input type="hidden" name="availableDate" id="availDate" value="' + esc(chosenDate) + '">';
     h += '<div class="form-group" id="chooseDateRow"' + (mode === 'choose' ? '' : ' hidden') + '><label class="form-label">Offering Date <span class="req">*</span></label><input type="date" class="form-input" name="chosenOfferingDate" min="' + todayIso + '" data-action="set-availability-date" value="' + esc(chosenDate) + '"' + lockAttr + '></div>';
@@ -3009,12 +3247,6 @@ function offeringFormHtml(t, opts) {
         : (storedOpenDate === sellerDate('tomorrow') ? 'tomorrow' : 'choose');
     var openingTime = t.ordersOpenFrom ? String(t.ordersOpenFrom).slice(11, 16) : '';
 
-    var now = new Date();
-    var currentLocalTime = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
-    var currentLocalIso = localDateStr(now) + 'T' + currentLocalTime;
-    var closeMinAttr = (!isEdit && chosenDate <= todayIso) ? ' min="' + currentLocalTime + '"' : '';
-    var readyMinAttr = (!locked) ? ' min="' + currentLocalIso + '"' : '';
-
     h += '<div id="ordersOpenFromFields">';
     h += '<div class="form-group"><label class="form-label">Orders Open From date</label><select class="form-select" name="orderOpenDateMode" data-action="set-order-open-date-mode"' + lockAttr + '>' +
         '<option value="today"' + (openDateMode === 'today' ? ' selected' : '') + '>Today</option>' +
@@ -3022,28 +3254,30 @@ function offeringFormHtml(t, opts) {
         '<option value="choose"' + (openDateMode === 'choose' ? ' selected' : '') + '>Choose Date</option></select></div>';
     h += '<div class="form-group" id="ordersOpenChooseDate"' + (openDateMode === 'choose' ? '' : ' hidden') + '>' +
         '<label class="form-label">Opening Date</label><input class="form-input" name="chosenOrderOpenDate" type="date" min="' + todayIso + '" value="' + esc(storedOpenDate) + '"' + lockAttr + '></div>';
-    h += '<div class="form-group"><label class="form-label">Orders Open From time — Optional for Today</label>' +
-        '<input class="form-input" name="orderOpenTime" type="time" value="' + esc(openingTime) + '"' + lockAttr + '>' +
-        '<p class="muted small" id="ordersOpenFromSummary">Leave blank for today to open immediately after publishing. Tomorrow and future dates require a time.</p></div></div>';
+    h += '</div>';
+
     h += '<input type="hidden" name="initialOrderOpenDate" value="' + esc(storedOpenDate) + '">' +
         '<input type="hidden" name="initialOrderOpenTime" value="' + esc(openingTime) + '">';
     if (isEdit) {
         h += '<input type="hidden" name="orderWindowStart" value="' + esc(openValue) + '">';
     }
 
-    h += scrollingWheelPickerHtml(closeValue, initialReady, locked);
+    // 3 Consistent Compact Time Rows
+    h += compactTimeRowsHtml(openingTime, closeValue, initialReady, locked, openDateMode);
 
+    // Non-editable Schedule Summary Card
+    h += offeringScheduleSummaryHtml(openingTime, closeValue, initialReady, openDateMode, storedOpenDate);
+
+    // Live timing badge and inline warning for timing validation
     var initialBadge = (readyIso && initialReady && closeValue)
         ? '<span class="badge-icon">⏱️</span> Your offering will be delivered at: <strong>' + esc(formatFriendlyTime12h(initialReady.slice(11, 16))) + '</strong>. Customers can order until: <strong>' + esc(formatFriendlyTime12h(closeValue)) + '</strong>.'
         : '<span class="badge-icon">💡</span> Select your delivery time to preview delivery and order cutoff schedule.';
-    h += '<div id="liveTimingBadge" class="timing-live-badge">' + initialBadge + '</div>';
+    h += '<div id="liveTimingBadge" class="timing-live-badge" style="display:none;">' + initialBadge + '</div>';
     h += '<div id="timingInlineWarning" class="timing-inline-warning" style="display:none;"></div>';
 
-    // Hidden inputs mapped directly to the wheel time picker selections
-    h += '<input type="hidden" name="orderWindowEnd" value="' + esc(closeValue) + '">';
-    h += '<input type="hidden" name="readyByTime" value="' + esc(readyIso ? initialReady.slice(0, 16) : (initialReady || '')) + '">';
+    h += '</div>'; // .availability-timing-card
 
-    var qtyValue = '', qtyAttr = '', qtyNote = 'Leave blank for unlimited quantity.';
+    var qtyValue = '', qtyAttr = '', qtyNote = 'Leave blank for unlimited quantity. When set, orders close automatically when sold out.';
     if (isEdit) {
         if (t.maxQuantity == null) {
             qtyAttr = ' disabled';
