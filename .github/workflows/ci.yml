@@ -55,6 +55,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       TZ: 'Asia/Kolkata'
+      MAVEN_OPTS: '-Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.http.retryHandler.count=5'
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -78,7 +79,7 @@ jobs:
 
       - name: Pre-compile backend classes for E2E runner
         working-directory: my-first-spring-api
-        run: ./mvnw -B -DskipTests compile
+        run: mvn -B -DskipTests compile
 
       - name: Install Playwright and browser dependencies
         working-directory: my-first-spring-api/e2e
