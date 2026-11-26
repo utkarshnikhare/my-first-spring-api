@@ -28,6 +28,13 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             + "AND (p.archived = true OR p.availableDate < :date) "
             + "ORDER BY p.availableDate DESC, p.createdAt DESC")
     List<Product> findHistoryIncludingArchived(@Param("kitchen") Kitchen kitchen, @Param("date") LocalDate date);
+
+    @Query("SELECT p FROM Product p WHERE p.kitchen = :kitchen "
+            + "AND p.availableDate = :yesterday "
+            + "AND p.archived = false "
+            + "AND (p.publicationDraft = false OR p.publicationDraft IS NULL) "
+            + "ORDER BY p.id ASC")
+    List<Product> findYesterdayOfferings(@Param("kitchen") Kitchen kitchen, @Param("yesterday") LocalDate yesterday);
     Optional<Product> findByKitchenAndQuickPostRequestId(Kitchen kitchen, String quickPostRequestId);
 
     @Modifying

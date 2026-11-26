@@ -5615,3 +5615,237 @@ html[data-theme="dark"] .btn-meal-preset.active {
     border-top: 1px solid var(--border, #EFE3D8);
 }
 
+/* ==================== OPTION 4: REUSE YESTERDAY'S MENU ==================== */
+.badge-new {
+    display: inline-block;
+    vertical-align: middle;
+    background: linear-gradient(135deg, #FF6B4A, #E05330);
+    color: #FFFFFF;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-left: 6px;
+    box-shadow: 0 1px 4px rgba(224, 83, 48, 0.35);
+}
+
+.reuse-yesterday-view {
+    max-width: 720px;
+    margin: 0 auto;
+    padding-bottom: 80px;
+}
+
+.reuse-header-desc {
+    margin-bottom: 16px;
+}
+
+.reuse-date-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(169, 103, 72, 0.08);
+    border: 1px solid rgba(169, 103, 72, 0.18);
+    color: var(--brand, #A96748);
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 5px 12px;
+    border-radius: 999px;
+    margin-top: 6px;
+}
+
+.reuse-controls-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border, rgba(169, 103, 72, 0.15));
+    margin-bottom: 14px;
+}
+
+.reuse-selected-count {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text, #44352F);
+}
+
+.reuse-items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.reuse-item-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--surface, #FFFFFF);
+    border: 1.5px solid var(--border, rgba(169, 103, 72, 0.18));
+    border-radius: 16px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 1px 4px rgba(68, 53, 47, 0.04);
+    user-select: none;
+}
+
+.reuse-item-card:hover {
+    border-color: var(--brand, #A96748);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(169, 103, 72, 0.12);
+}
+
+.reuse-item-card.is-selected {
+    border-color: var(--brand, #A96748);
+    background: linear-gradient(135deg, rgba(200, 122, 84, 0.06), rgba(169, 103, 72, 0.02));
+    box-shadow: 0 2px 10px rgba(169, 103, 72, 0.14);
+}
+
+.reuse-item-cb-col {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.reuse-cb {
+    width: 22px;
+    height: 22px;
+    accent-color: var(--brand, #A96748);
+    cursor: pointer;
+}
+
+.reuse-thumb {
+    width: 54px;
+    height: 54px;
+    border-radius: 12px;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1px solid rgba(169, 103, 72, 0.12);
+}
+
+.reuse-item-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.reuse-item-name-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+.reuse-item-name {
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: var(--text, #44352F);
+}
+
+.reuse-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 2px;
+}
+
+.reuse-item-price {
+    font-size: 0.9rem;
+}
+
+.reuse-item-qty {
+    font-size: 0.78rem;
+}
+
+.reuse-item-timing {
+    font-size: 0.76rem;
+    color: var(--muted, #7E6F67);
+}
+
+.reuse-actions-bar {
+    position: sticky;
+    bottom: 20px;
+    background: var(--surface, #FFFFFF);
+    padding: 14px;
+    border-radius: 18px;
+    box-shadow: 0 4px 20px rgba(68, 53, 47, 0.15);
+    border: 1px solid var(--border, rgba(169, 103, 72, 0.18));
+    z-index: 50;
+}
+
+/* Batch review progress banner inside sellerCreateView */
+.reuse-batch-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: linear-gradient(135deg, rgba(200, 122, 84, 0.12), rgba(169, 103, 72, 0.05));
+    border: 1.5px solid rgba(169, 103, 72, 0.25);
+    border-radius: 14px;
+    padding: 10px 14px;
+}
+
+.reuse-batch-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.reuse-batch-badge {
+    background: var(--brand, #A96748);
+    color: #FFFFFF;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+}
+
+.reuse-batch-count {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--muted, #7E6F67);
+}
+
+.reuse-batch-name {
+    font-size: 0.9rem;
+    color: var(--text, #44352F);
+}
+
+.reuse-batch-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* Dark mode theme support */
+html[data-theme="dark"] .reuse-item-card {
+    background: var(--surface);
+    border-color: rgba(201, 130, 99, 0.22);
+}
+
+html[data-theme="dark"] .reuse-item-card.is-selected {
+    background: rgba(201, 130, 99, 0.12);
+    border-color: #C98263;
+}
+
+html[data-theme="dark"] .reuse-actions-bar {
+    background: var(--surface);
+    border-color: rgba(201, 130, 99, 0.22);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+html[data-theme="dark"] .reuse-batch-banner {
+    background: rgba(201, 130, 99, 0.1);
+    border-color: rgba(201, 130, 99, 0.3);
+}
+
+html[data-theme="dark"] .reuse-date-badge {
+    background: rgba(201, 130, 99, 0.12);
+    border-color: rgba(201, 130, 99, 0.25);
+    color: #E29B7C;
+}
+
